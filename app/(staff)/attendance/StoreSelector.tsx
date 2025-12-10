@@ -118,7 +118,7 @@ export default function StoreSelector({ selectedStoreId: propSelectedStoreId, on
       // management_days에서 오늘 요일이 포함되어 있는지 확인
       // 형식: "월,수,금" 또는 "월수금" 둘 다 처리
       const managementDays = store.management_days.replace(/\s/g, '') // 공백 제거
-      const dayList = managementDays.split(',').map(d => d.trim())
+      const dayList = managementDays.split(',').map((d: string) => d.trim())
       
       // 쉼표로 구분된 경우와 그렇지 않은 경우 모두 처리
       if (dayList.length > 1) {
