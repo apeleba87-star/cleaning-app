@@ -2,10 +2,10 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { GeoGuard, GPSLocation } from '@/components/GeoGuard'
+import { GeoGuard } from '@/components/GeoGuard'
+import { GPSLocation, Attendance } from '@/types/db'
 import { clockInAction, clockOutAction } from './actions'
 import { createClient } from '@/lib/supabase/client'
-import { Attendance } from '@/types/db'
 import StoreSelector from './StoreSelector'
 
 interface AttendanceWithStore extends Attendance {
