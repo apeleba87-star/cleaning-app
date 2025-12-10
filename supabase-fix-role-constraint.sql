@@ -38,3 +38,4 @@ LEFT JOIN auth.users au ON u.id = au.id
 WHERE u.role = 'platform_admin';
 
 
+

@@ -42,3 +42,4 @@ WHERE user_id = 'YOUR_USER_ID_HERE'  -- 여기를 실제 사용자 ID로 변경
 ORDER BY work_date DESC, clock_in_at DESC;
 
 
+

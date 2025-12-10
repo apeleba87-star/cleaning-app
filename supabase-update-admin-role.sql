@@ -17,3 +17,4 @@ FROM auth.users
 WHERE id IN (SELECT id FROM public.users WHERE role = 'platform_admin');
 
 
+

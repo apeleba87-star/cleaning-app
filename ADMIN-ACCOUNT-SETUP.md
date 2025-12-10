@@ -82,3 +82,4 @@ WHERE email = 'apeleba@naver.com';
 3. 로그인 성공 시 관리자 대시보드로 리다이렉트됩니다.
 
 
+

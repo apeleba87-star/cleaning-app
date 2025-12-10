@@ -124,3 +124,4 @@ CREATE POLICY "Business owners can manage company stores" ON public.stores
 -- UPDATE public.users SET role = 'platform_admin' WHERE role = 'admin';
 
 
+

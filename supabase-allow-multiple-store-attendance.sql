@@ -39,3 +39,4 @@ WHERE conrelid = 'public.attendance'::regclass
   AND contype = 'u';
 
 
+

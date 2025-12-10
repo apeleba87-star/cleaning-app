@@ -16,3 +16,4 @@ SET head_office_name = COALESCE(head_office_name, '개인'),
 WHERE head_office_name IS NULL OR service_active IS NULL;
 
 
+

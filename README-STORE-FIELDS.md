@@ -40,3 +40,4 @@ WHERE head_office_name IS NULL OR service_active IS NULL;
 - `IF NOT EXISTS`를 사용했으므로 중복 실행해도 안전합니다.
 
 
+

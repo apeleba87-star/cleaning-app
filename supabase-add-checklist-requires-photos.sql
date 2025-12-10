@@ -21,3 +21,4 @@ WHERE table_schema = 'public'
     AND column_name = 'requires_photos';
 
 
+

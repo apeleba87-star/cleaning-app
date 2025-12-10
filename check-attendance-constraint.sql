@@ -32,3 +32,4 @@ WHERE schemaname = 'public'
   AND tablename = 'attendance';
 
 
+

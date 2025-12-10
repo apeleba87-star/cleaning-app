@@ -58,3 +58,4 @@ CREATE POLICY "Staff manage assigned checklists" ON public.checklist
     );
 
 
+

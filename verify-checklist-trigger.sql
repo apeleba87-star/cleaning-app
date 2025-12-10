@@ -35,3 +35,4 @@ AND routine_name = 'update_updated_at_column';
 -- ORDER BY updated_at DESC;
 
 
+

@@ -11,3 +11,4 @@ SET employment_active = COALESCE(employment_active, true)
 WHERE employment_active IS NULL;
 
 
+

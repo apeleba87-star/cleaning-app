@@ -96,3 +96,4 @@ New-NetFirewallRule -DisplayName "Next.js Dev Server" -Direction Inbound -LocalP
 실제 모바일 기기보다 **브라우저 개발자 도구의 모바일 모드**를 사용하는 것이 더 빠르고 안정적입니다!
 
 
+

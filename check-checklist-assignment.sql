@@ -70,3 +70,4 @@ WHERE c.work_date >= CURRENT_DATE - INTERVAL '7 days'
 ORDER BY c.work_date DESC, c.created_at DESC;
 
 
+

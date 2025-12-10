@@ -612,3 +612,4 @@ CREATE POLICY "Managers can read assigned store selfies" ON storage.objects
     );
 
 
+
