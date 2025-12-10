@@ -95,7 +95,7 @@ export default function StoreSelector({ selectedStoreId: propSelectedStoreId, on
     }
 
     console.log('Final stores:', storesData)
-    setStores(storesData || [])
+    setStores((storesData || []) as Store[])
     if (storesData && storesData.length > 0) {
       if (!propSelectedStoreId) {
         setSelectedStoreId(storesData[0].id)
