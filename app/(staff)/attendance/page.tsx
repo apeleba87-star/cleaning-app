@@ -9,7 +9,7 @@ import { createClient } from '@/lib/supabase/client'
 import StoreSelector from './StoreSelector'
 
 interface AttendanceWithStore extends Attendance {
-  stores?: { name: string }
+  stores?: { id: string; name: string } | null
 }
 
 export default function AttendancePage() {
@@ -90,7 +90,7 @@ export default function AttendancePage() {
       console.error('Error loading attendance:', queryError)
     }
 
-    setTodayAttendances(data || [])
+    setTodayAttendances((data || []) as AttendanceWithStore[])
     setLoading(false)
   }
 
