@@ -137,7 +137,7 @@ export default function StoreSelector({ selectedStoreId: propSelectedStoreId, on
     // 따라서 퇴근 완료된 매장은 다시 출근 가능
     const availableStores = todayManagementStores.filter(
       store => !excludeStoreIds.includes(store.id)
-    )
+    ) as Store[]
     
     setStores(availableStores)
     if (availableStores.length > 0) {
