@@ -33,10 +33,17 @@ export function ChecklistCamera({ items, mode, storeId, onComplete, onCancel }: 
       cameraRequested = true
 
       try {
-        // PC 환경에서는 facingMode를 사용하지 않음 (일반 웹캠 사용)
-        const constraints = {
+        // HTTPS 또는 localhost가 아닌 경우 카메라 접근 불가
+        if (location.protocol !== 'https:' && !location.hostname.includes('localhost') && location.hostname !== '127.0.0.1') {
+          throw new Error('HTTPS_REQUIRED')
+        }
+
+        // 카메라 제약 조건 (더 유연하게)
+        const constraints: MediaStreamConstraints = {
           video: {
             facingMode: { ideal: 'environment' }, // 모바일에서는 후면 카메라, PC에서는 기본 카메라
+            width: { ideal: 1280 },
+            height: { ideal: 720 }
           }
         }
 
@@ -57,19 +64,35 @@ export function ChecklistCamera({ items, mode, storeId, onComplete, onCancel }: 
         if (!isMounted) return
         
         console.error('카메라 접근 실패:', error)
-        const errorMessage = error.name === 'NotAllowedError' 
-          ? '카메라 접근 권한이 거부되었습니다. 브라우저 설정에서 카메라 권한을 허용해주세요.'
-          : error.name === 'NotFoundError'
-          ? '카메라를 찾을 수 없습니다. 카메라가 연결되어 있는지 확인해주세요.'
-          : '카메라 접근에 실패했습니다.'
+        
+        let errorMessage = '카메라 접근에 실패했습니다.'
+        let showFileInput = false
+        
+        if (error.message === 'HTTPS_REQUIRED') {
+          errorMessage = '카메라 사용을 위해서는 HTTPS 연결이 필요합니다.\n\n로컬 네트워크에서는 카메라가 작동하지 않을 수 있습니다.\n파일 선택을 통해 사진을 업로드할 수 있습니다.'
+          showFileInput = true
+        } else if (error.name === 'NotAllowedError') {
+          errorMessage = '카메라 접근 권한이 거부되었습니다.\n\n브라우저 설정에서 카메라 권한을 허용해주세요.\n또는 파일 선택을 통해 사진을 업로드할 수 있습니다.'
+          showFileInput = true
+        } else if (error.name === 'NotFoundError') {
+          errorMessage = '카메라를 찾을 수 없습니다.\n\n파일 선택을 통해 사진을 업로드할 수 있습니다.'
+          showFileInput = true
+        }
         
         alert(errorMessage)
-        // 에러 발생 시 카메라 모드 종료
-        setTimeout(() => {
-          if (isMounted) {
-            onCancel()
-          }
-        }, 1000)
+        
+        // 파일 입력 폴백 제공
+        if (showFileInput && fileInputRef.current) {
+          // 카메라 모드는 유지하되 파일 입력 옵션 제공
+          setStream(null) // 스트림은 null로 설정
+        } else {
+          // 에러 발생 시 카메라 모드 종료
+          setTimeout(() => {
+            if (isMounted) {
+              onCancel()
+            }
+          }, 1000)
+        }
       }
     }
 
@@ -211,13 +234,56 @@ export function ChecklistCamera({ items, mode, storeId, onComplete, onCancel }: 
       </div>
 
       {/* 카메라 화면 */}
-      <div className="flex-1 relative flex items-center justify-center">
-        <video
-          ref={videoRef}
-          autoPlay
-          playsInline
-          className="w-full h-full object-cover"
-        />
+      <div className="flex-1 relative flex items-center justify-center bg-black">
+        {stream ? (
+          <>
+            <video
+              ref={videoRef}
+              autoPlay
+              playsInline
+              className="w-full h-full object-cover"
+            />
+          </>
+        ) : (
+          <div className="text-white text-center p-8">
+            <p className="text-lg mb-4">카메라를 사용할 수 없습니다</p>
+            <p className="text-sm mb-6 text-gray-300">
+              파일 선택을 통해 사진을 업로드하세요
+            </p>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              capture="environment"
+              onChange={(e) => {
+                const file = e.target.files?.[0]
+                if (file) {
+                  const reader = new FileReader()
+                  reader.onloadend = () => {
+                    const dataURL = reader.result as string
+                    setTempPhotos(prev => ({
+                      ...prev,
+                      [currentIndex]: dataURL
+                    }))
+                  }
+                  reader.readAsDataURL(file)
+                  // 다음 항목으로 자동 이동
+                  if (currentIndex < photoItems.length - 1) {
+                    setCurrentIndex(currentIndex + 1)
+                  }
+                }
+              }}
+              className="hidden"
+              multiple={false}
+            />
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium"
+            >
+              📷 파일에서 사진 선택
+            </button>
+          </div>
+        )}
         <canvas ref={canvasRef} className="hidden" />
 
         {/* 왼쪽 하단: 사진 미리보기 영역 (임시 저장된 사진들) */}
