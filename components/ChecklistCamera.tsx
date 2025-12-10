@@ -287,58 +287,81 @@ export function ChecklistCamera({ items, mode, storeId, onComplete, onCancel }: 
         <canvas ref={canvasRef} className="hidden" />
 
         {/* 왼쪽 하단: 사진 미리보기 영역 (임시 저장된 사진들) */}
-        <div className="absolute bottom-20 left-4 flex gap-2 max-w-[calc(100%-8rem)] overflow-x-auto z-20">
+        <div className="absolute bottom-32 left-4 right-4 flex gap-2 overflow-x-auto z-30 pb-2">
           {photoItems.map((item, idx) => {
-            if (!tempPhotos[idx]) return null // 촬영하지 않은 항목은 표시하지 않음
+            const hasPhoto = !!tempPhotos[idx]
             return (
-              <div key={idx} className="relative flex-shrink-0">
-                <img
-                  src={tempPhotos[idx]}
-                  alt={item.area}
-                  className="w-20 h-20 object-cover rounded border-2 border-white"
-                />
-                <button
-                  onClick={() => removePhoto(idx)}
-                  className="absolute -top-1 -right-1 w-6 h-6 bg-red-500 text-white rounded-full text-xs flex items-center justify-center hover:bg-red-600 font-bold"
-                  title="재촬영"
-                >
-                  ×
-                </button>
+              <div 
+                key={idx} 
+                className={`relative flex-shrink-0 ${idx === currentIndex ? 'ring-2 ring-blue-400 ring-offset-2 ring-offset-black' : ''}`}
+                onClick={() => setCurrentIndex(idx)}
+              >
+                {hasPhoto ? (
+                  <>
+                    <img
+                      src={tempPhotos[idx]}
+                      alt={item.area}
+                      className="w-24 h-24 object-cover rounded-lg border-2 border-white shadow-lg"
+                    />
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        removePhoto(idx)
+                      }}
+                      className="absolute -top-2 -right-2 w-7 h-7 bg-red-500 text-white rounded-full text-sm flex items-center justify-center hover:bg-red-600 font-bold shadow-lg z-10"
+                      title="재촬영"
+                    >
+                      ×
+                    </button>
+                    {/* 촬영 완료 표시 */}
+                    <div className="absolute bottom-1 left-1 right-1 bg-green-500 bg-opacity-90 text-white text-xs px-1 py-0.5 rounded text-center font-bold">
+                      ✓
+                    </div>
+                  </>
+                ) : (
+                  <div className="w-24 h-24 bg-gray-800 bg-opacity-70 border-2 border-gray-500 border-dashed rounded-lg flex flex-col items-center justify-center">
+                    <span className="text-gray-400 text-2xl mb-1">📷</span>
+                    <span className="text-gray-300 text-xs text-center px-1 font-medium leading-tight">{item.area}</span>
+                  </div>
+                )}
               </div>
             )
           })}
         </div>
-
-        {/* 왼쪽 하단: 현재 항목의 빈 공간 (촬영 전) */}
-        {!tempPhotos[currentIndex] && (
-          <div className="absolute bottom-20 left-4 w-20 h-20 bg-gray-800 bg-opacity-70 border-2 border-gray-400 border-dashed rounded flex items-center justify-center z-10">
-            <div className="text-white text-xs text-center px-1 font-medium">
-              {currentItem?.area}
-            </div>
-          </div>
-        )}
       </div>
 
       {/* 하단: 버튼 영역 */}
       <div className="absolute bottom-0 left-0 right-0 bg-black bg-opacity-90 p-4 z-20">
         {/* 항목 선택 버튼들 */}
         <div className="flex gap-2 mb-4 overflow-x-auto pb-2">
-          {photoItems.map((item, idx) => (
-            <button
-              key={idx}
-              onClick={() => setCurrentIndex(idx)}
-              className={`flex-shrink-0 flex flex-col items-center justify-center w-16 h-16 rounded transition-all ${
-                idx === currentIndex
-                  ? 'bg-blue-600 ring-2 ring-blue-400'
-                  : tempPhotos[idx]
-                  ? 'bg-gray-700'
-                  : 'bg-gray-800'
-              }`}
-            >
-              <span className="text-white text-2xl mb-1">📷</span>
-              <span className="text-white text-xs text-center px-1 leading-tight">{item.area}</span>
-            </button>
-          ))}
+          {photoItems.map((item, idx) => {
+            const hasPhoto = !!tempPhotos[idx]
+            return (
+              <button
+                key={idx}
+                onClick={() => setCurrentIndex(idx)}
+                className={`relative flex-shrink-0 flex flex-col items-center justify-center w-16 h-16 rounded transition-all ${
+                  idx === currentIndex
+                    ? 'bg-blue-600 ring-2 ring-blue-400'
+                    : hasPhoto
+                    ? 'bg-green-600'
+                    : 'bg-gray-700'
+                }`}
+              >
+                {hasPhoto ? (
+                  <>
+                    <span className="text-white text-xl mb-1">✓</span>
+                    <span className="text-white text-xs text-center px-1 leading-tight">{item.area}</span>
+                  </>
+                ) : (
+                  <>
+                    <span className="text-white text-2xl mb-1">📷</span>
+                    <span className="text-white text-xs text-center px-1 leading-tight">{item.area}</span>
+                  </>
+                )}
+              </button>
+            )
+          })}
         </div>
 
         {/* 촬영 버튼 및 저장 버튼 */}
