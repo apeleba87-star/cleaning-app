@@ -289,10 +289,13 @@ export default function AttendancePage() {
                 <div className="flex items-start justify-between mb-2">
                   <div className="flex-1">
                     <h3 className="font-semibold text-gray-900">
-                      {Array.isArray((attendance as AttendanceWithStore).stores) 
-                        ? (attendance as AttendanceWithStore).stores?.[0]?.name 
-                        : (attendance as AttendanceWithStore).stores?.name 
-                        || attendance.store_id}
+                      {(() => {
+                        const stores = (attendance as AttendanceWithStore).stores
+                        if (Array.isArray(stores) && stores.length > 0) {
+                          return stores[0]?.name || attendance.store_id
+                        }
+                        return stores?.name || attendance.store_id
+                      })()}
                     </h3>
                     <p className="text-sm text-gray-600 mt-1">
                       출근 시간: {new Date(attendance.clock_in_at).toLocaleString('ko-KR')}
