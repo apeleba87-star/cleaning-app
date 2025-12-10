@@ -9,7 +9,7 @@ import { createClient } from '@/lib/supabase/client'
 import StoreSelector from './StoreSelector'
 
 interface AttendanceWithStore extends Attendance {
-  stores?: { id: any; name: any } | null
+  stores?: { id: any; name: any } | { id: any; name: any }[] | null
 }
 
 export default function AttendancePage() {
