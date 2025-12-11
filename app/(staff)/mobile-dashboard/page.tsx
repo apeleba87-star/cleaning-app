@@ -634,7 +634,6 @@ export default function MobileDashboardPage() {
               </div>
               <div className="flex-1">
                 <div className="font-semibold">출퇴근</div>
-                <div className="text-sm text-gray-600">GPS 기반 출퇴근 관리</div>
               </div>
               <div className="text-gray-400">›</div>
             </div>
@@ -650,23 +649,6 @@ export default function MobileDashboardPage() {
               </div>
               <div className="flex-1">
                 <div className="font-semibold">체크리스트</div>
-                <div className="text-sm text-gray-600">배정된 체크리스트 수행</div>
-              </div>
-              <div className="text-gray-400">›</div>
-            </div>
-          </Link>
-
-          <Link
-            href="/photos"
-            className="block bg-white rounded-lg shadow-md p-4 hover:shadow-lg transition-shadow"
-          >
-            <div className="flex items-center gap-3">
-              <div className="w-12 h-12 bg-purple-500 rounded-lg flex items-center justify-center text-2xl">
-                📷
-              </div>
-              <div className="flex-1">
-                <div className="font-semibold">청소 사진</div>
-                <div className="text-sm text-gray-600">청소 전후 사진 업로드</div>
               </div>
               <div className="text-gray-400">›</div>
             </div>
@@ -681,8 +663,7 @@ export default function MobileDashboardPage() {
                 ⚠️
               </div>
               <div className="flex-1">
-                <div className="font-semibold">이슈</div>
-                <div className="text-sm text-gray-600">이슈 등록 및 조회</div>
+                <div className="font-semibold">매장문제보고</div>
               </div>
               <div className="text-gray-400">›</div>
             </div>
@@ -698,7 +679,6 @@ export default function MobileDashboardPage() {
               </div>
               <div className="flex-1">
                 <div className="font-semibold">물품 요청</div>
-                <div className="text-sm text-gray-600">물품 요청 및 조회</div>
               </div>
               <div className="text-gray-400">›</div>
             </div>

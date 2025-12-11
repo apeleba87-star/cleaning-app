@@ -33,17 +33,10 @@ export function ChecklistCamera({ items, mode, storeId, onComplete, onCancel }: 
       cameraRequested = true
 
       try {
-        // HTTPS 또는 localhost가 아닌 경우 카메라 접근 불가
-        if (location.protocol !== 'https:' && !location.hostname.includes('localhost') && location.hostname !== '127.0.0.1') {
-          throw new Error('HTTPS_REQUIRED')
-        }
-
-        // 카메라 제약 조건 (더 유연하게)
-        const constraints: MediaStreamConstraints = {
+        // PC 환경에서는 facingMode를 사용하지 않음 (일반 웹캠 사용)
+        const constraints = {
           video: {
             facingMode: { ideal: 'environment' }, // 모바일에서는 후면 카메라, PC에서는 기본 카메라
-            width: { ideal: 1280 },
-            height: { ideal: 720 }
           }
         }
 
@@ -64,35 +57,19 @@ export function ChecklistCamera({ items, mode, storeId, onComplete, onCancel }: 
         if (!isMounted) return
         
         console.error('카메라 접근 실패:', error)
-        
-        let errorMessage = '카메라 접근에 실패했습니다.'
-        let showFileInput = false
-        
-        if (error.message === 'HTTPS_REQUIRED') {
-          errorMessage = '카메라 사용을 위해서는 HTTPS 연결이 필요합니다.\n\n로컬 네트워크에서는 카메라가 작동하지 않을 수 있습니다.\n파일 선택을 통해 사진을 업로드할 수 있습니다.'
-          showFileInput = true
-        } else if (error.name === 'NotAllowedError') {
-          errorMessage = '카메라 접근 권한이 거부되었습니다.\n\n브라우저 설정에서 카메라 권한을 허용해주세요.\n또는 파일 선택을 통해 사진을 업로드할 수 있습니다.'
-          showFileInput = true
-        } else if (error.name === 'NotFoundError') {
-          errorMessage = '카메라를 찾을 수 없습니다.\n\n파일 선택을 통해 사진을 업로드할 수 있습니다.'
-          showFileInput = true
-        }
+        const errorMessage = error.name === 'NotAllowedError' 
+          ? '카메라 접근 권한이 거부되었습니다. 브라우저 설정에서 카메라 권한을 허용해주세요.'
+          : error.name === 'NotFoundError'
+          ? '카메라를 찾을 수 없습니다. 카메라가 연결되어 있는지 확인해주세요.'
+          : '카메라 접근에 실패했습니다.'
         
         alert(errorMessage)
-        
-        // 파일 입력 폴백 제공
-        if (showFileInput && fileInputRef.current) {
-          // 카메라 모드는 유지하되 파일 입력 옵션 제공
-          setStream(null) // 스트림은 null로 설정
-        } else {
-          // 에러 발생 시 카메라 모드 종료
-          setTimeout(() => {
-            if (isMounted) {
-              onCancel()
-            }
-          }, 1000)
-        }
+        // 에러 발생 시 카메라 모드 종료
+        setTimeout(() => {
+          if (isMounted) {
+            onCancel()
+          }
+        }, 1000)
       }
     }
 
@@ -234,134 +211,68 @@ export function ChecklistCamera({ items, mode, storeId, onComplete, onCancel }: 
       </div>
 
       {/* 카메라 화면 */}
-      <div className="flex-1 relative flex items-center justify-center bg-black">
-        {stream ? (
-          <>
-            <video
-              ref={videoRef}
-              autoPlay
-              playsInline
-              className="w-full h-full object-cover"
-            />
-          </>
-        ) : (
-          <div className="text-white text-center p-8">
-            <p className="text-lg mb-4">카메라를 사용할 수 없습니다</p>
-            <p className="text-sm mb-6 text-gray-300">
-              파일 선택을 통해 사진을 업로드하세요
-            </p>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/*"
-              capture="environment"
-              onChange={(e) => {
-                const file = e.target.files?.[0]
-                if (file) {
-                  const reader = new FileReader()
-                  reader.onloadend = () => {
-                    const dataURL = reader.result as string
-                    setTempPhotos(prev => ({
-                      ...prev,
-                      [currentIndex]: dataURL
-                    }))
-                  }
-                  reader.readAsDataURL(file)
-                  // 다음 항목으로 자동 이동
-                  if (currentIndex < photoItems.length - 1) {
-                    setCurrentIndex(currentIndex + 1)
-                  }
-                }
-              }}
-              className="hidden"
-              multiple={false}
-            />
-            <button
-              onClick={() => fileInputRef.current?.click()}
-              className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium"
-            >
-              📷 파일에서 사진 선택
-            </button>
-          </div>
-        )}
+      <div className="flex-1 relative flex items-center justify-center">
+        <video
+          ref={videoRef}
+          autoPlay
+          playsInline
+          className="w-full h-full object-cover"
+        />
         <canvas ref={canvasRef} className="hidden" />
 
         {/* 왼쪽 하단: 사진 미리보기 영역 (임시 저장된 사진들) */}
-        <div className="absolute bottom-32 left-4 right-4 flex gap-2 overflow-x-auto z-30 pb-2">
+        <div className="absolute bottom-20 left-4 flex gap-2 max-w-[calc(100%-8rem)] overflow-x-auto z-20">
           {photoItems.map((item, idx) => {
-            const hasPhoto = !!tempPhotos[idx]
+            if (!tempPhotos[idx]) return null // 촬영하지 않은 항목은 표시하지 않음
             return (
-              <div 
-                key={idx} 
-                className={`relative flex-shrink-0 ${idx === currentIndex ? 'ring-2 ring-blue-400 ring-offset-2 ring-offset-black' : ''}`}
-                onClick={() => setCurrentIndex(idx)}
-              >
-                {hasPhoto ? (
-                  <>
-                    <img
-                      src={tempPhotos[idx]}
-                      alt={item.area}
-                      className="w-24 h-24 object-cover rounded-lg border-2 border-white shadow-lg"
-                    />
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        removePhoto(idx)
-                      }}
-                      className="absolute -top-2 -right-2 w-7 h-7 bg-red-500 text-white rounded-full text-sm flex items-center justify-center hover:bg-red-600 font-bold shadow-lg z-10"
-                      title="재촬영"
-                    >
-                      ×
-                    </button>
-                    {/* 촬영 완료 표시 */}
-                    <div className="absolute bottom-1 left-1 right-1 bg-green-500 bg-opacity-90 text-white text-xs px-1 py-0.5 rounded text-center font-bold">
-                      ✓
-                    </div>
-                  </>
-                ) : (
-                  <div className="w-24 h-24 bg-gray-800 bg-opacity-70 border-2 border-gray-500 border-dashed rounded-lg flex flex-col items-center justify-center">
-                    <span className="text-gray-400 text-2xl mb-1">📷</span>
-                    <span className="text-gray-300 text-xs text-center px-1 font-medium leading-tight">{item.area}</span>
-                  </div>
-                )}
+              <div key={idx} className="relative flex-shrink-0">
+                <img
+                  src={tempPhotos[idx]}
+                  alt={item.area}
+                  className="w-20 h-20 object-cover rounded border-2 border-white"
+                />
+                <button
+                  onClick={() => removePhoto(idx)}
+                  className="absolute -top-1 -right-1 w-6 h-6 bg-red-500 text-white rounded-full text-xs flex items-center justify-center hover:bg-red-600 font-bold"
+                  title="재촬영"
+                >
+                  ×
+                </button>
               </div>
             )
           })}
         </div>
+
+        {/* 왼쪽 하단: 현재 항목의 빈 공간 (촬영 전) */}
+        {!tempPhotos[currentIndex] && (
+          <div className="absolute bottom-20 left-4 w-20 h-20 bg-gray-800 bg-opacity-70 border-2 border-gray-400 border-dashed rounded flex items-center justify-center z-10">
+            <div className="text-white text-xs text-center px-1 font-medium">
+              {currentItem?.area}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* 하단: 버튼 영역 */}
       <div className="absolute bottom-0 left-0 right-0 bg-black bg-opacity-90 p-4 z-20">
         {/* 항목 선택 버튼들 */}
         <div className="flex gap-2 mb-4 overflow-x-auto pb-2">
-          {photoItems.map((item, idx) => {
-            const hasPhoto = !!tempPhotos[idx]
-            return (
-              <button
-                key={idx}
-                onClick={() => setCurrentIndex(idx)}
-                className={`relative flex-shrink-0 flex flex-col items-center justify-center w-16 h-16 rounded transition-all ${
-                  idx === currentIndex
-                    ? 'bg-blue-600 ring-2 ring-blue-400'
-                    : hasPhoto
-                    ? 'bg-green-600'
-                    : 'bg-gray-700'
-                }`}
-              >
-                {hasPhoto ? (
-                  <>
-                    <span className="text-white text-xl mb-1">✓</span>
-                    <span className="text-white text-xs text-center px-1 leading-tight">{item.area}</span>
-                  </>
-                ) : (
-                  <>
-                    <span className="text-white text-2xl mb-1">📷</span>
-                    <span className="text-white text-xs text-center px-1 leading-tight">{item.area}</span>
-                  </>
-                )}
-              </button>
-            )
-          })}
+          {photoItems.map((item, idx) => (
+            <button
+              key={idx}
+              onClick={() => setCurrentIndex(idx)}
+              className={`flex-shrink-0 flex flex-col items-center justify-center w-16 h-16 rounded transition-all ${
+                idx === currentIndex
+                  ? 'bg-blue-600 ring-2 ring-blue-400'
+                  : tempPhotos[idx]
+                  ? 'bg-gray-700'
+                  : 'bg-gray-800'
+              }`}
+            >
+              <span className="text-white text-2xl mb-1">📷</span>
+              <span className="text-white text-xs text-center px-1 leading-tight">{item.area}</span>
+            </button>
+          ))}
         </div>
 
         {/* 촬영 버튼 및 저장 버튼 */}

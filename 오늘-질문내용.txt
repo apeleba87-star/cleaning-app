@@ -1,0 +1,321 @@
+===========================================
+오늘 질문 내용 정리 (2025-12-11)
+===========================================
+
+【질문 1】 업체관리자 앱 기능 추가 요청
+--------------------------------------------------
+시간: 오전 초기
+질문: "지금부턴 업체관리자 앱을 수정하겠다 업체관리자가 전 매장 상태를 알수 있어야 한다 업체 관리자가 각 매장에 요청란을 보낼수 있어야 한다..."
+요구사항:
+- 업체관리자가 전 매장 상태 확인 가능
+- 각 매장에 요청란 보내기 가능
+- 요청란은 접수 -> 처리중 -> 완료 상태 흐름
+- 직원용앱에는 처리중인 요청란만 표시
+- 매장 상태: 출근일 확인, 출근전/출근중/퇴근 확인, 문제보고, 제품 입고/보관제품 사진, 물품 요청, 체크리스트 수행률
+- 문제 발생 매장은 빨간색, 문제 없는 매장은 초록색
+- 매장 클릭 시 최근 7일 데이터 확인, 날짜 선택(최대 3개월)
+
+해결:
+- app/api/business/stores/status/route.ts 생성
+- app/business/stores/status/page.tsx 생성
+- app/api/business/requests/route.ts 생성
+- app/api/staff/requests/route.ts 생성
+- app/(staff)/requests/page.tsx 생성
+- types/db.ts에 Request 타입 추가
+
+
+【질문 2】 접속 안됨 문제
+--------------------------------------------------
+시간: 오전 중반
+질문: "접속이 안된다", "여전히 접속 안된다", "모든 앱이 들어가지지 않는다"
+문제: 서버가 실행되지 않음
+해결: 서버 재시작, 모듈 경로 확인
+
+
+【질문 3】 CSS 표현 안됨 문제
+--------------------------------------------------
+시간: 오전 중반
+질문: "방금까진 접속은 되었고 css가 전혀 표현 되지 않았다"
+문제: globals.css, tailwind.config.js, postcss.config.js 파일 누락
+해결: 
+- app/globals.css 생성
+- tailwind.config.js 생성
+- postcss.config.js 생성
+
+
+【질문 4】 서버 실행 문제
+--------------------------------------------------
+시간: 오전 중반
+질문: "내가 서버를 cmd로 직접 실행을 계속 키고 있어야 하는건가?", "이전까진 cmd안켜도 잘 실행 되던데 그렇게 해줘"
+문제: 서버가 자동으로 실행되지 않음
+해결:
+- start-server.bat 생성
+- start-server-background.bat 생성
+- start-server.js 생성
+- package.json에 dev:bg 스크립트 추가
+- README-SERVER.md 생성
+
+
+【질문 5】 매장 상태 UI 개선 요청
+--------------------------------------------------
+시간: 오후 초반
+질문: "매장 상태를 볼떄 첨부한 이미지를 예시로 ui를 정하고 우리에 맞게 데이터를 입력해줘 그리고 오늘 출근하는 매장과 휴무인 매장을 한눈에 구분할수 있게 구분해줘"
+해결:
+- 매장 상태 페이지 UI 개선
+- 출근 매장과 휴무 매장 시각적 구분
+- 요약 카드 추가 (전체 매장, 금일 운영, 완료, 문제발생, 알림)
+- 필터 버튼 추가 (전체, 금일 운영, 완료, 진행중, 문제발생)
+- 매장 카드에 상태 배지, 진행률 바, 요청 사항 표시
+
+
+【질문 6】 매장 상태 런타임 에러
+--------------------------------------------------
+시간: 오후 초반
+질문: "매장 상태를 누르니 이렇게 나온다"
+문제: todayChecklists 변수 선언 순서 오류
+해결: app/api/business/stores/status/route.ts에서 변수 선언 순서 수정
+
+
+【질문 7】 자동 새로고침 비용 최적화
+--------------------------------------------------
+시간: 오후 중반
+질문: "자동 새로고침 30초마다 자동으로 데이터 갱신 이기능을 넣었는데 이렇게 되면 수퍼베이스 운영비용이 올라가지 않나? 변경된 데이터만 가져오면 안되나?"
+해결:
+- app/api/business/stores/status/check/route.ts 생성 (변경 감지 API)
+- app/business/stores/status/page.tsx 수정 (변경 감지 후에만 전체 데이터 로드)
+
+
+【질문 8】 자동 새로고침 시간 설정 및 수동 새로고침
+--------------------------------------------------
+시간: 오후 중반
+질문: "현재 기준 자동 새로고침은 30분 기준으로 정하고 새로고침은 시간은 오전 8시~저녁 11시까지 그리고 수동 새로고침을 할 수 있게 배치하고 수동 새로고침 아래에는 새로고침을 해야 출근상태가 정확하다는 것을 알려줘 단 매장 문제보고가 있는 경우엔 그 매장만 즉시 새로고침을 할수 있나? 현재는 전체를 새로고침하는 것이 아닌 매장단위로만 새로고침이 필요하다"
+해결:
+- 자동 새로고침 30분 간격으로 변경
+- 오전 8시~저녁 11시에만 자동 새로고침 작동
+- 수동 새로고침 버튼 추가
+- 안내 문구 추가
+- 매장별 개별 새로고침 기능 추가 (문제보고가 있는 매장에만 버튼 표시)
+- app/api/business/stores/[id]/status/route.ts 생성 (매장별 상태 조회 API)
+
+
+【질문 9】 업체관리자 매장 수정 오류
+--------------------------------------------------
+시간: 오후 중반
+질문: "업체관리자에서 매장 수정 할려니 이렇게 나온다"
+문제: 
+- "Unexpected end of JSON input" 오류
+- "Cannot access 'store' before initialization" 오류
+- PATCH API 누락
+해결:
+- app/api/business/stores/[id]/route.ts에 PATCH 메서드 추가
+- app/api/business/stores/route.ts에 POST 메서드 추가
+- app/business/stores/StoreForm.tsx 에러 처리 개선
+- 변수명 충돌 해결 (store -> updatedStore)
+
+
+【질문 10】 직원용 앱 요청란 복구
+--------------------------------------------------
+시간: 오후 중반
+질문: "그리고 직원용 앱인데 어제 마지막까지 만들었던거 없어졌네?"
+문제: 요청란 기능이 표시되지 않음
+해결:
+- app/(staff)/requests/page.tsx 확인 및 유지
+- app/(staff)/mobile-dashboard/page.tsx에서 요청란 섹션 항상 표시하도록 수정
+- 요청란이 없어도 클릭 가능하도록 링크 추가
+
+
+【질문 11】 Supabase DDL 및 RLS 복구
+--------------------------------------------------
+시간: 오후 후반
+질문: "아래 16시간 전에 만들었던거 보이지? 저거 복구해야지"
+문제: Supabase 스키마 및 RLS 정책 파일 누락
+해결:
+- supabase-schema-and-rls.sql 생성
+- 모든 테이블 DDL 포함
+- RLS 정책 포함
+- 함수 생성 포함
+- Storage 버킷 정책 포함
+- 구문 오류 수정 (CREATE POLICY 누락 문제)
+- 함수 매개변수 이름 충돌 해결 (DROP FUNCTION 추가)
+
+
+【질문 12】 Platform Stores 빌드 에러
+--------------------------------------------------
+시간: 오후 후반
+질문: (이미지로 에러 표시)
+문제: Module not found: Can't resolve './StoreForm'
+파일: app/platform/stores/StoreList.tsx
+해결:
+- app/platform/stores/StoreForm.tsx 생성
+- app/api/platform/stores/route.ts 생성
+- app/api/platform/stores/[id]/route.ts 생성
+
+
+【질문 13】 빌드 에러 - SupplyList 컴포넌트 누락
+--------------------------------------------------
+시간: 오전 초기
+문제: Module not found: Can't resolve '@/components/SupplyList'
+파일: app/(staff)/supplies/page.tsx
+해결: SupplyList import 제거, 인라인 렌더링으로 변경
+
+
+【질문 14】 빌드 에러 - CreateUserForm 파일 누락
+--------------------------------------------------
+시간: 오전 중반
+문제: Module not found: Can't resolve './CreateUserForm'
+파일: app/platform/users/CreateUserForm.tsx
+해결: 파일 새로 생성, platform용으로 수정
+
+
+【질문 15】 런타임 에러 - description 컬럼 누락
+--------------------------------------------------
+시간: 오전 중반
+문제: Could not find the 'description' column of 'supply_requests'
+해결: types/db.ts에 description 필드 추가, SQL 스크립트 생성
+
+
+【질문 16】 빌드 에러 - /business/stores/status 페이지
+--------------------------------------------------
+시간: 오전 중반
+문제: The default export is not a React Component
+파일: app/business/stores/status/page.tsx (파일이 비어있음)
+해결: 페이지 파일 및 API 엔드포인트 복원
+
+
+===========================================
+수정/생성된 주요 파일 목록
+===========================================
+
+1. app/api/business/stores/status/route.ts (신규)
+   - 전체 매장 상태 조회 API
+   - 출근 정보, 문제보고, 체크리스트, 요청란 등 집계
+
+2. app/api/business/stores/status/check/route.ts (신규)
+   - 변경 감지 API (비용 최적화)
+
+3. app/api/business/stores/[id]/status/route.ts (신규)
+   - 개별 매장 상태 조회 API
+
+4. app/business/stores/status/page.tsx (신규)
+   - 매장 상태 대시보드 페이지
+   - 자동 새로고침 (30분, 8시~23시)
+   - 수동 새로고침
+   - 매장별 개별 새로고침
+
+5. app/api/business/requests/route.ts (신규)
+   - 요청란 생성/조회 API
+
+6. app/api/business/requests/[id]/status/route.ts (신규)
+   - 요청란 상태 변경 API
+
+7. app/api/staff/requests/route.ts (신규)
+   - 직원용 요청란 조회 API
+
+8. app/(staff)/requests/page.tsx (신규)
+   - 직원용 요청란 페이지
+
+9. app/platform/stores/StoreForm.tsx (신규)
+   - Platform용 매장 폼
+
+10. app/api/platform/stores/route.ts (신규)
+    - Platform용 매장 생성 API
+
+11. app/api/platform/stores/[id]/route.ts (신규)
+    - Platform용 매장 수정 API
+
+12. app/api/business/stores/[id]/route.ts (수정)
+    - PATCH 메서드 추가
+
+13. app/api/business/stores/route.ts (수정)
+    - POST 메서드 추가
+
+14. app/business/stores/StoreForm.tsx (수정)
+    - 에러 처리 개선
+
+15. app/(staff)/mobile-dashboard/page.tsx (수정)
+    - 요청란 섹션 항상 표시
+
+16. types/db.ts (수정)
+    - Request 타입 추가
+    - SupplyRequest에 description 필드 추가
+
+17. supabase-schema-and-rls.sql (신규)
+    - 전체 데이터베이스 스키마
+    - RLS 정책
+    - 함수 정의
+    - Storage 정책
+
+18. app/globals.css (신규)
+19. tailwind.config.js (신규)
+20. postcss.config.js (신규)
+21. start-server.bat (신규)
+22. start-server-background.bat (신규)
+23. start-server.js (신규)
+24. README-SERVER.md (신규)
+
+
+===========================================
+해결한 에러 목록
+===========================================
+
+1. ✅ Module not found: '@/components/SupplyList'
+2. ✅ Module not found: './CreateUserForm'
+3. ✅ Could not find the 'description' column
+4. ✅ The default export is not a React Component
+5. ✅ 접속 안됨 문제
+6. ✅ CSS 표현 안됨 문제
+7. ✅ 서버 실행 문제
+8. ✅ todayChecklists 변수 선언 순서 오류
+9. ✅ Unexpected end of JSON input
+10. ✅ Cannot access 'store' before initialization
+11. ✅ Module not found: './StoreForm' (platform)
+12. ✅ SQL 구문 오류 (CREATE POLICY 누락)
+13. ✅ 함수 매개변수 이름 충돌
+
+
+===========================================
+구현된 주요 기능
+===========================================
+
+1. ✅ 업체관리자 매장 상태 대시보드
+   - 전체 매장 상태 조회
+   - 출근/휴무 구분
+   - 문제 발생 매장 표시
+   - 체크리스트 진행률
+   - 요청란 현황
+
+2. ✅ 요청란 시스템
+   - 업체관리자 → 매장 요청란 보내기
+   - 직원용앱에서 처리중인 요청란 확인
+   - 상태 흐름: 접수 → 처리중 → 완료
+
+3. ✅ 자동 새로고침 최적화
+   - 변경 감지 API로 비용 절감
+   - 30분 간격 자동 새로고침
+   - 오전 8시~저녁 11시에만 작동
+
+4. ✅ 수동 새로고침
+   - 전체 새로고침 버튼
+   - 매장별 개별 새로고침 (문제보고 매장)
+
+5. ✅ Platform 관리자 기능
+   - 매장 생성/수정
+   - 회사 선택 기능
+
+6. ✅ Supabase 스키마 복구
+   - 전체 테이블 DDL
+   - RLS 정책
+   - 함수 정의
+
+
+===========================================
+현재 상태
+===========================================
+
+✅ 모든 빌드 에러 해결
+✅ 모든 런타임 에러 해결
+✅ 업체관리자 매장 상태 기능 완료
+✅ 요청란 시스템 완료
+✅ 자동 새로고침 최적화 완료
+✅ Supabase 스키마 복구 완료
+✅ Platform 기능 완료

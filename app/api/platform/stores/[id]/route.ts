@@ -19,10 +19,10 @@ export async function PATCH(
     const body = await request.json()
     const {
       company_id,
-      name,
-      address,
       head_office_name,
       parent_store_name,
+      name,
+      address,
       management_days,
       service_amount,
       category,
@@ -44,16 +44,16 @@ export async function PATCH(
       .from('stores')
       .update({
         company_id: company_id || null,
-        name: name.trim(),
-        address: address?.trim() || null,
         head_office_name: head_office_name?.trim() || '개인',
         parent_store_name: parent_store_name?.trim() || null,
+        name: name.trim(),
+        address: address?.trim() || null,
         management_days: management_days?.trim() || null,
         service_amount: service_amount ? parseFloat(service_amount) : null,
         category: category?.trim() || null,
         contract_start_date: contract_start_date || null,
         contract_end_date: contract_end_date || null,
-        service_active: service_active ?? true,
+        service_active: service_active !== undefined ? service_active : true,
         updated_at: new Date().toISOString(),
       })
       .eq('id', params.id)
@@ -74,6 +74,13 @@ export async function PATCH(
       )
     }
 
+    if (!store) {
+      return NextResponse.json(
+        { error: '매장을 찾을 수 없습니다.' },
+        { status: 404 }
+      )
+    }
+
     return NextResponse.json({ store })
   } catch (error: any) {
     console.error('Error in PATCH /api/platform/stores/[id]:', error)
@@ -83,6 +90,5 @@ export async function PATCH(
     )
   }
 }
-
 
 

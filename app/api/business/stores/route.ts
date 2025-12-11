@@ -1,35 +1,39 @@
-import { createServerSupabaseClient } from '@/lib/supabase/server'
-import { NextRequest, NextResponse } from 'next/server'
-import { getServerUser } from '@/lib/supabase/server'
+import { NextRequest } from 'next/server'
+import { createServerSupabaseClient, getServerUser } from '@/lib/supabase/server'
+import { handleApiError, UnauthorizedError, ForbiddenError } from '@/lib/errors'
 
+// 매장 생성
 export async function POST(request: NextRequest) {
   try {
     const user = await getServerUser()
+    if (!user) {
+      throw new UnauthorizedError('Authentication required')
+    }
 
-    if (!user || (user.role !== 'business_owner' && user.role !== 'platform_admin')) {
-      return NextResponse.json(
-        { error: '권한이 없습니다.' },
-        { status: 403 }
-      )
+    if (user.role !== 'business_owner') {
+      throw new ForbiddenError('Only business owners can create stores')
+    }
+
+    if (!user.company_id) {
+      throw new ForbiddenError('Company ID is required')
     }
 
     const body = await request.json()
-    const { company_id, name, ...storeData } = body
+    const {
+      head_office_name,
+      parent_store_name,
+      name,
+      address,
+      management_days,
+      service_amount,
+      category,
+      contract_start_date,
+      contract_end_date,
+      service_active,
+    } = body
 
     if (!name || typeof name !== 'string' || name.trim().length === 0) {
-      return NextResponse.json(
-        { error: '매장명은 필수입니다.' },
-        { status: 400 }
-      )
-    }
-
-    // business_owner는 자신의 회사만 추가 가능
-    const finalCompanyId = user.role === 'business_owner' ? user.company_id : company_id
-    if (!finalCompanyId) {
-      return NextResponse.json(
-        { error: '회사 정보가 없습니다.' },
-        { status: 400 }
-      )
+      throw new Error('매장명은 필수입니다.')
     }
 
     const supabase = await createServerSupabaseClient()
@@ -37,30 +41,32 @@ export async function POST(request: NextRequest) {
     const { data: store, error } = await supabase
       .from('stores')
       .insert({
-        company_id: finalCompanyId,
+        company_id: user.company_id,
+        head_office_name: head_office_name?.trim() || '개인',
+        parent_store_name: parent_store_name?.trim() || null,
         name: name.trim(),
-        ...storeData,
+        address: address?.trim() || null,
+        management_days: management_days?.trim() || null,
+        service_amount: service_amount ? parseFloat(service_amount) : null,
+        category: category?.trim() || null,
+        contract_start_date: contract_start_date || null,
+        contract_end_date: contract_end_date || null,
+        service_active: service_active !== undefined ? service_active : true,
       })
       .select()
       .single()
 
     if (error) {
-      console.error('Error creating store:', error)
-      return NextResponse.json(
-        { error: '매장 생성에 실패했습니다.' },
-        { status: 500 }
-      )
+      throw new Error(`Failed to create store: ${error.message}`)
     }
 
-    return NextResponse.json({ store })
+    return Response.json({
+      success: true,
+      store,
+    })
   } catch (error: any) {
-    console.error('Error in POST /api/business/stores:', error)
-    return NextResponse.json(
-      { error: '서버 오류가 발생했습니다.' },
-      { status: 500 }
-    )
+    return handleApiError(error)
   }
 }
-
 
 

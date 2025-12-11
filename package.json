@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "next dev",
     "dev:mobile": "next dev -H 0.0.0.0",
+    "dev:bg": "node start-server.js",
     "build": "next build",
     "start": "next start",
     "lint": "next lint"

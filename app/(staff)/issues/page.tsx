@@ -1,9 +1,8 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { IssueList } from '@/components/IssueList'
 import { createClient } from '@/lib/supabase/client'
-import { Issue } from '@/types/db'
+import { Issue, IssueStatus } from '@/types/db'
 import { PhotoUploader } from '@/components/PhotoUploader'
 import { useTodayAttendance } from '@/lib/hooks/useTodayAttendance'
 import StoreSelector from '../attendance/StoreSelector'
@@ -190,7 +189,83 @@ export default function IssuesPage() {
       )}
 
       <div className="bg-white rounded-lg shadow-md p-6">
-        <IssueList issues={issues} userRole="staff" />
+        <h2 className="text-lg font-semibold mb-4">이슈 목록</h2>
+        {issues.length === 0 ? (
+          <p className="text-gray-500 text-center py-8">이슈가 없습니다.</p>
+        ) : (
+          <div className="space-y-4">
+            {issues.map((issue) => {
+              const getStatusLabel = (status: IssueStatus) => {
+                switch (status) {
+                  case 'submitted':
+                    return '제출됨'
+                  case 'in_progress':
+                    return '진행중'
+                  case 'completed':
+                    return '완료'
+                  case 'rejected':
+                    return '거부됨'
+                  default:
+                    return status
+                }
+              }
+
+              const getStatusColor = (status: IssueStatus) => {
+                switch (status) {
+                  case 'submitted':
+                    return 'bg-yellow-100 text-yellow-800'
+                  case 'in_progress':
+                    return 'bg-blue-100 text-blue-800'
+                  case 'completed':
+                    return 'bg-green-100 text-green-800'
+                  case 'rejected':
+                    return 'bg-red-100 text-red-800'
+                  default:
+                    return 'bg-gray-100 text-gray-800'
+                }
+              }
+
+              return (
+                <div
+                  key={issue.id}
+                  className="border border-gray-200 rounded-lg p-4 hover:bg-gray-50"
+                >
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-2">
+                        <span
+                          className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(issue.status)}`}
+                        >
+                          {getStatusLabel(issue.status)}
+                        </span>
+                        <span className="text-xs text-gray-500">
+                          {new Date(issue.created_at).toLocaleString('ko-KR')}
+                        </span>
+                      </div>
+                      <h3 className="text-sm font-medium text-gray-900 mb-1">
+                        {issue.title}
+                      </h3>
+                      {issue.description && (
+                        <p className="text-sm text-gray-600 whitespace-pre-wrap">
+                          {issue.description}
+                        </p>
+                      )}
+                      {issue.photo_url && (
+                        <div className="mt-2">
+                          <img
+                            src={issue.photo_url}
+                            alt="이슈 사진"
+                            className="max-h-48 rounded-lg border border-gray-300"
+                          />
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        )}
       </div>
     </div>
   )

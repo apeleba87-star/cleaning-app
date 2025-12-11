@@ -1,0 +1,6 @@
+{
+  "/business/stores/status/page": "app/business/stores/status/page.js",
+  "/(staff)/checklist/page": "app/(staff)/checklist/page.js",
+  "/(staff)/issues/page": "app/(staff)/issues/page.js",
+  "/(staff)/mobile-dashboard/page": "app/(staff)/mobile-dashboard/page.js"
+}

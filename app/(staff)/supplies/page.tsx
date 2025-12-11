@@ -1,10 +1,8 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { SupplyList } from '@/components/SupplyList'
 import { createClient } from '@/lib/supabase/client'
 import { SupplyRequest, SupplyRequestStatus } from '@/types/db'
-import { PhotoUploader } from '@/components/PhotoUploader'
 import { useTodayAttendance } from '@/lib/hooks/useTodayAttendance'
 import StoreSelector from '../attendance/StoreSelector'
 
@@ -14,10 +12,7 @@ export default function SuppliesPage() {
   const [showForm, setShowForm] = useState(false)
   const [formData, setFormData] = useState({
     store_id: '',
-    category_id: '',
-    item_name: '',
-    quantity: '',
-    photo_url: '',
+    description: '',
   })
 
   // 출근 정보 가져오기
@@ -58,8 +53,8 @@ export default function SuppliesPage() {
   }
 
   const handleSubmit = async () => {
-    if (!formData.store_id || !formData.item_name) {
-      alert('매장 ID와 품목명을 입력해주세요.')
+    if (!formData.store_id || !formData.description) {
+      alert('매장과 요청란을 입력해주세요.')
       return
     }
 
@@ -71,10 +66,12 @@ export default function SuppliesPage() {
     if (!session) return
 
     const { error } = await supabase.from('supply_requests').insert({
-      ...formData,
-      quantity: formData.quantity ? parseInt(formData.quantity) : null,
+      store_id: formData.store_id,
+      description: formData.description,
       user_id: session.user.id,
       status: 'requested',
+      item_name: '', // 기존 필드 유지 (호환성)
+      quantity: null,
     })
 
     if (error) {
@@ -83,26 +80,39 @@ export default function SuppliesPage() {
       setShowForm(false)
       setFormData({
         store_id: '',
-        category_id: '',
-        item_name: '',
-        quantity: '',
-        photo_url: '',
+        description: '',
       })
       loadSupplies()
     }
   }
 
-  const handleStatusChange = async (id: string, status: SupplyRequestStatus) => {
-    const response = await fetch(`/api/supply/${id}/status`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ status }),
-    })
+  const getStatusLabel = (status: SupplyRequestStatus) => {
+    switch (status) {
+      case 'requested':
+        return '요청됨'
+      case 'received':
+        return '수신됨'
+      case 'completed':
+        return '완료됨'
+      case 'rejected':
+        return '거부됨'
+      default:
+        return status
+    }
+  }
 
-    if (response.ok) {
-      loadSupplies()
-    } else {
-      alert('상태 변경 실패')
+  const getStatusColor = (status: SupplyRequestStatus) => {
+    switch (status) {
+      case 'requested':
+        return 'bg-yellow-100 text-yellow-800'
+      case 'received':
+        return 'bg-blue-100 text-blue-800'
+      case 'completed':
+        return 'bg-green-100 text-green-800'
+      case 'rejected':
+        return 'bg-red-100 text-red-800'
+      default:
+        return 'bg-gray-100 text-gray-800'
     }
   }
 
@@ -133,85 +143,109 @@ export default function SuppliesPage() {
   return (
     <div className="max-w-4xl mx-auto space-y-6 mb-20 md:mb-0">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">물품 요청</h1>
+        <h1 className="text-2xl font-bold">물품/기타 요청</h1>
         <button
           onClick={() => setShowForm(!showForm)}
           className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
         >
-          {showForm ? '취소' : '+ 요청 생성'}
+          {showForm ? '취소' : '요청하기'}
         </button>
       </div>
 
       {showForm && (
         <div className="bg-white rounded-lg shadow-md p-6 space-y-4">
-          <h2 className="text-lg font-semibold">새 물품 요청</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                매장 <span className="text-red-500">*</span>
-              </label>
-              <StoreSelector
-                selectedStoreId={formData.store_id}
-                onSelectStore={(id) => setFormData({ ...formData, store_id: id })}
-                disabled={true} // 출근한 매장으로 고정
-              />
-              <p className="mt-1 text-xs text-gray-500">
-                출근한 매장: {attendanceStoreId}
-              </p>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                품목명 *
-              </label>
-              <input
-                type="text"
-                value={formData.item_name}
-                onChange={(e) =>
-                  setFormData({ ...formData, item_name: e.target.value })
-                }
-                className="w-full px-3 py-2 border border-gray-300 rounded-md"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                수량
-              </label>
-              <input
-                type="number"
-                value={formData.quantity}
-                onChange={(e) =>
-                  setFormData({ ...formData, quantity: e.target.value })
-                }
-                className="w-full px-3 py-2 border border-gray-300 rounded-md"
-              />
-            </div>
-          </div>
-          {formData.store_id && (
-            <PhotoUploader
-              storeId={formData.store_id}
-              entity="supply"
-              onUploadComplete={(url) =>
-                setFormData({ ...formData, photo_url: url })
-              }
+          <h2 className="text-lg font-semibold">새 요청</h2>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              매장 <span className="text-red-500">*</span>
+            </label>
+            <StoreSelector
+              selectedStoreId={formData.store_id}
+              onSelectStore={(id) => setFormData({ ...formData, store_id: id })}
+              disabled={true}
             />
-          )}
-          <button
-            onClick={handleSubmit}
-            className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
-          >
-            제출
-          </button>
+            <p className="mt-1 text-xs text-gray-500">
+              출근한 매장: {attendanceStoreId}
+            </p>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              요청란
+            </label>
+            <textarea
+              value={formData.description}
+              onChange={(e) =>
+                setFormData({ ...formData, description: e.target.value })
+              }
+              className="w-full px-3 py-2 border border-gray-300 rounded-md"
+              rows={4}
+              placeholder="요청 내용을 입력하세요"
+            />
+          </div>
+          <div className="flex justify-end space-x-3">
+            <button
+              onClick={() => {
+                setShowForm(false)
+                setFormData({
+                  store_id: '',
+                  description: '',
+                })
+              }}
+              className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50"
+            >
+              취소
+            </button>
+            <button
+              onClick={handleSubmit}
+              className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+            >
+              저장
+            </button>
+          </div>
         </div>
       )}
 
       <div className="bg-white rounded-lg shadow-md p-6">
-        <SupplyList
-          supplies={supplies}
-          onStatusChange={handleStatusChange}
-          userRole="staff"
-        />
+        <h2 className="text-lg font-semibold mb-4">요청 목록</h2>
+        {supplies.length === 0 ? (
+          <p className="text-gray-500 text-center py-8">요청이 없습니다.</p>
+        ) : (
+          <div className="space-y-4">
+            {supplies.map((supply) => (
+              <div
+                key={supply.id}
+                className="border border-gray-200 rounded-lg p-4 hover:bg-gray-50"
+              >
+                <div className="flex items-start justify-between">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 mb-2">
+                      <span
+                        className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(supply.status)}`}
+                      >
+                        {getStatusLabel(supply.status)}
+                      </span>
+                      <span className="text-xs text-gray-500">
+                        {new Date(supply.created_at).toLocaleString('ko-KR')}
+                      </span>
+                    </div>
+                    {supply.description && (
+                      <p className="text-sm text-gray-700 whitespace-pre-wrap">
+                        {supply.description}
+                      </p>
+                    )}
+                    {supply.manager_comment && (
+                      <div className="mt-2 p-2 bg-gray-50 rounded">
+                        <p className="text-xs font-medium text-gray-600">관리자 코멘트:</p>
+                        <p className="text-sm text-gray-700">{supply.manager_comment}</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   )
 }
-

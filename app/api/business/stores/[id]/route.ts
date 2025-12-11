@@ -1,54 +1,116 @@
-import { createServerSupabaseClient } from '@/lib/supabase/server'
-import { NextRequest, NextResponse } from 'next/server'
-import { getServerUser } from '@/lib/supabase/server'
+import { NextRequest } from 'next/server'
+import { createServerSupabaseClient, getServerUser } from '@/lib/supabase/server'
+import { handleApiError, UnauthorizedError, ForbiddenError } from '@/lib/errors'
 
+// 매장 정보 조회
+export async function GET(
+  request: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  try {
+    const user = await getServerUser()
+    if (!user) {
+      throw new UnauthorizedError('Authentication required')
+    }
+
+    if (user.role !== 'business_owner') {
+      throw new ForbiddenError('Only business owners can view stores')
+    }
+
+    if (!user.company_id) {
+      throw new ForbiddenError('Company ID is required')
+    }
+
+    const supabase = await createServerSupabaseClient()
+
+    // 매장이 회사에 속해있는지 확인
+    const { data: store, error } = await supabase
+      .from('stores')
+      .select('*')
+      .eq('id', params.id)
+      .eq('company_id', user.company_id)
+      .is('deleted_at', null)
+      .single()
+
+    if (error || !store) {
+      throw new ForbiddenError('Store not found or access denied')
+    }
+
+    return Response.json({
+      success: true,
+      data: store,
+    })
+  } catch (error: any) {
+    return handleApiError(error)
+  }
+}
+
+// 매장 수정
 export async function PATCH(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
   try {
     const user = await getServerUser()
+    if (!user) {
+      throw new UnauthorizedError('Authentication required')
+    }
 
-    if (!user || (user.role !== 'business_owner' && user.role !== 'platform_admin')) {
-      return NextResponse.json(
-        { error: '권한이 없습니다.' },
-        { status: 403 }
-      )
+    if (user.role !== 'business_owner') {
+      throw new ForbiddenError('Only business owners can update stores')
+    }
+
+    if (!user.company_id) {
+      throw new ForbiddenError('Company ID is required')
     }
 
     const body = await request.json()
-    const { name, ...storeData } = body
+    const {
+      head_office_name,
+      parent_store_name,
+      name,
+      address,
+      management_days,
+      service_amount,
+      category,
+      contract_start_date,
+      contract_end_date,
+      service_active,
+    } = body
 
     if (!name || typeof name !== 'string' || name.trim().length === 0) {
-      return NextResponse.json(
-        { error: '매장명은 필수입니다.' },
-        { status: 400 }
-      )
+      throw new Error('매장명은 필수입니다.')
     }
 
     const supabase = await createServerSupabaseClient()
 
-    // business_owner는 자신의 회사 매장만 수정 가능
-    if (user.role === 'business_owner') {
-      const { data: store } = await supabase
-        .from('stores')
-        .select('company_id')
-        .eq('id', params.id)
-        .single()
+    // 매장이 회사에 속해있는지 확인
+    const { data: existingStore, error: checkError } = await supabase
+      .from('stores')
+      .select('id')
+      .eq('id', params.id)
+      .eq('company_id', user.company_id)
+      .is('deleted_at', null)
+      .single()
 
-      if (!store || store.company_id !== user.company_id) {
-        return NextResponse.json(
-          { error: '권한이 없습니다.' },
-          { status: 403 }
-        )
-      }
+    if (checkError || !existingStore) {
+      throw new ForbiddenError('Store not found or access denied')
     }
 
+    // 매장 수정
     const { data: store, error } = await supabase
       .from('stores')
       .update({
+        head_office_name: head_office_name?.trim() || '개인',
+        parent_store_name: parent_store_name?.trim() || null,
         name: name.trim(),
-        ...storeData,
+        address: address?.trim() || null,
+        management_days: management_days?.trim() || null,
+        service_amount: service_amount ? parseFloat(service_amount) : null,
+        category: category?.trim() || null,
+        contract_start_date: contract_start_date || null,
+        contract_end_date: contract_end_date || null,
+        service_active: service_active !== undefined ? service_active : true,
         updated_at: new Date().toISOString(),
       })
       .eq('id', params.id)
@@ -56,80 +118,18 @@ export async function PATCH(
       .single()
 
     if (error) {
-      console.error('Error updating store:', error)
-      return NextResponse.json(
-        { error: '매장 수정에 실패했습니다.' },
-        { status: 500 }
-      )
+      throw new Error(`Failed to update store: ${error.message}`)
     }
 
-    return NextResponse.json({ store })
+    if (!store) {
+      throw new Error('Store not found')
+    }
+
+    return Response.json({
+      store,
+    })
   } catch (error: any) {
-    console.error('Error in PATCH /api/business/stores/[id]:', error)
-    return NextResponse.json(
-      { error: '서버 오류가 발생했습니다.' },
-      { status: 500 }
-    )
+    return handleApiError(error)
   }
 }
-
-export async function DELETE(
-  request: NextRequest,
-  { params }: { params: { id: string } }
-) {
-  try {
-    const user = await getServerUser()
-
-    if (!user || (user.role !== 'business_owner' && user.role !== 'platform_admin')) {
-      return NextResponse.json(
-        { error: '권한이 없습니다.' },
-        { status: 403 }
-      )
-    }
-
-    const supabase = await createServerSupabaseClient()
-
-    // business_owner는 자신의 회사 매장만 삭제 가능
-    if (user.role === 'business_owner') {
-      const { data: store } = await supabase
-        .from('stores')
-        .select('company_id')
-        .eq('id', params.id)
-        .single()
-
-      if (!store || store.company_id !== user.company_id) {
-        return NextResponse.json(
-          { error: '권한이 없습니다.' },
-          { status: 403 }
-        )
-      }
-    }
-
-    const { error } = await supabase
-      .from('stores')
-      .update({
-        deleted_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', params.id)
-
-    if (error) {
-      console.error('Error deleting store:', error)
-      return NextResponse.json(
-        { error: '매장 삭제에 실패했습니다.' },
-        { status: 500 }
-      )
-    }
-
-    return NextResponse.json({ success: true })
-  } catch (error: any) {
-    console.error('Error in DELETE /api/business/stores/[id]:', error)
-    return NextResponse.json(
-      { error: '서버 오류가 발생했습니다.' },
-      { status: 500 }
-    )
-  }
-}
-
-
 

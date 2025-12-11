@@ -2,14 +2,14 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { GeoGuard } from '@/components/GeoGuard'
-import { GPSLocation, Attendance } from '@/types/db'
+import { GeoGuard, GPSLocation } from '@/components/GeoGuard'
 import { clockInAction, clockOutAction } from './actions'
 import { createClient } from '@/lib/supabase/client'
+import { Attendance } from '@/types/db'
 import StoreSelector from './StoreSelector'
 
 interface AttendanceWithStore extends Attendance {
-  stores?: { id: any; name: any } | { id: any; name: any }[] | null
+  stores?: { name: string }
 }
 
 export default function AttendancePage() {
@@ -90,7 +90,7 @@ export default function AttendancePage() {
       console.error('Error loading attendance:', queryError)
     }
 
-    setTodayAttendances((data || []) as AttendanceWithStore[])
+    setTodayAttendances(data || [])
     setLoading(false)
   }
 
@@ -289,13 +289,7 @@ export default function AttendancePage() {
                 <div className="flex items-start justify-between mb-2">
                   <div className="flex-1">
                     <h3 className="font-semibold text-gray-900">
-                      {(() => {
-                        const stores = (attendance as AttendanceWithStore).stores
-                        if (Array.isArray(stores) && stores.length > 0) {
-                          return stores[0]?.name || attendance.store_id
-                        }
-                        return stores?.name || attendance.store_id
-                      })()}
+                      {(attendance as AttendanceWithStore).stores?.name || attendance.store_id}
                     </h3>
                     <p className="text-sm text-gray-600 mt-1">
                       출근 시간: {new Date(attendance.clock_in_at).toLocaleString('ko-KR')}

@@ -59,13 +59,30 @@ export default function StoreForm({ store, companyId, onSuccess, onCancel }: Sto
         }),
       })
 
-      const data = await response.json()
-
-      if (!response.ok) {
-        throw new Error(data.error || '저장에 실패했습니다.')
+      // 응답이 비어있는지 확인
+      const text = await response.text()
+      if (!text) {
+        throw new Error('서버 응답이 없습니다.')
       }
 
-      onSuccess(data.store)
+      let data
+      try {
+        data = JSON.parse(text)
+      } catch (parseError) {
+        throw new Error(`서버 응답 파싱 오류: ${text}`)
+      }
+
+      if (!response.ok) {
+        throw new Error(data.error || data.message || '저장에 실패했습니다.')
+      }
+
+      // 응답 형식 확인
+      const updatedStore = data.store || data.data
+      if (!updatedStore) {
+        throw new Error('저장된 매장 정보를 받을 수 없습니다.')
+      }
+
+      onSuccess(updatedStore)
     } catch (err: any) {
       setError(err.message)
     } finally {

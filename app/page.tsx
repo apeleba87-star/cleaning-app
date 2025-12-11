@@ -29,7 +29,7 @@ export default async function HomePage() {
   } else if (user.role === 'platform_admin') {
     redirect('/platform/dashboard')
   } else if (user.role === 'admin') {
-    redirect('/admin/dashboard')
+    redirect('/dashboard')
   }
 
   redirect('/login')

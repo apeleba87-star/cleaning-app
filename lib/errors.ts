@@ -1,83 +1,67 @@
-export interface ApiError {
-  error: string
-  message: string
-  details?: unknown
-  statusCode: number
-}
-
-export class AppError extends Error {
-  constructor(
-    public message: string,
-    public statusCode: number = 500,
-    public details?: unknown
-  ) {
+export class ValidationError extends Error {
+  constructor(message: string, public details?: any) {
     super(message)
-    this.name = 'AppError'
-  }
-
-  toJSON(): ApiError {
-    return {
-      error: this.name,
-      message: this.message,
-      details: this.details,
-      statusCode: this.statusCode,
-    }
-  }
-}
-
-export class ValidationError extends AppError {
-  constructor(message: string, details?: unknown) {
-    super(message, 422, details)
     this.name = 'ValidationError'
   }
 }
 
-export class UnauthorizedError extends AppError {
-  constructor(message: string = 'Unauthorized') {
-    super(message, 401)
+export class UnauthorizedError extends Error {
+  constructor(message: string) {
+    super(message)
     this.name = 'UnauthorizedError'
   }
 }
 
-export class ForbiddenError extends AppError {
-  constructor(message: string = 'Forbidden') {
-    super(message, 403)
+export class ForbiddenError extends Error {
+  constructor(message: string) {
+    super(message)
     this.name = 'ForbiddenError'
   }
 }
 
-export class NotFoundError extends AppError {
-  constructor(message: string = 'Not found') {
-    super(message, 404)
-    this.name = 'NotFoundError'
-  }
-}
+export function handleApiError(error: any) {
+  console.error('API Error:', error)
 
-export function handleApiError(error: unknown): Response {
-  if (error instanceof AppError) {
-    return Response.json(error.toJSON(), { status: error.statusCode })
-  }
-
-  if (error instanceof Error) {
+  if (error instanceof ValidationError) {
     return Response.json(
       {
-        error: 'InternalServerError',
-        message: error.message,
-        statusCode: 500,
+        error: error.message,
+        details: error.details,
+        statusCode: 400,
       },
-      { status: 500 }
+      { status: 400 }
+    )
+  }
+
+  if (error instanceof UnauthorizedError) {
+    return Response.json(
+      {
+        error: error.message,
+        statusCode: 401,
+      },
+      { status: 401 }
+    )
+  }
+
+  if (error instanceof ForbiddenError) {
+    return Response.json(
+      {
+        error: error.message,
+        statusCode: 403,
+      },
+      { status: 403 }
     )
   }
 
   return Response.json(
     {
-      error: 'InternalServerError',
-      message: 'An unknown error occurred',
+      error: error.message || 'Internal server error',
       statusCode: 500,
     },
     { status: 500 }
   )
 }
+
 
 
 

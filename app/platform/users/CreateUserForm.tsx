@@ -31,6 +31,11 @@ export default function CreateUserForm({ stores, companies, onSuccess, onCancel 
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  // 선택된 회사의 매장만 필터링
+  const filteredStores = selectedCompanyId
+    ? stores.filter(store => store.company_id === selectedCompanyId)
+    : []
+
   const handleToggleStore = (storeId: string) => {
     setSelectedStoreIds((prev) =>
       prev.includes(storeId)
@@ -38,11 +43,6 @@ export default function CreateUserForm({ stores, companies, onSuccess, onCancel 
         : [...prev, storeId]
     )
   }
-
-  // 선택된 회사의 매장만 필터링
-  const availableStores = selectedCompanyId
-    ? stores.filter(s => s.company_id === selectedCompanyId)
-    : stores
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()
@@ -73,7 +73,7 @@ export default function CreateUserForm({ stores, companies, onSuccess, onCancel 
       const data = await response.json()
 
       if (!response.ok) {
-        throw new Error(data.error || '사용자 생성에 실패했습니다.')
+        throw new Error(data.error || '사용자 추가에 실패했습니다.')
       }
 
       onSuccess()
@@ -141,47 +141,23 @@ export default function CreateUserForm({ stores, companies, onSuccess, onCancel 
           />
         </div>
 
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label htmlFor="role" className="block text-sm font-medium text-gray-700 mb-1">
-              역할 <span className="text-red-500">*</span>
-            </label>
-            <select
-              id="role"
-              value={role}
-              onChange={(e) => setRole(e.target.value as UserRole)}
-              required
-              className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              <option value="staff">직원</option>
-              <option value="manager">매니저</option>
-              <option value="business_owner">업체관리자</option>
-              <option value="platform_admin">시스템관리자</option>
-              <option value="admin">관리자</option>
-            </select>
-          </div>
-
-          <div>
-            <label htmlFor="company" className="block text-sm font-medium text-gray-700 mb-1">
-              회사
-            </label>
-            <select
-              id="company"
-              value={selectedCompanyId}
-              onChange={(e) => {
-                setSelectedCompanyId(e.target.value)
-                setSelectedStoreIds([]) // 회사 변경 시 매장 선택 초기화
-              }}
-              className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              <option value="">회사 없음</option>
-              {companies.map((company) => (
-                <option key={company.id} value={company.id}>
-                  {company.name}
-                </option>
-              ))}
-            </select>
-          </div>
+        <div>
+          <label htmlFor="role" className="block text-sm font-medium text-gray-700 mb-1">
+            역할 <span className="text-red-500">*</span>
+          </label>
+          <select
+            id="role"
+            value={role}
+            onChange={(e) => setRole(e.target.value as UserRole)}
+            required
+            className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            <option value="staff">직원</option>
+            <option value="manager">매니저</option>
+            <option value="business_owner">업체관리자</option>
+            <option value="platform_admin">시스템관리자</option>
+            <option value="admin">관리자</option>
+          </select>
         </div>
 
         <div>
@@ -199,36 +175,62 @@ export default function CreateUserForm({ stores, companies, onSuccess, onCancel 
         </div>
 
         <div>
+          <label htmlFor="company" className="block text-sm font-medium text-gray-700 mb-1">
+            회사
+          </label>
+          <select
+            id="company"
+            value={selectedCompanyId}
+            onChange={(e) => {
+              setSelectedCompanyId(e.target.value)
+              setSelectedStoreIds([]) // 회사 변경 시 매장 선택 초기화
+            }}
+            className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            <option value="">회사를 선택하세요</option>
+            {companies.map((company) => (
+              <option key={company.id} value={company.id}>
+                {company.name}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">
             배정 매장
           </label>
-          <div className="border border-gray-300 rounded-md p-4 max-h-60 overflow-y-auto">
-            {availableStores.length === 0 ? (
-              <p className="text-gray-500 text-sm">
-                {selectedCompanyId ? '선택한 회사에 등록된 매장이 없습니다.' : '회사를 먼저 선택하세요.'}
-              </p>
-            ) : (
-              <div className="space-y-2">
-                {availableStores.map((store) => (
-                  <label
-                    key={store.id}
-                    className="flex items-center space-x-2 cursor-pointer hover:bg-gray-50 p-2 rounded"
-                  >
-                    <input
-                      type="checkbox"
-                      checked={selectedStoreIds.includes(store.id)}
-                      onChange={() => handleToggleStore(store.id)}
-                      className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                    />
-                    <span className="text-sm text-gray-700">{store.name}</span>
-                  </label>
-                ))}
+          {!selectedCompanyId ? (
+            <p className="text-sm text-gray-500">먼저 회사를 선택해주세요.</p>
+          ) : (
+            <>
+              <div className="border border-gray-300 rounded-md p-4 max-h-60 overflow-y-auto">
+                {filteredStores.length === 0 ? (
+                  <p className="text-gray-500 text-sm">등록된 매장이 없습니다.</p>
+                ) : (
+                  <div className="space-y-2">
+                    {filteredStores.map((store) => (
+                      <label
+                        key={store.id}
+                        className="flex items-center space-x-2 cursor-pointer hover:bg-gray-50 p-2 rounded"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={selectedStoreIds.includes(store.id)}
+                          onChange={() => handleToggleStore(store.id)}
+                          className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                        />
+                        <span className="text-sm text-gray-700">{store.name}</span>
+                      </label>
+                    ))}
+                  </div>
+                )}
               </div>
-            )}
-          </div>
-          <p className="mt-2 text-xs text-gray-500">
-            {selectedStoreIds.length}개 매장이 선택되었습니다.
-          </p>
+              <p className="mt-2 text-xs text-gray-500">
+                {selectedStoreIds.length}개 매장이 선택되었습니다.
+              </p>
+            </>
+          )}
         </div>
 
         <div>
@@ -303,13 +305,12 @@ export default function CreateUserForm({ stores, companies, onSuccess, onCancel 
             disabled={loading}
             className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
           >
-            {loading ? '생성 중...' : '생성'}
+            {loading ? '추가 중...' : '추가'}
           </button>
         </div>
       </form>
     </div>
   )
 }
-
 
 

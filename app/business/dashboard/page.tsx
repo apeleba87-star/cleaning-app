@@ -65,6 +65,7 @@ export default async function BusinessOwnerDashboardPage() {
   const sections = [
     { title: '회사 관리', href: '/business/company', description: '회사 정보 및 요금제 관리' },
     { title: '매장 관리', href: '/business/stores', description: '매장 등록 및 관리' },
+    { title: '매장 상태', href: '/business/stores/status', description: '전체 매장 상태 확인 및 요청란 보내기' },
     { title: '직원 관리', href: '/business/users', description: '직원 초대 및 권한 설정' },
     { title: '체크리스트 관리', href: '/business/checklists', description: '매장별 체크리스트 생성 및 관리' },
     { title: '리포트', href: '/business/reports', description: '월간/주간 리포트 조회' },

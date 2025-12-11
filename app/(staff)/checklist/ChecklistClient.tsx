@@ -554,52 +554,23 @@ export default function ChecklistClient() {
                           미완료 항목이 없습니다.
                         </div>
                       ) : (
-                        incompleteItems.map((item, index) => {
-                          // items 배열에서 실제 인덱스 찾기
-                          const actualIndex = items.findIndex(i => i.area === item.area && i.type === item.type)
-                          return (
-                            <div
-                              key={index}
-                              className="flex items-center space-x-3 p-3 border border-gray-200 rounded-lg hover:bg-gray-50"
-                            >
-                              {item.type === 'photo' ? (
-                                <div className="w-6 h-6 flex-shrink-0 flex items-center justify-center text-blue-600 text-lg">
-                                  📷
-                                </div>
-                              ) : (
-                                <button
-                                  onClick={() => {
-                                    const newItems = [...items]
-                                    if (actualIndex >= 0 && newItems[actualIndex].type === 'check') {
-                                      newItems[actualIndex] = {
-                                        ...newItems[actualIndex],
-                                        checked: !newItems[actualIndex].checked,
-                                        // 기본값 설정
-                                        status: newItems[actualIndex].status || 'good'
-                                      }
-                                      setItems(newItems)
-                                    }
-                                  }}
-                                  className={`w-8 h-8 rounded border-2 flex items-center justify-center flex-shrink-0 transition-all ${
-                                    item.checked
-                                      ? 'bg-green-500 border-green-600 text-white'
-                                      : 'bg-white border-gray-400 hover:border-green-500 hover:bg-green-50'
-                                  }`}
-                                  title={item.checked ? '체크 완료' : '체크하기'}
-                                >
-                                  {item.checked ? (
-                                    <span className="text-lg">✓</span>
-                                  ) : (
-                                    <span className="text-gray-400 text-lg">□</span>
-                                  )}
-                                </button>
-                              )}
-                              <span className="flex-1 text-gray-800">
-                                {index + 1}. {item.area}
-                              </span>
-                            </div>
-                          )
-                        })
+                        incompleteItems.map((item, index) => (
+                          <div
+                            key={index}
+                            className="flex items-center space-x-3 p-3 border border-gray-200 rounded-lg hover:bg-gray-50"
+                          >
+                            {item.type === 'photo' ? (
+                              <div className="w-6 h-6 flex-shrink-0 flex items-center justify-center text-blue-600 text-lg">
+                                📷
+                              </div>
+                            ) : (
+                              <div className="w-6 h-6 rounded-full border-2 border-gray-300 flex-shrink-0"></div>
+                            )}
+                            <span className="flex-1 text-gray-800">
+                              {index + 1}. {item.area}
+                            </span>
+                          </div>
+                        ))
                       )}
                     </div>
                   ) : (
