@@ -1,10 +1,9 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { NavRoleSwitch } from '@/components/NavRoleSwitch'
 import { calculateChecklistProgress } from '@/lib/utils/checklist'
 
 interface StoreWithAssignment {
@@ -13,32 +12,40 @@ interface StoreWithAssignment {
   management_days: string | null
   isWorkDay: boolean
   attendanceStatus: 'not_clocked_in' | 'clocked_in' | 'clocked_out'
-  attendanceWorkDate: string | null // 출근한 날짜 (날짜가 바뀌어도 출근 상태 유지용)
+  attendanceWorkDate: string | null
 }
 
-interface TodayRequest {
+interface Request {
   id: string
   store_id: string
   store_name: string
   title: string
+  category?: string
 }
 
-interface TodayTask {
+interface TodayWorkStats {
   store_id: string
   store_name: string
-  checklist_count: number
   checklist_completed: number
-  photo_count: number
-  photo_completed: number
-  completion_rate: number
+  request_completed: number
+  store_problem_count: number
+  vending_problem_count: number
+  has_product_inflow: boolean
+  has_storage_photo: boolean
 }
 
-interface RecentWork {
-  id: string
+interface WeeklyWorkStats {
+  store_id: string
   store_name: string
-  work_date: string
-  description: string
+  daily_checklists: { date: string; count: number }[]
+  store_problem_count: number
+  request_completed: number
+  product_inflow_count: number
+  vending_problem_count: number
+  lost_item_count: number
 }
+
+type WorkHistoryTab = 'today' | 'weekly'
 
 export default function MobileDashboardPage() {
   const router = useRouter()
@@ -46,11 +53,11 @@ export default function MobileDashboardPage() {
   const [loading, setLoading] = useState(true)
   const [currentTime, setCurrentTime] = useState(new Date())
   const [stores, setStores] = useState<StoreWithAssignment[]>([])
-  const [todayRequests, setTodayRequests] = useState<TodayRequest[]>([])
-  const [todayTasks, setTodayTasks] = useState<TodayTask[]>([])
-  const [recentWorks, setRecentWorks] = useState<RecentWork[]>([])
+  const [requests, setRequests] = useState<Request[]>([])
+  const [workHistoryTab, setWorkHistoryTab] = useState<WorkHistoryTab>('today')
+  const [todayWorkStats, setTodayWorkStats] = useState<TodayWorkStats[]>([])
+  const [weeklyWorkStats, setWeeklyWorkStats] = useState<WeeklyWorkStats[]>([])
 
-  // 현재 시간 업데이트
   useEffect(() => {
     const timer = setInterval(() => {
       setCurrentTime(new Date())
@@ -58,25 +65,20 @@ export default function MobileDashboardPage() {
     return () => clearInterval(timer)
   }, [])
 
-  // 요일 번호를 한글 요일로 변환
   const getKoreanDayName = (dayIndex: number): string => {
     const days = ['일', '월', '화', '수', '목', '금', '토']
     return days[dayIndex]
   }
 
-  // 오늘 요일 확인
   const todayDayIndex = currentTime.getDay()
   const todayDayName = getKoreanDayName(todayDayIndex)
 
-  // management_days 문자열에서 오늘이 근무일인지 확인
   const isTodayWorkDay = (managementDays: string | null): boolean => {
     if (!managementDays) return false
-    // "월,수,금" 형식에서 오늘 요일이 포함되어 있는지 확인
     const days = managementDays.split(',').map(d => d.trim())
     return days.includes(todayDayName)
   }
 
-  // 날짜 포맷팅
   const formatDate = (date: Date): string => {
     const year = date.getFullYear()
     const month = date.getMonth() + 1
@@ -96,7 +98,6 @@ export default function MobileDashboardPage() {
 
   useEffect(() => {
     let isMounted = true
-    let timeoutId: NodeJS.Timeout | null = null
     
     const loadDashboardData = async () => {
       try {
@@ -113,7 +114,6 @@ export default function MobileDashboardPage() {
           return
         }
 
-        // 사용자 정보 로드
         const { data: userData, error: userError } = await supabase
           .from('users')
           .select('id, name, role')
@@ -130,7 +130,6 @@ export default function MobileDashboardPage() {
 
         setUser(userData)
 
-        // 배정된 매장 정보 로드
         const { data: storeAssignments, error: assignError } = await supabase
           .from('store_assign')
           .select(`
@@ -147,20 +146,14 @@ export default function MobileDashboardPage() {
           console.error('Error loading store assignments:', assignError)
         }
 
-        // 오늘 날짜
         const today = new Date().toISOString().split('T')[0]
 
-        // 출근 정보 로드
-        // 1. 오늘 출근 기록
-        // 2. 퇴근하지 않은 과거 출근 기록 (날짜가 바뀌어도 출근 상태 유지)
         const [todayResult, pastResult] = await Promise.all([
-          // 오늘 출근 기록
           supabase
             .from('attendance')
             .select('store_id, clock_out_at, work_date')
             .eq('user_id', session.user.id)
             .eq('work_date', today),
-          // 퇴근하지 않은 과거 출근 기록
           supabase
             .from('attendance')
             .select('store_id, clock_out_at, work_date')
@@ -169,19 +162,15 @@ export default function MobileDashboardPage() {
             .lt('work_date', today)
         ])
         
-        // 두 결과 병합
         const todayAttendance = [
           ...(todayResult.data || []),
           ...(pastResult.data || [])
         ]
-        const attendanceError = todayResult.error || pastResult.error
 
-        // 매장별 출근 상태 및 출근 날짜 맵 생성
         const attendanceMap = new Map<string, { status: 'not_clocked_in' | 'clocked_in' | 'clocked_out', workDate: string | null }>()
         if (todayAttendance) {
           todayAttendance.forEach((attendance: any) => {
             const existing = attendanceMap.get(attendance.store_id)
-            // 오늘 출근 기록이 우선 (같은 매장에 여러 기록이 있을 경우)
             if (attendance.work_date === today || !existing) {
               if (attendance.clock_out_at) {
                 attendanceMap.set(attendance.store_id, { status: 'clocked_out', workDate: attendance.work_date })
@@ -192,7 +181,6 @@ export default function MobileDashboardPage() {
           })
         }
 
-        // 매장 정보 처리
         const storesData: StoreWithAssignment[] = (
           storeAssignments || []
         )
@@ -200,7 +188,6 @@ export default function MobileDashboardPage() {
             const store = assignment.stores
             if (!store) return null
             
-            // 출근 상태 결정
             let attendanceStatus: 'not_clocked_in' | 'clocked_in' | 'clocked_out' = 'not_clocked_in'
             let attendanceWorkDate: string | null = null
             if (attendanceMap.has(store.id)) {
@@ -215,12 +202,11 @@ export default function MobileDashboardPage() {
               management_days: store.management_days,
               isWorkDay: isTodayWorkDay(store.management_days),
               attendanceStatus,
-              attendanceWorkDate, // 출근한 날짜 저장
+              attendanceWorkDate,
             }
           })
           .filter((s: any): s is StoreWithAssignment => s !== null)
           .sort((a, b) => {
-            // 출근일이 먼저 (파란색), 휴무일이 나중에 (회색)
             if (a.isWorkDay && !b.isWorkDay) return -1
             if (!a.isWorkDay && b.isWorkDay) return 1
             return 0
@@ -228,157 +214,36 @@ export default function MobileDashboardPage() {
 
         setStores(storesData)
 
-        // 오늘의 요청 사항 (issues)
         const storeIds = storesData.map(s => s.id)
+
+        // 요청란 조회
         if (storeIds.length > 0) {
-          const todayStart = new Date()
-          todayStart.setHours(0, 0, 0, 0)
-          const todayEnd = new Date()
-          todayEnd.setHours(23, 59, 59, 999)
-
-          const { data: issues, error: issuesError } = await supabase
-            .from('issues')
-            .select(`
-              id,
-              store_id,
-              title,
-              stores:store_id (
-                name
-              )
-            `)
-            .in('store_id', storeIds)
-            .gte('created_at', todayStart.toISOString())
-            .lte('created_at', todayEnd.toISOString())
-            .eq('status', 'submitted')
-
-          if (!issuesError && issues) {
-            const requests: TodayRequest[] = issues.map((issue: any) => ({
-              id: issue.id,
-              store_id: issue.store_id,
-              store_name: issue.stores?.name || '',
-              title: issue.title,
-            }))
-            setTodayRequests(requests)
-          } else {
-            // 에러가 발생하거나 데이터가 없으면 빈 배열로 설정
-            setTodayRequests([])
+          try {
+            const response = await fetch('/api/staff/requests')
+            const data = await response.json()
+            if (data.success && data.data) {
+              const requestsData: Request[] = data.data.map((req: any) => ({
+                id: req.id,
+                store_id: req.store_id,
+                store_name: req.stores?.name || '',
+                title: req.title,
+                category: req.title, // title이 카테고리 정보를 포함
+              }))
+              setRequests(requestsData)
+            }
+          } catch (error) {
+            console.error('Error loading requests:', error)
           }
-        } else {
-          // 배정된 매장이 없으면 빈 배열로 설정
-          setTodayRequests([])
         }
 
-        // 오늘 해야할 업무 (체크리스트 + 관리 사진)
-        // - 오늘이 출근일인 매장
-        // - 또는 출근 중인 매장 (날짜가 바뀌어도 체크리스트 표시)
+        // 오늘 업무 통계
         if (storeIds.length > 0) {
-          const tasks: TodayTask[] = []
-
-          // 오늘이 출근일이거나 출근 중인 매장 필터링
-          const workDayStores = storesData.filter(store => 
-            store.isWorkDay || store.attendanceStatus === 'clocked_in'
-          )
-
-          for (const store of workDayStores) {
-            // 출근 중인 경우 출근한 날짜의 체크리스트, 그 외에는 오늘 날짜
-            const checklistDate = store.attendanceStatus === 'clocked_in' && store.attendanceWorkDate
-              ? store.attendanceWorkDate
-              : today
-
-            // 체크리스트 조회 (출근한 날짜 기준)
-            const { data: checklists, error: checklistError } = await supabase
-              .from('checklist')
-              .select('*')
-              .eq('store_id', store.id)
-              .eq('work_date', checklistDate)
-              .eq('assigned_user_id', session.user.id)
-
-            let checklistCount = 0
-            let checklistCompleted = 0
-
-            if (!checklistError && checklists) {
-              checklistCount = checklists.length
-              checklists.forEach((checklist: any) => {
-                const progress = calculateChecklistProgress(checklist)
-                if (progress.percentage === 100) {
-                  checklistCompleted++
-                }
-              })
-            }
-
-            let photoCount = 0
-            let photoCompleted = 0
-
-            // 체크리스트에서 사진 항목 개수 계산
-            if (checklists && checklists.length > 0) {
-              checklists.forEach((checklist: any) => {
-                const items = checklist.items || []
-                const photoItems = items.filter((item: any) => 
-                  item.type === 'photo' && item.area?.trim()
-                )
-                
-                photoItems.forEach((item: any) => {
-                  // 각 사진 항목은 before + after 2개
-                  photoCount += 2
-                  if (item.before_photo_url && item.after_photo_url) {
-                    photoCompleted += 2
-                  } else if (item.before_photo_url || item.after_photo_url) {
-                    photoCompleted += 1
-                  }
-                })
-              })
-            }
-
-            const totalTasks = checklistCount + photoCount
-            const totalCompleted = checklistCompleted + photoCompleted
-            const completionRate = totalTasks > 0 
-              ? Math.round((totalCompleted / totalTasks) * 100) 
-              : 0
-
-            tasks.push({
-              store_id: store.id,
-              store_name: store.name,
-              checklist_count: checklistCount,
-              checklist_completed: checklistCompleted,
-              photo_count: photoCount,
-              photo_completed: photoCompleted,
-              completion_rate: completionRate,
-            })
-          }
-
-          setTodayTasks(tasks)
+          await loadTodayWorkStats(storesData, session.user.id, today, supabase)
         }
 
-        // 최근 업무 기록 (최근 1주일)
-        const oneWeekAgo = new Date()
-        oneWeekAgo.setDate(oneWeekAgo.getDate() - 7)
-        const oneWeekAgoStr = oneWeekAgo.toISOString().split('T')[0]
-
-        const { data: recentAttendance, error: recentError } = await supabase
-          .from('attendance')
-          .select(`
-            id,
-            store_id,
-            work_date,
-            clock_out_at,
-            stores:store_id (
-              name
-            )
-          `)
-          .eq('user_id', session.user.id)
-          .gte('work_date', oneWeekAgoStr)
-          .not('clock_out_at', 'is', null)
-          .order('work_date', { ascending: false })
-          .limit(10)
-
-        if (!recentError && recentAttendance) {
-          const works: RecentWork[] = recentAttendance.map((attendance: any) => ({
-            id: attendance.id,
-            store_name: attendance.stores?.name || '',
-            work_date: attendance.work_date,
-            description: `${attendance.stores?.name || ''} 관리 완료`,
-          }))
-          setRecentWorks(works)
+        // 최근 1주일 업무 통계
+        if (storeIds.length > 0) {
+          await loadWeeklyWorkStats(storesData, session.user.id, supabase)
         }
 
         setLoading(false)
@@ -390,27 +255,188 @@ export default function MobileDashboardPage() {
       }
     }
 
-    // 타임아웃 설정 (5초 후 강제로 로딩 해제)
-    timeoutId = setTimeout(() => {
-      console.warn('Loading timeout - forcing load to complete')
-      if (isMounted) {
-        setLoading(false)
+    const loadTodayWorkStats = async (storesData: StoreWithAssignment[], userId: string, today: string, supabase: any) => {
+      const stats: TodayWorkStats[] = []
+
+      for (const store of storesData) {
+        const checklistDate = store.attendanceStatus === 'clocked_in' && store.attendanceWorkDate
+          ? store.attendanceWorkDate
+          : today
+
+        // 체크리스트 완료 건수
+        const { data: checklists } = await supabase
+          .from('checklist')
+          .select('*')
+          .eq('store_id', store.id)
+          .eq('work_date', checklistDate)
+          .eq('assigned_user_id', userId)
+
+        let checklistCompleted = 0
+        if (checklists) {
+          checklists.forEach((checklist: any) => {
+            const progress = calculateChecklistProgress(checklist)
+            if (progress.percentage === 100) {
+              checklistCompleted++
+            }
+          })
+        }
+
+        // 요청 완료 건수 (오늘)
+        const todayStart = new Date(today + 'T00:00:00')
+        const todayEnd = new Date(today + 'T23:59:59')
+        const { data: completedRequests } = await supabase
+          .from('requests')
+          .select('id')
+          .eq('store_id', store.id)
+          .eq('status', 'completed')
+          .gte('updated_at', todayStart.toISOString())
+          .lte('updated_at', todayEnd.toISOString())
+
+        // 매장 문제 보고 건수 (오늘)
+        const { data: storeProblems } = await supabase
+          .from('problem_reports')
+          .select('id')
+          .eq('store_id', store.id)
+          .eq('category', 'other')
+          .like('title', '매장 문제%')
+          .gte('created_at', todayStart.toISOString())
+          .lte('created_at', todayEnd.toISOString())
+
+        // 자판기 문제 보고 건수 (오늘)
+        const { data: vendingProblems } = await supabase
+          .from('problem_reports')
+          .select('id')
+          .eq('store_id', store.id)
+          .not('vending_machine_number', 'is', null)
+          .gte('created_at', todayStart.toISOString())
+          .lte('created_at', todayEnd.toISOString())
+
+        // 제품 입고 유무 (오늘)
+        const { data: productInflow } = await supabase
+          .from('product_photos')
+          .select('id')
+          .eq('store_id', store.id)
+          .eq('type', 'receipt')
+          .gte('created_at', todayStart.toISOString())
+          .lte('created_at', todayEnd.toISOString())
+          .limit(1)
+
+        // 보관사진 유무 (오늘)
+        const { data: storagePhotos } = await supabase
+          .from('product_photos')
+          .select('id')
+          .eq('store_id', store.id)
+          .eq('type', 'storage')
+          .gte('created_at', todayStart.toISOString())
+          .lte('created_at', todayEnd.toISOString())
+          .limit(1)
+
+        stats.push({
+          store_id: store.id,
+          store_name: store.name,
+          checklist_completed: checklistCompleted,
+          request_completed: completedRequests?.length || 0,
+          store_problem_count: storeProblems?.length || 0,
+          vending_problem_count: vendingProblems?.length || 0,
+          has_product_inflow: (productInflow?.length || 0) > 0,
+          has_storage_photo: (storagePhotos?.length || 0) > 0,
+        })
       }
-    }, 5000)
+
+      setTodayWorkStats(stats)
+    }
+
+    const loadWeeklyWorkStats = async (storesData: StoreWithAssignment[], userId: string, supabase: any) => {
+      const oneWeekAgo = new Date()
+      oneWeekAgo.setDate(oneWeekAgo.getDate() - 7)
+      const oneWeekAgoStr = oneWeekAgo.toISOString().split('T')[0]
+      const today = new Date().toISOString().split('T')[0]
+
+      const stats: WeeklyWorkStats[] = []
+
+      for (const store of storesData) {
+        // 날짜별 체크리스트 건수
+        const { data: checklists } = await supabase
+          .from('checklist')
+          .select('work_date')
+          .eq('store_id', store.id)
+          .eq('assigned_user_id', userId)
+          .gte('work_date', oneWeekAgoStr)
+          .lte('work_date', today)
+
+        const dailyChecklists: { [key: string]: number } = {}
+        if (checklists) {
+          checklists.forEach((cl: any) => {
+            const date = cl.work_date
+            dailyChecklists[date] = (dailyChecklists[date] || 0) + 1
+          })
+        }
+
+        const dailyChecklistArray = Object.entries(dailyChecklists)
+          .map(([date, count]) => ({ date, count }))
+          .sort((a, b) => b.date.localeCompare(a.date))
+
+        // 최근 7일간 건수
+        const { data: storeProblems } = await supabase
+          .from('problem_reports')
+          .select('id')
+          .eq('store_id', store.id)
+          .eq('category', 'other')
+          .like('title', '매장 문제%')
+          .gte('created_at', oneWeekAgo.toISOString())
+
+        const { data: completedRequests } = await supabase
+          .from('requests')
+          .select('id')
+          .eq('store_id', store.id)
+          .eq('status', 'completed')
+          .gte('updated_at', oneWeekAgo.toISOString())
+
+        const { data: productInflow } = await supabase
+          .from('product_photos')
+          .select('id')
+          .eq('store_id', store.id)
+          .eq('type', 'receipt')
+          .gte('created_at', oneWeekAgo.toISOString())
+
+        const { data: vendingProblems } = await supabase
+          .from('problem_reports')
+          .select('id')
+          .eq('store_id', store.id)
+          .not('vending_machine_number', 'is', null)
+          .gte('created_at', oneWeekAgo.toISOString())
+
+        const { data: lostItems } = await supabase
+          .from('lost_items')
+          .select('id')
+          .eq('store_id', store.id)
+          .gte('created_at', oneWeekAgo.toISOString())
+
+        stats.push({
+          store_id: store.id,
+          store_name: store.name,
+          daily_checklists: dailyChecklistArray,
+          store_problem_count: storeProblems?.length || 0,
+          request_completed: completedRequests?.length || 0,
+          product_inflow_count: productInflow?.length || 0,
+          vending_problem_count: vendingProblems?.length || 0,
+          lost_item_count: lostItems?.length || 0,
+        })
+      }
+
+      setWeeklyWorkStats(stats)
+    }
 
     loadDashboardData()
 
     return () => {
       isMounted = false
-      if (timeoutId) {
-        clearTimeout(timeoutId)
-      }
     }
   }, [router])
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
+      <div className="flex items-center justify-center min-h-screen bg-gray-50">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
       </div>
     )
@@ -418,12 +444,12 @@ export default function MobileDashboardPage() {
 
   if (!user) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-center">
+      <div className="flex items-center justify-center min-h-screen bg-gray-50">
+        <div className="text-center px-4">
           <p className="text-red-600 mb-4">사용자 정보를 불러올 수 없습니다.</p>
           <button
             onClick={() => router.push('/login')}
-            className="px-4 py-2 bg-blue-600 text-white rounded-md"
+            className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
           >
             로그인 페이지로 이동
           </button>
@@ -433,378 +459,393 @@ export default function MobileDashboardPage() {
   }
 
   const totalStores = stores.length
+  const hasRequests = requests.length > 0
 
   return (
     <div className="min-h-screen bg-gray-50 pb-20">
-      {/* 헤더 */}
-      <div className="bg-white border-b border-gray-200 px-4 py-3 flex justify-between items-center">
-        <div className="flex items-center gap-2">
-          <span>📅</span>
-          <span className="text-sm text-gray-600">Today</span>
-          <span className="text-sm font-medium">{formatDate(currentTime)}</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <span>🕐</span>
-          <span className="text-sm font-medium">{formatTime(currentTime)}</span>
+      {/* 헤더 - 반응형 */}
+      <div className="bg-white border-b border-gray-200 px-3 sm:px-4 py-3">
+        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2">
+          <div className="flex items-center gap-2">
+            <span className="text-base sm:text-lg">📅</span>
+            <span className="text-xs sm:text-sm text-gray-600">Today</span>
+            <span className="text-xs sm:text-sm font-medium truncate">{formatDate(currentTime)}</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-base sm:text-lg">🕐</span>
+            <span className="text-xs sm:text-sm font-medium">{formatTime(currentTime)}</span>
+          </div>
         </div>
       </div>
 
-      {/* 직원 기본 정보 */}
-      <div className="bg-blue-600 text-white p-6 mb-4">
-        <div className="flex items-center gap-4">
-          <div className="w-16 h-16 bg-purple-400 rounded-full flex items-center justify-center text-2xl">
+      {/* 직원 기본 정보 - 반응형 */}
+      <div className="bg-blue-600 text-white p-4 sm:p-6 mb-4">
+        <div className="flex items-center gap-3 sm:gap-4">
+          <div className="w-12 h-12 sm:w-16 sm:h-16 bg-purple-400 rounded-full flex items-center justify-center text-xl sm:text-2xl flex-shrink-0">
             👤
           </div>
-          <div>
-            <div className="text-lg font-semibold mb-1">{user.name || '직원'}</div>
-            <div className="text-sm text-blue-100">
+          <div className="min-w-0 flex-1">
+            <div className="text-base sm:text-lg font-semibold mb-1 truncate">{user.name || '직원'}</div>
+            <div className="text-xs sm:text-sm text-blue-100">
               총 {totalStores}개 매장 관리
             </div>
           </div>
         </div>
       </div>
 
-      <div className="px-4 space-y-4">
-        {/* 매장 출근 현황 */}
+      <div className="px-3 sm:px-4 space-y-4">
+        {/* 매장 출근 현황 - 반응형 */}
         <Link href="/attendance" className="block">
-          <div className="bg-white rounded-lg shadow-md p-4 cursor-pointer hover:shadow-lg transition-shadow">
+          <div className="bg-white rounded-lg shadow-md p-3 sm:p-4 cursor-pointer hover:shadow-lg transition-shadow">
             <div className="flex items-center gap-2 mb-3">
-              <span>📍</span>
-              <h2 className="text-lg font-semibold">매장 출근 현황</h2>
+              <span className="text-lg sm:text-xl">📍</span>
+              <h2 className="text-base sm:text-lg font-semibold">매장 출근 현황</h2>
             </div>
-          <div className="space-y-2">
-            {stores.length === 0 ? (
-              <div className="text-sm text-gray-500 text-center py-4">
-                배정된 매장이 없습니다.
-              </div>
-            ) : (
-              stores.map((store) => {
-                // 박스 색상 결정
-                let boxBgColor = 'bg-gray-50'
-                let boxBorderColor = 'border-gray-300'
-                let boxTextColor = 'text-gray-700'
-                
-                if (!store.isWorkDay) {
-                  // 휴무일 - 회색
-                  boxBgColor = 'bg-gray-100'
-                  boxBorderColor = 'border-gray-300'
-                  boxTextColor = 'text-gray-600'
-                } else if (store.attendanceStatus === 'not_clocked_in') {
-                  // 출근일이고 출근전 - 빨간색
-                  boxBgColor = 'bg-red-50'
-                  boxBorderColor = 'border-red-400'
-                  boxTextColor = 'text-red-700'
-                } else if (store.attendanceStatus === 'clocked_in') {
-                  // 출근일이고 출근중 - 주황색
-                  boxBgColor = 'bg-orange-50'
-                  boxBorderColor = 'border-orange-400'
-                  boxTextColor = 'text-orange-700'
-                } else if (store.attendanceStatus === 'clocked_out') {
-                  // 출근일이고 퇴근 - 파란색
-                  boxBgColor = 'bg-blue-50'
-                  boxBorderColor = 'border-blue-400'
-                  boxTextColor = 'text-blue-700'
-                }
-                
-                return (
-                  <div 
-                    key={store.id} 
-                    className={`flex items-center justify-between p-3 rounded-lg border-2 ${boxBgColor} ${boxBorderColor}`}
-                  >
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-1">
-                        <div
-                          className={`w-2 h-2 rounded-full ${
-                            !store.isWorkDay ? 'bg-gray-400' :
-                            store.attendanceStatus === 'not_clocked_in' ? 'bg-red-500' :
-                            store.attendanceStatus === 'clocked_in' ? 'bg-orange-500' : 'bg-blue-500'
-                          }`}
-                        ></div>
-                        <span className={`font-medium ${boxTextColor}`}>{store.name}</span>
-                      </div>
-                      {store.management_days && (
-                        <div className={`text-xs ml-4 ${boxTextColor}`}>
-                          {store.management_days}
+            <div className="space-y-2">
+              {stores.length === 0 ? (
+                <div className="text-xs sm:text-sm text-gray-500 text-center py-4">
+                  배정된 매장이 없습니다.
+                </div>
+              ) : (
+                stores.map((store) => {
+                  let boxBgColor = 'bg-gray-50'
+                  let boxBorderColor = 'border-gray-300'
+                  let boxTextColor = 'text-gray-700'
+                  
+                  if (!store.isWorkDay) {
+                    boxBgColor = 'bg-gray-100'
+                    boxBorderColor = 'border-gray-300'
+                    boxTextColor = 'text-gray-600'
+                  } else if (store.attendanceStatus === 'not_clocked_in') {
+                    boxBgColor = 'bg-red-50'
+                    boxBorderColor = 'border-red-400'
+                    boxTextColor = 'text-red-700'
+                  } else if (store.attendanceStatus === 'clocked_in') {
+                    boxBgColor = 'bg-orange-50'
+                    boxBorderColor = 'border-orange-400'
+                    boxTextColor = 'text-orange-700'
+                  } else if (store.attendanceStatus === 'clocked_out') {
+                    boxBgColor = 'bg-blue-50'
+                    boxBorderColor = 'border-blue-400'
+                    boxTextColor = 'text-blue-700'
+                  }
+                  
+                  return (
+                    <div 
+                      key={store.id} 
+                      className={`flex items-center justify-between p-2 sm:p-3 rounded-lg border-2 ${boxBgColor} ${boxBorderColor}`}
+                    >
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-1">
+                          <div
+                            className={`w-2 h-2 rounded-full flex-shrink-0 ${
+                              !store.isWorkDay ? 'bg-gray-400' :
+                              store.attendanceStatus === 'not_clocked_in' ? 'bg-red-500' :
+                              store.attendanceStatus === 'clocked_in' ? 'bg-orange-500' : 'bg-blue-500'
+                            }`}
+                          ></div>
+                          <span className={`font-medium text-sm sm:text-base truncate ${boxTextColor}`}>{store.name}</span>
                         </div>
-                      )}
-                    </div>
-                    <div className="flex flex-col items-end gap-1">
-                      <button
-                        className={`px-4 py-2 rounded-md text-sm font-medium ${
-                          !store.isWorkDay
-                            ? 'bg-gray-200 text-gray-600'
-                            : store.attendanceStatus === 'not_clocked_in'
-                            ? 'bg-red-600 text-white'
-                            : store.attendanceStatus === 'clocked_in'
-                            ? 'bg-orange-500 text-white'
-                            : 'bg-blue-600 text-white'
-                        }`}
-                        disabled
-                      >
-                        {store.isWorkDay ? '출근일' : '휴무'}
-                      </button>
-                      {store.isWorkDay && (
-                        <span
-                          className={`px-3 py-1 rounded-md text-xs font-medium ${
-                            store.attendanceStatus === 'not_clocked_in'
-                              ? 'bg-red-100 text-red-700'
-                              : store.attendanceStatus === 'clocked_in'
-                              ? 'bg-orange-100 text-orange-700'
-                              : 'bg-blue-100 text-blue-700'
+                        {store.management_days && (
+                          <div className={`text-xs ml-4 ${boxTextColor}`}>
+                            {store.management_days}
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex flex-col items-end gap-1 ml-2">
+                        <button
+                          className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-md text-xs sm:text-sm font-medium ${
+                            !store.isWorkDay
+                              ? 'bg-gray-200 text-gray-600'
+                              : 'bg-blue-600 text-white'
                           }`}
+                          disabled
                         >
-                          {store.attendanceStatus === 'not_clocked_in'
-                            ? '출근전'
-                            : store.attendanceStatus === 'clocked_in'
-                            ? '출근중'
-                            : '퇴근완료'}
-                        </span>
-                      )}
+                          {store.isWorkDay ? '출근일' : '휴무'}
+                        </button>
+                        {store.isWorkDay && (
+                          <span
+                            className={`px-2 sm:px-3 py-0.5 sm:py-1 rounded-md text-xs font-medium ${
+                              store.attendanceStatus === 'not_clocked_in'
+                                ? 'bg-red-100 text-red-700'
+                                : store.attendanceStatus === 'clocked_in'
+                                ? 'bg-orange-100 text-orange-700'
+                                : 'bg-blue-100 text-blue-700'
+                            }`}
+                          >
+                            {store.attendanceStatus === 'not_clocked_in'
+                              ? '출근전'
+                              : store.attendanceStatus === 'clocked_in'
+                              ? '출근중'
+                              : '퇴근완료'}
+                          </span>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                )
-              })
-            )}
-          </div>
+                  )
+                })
+              )}
+            </div>
           </div>
         </Link>
 
-        {/* 오늘의 요청 사항 */}
-        {todayRequests.length > 0 ? (
-          <Link href="/issues" className="block">
-            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 cursor-pointer hover:shadow-md transition-shadow">
-              <div className="flex items-center gap-2 mb-3">
-                <span className="text-orange-500">⚠️</span>
-                <h2 className="text-lg font-semibold text-yellow-800">오늘의 요청 사항</h2>
-              </div>
+        {/* 요청란 - 반응형 */}
+        <Link href="/requests" className="block">
+          <div className={`rounded-lg p-3 sm:p-4 cursor-pointer transition-all ${
+            hasRequests
+              ? 'bg-yellow-50 border border-yellow-200 hover:shadow-md'
+              : 'bg-gray-100 border border-gray-300'
+          }`}>
+            <div className="flex items-center gap-2 mb-3">
+              <span className={`text-lg sm:text-xl ${hasRequests ? 'text-orange-500' : 'text-gray-400'}`}>⚠️</span>
+              <h2 className={`text-base sm:text-lg font-semibold ${hasRequests ? 'text-yellow-800' : 'text-gray-600'}`}>
+                요청란
+              </h2>
+              {hasRequests && (
+                <span className="ml-auto px-2 py-1 bg-yellow-200 text-yellow-800 text-xs font-semibold rounded">
+                  {requests.length}건
+                </span>
+              )}
+            </div>
+            {hasRequests ? (
               <div className="space-y-2">
-                {todayRequests.map((request) => (
+                {requests.slice(0, 3).map((request) => (
                   <div key={request.id} className="flex items-start gap-2">
                     <div className="w-2 h-2 bg-orange-500 rounded-full mt-2 flex-shrink-0"></div>
-                    <div>
-                      <span className="font-medium text-yellow-900">{request.store_name}</span>
-                      <span className="text-yellow-800 ml-2">{request.title}</span>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-xs sm:text-sm font-medium text-yellow-900 truncate">{request.store_name}</div>
+                      <div className="text-xs sm:text-sm text-yellow-800 truncate">{request.category || request.title}</div>
                     </div>
                   </div>
                 ))}
+                {requests.length > 3 && (
+                  <div className="text-xs text-yellow-700 text-center pt-2">
+                    +{requests.length - 3}건 더 보기
+                  </div>
+                )}
               </div>
-            </div>
-          </Link>
-        ) : (
-          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-            <div className="flex items-center gap-2 mb-3">
-              <span className="text-orange-500">⚠️</span>
-              <h2 className="text-lg font-semibold text-yellow-800">오늘의 요청 사항</h2>
-            </div>
-            <div className="text-center py-4 text-yellow-700 text-sm">
-              오늘 요청 사항이 없습니다.
-            </div>
+            ) : (
+              <div className="text-center py-2 text-xs sm:text-sm text-gray-600">
+                요청 사항이 없습니다.
+              </div>
+            )}
           </div>
-        )}
+        </Link>
 
-        {/* 오늘 해야할 업무 */}
-        {todayTasks.length > 0 && (
-          <Link href="/checklist" className="block">
-            <div className="bg-white rounded-lg shadow-md p-4 cursor-pointer hover:shadow-lg transition-shadow">
-              <div className="flex items-center gap-2 mb-3">
-                <span>📋</span>
-                <h2 className="text-lg font-semibold">오늘 해야할 업무</h2>
-              </div>
-            <div className="space-y-4">
-              {todayTasks.map((task) => {
-                // 매장 출근 상태 찾기
-                const store = stores.find(s => s.id === task.store_id)
-                let boxBgColor = 'bg-gray-50'
-                let boxBorderColor = 'border-gray-300'
-                let progressColor = 'bg-gray-400'
-                let textColor = 'text-gray-600'
-                
-                if (!store?.isWorkDay) {
-                  // 휴무일 - 회색
-                  boxBgColor = 'bg-gray-100'
-                  boxBorderColor = 'border-gray-300'
-                  progressColor = 'bg-gray-400'
-                  textColor = 'text-gray-600'
-                } else if (store.attendanceStatus === 'not_clocked_in') {
-                  // 출근일이고 출근전 - 빨간색
-                  boxBgColor = 'bg-red-50'
-                  boxBorderColor = 'border-red-400'
-                  progressColor = 'bg-red-500'
-                  textColor = 'text-red-600'
-                } else if (store.attendanceStatus === 'clocked_in') {
-                  // 출근일이고 출근중 - 주황색
-                  boxBgColor = 'bg-orange-50'
-                  boxBorderColor = 'border-orange-400'
-                  progressColor = 'bg-orange-500'
-                  textColor = 'text-orange-600'
-                } else if (store.attendanceStatus === 'clocked_out') {
-                  // 출근일이고 퇴근 - 파란색
-                  boxBgColor = 'bg-blue-50'
-                  boxBorderColor = 'border-blue-400'
-                  progressColor = 'bg-blue-500'
-                  textColor = 'text-blue-600'
-                }
-                
-                return (
-                  <div key={task.store_id} className={`border-2 rounded-lg p-3 ${boxBgColor} ${boxBorderColor}`}>
-                    <div className={`font-medium mb-2 ${textColor}`}>{task.store_name}</div>
-                    <div className="w-full bg-gray-200 rounded-full h-2.5 mb-2">
-                      <div
-                        className={`${progressColor} h-2.5 rounded-full transition-all`}
-                        style={{ width: `${task.completion_rate}%` }}
-                      ></div>
-                    </div>
-                    <div className="flex items-center justify-between text-sm">
-                      <div className="flex items-center gap-4">
-                        <div className="flex items-center gap-1">
-                          <span>✓</span>
-                          <span className={`${textColor}`}>체크리스트</span>
-                          <span className={`font-medium ${textColor}`}>
-                            {task.checklist_completed}/{task.checklist_count}
-                          </span>
-                        </div>
-                        <div className="flex items-center gap-1">
-                          <span>📷</span>
-                          <span className={`${textColor}`}>관리 사진</span>
-                          <span className={`font-medium ${textColor}`}>
-                            {task.photo_completed}/{task.photo_count}
-                          </span>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-1">
-                        <span className={`${textColor}`}>↑</span>
-                        <span className={`font-medium ${textColor}`}>{task.completion_rate}%</span>
-                      </div>
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-            </div>
-          </Link>
-        )}
+        {/* 최근 업무 기록 - 탭 구조 */}
+        <div className="bg-white rounded-lg shadow-md p-3 sm:p-4">
+          <div className="flex items-center gap-2 mb-4">
+            <span className="text-lg sm:text-xl">🕐</span>
+            <h2 className="text-base sm:text-lg font-semibold">최근 업무 기록</h2>
+          </div>
+          
+          {/* 탭 버튼 */}
+          <div className="flex gap-2 mb-4 border-b border-gray-200">
+            <button
+              onClick={() => setWorkHistoryTab('today')}
+              className={`flex-1 py-2 text-sm sm:text-base font-medium transition-colors ${
+                workHistoryTab === 'today'
+                  ? 'text-blue-600 border-b-2 border-blue-600'
+                  : 'text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              오늘
+            </button>
+            <button
+              onClick={() => setWorkHistoryTab('weekly')}
+              className={`flex-1 py-2 text-sm sm:text-base font-medium transition-colors ${
+                workHistoryTab === 'weekly'
+                  ? 'text-blue-600 border-b-2 border-blue-600'
+                  : 'text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              최근 1주일
+            </button>
+          </div>
 
-        {/* 최근 업무 기록 */}
-        {recentWorks.length > 0 && (
-          <div className="bg-white rounded-lg shadow-md p-4">
-            <div className="flex items-center justify-between mb-3">
-              <div className="flex items-center gap-2">
-                <span>🕐</span>
-                <h2 className="text-lg font-semibold">최근 업무 기록</h2>
-              </div>
-              <span className="text-sm text-gray-500">최근 1주일</span>
-            </div>
-            <div className="space-y-2">
-              {recentWorks.map((work) => (
-                <div key={work.id} className="flex items-start gap-2">
-                  <div className="w-2 h-2 bg-green-500 rounded-full mt-2 flex-shrink-0"></div>
-                  <div className="flex-1">
-                    <span className="text-gray-800">{work.description}</span>
-                    <span className="text-gray-500 text-sm ml-2">
-                      - {work.work_date}
-                    </span>
-                  </div>
+          {/* 오늘 탭 */}
+          {workHistoryTab === 'today' && (
+            <div className="space-y-3">
+              {todayWorkStats.length === 0 ? (
+                <div className="text-center py-8 text-sm text-gray-500">
+                  오늘의 업무 기록이 없습니다.
                 </div>
-              ))}
+              ) : (
+                todayWorkStats.map((stat) => (
+                  <div key={stat.store_id} className="border border-gray-200 rounded-lg p-3 sm:p-4 bg-gray-50">
+                    <div className="font-semibold text-sm sm:text-base mb-3 text-gray-800">{stat.store_name}</div>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 sm:gap-3 text-xs sm:text-sm">
+                      <div>
+                        <span className="text-gray-600">체크리스트 완료:</span>
+                        <span className="ml-1 font-medium">{stat.checklist_completed}건</span>
+                      </div>
+                      <div>
+                        <span className="text-gray-600">요청 완료:</span>
+                        <span className="ml-1 font-medium">{stat.request_completed}건</span>
+                      </div>
+                      <div>
+                        <span className="text-gray-600">매장 문제:</span>
+                        <span className="ml-1 font-medium">{stat.store_problem_count}건</span>
+                      </div>
+                      <div>
+                        <span className="text-gray-600">자판기 문제:</span>
+                        <span className="ml-1 font-medium">{stat.vending_problem_count}건</span>
+                      </div>
+                      <div>
+                        <span className="text-gray-600">제품 입고:</span>
+                        <span className={`ml-1 font-medium ${stat.has_product_inflow ? 'text-green-600' : 'text-gray-400'}`}>
+                          {stat.has_product_inflow ? '있음' : '없음'}
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-gray-600">보관사진:</span>
+                        <span className={`ml-1 font-medium ${stat.has_storage_photo ? 'text-green-600' : 'text-gray-400'}`}>
+                          {stat.has_storage_photo ? '있음' : '없음'}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                ))
+              )}
             </div>
-          </div>
-        )}
+          )}
 
-        {/* 메뉴 버튼들 */}
+          {/* 최근 1주일 탭 */}
+          {workHistoryTab === 'weekly' && (
+            <div className="space-y-4">
+              {weeklyWorkStats.length === 0 ? (
+                <div className="text-center py-8 text-sm text-gray-500">
+                  최근 1주일 업무 기록이 없습니다.
+                </div>
+              ) : (
+                weeklyWorkStats.map((stat) => (
+                  <div key={stat.store_id} className="border border-gray-200 rounded-lg p-3 sm:p-4 bg-gray-50">
+                    <div className="font-semibold text-sm sm:text-base mb-3 text-gray-800">{stat.store_name}</div>
+                    
+                    {/* 날짜별 체크리스트 건수 */}
+                    {stat.daily_checklists.length > 0 && (
+                      <div className="mb-4">
+                        <div className="text-xs sm:text-sm font-medium text-gray-700 mb-2">날짜별 체크리스트 건수</div>
+                        <div className="space-y-1">
+                          {stat.daily_checklists.map((daily, idx) => (
+                            <div key={idx} className="flex items-center justify-between text-xs sm:text-sm bg-white rounded px-2 sm:px-3 py-1.5">
+                              <span className="text-gray-700">{daily.date}</span>
+                              <span className="font-medium text-gray-900">{daily.count}건</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* 최근 7일간 건수 */}
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 sm:gap-3 text-xs sm:text-sm">
+                      <div>
+                        <span className="text-gray-600">매장 문제:</span>
+                        <span className="ml-1 font-medium">{stat.store_problem_count}건</span>
+                      </div>
+                      <div>
+                        <span className="text-gray-600">요청 완료:</span>
+                        <span className="ml-1 font-medium">{stat.request_completed}건</span>
+                      </div>
+                      <div>
+                        <span className="text-gray-600">제품 입고:</span>
+                        <span className="ml-1 font-medium">{stat.product_inflow_count}건</span>
+                      </div>
+                      <div>
+                        <span className="text-gray-600">자판기 문제:</span>
+                        <span className="ml-1 font-medium">{stat.vending_problem_count}건</span>
+                      </div>
+                      <div>
+                        <span className="text-gray-600">분실물:</span>
+                        <span className="ml-1 font-medium">{stat.lost_item_count}건</span>
+                      </div>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* 메뉴 버튼들 - 반응형 */}
         <div className="space-y-2 pt-4">
           <Link
             href="/attendance"
-            className="block bg-white rounded-lg shadow-md p-4 hover:shadow-lg transition-shadow"
+            className="block bg-white rounded-lg shadow-md p-3 sm:p-4 hover:shadow-lg transition-shadow"
           >
             <div className="flex items-center gap-3">
-              <div className="w-12 h-12 bg-blue-500 rounded-lg flex items-center justify-center text-2xl">
+              <div className="w-10 h-10 sm:w-12 sm:h-12 bg-blue-500 rounded-lg flex items-center justify-center text-xl sm:text-2xl flex-shrink-0">
                 ⏰
               </div>
-              <div className="flex-1">
-                <div className="font-semibold">출퇴근</div>
-                <div className="text-sm text-gray-600">GPS 기반 출퇴근 관리</div>
+              <div className="flex-1 min-w-0">
+                <div className="font-semibold text-sm sm:text-base">출퇴근</div>
+                <div className="text-xs sm:text-sm text-gray-600">GPS 기반 출퇴근 관리</div>
               </div>
-              <div className="text-gray-400">›</div>
+              <div className="text-gray-400 text-xl">›</div>
             </div>
           </Link>
 
           <Link
             href="/checklist"
-            className="block bg-white rounded-lg shadow-md p-4 hover:shadow-lg transition-shadow"
+            className="block bg-white rounded-lg shadow-md p-3 sm:p-4 hover:shadow-lg transition-shadow"
           >
             <div className="flex items-center gap-3">
-              <div className="w-12 h-12 bg-green-500 rounded-lg flex items-center justify-center text-2xl">
+              <div className="w-10 h-10 sm:w-12 sm:h-12 bg-green-500 rounded-lg flex items-center justify-center text-xl sm:text-2xl flex-shrink-0">
                 ✅
               </div>
-              <div className="flex-1">
-                <div className="font-semibold">체크리스트</div>
-                <div className="text-sm text-gray-600">배정된 체크리스트 수행</div>
+              <div className="flex-1 min-w-0">
+                <div className="font-semibold text-sm sm:text-base">체크리스트</div>
+                <div className="text-xs sm:text-sm text-gray-600">배정된 체크리스트 수행</div>
               </div>
-              <div className="text-gray-400">›</div>
-            </div>
-          </Link>
-
-          <Link
-            href="/photos"
-            className="block bg-white rounded-lg shadow-md p-4 hover:shadow-lg transition-shadow"
-          >
-            <div className="flex items-center gap-3">
-              <div className="w-12 h-12 bg-purple-500 rounded-lg flex items-center justify-center text-2xl">
-                📷
-              </div>
-              <div className="flex-1">
-                <div className="font-semibold">청소 사진</div>
-                <div className="text-sm text-gray-600">청소 전후 사진 업로드</div>
-              </div>
-              <div className="text-gray-400">›</div>
+              <div className="text-gray-400 text-xl">›</div>
             </div>
           </Link>
 
           <Link
             href="/issues"
-            className="block bg-white rounded-lg shadow-md p-4 hover:shadow-lg transition-shadow"
+            className="block bg-white rounded-lg shadow-md p-3 sm:p-4 hover:shadow-lg transition-shadow"
           >
             <div className="flex items-center gap-3">
-              <div className="w-12 h-12 bg-orange-500 rounded-lg flex items-center justify-center text-2xl">
+              <div className="w-10 h-10 sm:w-12 sm:h-12 bg-orange-500 rounded-lg flex items-center justify-center text-xl sm:text-2xl flex-shrink-0">
                 ⚠️
               </div>
-              <div className="flex-1">
-                <div className="font-semibold">매장문제보고</div>
-                <div className="text-sm text-gray-600">매장 문제, 자판기 내부 문제, 분실물 습득</div>
+              <div className="flex-1 min-w-0">
+                <div className="font-semibold text-sm sm:text-base">매장문제보고</div>
+                <div className="text-xs sm:text-sm text-gray-600">매장 문제, 자판기 내부 문제, 분실물 습득</div>
               </div>
-              <div className="text-gray-400">›</div>
+              <div className="text-gray-400 text-xl">›</div>
             </div>
           </Link>
 
           <Link
             href="/product-photos"
-            className="block bg-white rounded-lg shadow-md p-4 hover:shadow-lg transition-shadow"
+            className="block bg-white rounded-lg shadow-md p-3 sm:p-4 hover:shadow-lg transition-shadow"
           >
             <div className="flex items-center gap-3">
-              <div className="w-12 h-12 bg-teal-500 rounded-lg flex items-center justify-center text-2xl">
+              <div className="w-10 h-10 sm:w-12 sm:h-12 bg-teal-500 rounded-lg flex items-center justify-center text-xl sm:text-2xl flex-shrink-0">
                 📸
               </div>
-              <div className="flex-1">
-                <div className="font-semibold">제품 입고 및 보관 사진</div>
-                <div className="text-sm text-gray-600">제품 입고 사진, 보관 사진 업로드</div>
+              <div className="flex-1 min-w-0">
+                <div className="font-semibold text-sm sm:text-base">제품 입고 및 보관 사진</div>
+                <div className="text-xs sm:text-sm text-gray-600">제품 입고 사진, 보관 사진 업로드</div>
               </div>
-              <div className="text-gray-400">›</div>
+              <div className="text-gray-400 text-xl">›</div>
             </div>
           </Link>
 
           <Link
             href="/supplies"
-            className="block bg-white rounded-lg shadow-md p-4 hover:shadow-lg transition-shadow"
+            className="block bg-white rounded-lg shadow-md p-3 sm:p-4 hover:shadow-lg transition-shadow"
           >
             <div className="flex items-center gap-3">
-              <div className="w-12 h-12 bg-indigo-500 rounded-lg flex items-center justify-center text-2xl">
+              <div className="w-10 h-10 sm:w-12 sm:h-12 bg-indigo-500 rounded-lg flex items-center justify-center text-xl sm:text-2xl flex-shrink-0">
                 📦
               </div>
-              <div className="flex-1">
-                <div className="font-semibold">물품 요청</div>
-                <div className="text-sm text-gray-600">물품 요청 및 조회</div>
+              <div className="flex-1 min-w-0">
+                <div className="font-semibold text-sm sm:text-base">물품 요청</div>
+                <div className="text-xs sm:text-sm text-gray-600">물품 요청 및 조회</div>
               </div>
-              <div className="text-gray-400">›</div>
+              <div className="text-gray-400 text-xl">›</div>
             </div>
           </Link>
         </div>
