@@ -126,10 +126,17 @@ export default function ChecklistForm({
         }),
       })
 
+      // Content-Type 확인
+      const contentType = response.headers.get('content-type')
+      if (!contentType || !contentType.includes('application/json')) {
+        const text = await response.text()
+        throw new Error(`서버 오류가 발생했습니다. (${response.status} ${response.statusText})`)
+      }
+
       const data = await response.json()
 
       if (!response.ok) {
-        throw new Error(data.error || '체크리스트 생성에 실패했습니다.')
+        throw new Error(data.error || (isEditMode ? '체크리스트 수정에 실패했습니다.' : '체크리스트 생성에 실패했습니다.'))
       }
 
       onSuccess()

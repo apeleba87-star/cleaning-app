@@ -32,11 +32,11 @@ export async function PATCH(
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
-    // status를 'confirmed'로 업데이트
+    // status를 'completed'로 업데이트 (confirmed는 유효한 상태 값이 아님)
     const { error: updateError } = await supabase
       .from('problem_reports')
       .update({ 
-        status: 'confirmed',
+        status: 'completed',
         updated_at: new Date().toISOString(),
       })
       .eq('id', params.id)
@@ -58,4 +58,5 @@ export async function PATCH(
     )
   }
 }
+
 

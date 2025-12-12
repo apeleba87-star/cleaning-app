@@ -13,6 +13,7 @@ interface StoreWithAssignment {
   management_days: string | null
   isWorkDay: boolean
   attendanceStatus: 'not_clocked_in' | 'clocked_in' | 'clocked_out'
+  attendanceWorkDate: string | null // 출근한 날짜 (날짜가 바뀌어도 출근 상태 유지용)
 }
 
 interface TodayRequest {
@@ -149,21 +150,44 @@ export default function MobileDashboardPage() {
         // 오늘 날짜
         const today = new Date().toISOString().split('T')[0]
 
-        // 오늘 출근 정보 로드 (clock_out_at 포함)
-        const { data: todayAttendance, error: attendanceError } = await supabase
-          .from('attendance')
-          .select('store_id, clock_out_at')
-          .eq('user_id', session.user.id)
-          .eq('work_date', today)
+        // 출근 정보 로드
+        // 1. 오늘 출근 기록
+        // 2. 퇴근하지 않은 과거 출근 기록 (날짜가 바뀌어도 출근 상태 유지)
+        const [todayResult, pastResult] = await Promise.all([
+          // 오늘 출근 기록
+          supabase
+            .from('attendance')
+            .select('store_id, clock_out_at, work_date')
+            .eq('user_id', session.user.id)
+            .eq('work_date', today),
+          // 퇴근하지 않은 과거 출근 기록
+          supabase
+            .from('attendance')
+            .select('store_id, clock_out_at, work_date')
+            .eq('user_id', session.user.id)
+            .is('clock_out_at', null)
+            .lt('work_date', today)
+        ])
+        
+        // 두 결과 병합
+        const todayAttendance = [
+          ...(todayResult.data || []),
+          ...(pastResult.data || [])
+        ]
+        const attendanceError = todayResult.error || pastResult.error
 
-        // 매장별 출근 상태 맵 생성
-        const attendanceMap = new Map<string, 'not_clocked_in' | 'clocked_in' | 'clocked_out'>()
+        // 매장별 출근 상태 및 출근 날짜 맵 생성
+        const attendanceMap = new Map<string, { status: 'not_clocked_in' | 'clocked_in' | 'clocked_out', workDate: string | null }>()
         if (todayAttendance) {
           todayAttendance.forEach((attendance: any) => {
-            if (attendance.clock_out_at) {
-              attendanceMap.set(attendance.store_id, 'clocked_out')
-            } else {
-              attendanceMap.set(attendance.store_id, 'clocked_in')
+            const existing = attendanceMap.get(attendance.store_id)
+            // 오늘 출근 기록이 우선 (같은 매장에 여러 기록이 있을 경우)
+            if (attendance.work_date === today || !existing) {
+              if (attendance.clock_out_at) {
+                attendanceMap.set(attendance.store_id, { status: 'clocked_out', workDate: attendance.work_date })
+              } else {
+                attendanceMap.set(attendance.store_id, { status: 'clocked_in', workDate: attendance.work_date })
+              }
             }
           })
         }
@@ -178,8 +202,11 @@ export default function MobileDashboardPage() {
             
             // 출근 상태 결정
             let attendanceStatus: 'not_clocked_in' | 'clocked_in' | 'clocked_out' = 'not_clocked_in'
+            let attendanceWorkDate: string | null = null
             if (attendanceMap.has(store.id)) {
-              attendanceStatus = attendanceMap.get(store.id) || 'not_clocked_in'
+              const attendanceData = attendanceMap.get(store.id)
+              attendanceStatus = attendanceData?.status || 'not_clocked_in'
+              attendanceWorkDate = attendanceData?.workDate || null
             }
             
             return {
@@ -188,6 +215,7 @@ export default function MobileDashboardPage() {
               management_days: store.management_days,
               isWorkDay: isTodayWorkDay(store.management_days),
               attendanceStatus,
+              attendanceWorkDate, // 출근한 날짜 저장
             }
           })
           .filter((s: any): s is StoreWithAssignment => s !== null)
@@ -240,20 +268,29 @@ export default function MobileDashboardPage() {
           setTodayRequests([])
         }
 
-        // 오늘 해야할 업무 (체크리스트 + 관리 사진) - 오늘이 출근일인 매장만
+        // 오늘 해야할 업무 (체크리스트 + 관리 사진)
+        // - 오늘이 출근일인 매장
+        // - 또는 출근 중인 매장 (날짜가 바뀌어도 체크리스트 표시)
         if (storeIds.length > 0) {
           const tasks: TodayTask[] = []
 
-          // 오늘이 출근일인 매장만 필터링
-          const workDayStores = storesData.filter(store => store.isWorkDay)
+          // 오늘이 출근일이거나 출근 중인 매장 필터링
+          const workDayStores = storesData.filter(store => 
+            store.isWorkDay || store.attendanceStatus === 'clocked_in'
+          )
 
           for (const store of workDayStores) {
-            // 오늘의 체크리스트
+            // 출근 중인 경우 출근한 날짜의 체크리스트, 그 외에는 오늘 날짜
+            const checklistDate = store.attendanceStatus === 'clocked_in' && store.attendanceWorkDate
+              ? store.attendanceWorkDate
+              : today
+
+            // 체크리스트 조회 (출근한 날짜 기준)
             const { data: checklists, error: checklistError } = await supabase
               .from('checklist')
               .select('*')
               .eq('store_id', store.id)
-              .eq('work_date', today)
+              .eq('work_date', checklistDate)
               .eq('assigned_user_id', session.user.id)
 
             let checklistCount = 0

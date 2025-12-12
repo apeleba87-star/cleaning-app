@@ -9,7 +9,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json()
-    const { store_id, category, title, description, photo_url, vending_machine_number, product_number } = body
+    const { store_id, category, title, description, photo_url, photo_urls, vending_machine_number, product_number } = body
 
     if (!store_id || !title) {
       return NextResponse.json(
@@ -24,12 +24,21 @@ export async function POST(request: NextRequest) {
     // 실제 분류는 title과 description으로 처리
     const dbCategory = 'other'
 
+    // photo_urls 배열이 있으면 첫 번째 사진을 photo_url에 저장
+    // 데이터베이스에는 photo_url 컬럼만 있으므로 첫 번째 사진만 저장
+    let finalPhotoUrl: string | null = null
+    if (photo_urls && Array.isArray(photo_urls) && photo_urls.length > 0) {
+      finalPhotoUrl = photo_urls[0] // 첫 번째 사진만 사용
+    } else if (photo_url) {
+      finalPhotoUrl = photo_url
+    }
+
     const insertData: any = {
       store_id,
       category: dbCategory,
       title,
       description: description || null,
-      photo_url: photo_url || null,
+      photo_url: finalPhotoUrl,
       status: 'submitted',
       user_id: user.id,
     }

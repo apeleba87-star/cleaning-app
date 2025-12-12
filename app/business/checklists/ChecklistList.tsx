@@ -87,6 +87,13 @@ export default function ChecklistList({ stores, staffUsers, companyId }: Checkli
         method: 'DELETE',
       })
 
+      // Content-Type 확인
+      const contentType = response.headers.get('content-type')
+      if (!contentType || !contentType.includes('application/json')) {
+        const text = await response.text()
+        throw new Error(`서버 오류가 발생했습니다. (${response.status} ${response.statusText})`)
+      }
+
       const data = await response.json()
 
       if (!response.ok) {

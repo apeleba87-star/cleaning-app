@@ -253,7 +253,22 @@ export default function BusinessStoresStatusPage() {
         const items = lostData.data || []
         console.log('Setting lost items:', items)
         console.log('Lost items count:', items.length)
+        items.forEach((item: any) => {
+          console.log(`  - ID: ${item.id}, Status: "${item.status}", updated_at: ${item.updated_at}`)
+        })
         setLostItems(items)
+        
+        // 확인된 항목 ID 자동 동기화 (status가 'completed'인 항목)
+        setConfirmedLostItemIds((prev) => {
+          const newSet = new Set(prev)
+        items.forEach((item: any) => {
+          if (item.status === 'completed' || item.status === 'confirmed' || item.status === 'processed') {
+            newSet.add(item.id)
+          }
+        })
+          console.log('Synced confirmedLostItemIds from API:', Array.from(newSet))
+          return newSet
+        })
       } else {
         console.error('Lost items API error:', lostData)
       }
@@ -457,16 +472,83 @@ export default function BusinessStoresStatusPage() {
   }
 
   const handleConfirmLostItem = async (lostItemId: string) => {
+    console.log('=== handleConfirmLostItem called ===', lostItemId)
     try {
+      console.log('Confirming lost item:', lostItemId)
+      console.log('Making API call to:', `/api/business/lost-items/${lostItemId}/confirm`)
+      
       const response = await fetch(`/api/business/lost-items/${lostItemId}/confirm`, {
         method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
       })
 
-      if (response.ok) {
-        setConfirmedLostItemIds((prev) => new Set(prev).add(lostItemId))
-        // 상태 갱신
-        loadStoreStatuses()
-        handleOpenProblemModal(selectedStore!)
+      console.log('Response received:', { status: response.status, ok: response.ok, statusText: response.statusText })
+      
+      const data = await response.json()
+      console.log('Confirm API response data:', data)
+
+      if (!response.ok) {
+        console.error('API call failed:', response.status, data)
+        alert(data.error || `확인 처리 중 오류가 발생했습니다. (${response.status})`)
+        return
+      }
+
+      if (data.success) {
+        console.log('API call succeeded, updating UI...')
+        console.log('API returned data:', data.data)
+        
+        // API 응답에서 반환된 상태 값 사용 (completed, confirmed, processed 중 하나)
+        const newStatus = data.data?.status || data.status || 'completed'
+        const newUpdatedAt = data.data?.updated_at || new Date().toISOString()
+        
+        console.log('Updating lost item with status:', newStatus)
+        
+        // 확인된 ID 추가
+        setConfirmedLostItemIds((prev) => {
+          const newSet = new Set(prev)
+          newSet.add(lostItemId)
+          console.log('Updated confirmedLostItemIds:', Array.from(newSet))
+          return newSet
+        })
+        
+        // 로컬 상태도 즉시 업데이트 (API 응답 데이터 사용)
+        setLostItems((prevItems) => {
+          const updated = prevItems.map((item) => {
+            if (item.id === lostItemId) {
+              console.log('Updating item status locally:', item.id, 'from', item.status, 'to', newStatus)
+              return { 
+                ...item, 
+                status: newStatus as any, 
+                updated_at: newUpdatedAt 
+              }
+            }
+            return item
+          })
+          console.log('Updated lostItems state:', updated.map(i => ({ id: i.id, status: i.status })))
+          return updated
+        })
+
+        // 상태 갱신 (약간의 지연 후, API 업데이트가 반영될 시간 확보)
+        await new Promise(resolve => setTimeout(resolve, 500))
+        await loadStoreStatuses()
+        
+        // 모달 데이터 새로고침 (데이터베이스에서 최신 상태 가져오기)
+        if (selectedStore) {
+          await handleOpenProblemModal(selectedStore)
+          
+          // 새로고침 후에도 confirmedLostItemIds 유지 보장
+          setConfirmedLostItemIds((prev) => {
+            const newSet = new Set(prev)
+            newSet.add(lostItemId)
+            console.log('Final confirmedLostItemIds after refresh:', Array.from(newSet))
+            return newSet
+          })
+        }
+      } else {
+        console.error('Confirm failed:', data)
+        alert(data.error || '확인 처리 중 오류가 발생했습니다.')
       }
     } catch (error) {
       console.error('Error confirming lost item:', error)
@@ -1488,7 +1570,7 @@ export default function BusinessStoresStatusPage() {
                     <h3 className="text-lg font-medium text-blue-700">분실물 습득</h3>
                     {!expandedSections.lostItems && (
                       <span className="text-sm font-semibold text-blue-600 bg-white px-3 py-1 rounded-full">
-                        {lostItems.filter((item) => !confirmedLostItemIds.has(item.id)).length}건
+                        {lostItems.filter((item) => item.status !== 'completed' && item.status !== 'confirmed' && item.status !== 'processed' && !confirmedLostItemIds.has(item.id)).length}건
                       </span>
                     )}
                   </div>
@@ -1502,8 +1584,9 @@ export default function BusinessStoresStatusPage() {
                       <p className="text-gray-500">분실물 습득 내역이 없습니다.</p>
                     ) : (
                       <div className="space-y-4">
+                        {/* 미확인 항목 */}
                         {lostItems
-                          .filter((item) => !confirmedLostItemIds.has(item.id))
+                          .filter((item) => item.status !== 'completed' && item.status !== 'confirmed' && item.status !== 'processed' && !confirmedLostItemIds.has(item.id))
                           .map((item) => (
                         <div key={item.id} className="border-2 border-blue-300 bg-blue-50 rounded-lg p-4 shadow-sm">
                           <div className="flex justify-between items-start mb-3">
@@ -1575,7 +1658,12 @@ export default function BusinessStoresStatusPage() {
                             
                             {/* 확인 버튼 */}
                             <button
-                              onClick={() => handleConfirmLostItem(item.id)}
+                              onClick={(e) => {
+                                e.preventDefault()
+                                e.stopPropagation()
+                                console.log('Confirm button clicked for item:', item.id)
+                                handleConfirmLostItem(item.id)
+                              }}
                               className="ml-4 px-4 py-2 bg-green-600 text-white text-sm font-semibold rounded-md hover:bg-green-700 transition-colors shadow-sm"
                             >
                               확인
@@ -1583,6 +1671,92 @@ export default function BusinessStoresStatusPage() {
                           </div>
                         </div>
                       ))}
+                      
+                      {/* 확인된 항목 - 연하게 표시 */}
+                      {lostItems
+                        .filter((item) => item.status === 'completed' || item.status === 'confirmed' || item.status === 'processed' || confirmedLostItemIds.has(item.id))
+                        .map((item) => (
+                          <div key={item.id} className="border-2 border-gray-300 bg-gray-50 rounded-lg p-4 opacity-60">
+                            <div className="flex justify-between items-start mb-3">
+                              <div className="flex-1">
+                                {/* 카테고리 배지 */}
+                                <div className="mb-3">
+                                  {(() => {
+                                    const categoryMatch = item.description?.match(/\[카테고리:\s*(.+?)\]/)
+                                    const category = categoryMatch ? categoryMatch[1] : item.type
+                                    return (
+                                      <span className="inline-block px-4 py-2 bg-gray-400 text-white text-base font-semibold rounded-md shadow-sm">
+                                        {category}
+                                      </span>
+                                    )
+                                  })()}
+                                </div>
+                                
+                                {/* 보관장소 */}
+                                {item.storage_location && (
+                                  <div className="mb-3 p-3 bg-white border-2 border-gray-200 rounded-md shadow-sm">
+                                    <p className="text-sm font-semibold text-gray-700 mb-1">보관장소</p>
+                                    <p className="text-base text-gray-800 font-medium">
+                                      {item.storage_location}
+                                    </p>
+                                  </div>
+                                )}
+                                
+                                {/* 설명란 */}
+                                {item.description && (() => {
+                                  let cleanDescription = item.description.replace(/\[카테고리:.*?\]\s*/g, '').trim()
+                                  cleanDescription = cleanDescription.split('\n')
+                                    .filter(line => !line.trim().startsWith('보관장소:'))
+                                    .join('\n')
+                                    .trim()
+                                  return cleanDescription ? (
+                                    <div className="mb-3 p-4 bg-white border-2 border-gray-200 rounded-md shadow-sm">
+                                      <p className="text-base text-gray-800 font-medium leading-relaxed whitespace-pre-wrap">
+                                        {cleanDescription}
+                                      </p>
+                                    </div>
+                                  ) : null
+                                })()}
+                                
+                                {/* 사진 */}
+                                {item.photo_url && (
+                                  <div className="mt-4">
+                                    <div className="flex flex-wrap gap-3">
+                                      {getPhotoUrls(item.photo_url).map((url, idx) => (
+                                        <img
+                                          key={idx}
+                                          src={url}
+                                          alt={`${item.type} 사진 ${idx + 1}`}
+                                          className="w-40 h-40 object-cover rounded-lg border-2 border-gray-200 cursor-pointer hover:border-gray-400 transition-colors shadow-md opacity-70"
+                                          onClick={() => setSelectedImage(url)}
+                                        />
+                                      ))}
+                                    </div>
+                                  </div>
+                                )}
+                                
+                                {/* 작성 시간 및 확인 시간 */}
+                                <div className="mt-4 space-y-1">
+                                  <p className="text-xs text-gray-500">
+                                    작성: {new Date(item.created_at).toLocaleString('ko-KR')}
+                                  </p>
+                                  {(item.status === 'completed' || item.status === 'confirmed' || item.status === 'processed' || confirmedLostItemIds.has(item.id)) && item.updated_at && (
+                                    <p className="text-xs text-green-600 font-medium">
+                                      확인: {new Date(item.updated_at).toLocaleString('ko-KR')}
+                                    </p>
+                                  )}
+                                </div>
+                              </div>
+                              
+                              {/* 확인 완료 배지 */}
+                              <div className="ml-4 flex items-start">
+                                <span className="inline-block px-3 py-1 bg-green-100 text-green-700 text-sm font-semibold rounded-md">
+                                  확인 완료
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
                       </div>
                     )}
                   </>

@@ -25,18 +25,40 @@ export function useTodayAttendance() {
     }
 
     const today = new Date().toISOString().split('T')[0]
-    const { data, error: queryError } = await supabase
-      .from('attendance')
-      .select('id, user_id, store_id, work_date, clock_in_at, clock_in_latitude, clock_in_longitude, clock_out_at, clock_out_latitude, clock_out_longitude, selfie_url, created_at, updated_at')
-      .eq('user_id', session.user.id)
-      .eq('work_date', today)
-      .order('clock_in_at', { ascending: false })
+    // 오늘 출근 기록 + 퇴근하지 않은 과거 출근 기록 (날짜가 바뀌어도 출근 상태 유지)
+    const [todayResult, pastResult] = await Promise.all([
+      // 오늘 출근 기록
+      supabase
+        .from('attendance')
+        .select('id, user_id, store_id, work_date, clock_in_at, clock_in_latitude, clock_in_longitude, clock_out_at, clock_out_latitude, clock_out_longitude, selfie_url, created_at, updated_at')
+        .eq('user_id', session.user.id)
+        .eq('work_date', today),
+      // 퇴근하지 않은 과거 출근 기록
+      supabase
+        .from('attendance')
+        .select('id, user_id, store_id, work_date, clock_in_at, clock_in_latitude, clock_in_longitude, clock_out_at, clock_out_latitude, clock_out_longitude, selfie_url, created_at, updated_at')
+        .eq('user_id', session.user.id)
+        .is('clock_out_at', null)
+        .lt('work_date', today)
+    ])
+    
+    // 두 결과 병합하고 최신순으로 정렬
+    const allData = [
+      ...(todayResult.data || []),
+      ...(pastResult.data || [])
+    ].sort((a, b) => {
+      const dateA = new Date(a.clock_in_at).getTime()
+      const dateB = new Date(b.clock_in_at).getTime()
+      return dateB - dateA // 내림차순 (최신순)
+    })
+    
+    const queryError = todayResult.error || pastResult.error
 
     if (queryError) {
       console.error('Error loading attendance:', queryError)
       setError(queryError.message)
     } else {
-      setAttendances(data || [])
+      setAttendances(allData)
     }
     setLoading(false)
   }

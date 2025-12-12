@@ -16,8 +16,9 @@ export function calculateChecklistProgress(checklist: Checklist): ChecklistProgr
 
   checklist.items.forEach((item: ChecklistItem) => {
     if (item.type === 'check') {
+      // 체크 항목: 체크만 되면 완료
       totalItems++
-      if (item.checked && (item.status === 'good' || (item.status === 'bad' && item.comment))) {
+      if (item.checked) {
         completedItems++
       }
     } else if (item.type === 'photo') {

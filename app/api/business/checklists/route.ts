@@ -28,9 +28,13 @@ export async function GET(request: NextRequest) {
       }
     }
 
+    // 업체 관리자 앱에서는 템플릿 체크리스트만 조회
+    // 템플릿: work_date가 '2000-01-01'이고 assigned_user_id가 null
     let query = supabase
       .from('checklist')
       .select('*')
+      .eq('work_date', '2000-01-01') // 템플릿 날짜
+      .is('assigned_user_id', null) // 템플릿은 배정되지 않음
       .order('created_at', { ascending: false })
 
     if (storeId) {

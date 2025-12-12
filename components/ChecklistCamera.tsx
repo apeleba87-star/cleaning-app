@@ -22,6 +22,9 @@ export function ChecklistCamera({ items, mode, storeId, onComplete, onCancel }: 
   // 사진이 필요한 항목만 필터링
   const photoItems = items.filter(item => item.area?.trim() && item.type === 'photo')
 
+  const [cameraError, setCameraError] = useState<string | null>(null)
+  const [useFileInput, setUseFileInput] = useState(false)
+
   useEffect(() => {
     let currentStream: MediaStream | null = null
     let isMounted = true
@@ -29,15 +32,26 @@ export function ChecklistCamera({ items, mode, storeId, onComplete, onCancel }: 
 
     // 카메라 접근 (한 번만 시도)
     const initCamera = async () => {
-      if (cameraRequested || !isMounted) return
+      if (cameraRequested || !isMounted || useFileInput) return
       cameraRequested = true
 
       try {
+        // 모바일 환경 확인
+        const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent)
+        
         // PC 환경에서는 facingMode를 사용하지 않음 (일반 웹캠 사용)
-        const constraints = {
-          video: {
-            facingMode: { ideal: 'environment' }, // 모바일에서는 후면 카메라, PC에서는 기본 카메라
-          }
+        const constraints: MediaStreamConstraints = {
+          video: isMobile
+            ? {
+                facingMode: { ideal: 'environment' }, // 모바일에서는 후면 카메라
+                width: { ideal: 1920 },
+                height: { ideal: 1080 }
+              }
+            : {
+                // PC에서는 기본 카메라
+                width: { ideal: 1920 },
+                height: { ideal: 1080 }
+              }
         }
 
         const mediaStream = await navigator.mediaDevices.getUserMedia(constraints)
@@ -50,6 +64,7 @@ export function ChecklistCamera({ items, mode, storeId, onComplete, onCancel }: 
 
         currentStream = mediaStream
         setStream(mediaStream)
+        setCameraError(null)
         if (videoRef.current) {
           videoRef.current.srcObject = mediaStream
         }
@@ -60,20 +75,17 @@ export function ChecklistCamera({ items, mode, storeId, onComplete, onCancel }: 
         const errorMessage = error.name === 'NotAllowedError' 
           ? '카메라 접근 권한이 거부되었습니다. 브라우저 설정에서 카메라 권한을 허용해주세요.'
           : error.name === 'NotFoundError'
-          ? '카메라를 찾을 수 없습니다. 카메라가 연결되어 있는지 확인해주세요.'
+          ? '카메라를 찾을 수 없습니다.'
           : '카메라 접근에 실패했습니다.'
         
-        alert(errorMessage)
-        // 에러 발생 시 카메라 모드 종료
-        setTimeout(() => {
-          if (isMounted) {
-            onCancel()
-          }
-        }, 1000)
+        setCameraError(errorMessage)
+        setUseFileInput(true) // 카메라 실패 시 file input 모드로 전환
       }
     }
 
-    initCamera()
+    if (!useFileInput) {
+      initCamera()
+    }
 
     // 브라우저 히스토리에 엔트리 추가 (뒤로가기 감지용)
     window.history.pushState({ cameraMode: mode }, '')
@@ -99,7 +111,34 @@ export function ChecklistCamera({ items, mode, storeId, onComplete, onCancel }: 
       window.removeEventListener('popstate', handlePopState)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [useFileInput])
+
+  // File input으로 사진 선택
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    if (!file.type.startsWith('image/')) {
+      alert('이미지 파일만 선택할 수 있습니다.')
+      return
+    }
+
+    // File을 base64로 변환
+    const reader = new FileReader()
+    reader.onloadend = () => {
+      const dataURL = reader.result as string
+      setTempPhotos(prev => ({
+        ...prev,
+        [currentIndex]: dataURL
+      }))
+    }
+    reader.readAsDataURL(file)
+
+    // input 초기화 (같은 파일을 다시 선택할 수 있도록)
+    if (fileInputRef.current) {
+      fileInputRef.current.value = ''
+    }
+  }
 
   const capturePhoto = () => {
     if (!videoRef.current || !canvasRef.current) return
@@ -210,15 +249,64 @@ export function ChecklistCamera({ items, mode, storeId, onComplete, onCancel }: 
         </div>
       </div>
 
-      {/* 카메라 화면 */}
+      {/* 카메라 에러 표시 */}
+      {cameraError && (
+        <div className="absolute top-20 left-4 right-4 bg-red-600 bg-opacity-90 text-white p-3 rounded-lg z-30">
+          <p className="text-sm mb-2">{cameraError}</p>
+          <p className="text-xs text-red-100">갤러리에서 사진을 선택하거나, 브라우저 설정에서 카메라 권한을 허용해주세요.</p>
+        </div>
+      )}
+
+      {/* 카메라 화면 또는 File Input 모드 */}
       <div className="flex-1 relative flex items-center justify-center">
-        <video
-          ref={videoRef}
-          autoPlay
-          playsInline
-          className="w-full h-full object-cover"
-        />
-        <canvas ref={canvasRef} className="hidden" />
+        {useFileInput ? (
+          // File Input 모드
+          <div className="w-full h-full flex flex-col items-center justify-center bg-gray-900 p-4">
+            <div className="text-white text-center mb-6">
+              <div className="text-4xl mb-4">📷</div>
+              <div className="text-lg font-semibold mb-2">{currentItem?.area}</div>
+              <div className="text-sm text-gray-300">사진을 선택해주세요</div>
+            </div>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              capture="environment"
+              onChange={handleFileSelect}
+              className="hidden"
+            />
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium"
+            >
+              갤러리에서 선택
+            </button>
+            <button
+              onClick={() => {
+                setUseFileInput(false)
+                setCameraError(null)
+                // 카메라 재시도
+                setTimeout(() => {
+                  window.location.reload()
+                }, 100)
+              }}
+              className="mt-4 px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 text-sm"
+            >
+              카메라 다시 시도
+            </button>
+          </div>
+        ) : (
+          // 카메라 모드
+          <>
+            <video
+              ref={videoRef}
+              autoPlay
+              playsInline
+              className="w-full h-full object-cover"
+            />
+            <canvas ref={canvasRef} className="hidden" />
+          </>
+        )}
 
         {/* 왼쪽 하단: 사진 미리보기 영역 (임시 저장된 사진들) */}
         <div className="absolute bottom-20 left-4 flex gap-2 max-w-[calc(100%-8rem)] overflow-x-auto z-20">
@@ -283,13 +371,24 @@ export function ChecklistCamera({ items, mode, storeId, onComplete, onCancel }: 
           >
             취소
           </button>
-          <button
-            onClick={capturePhoto}
-            className="w-16 h-16 bg-white rounded-full border-4 border-gray-300 hover:bg-gray-100 active:scale-95 transition-transform flex items-center justify-center shadow-lg"
-            title="사진 촬영"
-          >
-            <div className="w-12 h-12 bg-white rounded-full border-2 border-gray-400"></div>
-          </button>
+          {!useFileInput && (
+            <button
+              onClick={capturePhoto}
+              className="w-16 h-16 bg-white rounded-full border-4 border-gray-300 hover:bg-gray-100 active:scale-95 transition-transform flex items-center justify-center shadow-lg"
+              title="사진 촬영"
+            >
+              <div className="w-12 h-12 bg-white rounded-full border-2 border-gray-400"></div>
+            </button>
+          )}
+          {!tempPhotos[currentIndex] && useFileInput && (
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              className="w-16 h-16 bg-blue-600 rounded-full border-4 border-blue-400 hover:bg-blue-700 active:scale-95 transition-transform flex items-center justify-center shadow-lg"
+              title="사진 선택"
+            >
+              <span className="text-white text-2xl">📷</span>
+            </button>
+          )}
           {allCaptured && (
             <button
               onClick={handleSave}

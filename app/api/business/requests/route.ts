@@ -33,14 +33,13 @@ export async function POST(request: NextRequest) {
     }
 
     // 업체관리자가 작성하면 즉시 처리중으로 저장
-    // user_id 필드 사용 (다른 테이블과 일관성 유지)
     const insertData = {
       store_id,
       title: category, // 카테고리를 title로 저장
       description: description.trim(),
       photo_url: photo_urls && photo_urls.length > 0 ? JSON.stringify(photo_urls) : null,
       status: 'in_progress', // 업체관리자가 작성하면 처리중
-      user_id: user.id, // created_by 대신 user_id 사용
+      created_by: user.id, // 작성자 ID
     }
 
     console.log('Creating request with data:', { ...insertData, description: insertData.description.substring(0, 50) + '...' })

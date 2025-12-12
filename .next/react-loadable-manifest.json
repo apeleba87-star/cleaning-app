@@ -1,4 +1,8 @@
 {
+  "components\\ChecklistCamera.tsx -> @/lib/supabase/upload": {
+    "id": "components\\ChecklistCamera.tsx -> @/lib/supabase/upload",
+    "files": []
+  },
   "node_modules\\@supabase\\auth-js\\dist\\module\\lib\\helpers.js -> @supabase/node-fetch": {
     "id": "node_modules\\@supabase\\auth-js\\dist\\module\\lib\\helpers.js -> @supabase/node-fetch",
     "files": []

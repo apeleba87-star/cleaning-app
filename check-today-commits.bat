@@ -15,3 +15,4 @@ git log -10 --pretty=format:"%h | %ad | %an | %s" --date=format:"%Y-%m-%d %H:%M:
 echo.
 pause
 
+

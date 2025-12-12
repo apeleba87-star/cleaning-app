@@ -71,3 +71,4 @@ COMMENT ON COLUMN public.product_photos.type IS 'receipt: 제품 입고, storage
 COMMENT ON COLUMN public.product_photos.photo_type IS '제품 입고일 때: product(제품 사진), order_sheet(발주서 사진)';
 COMMENT ON COLUMN public.product_photos.photo_urls IS '사진 URL 배열 (JSONB)';
 
+

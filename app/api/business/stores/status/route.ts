@@ -92,12 +92,12 @@ export async function GET(request: NextRequest) {
           .gte('created_at', thirtyDaysAgo.toISOString())
           .lte('created_at', todayEnd.toISOString())
 
+        // 분실물 조회 - 최근 30일간의 모든 분실물 (상태 업데이트 반영을 위해 날짜 제한 완화)
         const { data: lostItems } = await supabase
           .from('lost_items')
-          .select('id, status')
+          .select('id, status, created_at, updated_at')
           .eq('store_id', store.id)
           .gte('created_at', thirtyDaysAgo.toISOString())
-          .lte('created_at', todayEnd.toISOString())
 
         // 디버깅: 실제 저장된 category 값 확인
         console.log(`\n=== Store ${store.id} (${store.name}) ===`)
@@ -219,12 +219,24 @@ export async function GET(request: NextRequest) {
         })
         console.log(`=== End Store ${store.id} ===\n`)
 
+        // 분실물 상태 디버깅
+        if (lostItems && lostItems.length > 0) {
+          console.log(`Lost items for ${store.name}:`)
+          lostItems.forEach((l: any) => {
+            console.log(`  - ID: ${l.id}, Status: "${l.status}"`)
+          })
+        }
+
+        // 분실물 상태별 카운트 - 'completed', 'confirmed', 'processed' 상태를 확인된 것으로 간주
         const unconfirmedLostItems = lostItems?.filter(
-          (l: any) => l.status === 'pending' || l.status === 'received' || l.status === 'submitted'
+          (l: any) => l.status !== 'completed' && l.status !== 'confirmed' && l.status !== 'processed'
         ).length || 0
         const confirmedLostItems = lostItems?.filter(
-          (l: any) => l.status === 'completed'
+          (l: any) => l.status === 'completed' || l.status === 'confirmed' || l.status === 'processed'
         ).length || 0
+
+        console.log(`Lost items counts for ${store.name}: unconfirmed=${unconfirmedLostItems}, confirmed=${confirmedLostItems}`)
+        console.log(`Lost items status breakdown:`, lostItems?.map((l: any) => ({ id: l.id, status: l.status })))
 
         // 오늘 제품 입고 사진 (type = 'receipt')
         // 테이블이 없을 수 있으므로 에러 처리 추가

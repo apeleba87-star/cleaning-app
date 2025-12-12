@@ -1,9 +1,12 @@
 {
   "/_not-found/page": "app/_not-found/page.js",
+  "/business/checklists/page": "app/business/checklists/page.js",
   "/business/stores/status/page": "app/business/stores/status/page.js",
-  "/platform/users/page": "app/platform/users/page.js",
   "/api/business/stores/status/route": "app/api/business/stores/status/route.js",
+  "/api/business/stores/[id]/problem-reports/route": "app/api/business/stores/[id]/problem-reports/route.js",
+  "/api/business/stores/[id]/lost-items/route": "app/api/business/stores/[id]/lost-items/route.js",
+  "/api/business/lost-items/[id]/confirm/route": "app/api/business/lost-items/[id]/confirm/route.js",
+  "/(staff)/issues/page": "app/(staff)/issues/page.js",
   "/(staff)/product-photos/page": "app/(staff)/product-photos/page.js",
-  "/(staff)/attendance/page": "app/(staff)/attendance/page.js",
   "/(staff)/mobile-dashboard/page": "app/(staff)/mobile-dashboard/page.js"
 }

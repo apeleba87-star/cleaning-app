@@ -452,7 +452,12 @@ export default function ChecklistClient() {
               {(selectedChecklist as any).stores?.name || '매장'} - 체크리스트
             </h2>
             {(() => {
-              const progress = calculateChecklistProgress(selectedChecklist)
+              // 현재 상태의 items로 진행률 계산
+              const checklistWithCurrentItems = {
+                ...selectedChecklist,
+                items: items
+              }
+              const progress = calculateChecklistProgress(checklistWithCurrentItems)
               
               // 진행률에 따른 색상 결정
               let progressColor = 'bg-red-500' // 0-30%
@@ -480,7 +485,7 @@ export default function ChecklistClient() {
                     ></div>
                   </div>
                   <p className="text-xs text-gray-500 mt-1">
-                    {progress.completed} / {progress.total} 완료
+                    {progress.completedItems} / {progress.totalItems} 완료
                   </p>
                 </div>
               )
@@ -503,164 +508,74 @@ export default function ChecklistClient() {
             </div>
           )}
 
-          {/* 탭 구조 */}
+          {/* 체크리스트 항목 테이블 - 체크 및 사진 업로드 */}
+          <ChecklistTable
+            items={items}
+            storeId={selectedChecklist.store_id}
+            onItemsChange={handleItemsChange}
+          />
+
+          {/* 특이사항 */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              특이사항 (비고)
+            </label>
+            <textarea
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              rows={3}
+              className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder="특이사항이나 참고사항을 입력하세요"
+            />
+          </div>
+
+          {/* 사진 촬영 및 제출 버튼 */}
           {(() => {
             const photoItems = items.filter(item => item.type === 'photo' && item.area?.trim())
             const checkItems = items.filter(item => item.type === 'check' && item.area?.trim())
             
-            // 미완료 항목: before_photo_url이 없는 사진 항목 + 미완료된 체크 항목
-            const incompletePhotoItems = photoItems.filter(item => !item.before_photo_url)
-            const incompleteCheckItems = checkItems.filter(item => !item.checked)
-            const incompleteItems = [...incompletePhotoItems, ...incompleteCheckItems]
-            
-            // 완료 항목: after_photo_url이 있는 사진 항목
-            const completedPhotoItems = photoItems.filter(item => item.after_photo_url)
-            
-            const incompleteCount = incompleteItems.length
-            const completedCount = completedPhotoItems.length
-            
+            const hasAllBeforePhotos = photoItems.length === 0 || photoItems.every(item => item.before_photo_url)
+            const hasAllAfterPhotos = photoItems.length === 0 || photoItems.every(item => item.after_photo_url)
+            const hasAllCheckItemsCompleted = checkItems.length === 0 || checkItems.every(item => item.checked)
+
+            // 관리 전 사진이 없으면 관리 전 사진 촬영 버튼 표시
+            if (!hasAllBeforePhotos) {
+              const incompletePhotoItems = photoItems.filter(item => !item.before_photo_url)
+              const beforePhotoCount = incompletePhotoItems.length
+              return (
+                <button
+                  onClick={() => setCameraMode('before')}
+                  className="w-full px-6 py-4 bg-red-400 text-white rounded-lg hover:bg-red-500 font-medium text-lg flex items-center justify-center gap-2"
+                >
+                  <span>📷</span>
+                  관리전 사진 촬영 {beforePhotoCount > 0 && `(${beforePhotoCount}개)`}
+                </button>
+              )
+            }
+
+            // 관리 전 사진은 모두 있고, 일반 체크리스트 완료했지만 관리 후 사진이 없으면 관리 후 사진 촬영 버튼
+            if (hasAllBeforePhotos && hasAllCheckItemsCompleted && !hasAllAfterPhotos) {
+              const afterPhotoCount = photoItems.filter(item => item.before_photo_url && !item.after_photo_url).length
+              return (
+                <button
+                  onClick={() => setCameraMode('after')}
+                  className="w-full px-6 py-4 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium text-lg flex items-center justify-center gap-2"
+                >
+                  <span>📷</span>
+                  관리후 사진 촬영 {afterPhotoCount > 0 && `(${afterPhotoCount}개)`}
+                </button>
+              )
+            }
+
+            // 모두 완료되었으면 제출 버튼
             return (
-              <>
-                {/* 탭 */}
-                <div className="flex border-b border-gray-200 mb-4">
-                  <button
-                    onClick={() => setActiveTab('incomplete')}
-                    className={`flex-1 px-4 py-3 text-center font-medium transition-colors ${
-                      activeTab === 'incomplete'
-                        ? 'text-red-600 border-b-2 border-red-600'
-                        : 'text-gray-500 hover:text-gray-700'
-                    }`}
-                  >
-                    미완료 (관리전) {incompleteCount > 0 && `${incompleteCount}개`}
-                  </button>
-                  <button
-                    onClick={() => setActiveTab('completed')}
-                    className={`flex-1 px-4 py-3 text-center font-medium transition-colors ${
-                      activeTab === 'completed'
-                        ? 'text-blue-600 border-b-2 border-blue-600'
-                        : 'text-gray-500 hover:text-gray-700'
-                    }`}
-                  >
-                    완료 (관리후) {completedCount > 0 && `${completedCount}개`}
-                  </button>
-                </div>
-
-                {/* 탭별 콘텐츠 */}
-                <div className="mb-6">
-                  {activeTab === 'incomplete' ? (
-                    <div className="space-y-3">
-                      {incompleteItems.length === 0 ? (
-                        <div className="text-center py-8 text-gray-500">
-                          미완료 항목이 없습니다.
-                        </div>
-                      ) : (
-                        incompleteItems.map((item, index) => (
-                          <div
-                            key={index}
-                            className="flex items-center space-x-3 p-3 border border-gray-200 rounded-lg hover:bg-gray-50"
-                          >
-                            {item.type === 'photo' ? (
-                              <div className="w-6 h-6 flex-shrink-0 flex items-center justify-center text-blue-600 text-lg">
-                                📷
-                              </div>
-                            ) : (
-                              <div className="w-6 h-6 rounded-full border-2 border-gray-300 flex-shrink-0"></div>
-                            )}
-                            <span className="flex-1 text-gray-800">
-                              {index + 1}. {item.area}
-                            </span>
-                          </div>
-                        ))
-                      )}
-                    </div>
-                  ) : (
-                    <div className="space-y-3">
-                      {completedPhotoItems.length === 0 ? (
-                        <div className="text-center py-8 text-gray-500">
-                          완료된 항목이 없습니다.
-                        </div>
-                      ) : (
-                        completedPhotoItems.map((item, index) => (
-                          <div
-                            key={index}
-                            className="flex items-center space-x-3 p-3 border border-gray-200 rounded-lg bg-gray-50"
-                          >
-                            <div className="w-6 h-6 rounded-full bg-blue-600 flex items-center justify-center flex-shrink-0">
-                              <span className="text-white text-xs">✓</span>
-                            </div>
-                            <span className="flex-1 text-gray-800">
-                              {index + 1}. {item.area}
-                            </span>
-                          </div>
-                        ))
-                      )}
-                    </div>
-                  )}
-                </div>
-
-                {/* ChecklistTable은 카메라 모드와 사진 업로드를 위해 필요하므로 제거하지 않음 */}
-                {/* 사진 업로드를 위해서는 ChecklistTable의 PhotoUploader 기능이 필요함 */}
-
-                {/* 특이사항 */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    특이사항 (비고)
-                  </label>
-                  <textarea
-                    value={note}
-                    onChange={(e) => setNote(e.target.value)}
-                    rows={3}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    placeholder="특이사항이나 참고사항을 입력하세요"
-                  />
-                </div>
-
-                {/* 사진 촬영 및 제출 버튼 */}
-                {(() => {
-                  const hasAllBeforePhotos = photoItems.length === 0 || photoItems.every(item => item.before_photo_url)
-                  const hasAllAfterPhotos = photoItems.length === 0 || photoItems.every(item => item.after_photo_url)
-                  const hasAllCheckItemsCompleted = checkItems.length === 0 || checkItems.every(item => item.checked)
-
-                  // 관리 전 사진이 없으면 관리 전 사진 촬영 버튼 표시
-                  if (!hasAllBeforePhotos) {
-                    const beforePhotoCount = incompletePhotoItems.length
-                    return (
-                      <button
-                        onClick={() => setCameraMode('before')}
-                        className="w-full px-6 py-4 bg-red-400 text-white rounded-lg hover:bg-red-500 font-medium text-lg flex items-center justify-center gap-2"
-                      >
-                        <span>📷</span>
-                        관리전 사진 촬영 {beforePhotoCount > 0 && `(${beforePhotoCount}개)`}
-                      </button>
-                    )
-                  }
-
-                  // 관리 전 사진은 모두 있고, 일반 체크리스트 완료했지만 관리 후 사진이 없으면 관리 후 사진 촬영 버튼
-                  if (hasAllBeforePhotos && hasAllCheckItemsCompleted && !hasAllAfterPhotos) {
-                    const afterPhotoCount = photoItems.filter(item => item.before_photo_url && !item.after_photo_url).length
-                    return (
-                      <button
-                        onClick={() => setCameraMode('after')}
-                        className="w-full px-6 py-4 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium text-lg flex items-center justify-center gap-2"
-                      >
-                        <span>📷</span>
-                        관리후 사진 촬영 {afterPhotoCount > 0 && `(${afterPhotoCount}개)`}
-                      </button>
-                    )
-                  }
-
-                  // 모두 완료되었으면 제출 버튼
-                  return (
-                    <button
-                      onClick={handleSubmit}
-                      disabled={submitting || !hasAllAfterPhotos}
-                      className="w-full px-6 py-4 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed font-medium text-lg"
-                    >
-                      {submitting ? '제출 중...' : '체크리스트 제출'}
-                    </button>
-                  )
-                })()}
-              </>
+              <button
+                onClick={handleSubmit}
+                disabled={submitting || !hasAllAfterPhotos}
+                className="w-full px-6 py-4 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed font-medium text-lg"
+              >
+                {submitting ? '제출 중...' : '체크리스트 제출'}
+              </button>
             )
           })()}
         </div>
@@ -731,7 +646,7 @@ export default function ChecklistClient() {
                               ></div>
                             </div>
                             <p className="text-xs text-gray-500 mt-1">
-                              {progress.completed} / {progress.total} 완료
+                              {progress.completedItems} / {progress.totalItems} 완료
                             </p>
                           </div>
                         )
