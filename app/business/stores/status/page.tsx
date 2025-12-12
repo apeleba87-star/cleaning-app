@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useMemo, useRef } from 'react'
 import Link from 'next/link'
+import { uploadPhoto } from '@/lib/supabase/upload'
 
 interface StoreStatus {
   store_id: string
@@ -25,6 +26,8 @@ interface StoreStatus {
   confirmed_lost_items: number
   has_product_inflow_today: boolean
   has_storage_photos: boolean
+  storage_photos?: Array<{ id: string; photo_url: string }>
+  received_request_count: number
   in_progress_request_count: number
   completed_request_count: number
   unconfirmed_completed_request_count: number
@@ -82,7 +85,7 @@ export default function BusinessStoresStatusPage() {
   const [inventoryPhotos, setInventoryPhotos] = useState<{ product_inflow: InventoryPhoto[]; storage: InventoryPhoto[] }>({ product_inflow: [], storage: [] })
   const [problemReports, setProblemReports] = useState<{ store_problems: ProblemReport[]; vending_problems: ProblemReport[] }>({ store_problems: [], vending_problems: [] })
   const [lostItems, setLostItems] = useState<LostItem[]>([])
-  const [requests, setRequests] = useState<{ in_progress: Request[]; completed: Request[] }>({ in_progress: [], completed: [] })
+  const [requests, setRequests] = useState<{ received: Request[]; in_progress: Request[]; completed: Request[] }>({ received: [], in_progress: [], completed: [] })
   const [confirmedRequestIds, setConfirmedRequestIds] = useState<Set<string>>(new Set())
   const [confirmedProblemIds, setConfirmedProblemIds] = useState<Set<string>>(new Set())
   const [confirmedLostItemIds, setConfirmedLostItemIds] = useState<Set<string>>(new Set())
@@ -90,6 +93,14 @@ export default function BusinessStoresStatusPage() {
   const [showCompletionForm, setShowCompletionForm] = useState<string | null>(null)
   const [completionDescription, setCompletionDescription] = useState('')
   const [completionPhotos, setCompletionPhotos] = useState<string[]>([])
+  const [showRequestCreateModal, setShowRequestCreateModal] = useState(false)
+  const [editingRequestId, setEditingRequestId] = useState<string | null>(null)
+  const [requestFormData, setRequestFormData] = useState({
+    category: '',
+    description: '',
+    photos: [] as string[],
+  })
+  const [requestPhotos, setRequestPhotos] = useState<string[]>([])
   const intervalRef = useRef<NodeJS.Timeout | null>(null)
 
   // 시간 체크 함수 (8시 ~ 23시)
@@ -223,7 +234,7 @@ export default function BusinessStoresStatusPage() {
       const response = await fetch(`/api/business/stores/${store.store_id}/requests`)
       const data = await response.json()
       if (response.ok) {
-        setRequests(data.data || { in_progress: [], completed: [] })
+        setRequests(data.data || { received: [], in_progress: [], completed: [] })
       }
     } catch (error) {
       console.error('Error loading requests:', error)
@@ -242,6 +253,139 @@ export default function BusinessStoresStatusPage() {
     } catch (error) {
       console.error('Error confirming request:', error)
       alert('확인 처리 중 오류가 발생했습니다.')
+    }
+  }
+
+  const handleCreateRequest = async () => {
+    if (!requestFormData.category || !requestFormData.description) {
+      alert('카테고리와 요청란 설명을 입력해주세요.')
+      return
+    }
+
+    if (!selectedStore) return
+
+    try {
+      // 사진 업로드
+      const photoUrls: string[] = []
+      if (requestPhotos.length > 0) {
+        for (const photoDataUrl of requestPhotos) {
+          try {
+            const response = await fetch(photoDataUrl)
+            const blob = await response.blob()
+            const file = new File([blob], `request-${Date.now()}.jpg`, { type: blob.type })
+            const url = await uploadPhoto(file, selectedStore.store_id, 'issue')
+            photoUrls.push(url)
+          } catch (uploadError) {
+            console.error('Photo upload error:', uploadError)
+            alert('사진 업로드 중 오류가 발생했습니다.')
+            return
+          }
+        }
+      }
+
+      const response = await fetch('/api/business/requests', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          store_id: selectedStore.store_id,
+          title: requestFormData.category,
+          description: requestFormData.description,
+          photo_urls: photoUrls,
+        }),
+      })
+
+      if (response.ok) {
+        setShowRequestCreateModal(false)
+        setRequestFormData({ category: '', description: '', photos: [] })
+        setRequestPhotos([])
+        loadStoreStatuses()
+        alert('요청이 접수되었습니다.')
+      } else {
+        const data = await response.json()
+        alert(data.error || '요청 접수 중 오류가 발생했습니다.')
+      }
+    } catch (error) {
+      console.error('Error creating request:', error)
+      alert('요청 접수 중 오류가 발생했습니다.')
+    }
+  }
+
+  const handleApproveRequest = async (requestId: string) => {
+    try {
+      const response = await fetch(`/api/business/requests/${requestId}/approve`, {
+        method: 'PATCH',
+      })
+
+      if (response.ok) {
+        loadStoreStatuses()
+        handleOpenRequestModal(selectedStore!)
+        alert('요청이 승인되었습니다.')
+      } else {
+        const data = await response.json()
+        alert(data.error || '요청 승인 중 오류가 발생했습니다.')
+      }
+    } catch (error) {
+      console.error('Error approving request:', error)
+      alert('요청 승인 중 오류가 발생했습니다.')
+    }
+  }
+
+  const handleUpdateRequest = async (requestId: string) => {
+    if (!requestFormData.category || !requestFormData.description) {
+      alert('카테고리와 요청란 설명을 입력해주세요.')
+      return
+    }
+
+    if (!selectedStore) return
+
+    try {
+      // 사진 업로드
+      const photoUrls: string[] = []
+      if (requestPhotos.length > 0) {
+        for (const photoDataUrl of requestPhotos) {
+          try {
+            const response = await fetch(photoDataUrl)
+            const blob = await response.blob()
+            const file = new File([blob], `request-${Date.now()}.jpg`, { type: blob.type })
+            const url = await uploadPhoto(file, selectedStore.store_id, 'issue')
+            photoUrls.push(url)
+          } catch (uploadError) {
+            console.error('Photo upload error:', uploadError)
+            alert('사진 업로드 중 오류가 발생했습니다.')
+            return
+          }
+        }
+      }
+
+      // 기존 사진 URL 가져오기
+      const request = requests.received.find((r) => r.id === requestId)
+      const existingPhotos = request?.photo_url ? getPhotoUrls(request.photo_url) : []
+      const allPhotoUrls = [...existingPhotos, ...photoUrls]
+
+      const response = await fetch(`/api/business/requests/${requestId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: requestFormData.category,
+          description: requestFormData.description,
+          photo_urls: allPhotoUrls,
+        }),
+      })
+
+      if (response.ok) {
+        setEditingRequestId(null)
+        setRequestFormData({ category: '', description: '', photos: [] })
+        setRequestPhotos([])
+        loadStoreStatuses()
+        handleOpenRequestModal(selectedStore!)
+        alert('요청이 수정되었습니다.')
+      } else {
+        const data = await response.json()
+        alert(data.error || '요청 수정 중 오류가 발생했습니다.')
+      }
+    } catch (error) {
+      console.error('Error updating request:', error)
+      alert('요청 수정 중 오류가 발생했습니다.')
     }
   }
 
@@ -283,12 +427,35 @@ export default function BusinessStoresStatusPage() {
 
   const handleCompleteStoreProblem = async (problemId: string) => {
     try {
+      // 사진 파일을 업로드하고 URL 받기
+      const photoUrls: string[] = []
+      
+      if (completionPhotos.length > 0 && selectedStore) {
+        // base64 이미지를 File로 변환하여 업로드
+        for (const photoDataUrl of completionPhotos) {
+          try {
+            // base64에서 Blob 생성
+            const response = await fetch(photoDataUrl)
+            const blob = await response.blob()
+            const file = new File([blob], `completion-${Date.now()}.jpg`, { type: blob.type })
+            
+            // Supabase에 업로드
+            const url = await uploadPhoto(file, selectedStore.store_id, 'issue')
+            photoUrls.push(url)
+          } catch (uploadError) {
+            console.error('Photo upload error:', uploadError)
+            alert('사진 업로드 중 오류가 발생했습니다.')
+            return
+          }
+        }
+      }
+
       const response = await fetch(`/api/business/problem-reports/${problemId}/complete`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           description: completionDescription,
-          photo_urls: completionPhotos,
+          photo_urls: photoUrls,
         }),
       })
 
@@ -299,6 +466,9 @@ export default function BusinessStoresStatusPage() {
         // 상태 갱신
         loadStoreStatuses()
         handleOpenProblemModal(selectedStore!)
+      } else {
+        const data = await response.json()
+        alert(data.error || '처리 완료 중 오류가 발생했습니다.')
       }
     } catch (error) {
       console.error('Error completing problem:', error)
@@ -347,6 +517,63 @@ export default function BusinessStoresStatusPage() {
     }
   }
 
+  // 필터 상태 (조건문 이전에 선언해야 함)
+  const [filter, setFilter] = useState<'all' | 'operating' | 'completed' | 'in_progress' | 'problem'>('all')
+
+  // 필터링된 매장 목록
+  const filteredStores = useMemo(() => {
+    return sortedStores.filter((store) => {
+      if (filter === 'all') return true
+      if (filter === 'operating') return store.is_work_day
+      if (filter === 'completed') return store.attendance_status === 'clocked_out'
+      if (filter === 'in_progress') return store.attendance_status === 'clocked_in'
+      if (filter === 'problem') return store.has_problem
+      return true
+    })
+  }, [sortedStores, filter])
+
+  // 통계 계산
+  const stats = useMemo(() => ({
+    total: storeStatuses.length,
+    operating: storeStatuses.filter((s) => s.is_work_day).length,
+    completed: storeStatuses.filter((s) => s.attendance_status === 'clocked_out').length,
+    problem: storeStatuses.filter((s) => s.has_problem).length,
+    notifications: storeStatuses.reduce((sum, s) => sum + s.in_progress_request_count + s.completed_request_count + s.store_problem_count + s.vending_problem_count + s.lost_item_count, 0),
+  }), [storeStatuses])
+
+  const formatTimeAgo = (timeString: string | null) => {
+    if (!timeString) return '정보 없음'
+    const now = new Date()
+    const time = new Date(timeString)
+    const diffMs = now.getTime() - time.getTime()
+    const diffMins = Math.floor(diffMs / 60000)
+
+    if (diffMins < 1) return '방금 전'
+    if (diffMins < 60) return `${diffMins}분 전`
+    const diffHours = Math.floor(diffMins / 60)
+    if (diffHours < 24) return `${diffHours}시간 전`
+    const diffDays = Math.floor(diffHours / 24)
+    return `${diffDays}일 전`
+  }
+
+  const getStatusLabel = (status: StoreStatus): string => {
+    if (!status.is_work_day) return '휴무'
+    if (status.attendance_status === 'clocked_out') return '완료'
+    if (status.attendance_status === 'clocked_in') return '진행중'
+    return '미시작'
+  }
+
+  const getStatusColor = (status: StoreStatus): string => {
+    if (!status.is_work_day) return 'bg-gray-100 text-gray-700'
+    if (status.attendance_status === 'clocked_out') return 'bg-green-100 text-green-700'
+    if (status.attendance_status === 'clocked_in') return 'bg-blue-100 text-blue-700'
+    return 'bg-yellow-100 text-yellow-700'
+  }
+
+  const getTotalNotificationCount = (status: StoreStatus): number => {
+    return status.in_progress_request_count + status.completed_request_count + status.store_problem_count + status.vending_problem_count + status.lost_item_count
+  }
+
   if (loading) {
     return (
       <div className="max-w-6xl mx-auto px-4 py-6">
@@ -358,41 +585,96 @@ export default function BusinessStoresStatusPage() {
   }
 
   return (
-    <div className="max-w-6xl mx-auto px-4 py-6">
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-bold">매장 상태</h1>
-        <div className="flex gap-2 items-center">
+    <div className="max-w-7xl mx-auto p-6 bg-gray-50 min-h-screen">
+      {/* 헤더 */}
+      <div className="mb-6">
+        <div className="flex justify-between items-center mb-2">
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900">매장 관리 현황</h1>
+            <p className="text-gray-600 mt-1">실시간 매장별 업무 진행 상태를 확인하세요</p>
+          </div>
+          <div className="flex gap-2">
+            <button
+              onClick={() => loadStoreStatuses()}
+              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+            >
+              전체 새로고침
+            </button>
+            <Link
+              href="/business/dashboard"
+              className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors"
+            >
+              대시보드로
+            </Link>
+          </div>
+        </div>
+        {/* 안내 문구 */}
+        <div className="mt-3 bg-blue-50 border border-blue-200 rounded-lg p-3">
+          <p className="text-sm text-blue-800">
+            💡 <strong>새로고침을 해야 출근 상태가 정확합니다.</strong> 자동 새로고침은 30분마다 실행되며, 오전 8시부터 저녁 11시까지만 작동합니다.
+          </p>
+        </div>
+      </div>
+
+      {/* 요약 카드 */}
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
+        <div className="bg-white rounded-lg shadow-md p-4 border-l-4 border-blue-500">
+          <div className="text-sm text-gray-600 mb-1">전체 매장</div>
+          <div className="text-2xl font-bold text-gray-900">{stats.total}</div>
+        </div>
+        <div className="bg-white rounded-lg shadow-md p-4 border-l-4 border-green-500">
+          <div className="text-sm text-gray-600 mb-1">금일 운영</div>
+          <div className="text-2xl font-bold text-gray-900">{stats.operating}</div>
+        </div>
+        <div className="bg-white rounded-lg shadow-md p-4 border-l-4 border-purple-500">
+          <div className="text-sm text-gray-600 mb-1">완료</div>
+          <div className="text-2xl font-bold text-gray-900">{stats.completed}</div>
+        </div>
+        <div className="bg-white rounded-lg shadow-md p-4 border-l-4 border-red-500">
+          <div className="flex items-center gap-2">
+            <div className="text-sm text-gray-600 mb-1">문제발생</div>
+            {stats.problem > 0 && <span className="text-red-500">⚠️</span>}
+          </div>
+          <div className="text-2xl font-bold text-gray-900">{stats.problem}</div>
+        </div>
+        <div className="bg-white rounded-lg shadow-md p-4 border-l-4 border-yellow-500">
+          <div className="text-sm text-gray-600 mb-1">알림</div>
+          <div className="text-2xl font-bold text-gray-900">{stats.notifications}</div>
+        </div>
+      </div>
+
+      {/* 필터 버튼 */}
+      <div className="flex gap-2 mb-6 flex-wrap">
+        {(['all', 'operating', 'completed', 'in_progress', 'problem'] as const).map((filterType) => (
           <button
-            onClick={() => loadStoreStatuses()}
-            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm"
+            key={filterType}
+            onClick={() => setFilter(filterType)}
+            className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+              filter === filterType
+                ? 'bg-blue-600 text-white'
+                : 'bg-white text-gray-700 hover:bg-gray-100'
+            }`}
           >
-            수동 새로고침
+            {filterType === 'all' && '전체'}
+            {filterType === 'operating' && '금일 운영'}
+            {filterType === 'completed' && '완료'}
+            {filterType === 'in_progress' && '진행중'}
+            {filterType === 'problem' && '문제발생'}
           </button>
-          <Link
-            href="/business/dashboard"
-            className="text-blue-600 hover:text-blue-800 text-sm"
-          >
-            ← 대시보드로
-          </Link>
-        </div>
+        ))}
       </div>
 
-      {/* 안내 문구 */}
-      <div className="mb-4 bg-blue-50 border border-blue-200 rounded-lg p-3">
-        <p className="text-sm text-blue-800">
-          💡 <strong>새로고침을 해야 출근 상태가 정확합니다.</strong> 자동 새로고침은 30분마다 실행되며, 오전 8시부터 저녁 11시까지만 작동합니다.
-        </p>
-      </div>
-
-      {sortedStores.length === 0 ? (
-        <div className="bg-white rounded-lg shadow-md p-6 text-center">
-          <p className="text-gray-500">매장이 없습니다.</p>
-        </div>
-      ) : (
-        <div className="space-y-4">
-          {sortedStores.map((status) => {
+      {/* 매장 목록 */}
+      <div className="space-y-4">
+        {filteredStores.length === 0 ? (
+          <div className="bg-white rounded-lg shadow-md p-12 text-center text-gray-500">
+            표시할 매장이 없습니다.
+          </div>
+        ) : (
+          filteredStores.map((status) => {
             const totalProblems = status.store_problem_count + status.vending_problem_count + status.lost_item_count
-            const hasRequests = status.in_progress_request_count > 0 || status.completed_request_count > 0
+            const hasRequests = status.received_request_count > 0 || status.in_progress_request_count > 0 || status.completed_request_count > 0
+            const notificationCount = getTotalNotificationCount(status)
             
             return (
               <div
@@ -402,37 +684,76 @@ export default function BusinessStoresStatusPage() {
                     ? 'border-gray-300 opacity-60'
                     : status.has_problem
                     ? 'border-red-500'
-                    : 'border-green-500'
+                    : status.attendance_status === 'clocked_out'
+                    ? 'border-green-500'
+                    : 'border-blue-500'
                 }`}
               >
-                <div className="flex items-center justify-between mb-4">
-                  <h2 className="text-xl font-semibold">{status.store_name}</h2>
-                  <div className="flex items-center gap-2">
-                    {status.work_day && (
-                      <span className="text-sm text-gray-500">작업일: {status.work_day}</span>
-                    )}
-                    {/* 문제보고가 있는 경우 즉시 새로고침 버튼 */}
-                    {status.has_problem && (
-                      <button
-                        onClick={(e) => refreshStore(status.store_id, e)}
-                        disabled={refreshing.has(status.store_id)}
-                        className="px-3 py-1 bg-red-600 text-white text-xs rounded-lg hover:bg-red-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
-                        title="이 매장만 즉시 새로고침"
-                      >
-                        {refreshing.has(status.store_id) ? '새로고침 중...' : '🔄 즉시 새로고침'}
-                      </button>
-                    )}
+                <div className="flex items-start justify-between mb-4">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-3 mb-2">
+                      <h3 className="text-xl font-bold text-gray-900">{status.store_name}</h3>
+                      <span className={`px-3 py-1 rounded-full text-sm font-semibold ${getStatusColor(status)}`}>
+                        {getStatusLabel(status)}
+                      </span>
+                      {notificationCount > 0 && (
+                        <span className="px-2 py-1 bg-red-100 text-red-700 rounded-full text-xs font-semibold">
+                          {notificationCount}
+                        </span>
+                      )}
+                      {/* 문제보고가 있는 경우 즉시 새로고침 버튼 */}
+                      {status.has_problem && (
+                        <button
+                          onClick={(e) => refreshStore(status.store_id, e)}
+                          disabled={refreshing.has(status.store_id)}
+                          className="px-3 py-1 bg-red-600 text-white text-xs rounded-lg hover:bg-red-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
+                          title="이 매장만 즉시 새로고침"
+                        >
+                          {refreshing.has(status.store_id) ? '새로고침 중...' : '🔄 즉시 새로고침'}
+                        </button>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-4 text-sm text-gray-600">
+                      {status.store_address && <span>{status.store_address}</span>}
+                      {status.staff_name && (
+                        <span className="flex items-center gap-1">
+                          <span className="w-1 h-1 bg-gray-400 rounded-full"></span>
+                          {status.staff_name}
+                        </span>
+                      )}
+                      <span className="flex items-center gap-1">
+                        <span className="w-1 h-1 bg-gray-400 rounded-full"></span>
+                        {formatTimeAgo(status.last_update_time)}
+                      </span>
+                    </div>
                   </div>
                 </div>
-                
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+
+                {/* 전체 진행률 */}
+                <div className="mb-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm font-medium text-gray-700">전체 진행률</span>
+                    <span className="text-sm font-bold text-blue-600">{status.checklist_completion_rate}%</span>
+                  </div>
+                  <div className="w-full bg-gray-200 rounded-full h-3">
+                    <div
+                      className={`h-3 rounded-full transition-all ${
+                        status.checklist_completion_rate >= 70 ? 'bg-blue-600' : 
+                        status.checklist_completion_rate >= 40 ? 'bg-orange-500' : 'bg-red-500'
+                      }`}
+                      style={{ width: `${status.checklist_completion_rate}%` }}
+                    ></div>
+                  </div>
+                </div>
+                {/* 상세 정보 (3개 컬럼) */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
                   {/* 제품입고 및 보관 상태 */}
                   <div
                     onClick={() => handleOpenInventoryModal(status)}
                     className="border border-gray-200 rounded-lg p-4 cursor-pointer hover:bg-gray-50 transition-colors"
                   >
                     <h3 className="text-sm font-medium text-gray-700 mb-3">
-                      제품입고 및 보관 상태
+                      제품 입고 및 보관 상태
                     </h3>
                     <div className="space-y-2">
                       <div className="flex items-center justify-between">
@@ -443,9 +764,20 @@ export default function BusinessStoresStatusPage() {
                       </div>
                       <div className="flex items-center justify-between">
                         <span className="text-sm text-gray-600">보관 사진</span>
-                        <span className={`text-sm font-semibold ${status.has_storage_photos ? 'text-green-600' : 'text-gray-400'}`}>
-                          {status.has_storage_photos ? '있음' : '없음'}
-                        </span>
+                        {status.storage_photos && status.storage_photos.length > 0 ? (
+                          <div className="flex gap-1">
+                            {status.storage_photos.slice(0, 2).map((photo) => (
+                              <img
+                                key={photo.id}
+                                src={photo.photo_url}
+                                alt="보관 사진"
+                                className="w-8 h-8 object-cover rounded"
+                              />
+                            ))}
+                          </div>
+                        ) : (
+                          <span className="text-sm font-semibold text-gray-400">없음</span>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -466,8 +798,7 @@ export default function BusinessStoresStatusPage() {
                       {status.store_problem_count > 0 && (
                         <div className="space-y-1">
                           <div className="flex items-center gap-2">
-                            <div className="w-2 h-2 rounded-full bg-red-500"></div>
-                            <span className="text-sm text-gray-700">매장 문제 보고</span>
+                            <span className="text-sm text-gray-700 font-semibold">매장 문제 보고</span>
                             <span className="text-sm font-semibold text-gray-900 ml-auto">
                               {status.store_problem_count}건
                             </span>
@@ -481,8 +812,7 @@ export default function BusinessStoresStatusPage() {
                       {status.vending_problem_count > 0 && (
                         <div className="space-y-1">
                           <div className="flex items-center gap-2">
-                            <div className="w-2 h-2 rounded-full bg-orange-500"></div>
-                            <span className="text-sm text-gray-700">자판기 내부 문제</span>
+                            <span className="text-sm text-gray-700">자판기 문제 보고</span>
                             <span className="text-sm font-semibold text-gray-900 ml-auto">
                               {status.vending_problem_count}건
                             </span>
@@ -496,7 +826,6 @@ export default function BusinessStoresStatusPage() {
                       {status.lost_item_count > 0 && (
                         <div className="space-y-1">
                           <div className="flex items-center gap-2">
-                            <div className="w-2 h-2 rounded-full bg-blue-500"></div>
                             <span className="text-sm text-gray-700">분실물 습득</span>
                             <span className="text-sm font-semibold text-gray-900 ml-auto">
                               {status.lost_item_count}건
@@ -515,45 +844,78 @@ export default function BusinessStoresStatusPage() {
                   </div>
 
                   {/* 요청란 상황 */}
-                  <div
-                    onClick={() => handleOpenRequestModal(status)}
-                    className={`border rounded-lg p-4 cursor-pointer transition-colors ${
-                      hasRequests
-                        ? 'border-blue-200 bg-blue-50 hover:bg-blue-100'
-                        : 'border-gray-200 hover:bg-gray-50'
-                    }`}
-                  >
-                    <h3 className="text-sm font-medium text-gray-700 mb-3">
-                      요청란 상황
-                    </h3>
-                    <div className="space-y-2">
-                      {status.in_progress_request_count > 0 && (
-                        <div className="flex items-center justify-between">
-                          <span className="text-sm text-gray-600">진행중</span>
-                          <span className="text-sm font-semibold text-orange-600">
-                            {status.in_progress_request_count}건
-                          </span>
-                        </div>
-                      )}
-                      {status.completed_request_count > 0 && (
-                        <div className="flex items-center justify-between">
-                          <span className="text-sm text-gray-600">처리완료</span>
-                          <span className="text-sm font-semibold text-green-600">
-                            {status.completed_request_count}건
-                          </span>
-                        </div>
-                      )}
-                      {!hasRequests && (
-                        <p className="text-sm text-gray-500">요청 없음</p>
-                      )}
+                  <div className="border rounded-lg p-4">
+                    <div className="flex items-center justify-between mb-3">
+                      <h3 className="text-sm font-medium text-gray-700">
+                        요청란 상황
+                      </h3>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          setSelectedStore(status)
+                          setShowRequestCreateModal(true)
+                        }}
+                        className="px-3 py-1 bg-blue-600 text-white text-xs rounded hover:bg-blue-700 transition-colors"
+                      >
+                        요청접수
+                      </button>
+                    </div>
+                    <div
+                      onClick={() => handleOpenRequestModal(status)}
+                      className={`cursor-pointer transition-colors ${
+                        hasRequests
+                          ? 'text-blue-600 hover:text-blue-800'
+                          : 'text-gray-500'
+                      }`}
+                    >
+                      <div className="space-y-2">
+                        {status.received_request_count > 0 && (
+                          <div className="flex items-center justify-between">
+                            <span className="text-sm text-gray-600">접수</span>
+                            <span className="text-sm font-semibold text-gray-600">
+                              {status.received_request_count}건
+                            </span>
+                          </div>
+                        )}
+                        {status.in_progress_request_count > 0 && (
+                          <div className="flex items-center justify-between">
+                            <span className="text-sm text-gray-600">처리중</span>
+                            <span className="text-sm font-semibold text-orange-600">
+                              {status.in_progress_request_count}건
+                            </span>
+                          </div>
+                        )}
+                        {status.completed_request_count > 0 && (
+                          <div className="flex items-center justify-between">
+                            <span className="text-sm text-gray-600">처리완료</span>
+                            <span className="text-sm font-semibold text-green-600">
+                              {status.completed_request_count}건
+                            </span>
+                          </div>
+                        )}
+                        {!hasRequests && (
+                          <p className="text-sm text-gray-500">요청 없음</p>
+                        )}
+                      </div>
                     </div>
                   </div>
                 </div>
+
+
+                {/* 매장 상세 링크 */}
+                <div className="mt-4 pt-4 border-t border-gray-200">
+                  <Link
+                    href={`/business/stores/${status.store_id}/detail`}
+                    className="text-blue-600 hover:text-blue-800 text-sm font-medium"
+                  >
+                    매장 상세 보기 →
+                  </Link>
+                </div>
               </div>
             )
-          })}
-        </div>
-      )}
+          })
+        )}
+      </div>
 
       {/* 제품 입고 및 보관 사진 모달 */}
       {showInventoryModal && selectedStore && (
@@ -661,13 +1023,77 @@ export default function BusinessStoresStatusPage() {
                         </div>
                         {showCompletionForm === problem.id && (
                           <div className="mt-4 p-4 bg-gray-50 rounded-lg space-y-3">
-                            <textarea
-                              value={completionDescription}
-                              onChange={(e) => setCompletionDescription(e.target.value)}
-                              placeholder="처리 완료 설명을 입력하세요"
-                              className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                              rows={3}
-                            />
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-1">
+                                처리 완료 설명
+                              </label>
+                              <textarea
+                                value={completionDescription}
+                                onChange={(e) => setCompletionDescription(e.target.value)}
+                                placeholder="처리 완료 설명을 입력하세요"
+                                className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                                rows={3}
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-1">
+                                사진 첨부
+                              </label>
+                              <input
+                                type="file"
+                                multiple
+                                accept="image/*"
+                                onChange={(e) => {
+                                  const files = Array.from(e.target.files || [])
+                                  const filePromises = files.map((file) => {
+                                    // 파일 크기 체크 (5MB)
+                                    if (file.size > 5 * 1024 * 1024) {
+                                      alert('파일 크기는 5MB 이하여야 합니다.')
+                                      return null
+                                    }
+                                    return new Promise<string | null>((resolve) => {
+                                      const reader = new FileReader()
+                                      reader.onload = (event) => {
+                                        resolve(event.target?.result as string)
+                                      }
+                                      reader.onerror = () => resolve(null)
+                                      reader.readAsDataURL(file)
+                                    })
+                                  })
+                                  Promise.all(filePromises).then((urls) => {
+                                    const validUrls = urls.filter((url): url is string => url !== null)
+                                    setCompletionPhotos((prev) => [...prev, ...validUrls])
+                                  })
+                                  // input 초기화
+                                  if (e.target) {
+                                    e.target.value = ''
+                                  }
+                                }}
+                                className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+                              />
+                              <p className="mt-1 text-xs text-gray-500">여러 사진을 선택할 수 있습니다 (최대 5MB)</p>
+                              {completionPhotos.length > 0 && (
+                                <div className="mt-2 flex flex-wrap gap-2">
+                                  {completionPhotos.map((url, idx) => (
+                                    <div key={idx} className="relative">
+                                      <img
+                                        src={url}
+                                        alt={`처리 완료 사진 ${idx + 1}`}
+                                        className="w-20 h-20 object-cover rounded"
+                                      />
+                                      <button
+                                        onClick={() => {
+                                          setCompletionPhotos((prev) => prev.filter((_, i) => i !== idx))
+                                        }}
+                                        className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs"
+                                      >
+                                        ×
+                                      </button>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
                             <div className="flex gap-2">
                               <button
                                 onClick={() => handleCompleteStoreProblem(problem.id)}
@@ -817,9 +1243,177 @@ export default function BusinessStoresStatusPage() {
             </div>
 
             <div className="space-y-6">
+              {/* 접수 */}
+              {requests.received && requests.received.length > 0 && (
+                <div>
+                  <h3 className="text-lg font-medium mb-3">접수</h3>
+                  <div className="space-y-4">
+                    {requests.received.map((request) => (
+                      <div key={request.id} className="border rounded-lg p-4">
+                        {editingRequestId === request.id ? (
+                          <div className="space-y-3">
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-1">
+                                카테고리
+                              </label>
+                              <select
+                                value={requestFormData.category}
+                                onChange={(e) => setRequestFormData({ ...requestFormData, category: e.target.value })}
+                                className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                              >
+                                <option value="">선택하세요</option>
+                                <option value="제품 관련">제품 관련</option>
+                                <option value="자판기 걸림/사출">자판기 걸림/사출</option>
+                                <option value="자판기 고장/오류">자판기 고장/오류</option>
+                                <option value="매장 시설 환경">매장 시설 환경</option>
+                                <option value="기타">기타</option>
+                              </select>
+                            </div>
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-1">
+                                요청란 설명
+                              </label>
+                              <textarea
+                                value={requestFormData.description}
+                                onChange={(e) => setRequestFormData({ ...requestFormData, description: e.target.value })}
+                                className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                                rows={3}
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-1">
+                                사진 첨부
+                              </label>
+                              <input
+                                type="file"
+                                multiple
+                                accept="image/*"
+                                onChange={(e) => {
+                                  const files = Array.from(e.target.files || [])
+                                  const filePromises = files.map((file) => {
+                                    if (file.size > 5 * 1024 * 1024) {
+                                      alert('파일 크기는 5MB 이하여야 합니다.')
+                                      return null
+                                    }
+                                    return new Promise<string | null>((resolve) => {
+                                      const reader = new FileReader()
+                                      reader.onload = (event) => {
+                                        resolve(event.target?.result as string)
+                                      }
+                                      reader.onerror = () => resolve(null)
+                                      reader.readAsDataURL(file)
+                                    })
+                                  })
+                                  Promise.all(filePromises).then((urls) => {
+                                    const validUrls = urls.filter((url): url is string => url !== null)
+                                    setRequestPhotos((prev) => [...prev, ...validUrls])
+                                  })
+                                  if (e.target) {
+                                    e.target.value = ''
+                                  }
+                                }}
+                                className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+                              />
+                              {requestPhotos.length > 0 && (
+                                <div className="mt-2 flex flex-wrap gap-2">
+                                  {requestPhotos.map((url, idx) => (
+                                    <div key={idx} className="relative">
+                                      <img
+                                        src={url}
+                                        alt={`요청 사진 ${idx + 1}`}
+                                        className="w-20 h-20 object-cover rounded"
+                                      />
+                                      <button
+                                        onClick={() => {
+                                          setRequestPhotos((prev) => prev.filter((_, i) => i !== idx))
+                                        }}
+                                        className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs"
+                                      >
+                                        ×
+                                      </button>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                            <div className="flex gap-2">
+                              <button
+                                onClick={() => handleUpdateRequest(request.id)}
+                                className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+                              >
+                                저장
+                              </button>
+                              <button
+                                onClick={() => {
+                                  setEditingRequestId(null)
+                                  setRequestFormData({ category: '', description: '', photos: [] })
+                                  setRequestPhotos([])
+                                }}
+                                className="px-4 py-2 bg-gray-300 text-gray-700 rounded hover:bg-gray-400"
+                              >
+                                취소
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <>
+                            <div className="flex justify-between items-start mb-2">
+                              <div>
+                                <h4 className="font-medium">{request.title}</h4>
+                                {request.description && (
+                                  <p className="text-sm text-gray-600 mt-1">{request.description}</p>
+                                )}
+                                <p className="text-xs text-gray-400 mt-1">
+                                  {new Date(request.created_at).toLocaleString('ko-KR')}
+                                </p>
+                                {request.photo_url && (
+                                  <div className="mt-2">
+                                    {getPhotoUrls(request.photo_url).map((url, idx) => (
+                                      <img
+                                        key={idx}
+                                        src={url}
+                                        alt={`${request.title} 사진 ${idx + 1}`}
+                                        className="w-32 h-32 object-cover rounded cursor-pointer mr-2"
+                                        onClick={() => setSelectedImage(url)}
+                                      />
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                              <div className="flex gap-2">
+                                <button
+                                  onClick={() => handleApproveRequest(request.id)}
+                                  className="px-3 py-1 bg-green-600 text-white text-sm rounded hover:bg-green-700"
+                                >
+                                  승인
+                                </button>
+                                <button
+                                  onClick={() => {
+                                    setEditingRequestId(request.id)
+                                    setRequestFormData({
+                                      category: request.title,
+                                      description: request.description || '',
+                                      photos: [],
+                                    })
+                                    setRequestPhotos([])
+                                  }}
+                                  className="px-3 py-1 bg-blue-600 text-white text-sm rounded hover:bg-blue-700"
+                                >
+                                  수정
+                                </button>
+                              </div>
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {/* 진행중 */}
               <div>
-                <h3 className="text-lg font-medium mb-3">진행중</h3>
+                <h3 className="text-lg font-medium mb-3">처리중</h3>
                 {requests.in_progress.length === 0 ? (
                   <p className="text-gray-500">진행중인 요청이 없습니다.</p>
                 ) : (
@@ -845,44 +1439,52 @@ export default function BusinessStoresStatusPage() {
                 {requests.completed.length === 0 ? (
                   <p className="text-gray-500">처리완료된 요청이 없습니다.</p>
                 ) : (
-                  <div className="space-y-4">
-                    {requests.completed
-                      .filter((r) => !confirmedRequestIds.has(r.id))
-                      .map((request) => (
-                        <div key={request.id} className="border rounded-lg p-4">
-                          <div className="flex justify-between items-start mb-2">
-                            <div>
-                              <h4 className="font-medium">{request.title}</h4>
-                              {request.description && (
-                                <p className="text-sm text-gray-600 mt-1">{request.description}</p>
-                              )}
-                              <p className="text-xs text-gray-400 mt-1">
-                                {new Date(request.created_at).toLocaleString('ko-KR')}
-                              </p>
+                  <>
+                    <div className="mb-3 text-sm text-gray-600">
+                      총 {requests.completed.length}건 (확인 안된 항목만 표시)
+                    </div>
+                    <div className="space-y-4">
+                      {requests.completed
+                        .filter((r) => !confirmedRequestIds.has(r.id))
+                        .map((request) => (
+                          <div key={request.id} className="border rounded-lg p-4">
+                            <div className="flex justify-between items-start mb-2">
+                              <div>
+                                <h4 className="font-medium">{request.title}</h4>
+                                {request.description && (
+                                  <p className="text-sm text-gray-600 mt-1">{request.description}</p>
+                                )}
+                                <p className="text-xs text-gray-400 mt-1">
+                                  {new Date(request.created_at).toLocaleString('ko-KR')}
+                                </p>
+                              </div>
+                              <button
+                                onClick={() => handleConfirmRequest(request.id)}
+                                className="px-3 py-1 bg-blue-600 text-white text-sm rounded hover:bg-blue-700"
+                              >
+                                확인
+                              </button>
                             </div>
-                            <button
-                              onClick={() => handleConfirmRequest(request.id)}
-                              className="px-3 py-1 bg-blue-600 text-white text-sm rounded hover:bg-blue-700"
-                            >
-                              확인
-                            </button>
+                            {request.completion_photo_url && (
+                              <div className="mt-2">
+                                {getPhotoUrls(request.completion_photo_url).map((url, idx) => (
+                                  <img
+                                    key={idx}
+                                    src={url}
+                                    alt={`${request.title} 완료 사진 ${idx + 1}`}
+                                    className="w-32 h-32 object-cover rounded cursor-pointer mr-2"
+                                    onClick={() => setSelectedImage(url)}
+                                  />
+                                ))}
+                              </div>
+                            )}
                           </div>
-                          {request.completion_photo_url && (
-                            <div className="mt-2">
-                              {getPhotoUrls(request.completion_photo_url).map((url, idx) => (
-                                <img
-                                  key={idx}
-                                  src={url}
-                                  alt={`${request.title} 완료 사진 ${idx + 1}`}
-                                  className="w-32 h-32 object-cover rounded cursor-pointer mr-2"
-                                  onClick={() => setSelectedImage(url)}
-                                />
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      ))}
-                  </div>
+                        ))}
+                      {requests.completed.filter((r) => !confirmedRequestIds.has(r.id)).length === 0 && (
+                        <p className="text-sm text-gray-500">확인 안된 처리완료 항목이 없습니다.</p>
+                      )}
+                    </div>
+                  </>
                 )}
               </div>
             </div>

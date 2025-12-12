@@ -28,9 +28,9 @@ export async function GET(
 
     const { data: requests, error } = await supabase
       .from('requests')
-      .select('id, title, description, status, confirmed_at, completion_photo_url, created_at')
+      .select('id, title, description, photo_url, status, confirmed_at, completion_photo_url, created_at')
       .eq('store_id', storeId)
-      .in('status', ['in_progress', 'completed'])
+      .in('status', ['received', 'in_progress', 'completed'])
       .gte('created_at', thirtyDaysAgo.toISOString())
       .lte('created_at', todayEnd.toISOString())
       .order('created_at', { ascending: false })
@@ -39,12 +39,14 @@ export async function GET(
       throw new Error(`Failed to fetch requests: ${error.message}`)
     }
 
+    const received = requests?.filter((r) => r.status === 'received') || []
     const inProgress = requests?.filter((r) => r.status === 'in_progress') || []
     const completed = requests?.filter((r) => r.status === 'completed') || []
 
     return Response.json({
       success: true,
       data: {
+        received: received,
         in_progress: inProgress,
         completed: completed,
       },

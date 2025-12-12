@@ -136,29 +136,31 @@ export async function GET(request: NextRequest) {
           .gte('created_at', todayStart.toISOString())
           .lte('created_at', todayEnd.toISOString())
 
-        // 최근 보관 사진 (store_storage, parcel_locker) - 최대 2개
+        // 최근 보관 사진 (store_storage, parcel_locker) - 최신 사진만 (최대 2개)
         const { data: recentStoragePhotos } = await supabase
           .from('inventory_photos')
-          .select('id')
+          .select('id, photo_url')
           .eq('store_id', store.id)
           .in('photo_type', ['store_storage', 'parcel_locker'])
           .order('created_at', { ascending: false })
           .limit(2)
 
-        // 최근 30일 요청란 (진행중, 완료)
+        // 최근 30일 요청란 (접수, 진행중, 완료)
         const { data: recentRequests } = await supabase
           .from('requests')
-          .select('id, status, confirmed_at')
+          .select('id, title, status, confirmed_at, created_at')
           .eq('store_id', store.id)
-          .in('status', ['in_progress', 'completed'])
           .gte('created_at', thirtyDaysAgo.toISOString())
           .lte('created_at', todayEnd.toISOString())
+          .order('created_at', { ascending: false })
 
-        const inProgressRequestCount = recentRequests?.filter((r: any) => r.status === 'in_progress').length || 0
-        const completedRequestCount = recentRequests?.filter((r: any) => r.status === 'completed').length || 0
-        const unconfirmedCompletedCount = recentRequests?.filter(
-          (r: any) => r.status === 'completed' && !r.confirmed_at
-        ).length || 0
+        const receivedRequests = recentRequests?.filter((r: any) => r.status === 'received') || []
+        const inProgressRequests = recentRequests?.filter((r: any) => r.status === 'in_progress') || []
+        const completedRequests = recentRequests?.filter((r: any) => r.status === 'completed') || []
+        const receivedRequestCount = receivedRequests.length
+        const inProgressRequestCount = inProgressRequests.length
+        const completedRequestCount = completedRequests.length
+        const unconfirmedCompletedCount = completedRequests.filter((r: any) => !r.confirmed_at).length
 
         // 오늘 체크리스트 수행률
         const { data: todayChecklists } = await supabase
@@ -276,7 +278,9 @@ export async function GET(request: NextRequest) {
           // 제품 입고 및 보관 사진
           has_product_inflow_today: (todayProductInflow?.length || 0) > 0,
           has_storage_photos: (recentStoragePhotos?.length || 0) > 0,
+          storage_photos: recentStoragePhotos?.map((p: any) => ({ id: p.id, photo_url: p.photo_url })) || [],
           // 요청란
+          received_request_count: receivedRequestCount,
           in_progress_request_count: inProgressRequestCount,
           completed_request_count: completedRequestCount,
           unconfirmed_completed_request_count: unconfirmedCompletedCount,

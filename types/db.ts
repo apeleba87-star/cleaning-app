@@ -163,9 +163,13 @@ export interface Request {
   created_by_role: RequestCreatedByRole
   title: string
   description: string | null
+  category_id: string | null
+  photo_url: string | null
   status: RequestStatus
   approved_by: string | null
   approved_at: string | null
+  confirmed_at: string | null
+  completion_photo_url: string | null
   created_at: string
   updated_at: string
 }
