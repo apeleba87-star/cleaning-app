@@ -46,6 +46,7 @@ interface ProblemReport {
   photo_url: string | null
   status: string
   created_at: string
+  updated_at?: string
 }
 
 interface LostItem {
@@ -54,6 +55,7 @@ interface LostItem {
   description: string | null
   photo_url: string | null
   status: string
+  storage_location?: string | null
   created_at: string
 }
 
@@ -90,6 +92,11 @@ export default function BusinessStoresStatusPage() {
   const [confirmedProblemIds, setConfirmedProblemIds] = useState<Set<string>>(new Set())
   const [confirmedLostItemIds, setConfirmedLostItemIds] = useState<Set<string>>(new Set())
   const [selectedImage, setSelectedImage] = useState<string | null>(null)
+  const [expandedSections, setExpandedSections] = useState({
+    storeProblems: false,
+    vendingProblems: false,
+    lostItems: false,
+  })
   const [showCompletionForm, setShowCompletionForm] = useState<string | null>(null)
   const [completionDescription, setCompletionDescription] = useState('')
   const [completionPhotos, setCompletionPhotos] = useState<string[]>([])
@@ -150,7 +157,20 @@ export default function BusinessStoresStatusPage() {
       const data = await response.json()
 
       if (response.ok) {
+        console.log('=== Store Statuses API Response ===')
+        console.log('Total stores:', data.data?.length || 0)
+        data.data?.forEach((store: any) => {
+          console.log(`\nStore: ${store.store_name} (${store.store_id})`)
+          console.log('  - store_problem_count:', store.store_problem_count)
+          console.log('  - vending_problem_count:', store.vending_problem_count)
+          console.log('  - lost_item_count:', store.lost_item_count)
+          console.log('  - unprocessed_store_problems:', store.unprocessed_store_problems)
+          console.log('  - unconfirmed_vending_problems:', store.unconfirmed_vending_problems)
+        })
+        console.log('=== End Store Statuses ===\n')
         setStoreStatuses(data.data || [])
+      } else {
+        console.error('API Error:', data)
       }
     } catch (error) {
       console.error('Error loading store statuses:', error)
@@ -215,11 +235,26 @@ export default function BusinessStoresStatusPage() {
       const problemData = await problemResponse.json()
       const lostData = await lostResponse.json()
       
+      console.log('Problem reports API response:', problemData)
+      console.log('Lost items API response:', lostData)
+      
       if (problemResponse.ok) {
-        setProblemReports(problemData.data || { store_problems: [], vending_problems: [] })
+        const reports = problemData.data || { store_problems: [], vending_problems: [] }
+        console.log('Setting problem reports:', reports)
+        console.log('Store problems count:', reports.store_problems?.length || 0)
+        console.log('Vending problems count:', reports.vending_problems?.length || 0)
+        setProblemReports(reports)
+      } else {
+        console.error('Problem reports API error:', problemData)
       }
+      
       if (lostResponse.ok) {
-        setLostItems(lostData.data || [])
+        const items = lostData.data || []
+        console.log('Setting lost items:', items)
+        console.log('Lost items count:', items.length)
+        setLostItems(items)
+      } else {
+        console.error('Lost items API error:', lostData)
       }
     } catch (error) {
       console.error('Error loading problem reports:', error)
@@ -396,10 +431,13 @@ export default function BusinessStoresStatusPage() {
       })
 
       if (response.ok) {
-        setConfirmedProblemIds((prev) => new Set(prev).add(problemId))
+        alert('저장 되었습니다')
         // 상태 갱신
         loadStoreStatuses()
-        handleOpenProblemModal(selectedStore!)
+        await handleOpenProblemModal(selectedStore!)
+      } else {
+        const data = await response.json()
+        alert(data.error || '확인 처리 중 오류가 발생했습니다.')
       }
     } catch (error) {
       console.error('Error confirming problem:', error)
@@ -450,24 +488,40 @@ export default function BusinessStoresStatusPage() {
         }
       }
 
+      // 설명란이 비어있으면 기본 텍스트 "처리 완료" 사용
+      const finalDescription = completionDescription.trim() || '처리 완료'
+
       const response = await fetch(`/api/business/problem-reports/${problemId}/complete`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          description: completionDescription,
+          description: finalDescription,
           photo_urls: photoUrls,
         }),
       })
 
-      if (response.ok) {
+      const data = await response.json()
+      
+      console.log('Complete problem report response:', { response: response.ok, data })
+      
+      if (response.ok && data.success) {
         setShowCompletionForm(null)
         setCompletionDescription('')
         setCompletionPhotos([])
-        // 상태 갱신
-        loadStoreStatuses()
-        handleOpenProblemModal(selectedStore!)
+        
+        // 전체 상태 갱신 먼저 (매장 상태 카드 업데이트)
+        await loadStoreStatuses()
+        
+        // 모달 데이터 새로고침 (약간의 지연을 두어 DB 반영 시간 확보)
+        if (selectedStore) {
+          setTimeout(async () => {
+            await handleOpenProblemModal(selectedStore)
+          }, 500)
+        }
+        
+        alert('처리 완료되었습니다.')
       } else {
-        const data = await response.json()
+        console.error('Failed to complete problem report:', data)
         alert(data.error || '처리 완료 중 오류가 발생했습니다.')
       }
     } catch (error) {
@@ -787,18 +841,20 @@ export default function BusinessStoresStatusPage() {
                     onClick={() => handleOpenProblemModal(status)}
                     className={`border rounded-lg p-4 cursor-pointer transition-colors ${
                       totalProblems > 0
-                        ? 'border-red-200 bg-red-50 hover:bg-red-100'
+                        ? 'border-gray-200 hover:bg-gray-50'
                         : 'border-gray-200 hover:bg-gray-50'
                     }`}
                   >
-                    <h3 className="text-sm font-medium text-gray-700 mb-3">
-                      매장 상황
+                    <h3 className="text-sm font-medium text-gray-700 mb-3 flex items-center gap-2">
+                      <span>⚠️</span>
+                      <span>매장 상황</span>
                     </h3>
                     <div className="space-y-2">
                       {status.store_problem_count > 0 && (
-                        <div className="space-y-1">
+                        <div className="space-y-1 bg-red-50 rounded p-2 -mx-2">
                           <div className="flex items-center gap-2">
-                            <span className="text-sm text-gray-700 font-semibold">매장 문제 보고</span>
+                            <div className="w-2 h-2 bg-red-500 rounded-full flex-shrink-0"></div>
+                            <span className="text-sm text-gray-900 font-semibold">매장 문제 보고</span>
                             <span className="text-sm font-semibold text-gray-900 ml-auto">
                               {status.store_problem_count}건
                             </span>
@@ -812,7 +868,8 @@ export default function BusinessStoresStatusPage() {
                       {status.vending_problem_count > 0 && (
                         <div className="space-y-1">
                           <div className="flex items-center gap-2">
-                            <span className="text-sm text-gray-700">자판기 문제 보고</span>
+                            <div className="w-2 h-2 bg-orange-500 rounded-full flex-shrink-0"></div>
+                            <span className="text-sm text-gray-700">자판기 내부 문제</span>
                             <span className="text-sm font-semibold text-gray-900 ml-auto">
                               {status.vending_problem_count}건
                             </span>
@@ -826,6 +883,7 @@ export default function BusinessStoresStatusPage() {
                       {status.lost_item_count > 0 && (
                         <div className="space-y-1">
                           <div className="flex items-center gap-2">
+                            <div className="w-2 h-2 bg-blue-500 rounded-full flex-shrink-0"></div>
                             <span className="text-sm text-gray-700">분실물 습득</span>
                             <span className="text-sm font-semibold text-gray-900 ml-auto">
                               {status.lost_item_count}건
@@ -995,153 +1053,315 @@ export default function BusinessStoresStatusPage() {
             <div className="space-y-6">
               {/* 매장 문제 보고 */}
               <div>
-                <h3 className="text-lg font-medium mb-3">매장 문제 보고</h3>
-                {problemReports.store_problems.length === 0 ? (
-                  <p className="text-gray-500">매장 문제 보고 내역이 없습니다.</p>
-                ) : (
-                  <div className="space-y-4">
-                    {problemReports.store_problems.map((problem) => (
-                      <div key={problem.id} className="border rounded-lg p-4">
-                        <div className="flex justify-between items-start mb-2">
-                          <div>
-                            <h4 className="font-medium">{problem.title}</h4>
-                            {problem.description && (
-                              <p className="text-sm text-gray-600 mt-1">{problem.description}</p>
-                            )}
-                            <p className="text-xs text-gray-400 mt-1">
-                              {new Date(problem.created_at).toLocaleString('ko-KR')}
-                            </p>
-                          </div>
-                          {problem.status !== 'completed' && (
-                            <button
-                              onClick={() => setShowCompletionForm(problem.id)}
-                              className="px-3 py-1 bg-blue-600 text-white text-sm rounded hover:bg-blue-700"
-                            >
-                              처리 완료
-                            </button>
-                          )}
-                        </div>
-                        {showCompletionForm === problem.id && (
-                          <div className="mt-4 p-4 bg-gray-50 rounded-lg space-y-3">
-                            <div>
-                              <label className="block text-sm font-medium text-gray-700 mb-1">
-                                처리 완료 설명
-                              </label>
-                              <textarea
-                                value={completionDescription}
-                                onChange={(e) => setCompletionDescription(e.target.value)}
-                                placeholder="처리 완료 설명을 입력하세요"
-                                className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                                rows={3}
-                              />
-                            </div>
-                            <div>
-                              <label className="block text-sm font-medium text-gray-700 mb-1">
-                                사진 첨부
-                              </label>
-                              <input
-                                type="file"
-                                multiple
-                                accept="image/*"
-                                onChange={(e) => {
-                                  const files = Array.from(e.target.files || [])
-                                  const filePromises = files.map((file) => {
-                                    // 파일 크기 체크 (5MB)
-                                    if (file.size > 5 * 1024 * 1024) {
-                                      alert('파일 크기는 5MB 이하여야 합니다.')
-                                      return null
-                                    }
-                                    return new Promise<string | null>((resolve) => {
-                                      const reader = new FileReader()
-                                      reader.onload = (event) => {
-                                        resolve(event.target?.result as string)
-                                      }
-                                      reader.onerror = () => resolve(null)
-                                      reader.readAsDataURL(file)
-                                    })
-                                  })
-                                  Promise.all(filePromises).then((urls) => {
-                                    const validUrls = urls.filter((url): url is string => url !== null)
-                                    setCompletionPhotos((prev) => [...prev, ...validUrls])
-                                  })
-                                  // input 초기화
-                                  if (e.target) {
-                                    e.target.value = ''
-                                  }
-                                }}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
-                              />
-                              <p className="mt-1 text-xs text-gray-500">여러 사진을 선택할 수 있습니다 (최대 5MB)</p>
-                              {completionPhotos.length > 0 && (
-                                <div className="mt-2 flex flex-wrap gap-2">
-                                  {completionPhotos.map((url, idx) => (
-                                    <div key={idx} className="relative">
-                                      <img
-                                        src={url}
-                                        alt={`처리 완료 사진 ${idx + 1}`}
-                                        className="w-20 h-20 object-cover rounded"
-                                      />
-                                      <button
-                                        onClick={() => {
-                                          setCompletionPhotos((prev) => prev.filter((_, i) => i !== idx))
-                                        }}
-                                        className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs"
-                                      >
-                                        ×
-                                      </button>
+                <button
+                  onClick={() => setExpandedSections((prev) => ({ ...prev, storeProblems: !prev.storeProblems }))}
+                  className="flex items-center justify-between w-full text-left mb-3 p-4 bg-red-50 border-2 border-red-200 rounded-lg hover:bg-red-100 transition-colors shadow-sm"
+                >
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-lg font-medium text-red-700">매장 문제 보고</h3>
+                    {!expandedSections.storeProblems && (
+                      <span className="text-sm font-semibold text-red-600 bg-white px-3 py-1 rounded-full">
+                        {problemReports.store_problems.filter((p) => p.status !== 'completed').length}건
+                      </span>
+                    )}
+                  </div>
+                  <span className="text-red-500 text-lg">
+                    {expandedSections.storeProblems ? '▼' : '▶'}
+                  </span>
+                </button>
+                {expandedSections.storeProblems && (
+                  <>
+                    {problemReports.store_problems.length === 0 ? (
+                      <p className="text-gray-500">매장 문제 보고 내역이 없습니다.</p>
+                    ) : (
+                      <div className="space-y-4">
+                    {/* 미처리 항목 */}
+                    {problemReports.store_problems
+                      .filter((p) => p.status !== 'completed')
+                      .map((problem) => {
+                        // description에서 원본 내용만 추출
+                        const originalDescription = problem.description?.split('\n\n[처리 완료]')[0] || problem.description
+                        const originalPhotos = problem.photo_url ? getPhotoUrls(problem.photo_url) : []
+                        
+                        return (
+                          <div key={problem.id} className="border-2 border-red-300 bg-red-50 rounded-lg p-4 shadow-sm">
+                            <div className="flex justify-between items-start mb-3">
+                              <div className="flex-1">
+                                {/* 카테고리 */}
+                                <div className="mb-3">
+                                  <span className="inline-block px-3 py-1 bg-red-600 text-white text-sm font-semibold rounded-md">
+                                    {problem.title}
+                                  </span>
+                                </div>
+                                
+                                {/* 설명란 - 원본 내용만 */}
+                                {originalDescription && (
+                                  <div className="mb-3 p-3 bg-white border border-red-200 rounded-md">
+                                    <p className="text-base text-gray-800 font-medium leading-relaxed whitespace-pre-wrap">
+                                      {originalDescription}
+                                    </p>
+                                  </div>
+                                )}
+                                
+                                {/* 사진 - 원본 사진만 */}
+                                {originalPhotos.length > 0 && (
+                                  <div className="mt-3">
+                                    <div className="flex flex-wrap gap-2">
+                                      {originalPhotos.map((url, idx) => (
+                                        <img
+                                          key={idx}
+                                          src={url}
+                                          alt={`${problem.title} 사진 ${idx + 1}`}
+                                          className="w-32 h-32 object-cover rounded-lg border-2 border-red-200 cursor-pointer hover:border-red-400 transition-colors shadow-sm"
+                                          onClick={() => setSelectedImage(url)}
+                                        />
+                                      ))}
                                     </div>
-                                  ))}
+                                  </div>
+                                )}
+                                
+                                {/* 작성 시간 */}
+                                <p className="text-xs text-gray-500 mt-3">
+                                  {new Date(problem.created_at).toLocaleString('ko-KR')}
+                                </p>
+                              </div>
+                              
+                              {/* 처리 완료 버튼 */}
+                              <button
+                                onClick={() => setShowCompletionForm(problem.id)}
+                                className="ml-4 px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-md hover:bg-blue-700 transition-colors shadow-sm"
+                              >
+                                처리 완료
+                              </button>
+                            </div>
+                            
+                            {showCompletionForm === problem.id && (
+                              <div className="mt-4 p-4 bg-white border border-red-200 rounded-lg space-y-3">
+                                <div>
+                                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                                    처리 완료 설명
+                                  </label>
+                                  <textarea
+                                    value={completionDescription}
+                                    onChange={(e) => setCompletionDescription(e.target.value)}
+                                    placeholder="처리 완료 설명을 입력하세요"
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                                    rows={3}
+                                  />
+                                </div>
+                                <div>
+                                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                                    사진 첨부
+                                  </label>
+                                  <input
+                                    type="file"
+                                    multiple
+                                    accept="image/*"
+                                    onChange={(e) => {
+                                      const files = Array.from(e.target.files || [])
+                                      const filePromises = files.map((file) => {
+                                        // 파일 크기 체크 (5MB)
+                                        if (file.size > 5 * 1024 * 1024) {
+                                          alert('파일 크기는 5MB 이하여야 합니다.')
+                                          return null
+                                        }
+                                        return new Promise<string | null>((resolve) => {
+                                          const reader = new FileReader()
+                                          reader.onload = (event) => {
+                                            resolve(event.target?.result as string)
+                                          }
+                                          reader.onerror = () => resolve(null)
+                                          reader.readAsDataURL(file)
+                                        })
+                                      })
+                                      Promise.all(filePromises).then((urls) => {
+                                        const validUrls = urls.filter((url): url is string => url !== null)
+                                        setCompletionPhotos((prev) => [...prev, ...validUrls])
+                                      })
+                                      // input 초기화
+                                      if (e.target) {
+                                        e.target.value = ''
+                                      }
+                                    }}
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+                                  />
+                                  <p className="mt-1 text-xs text-gray-500">여러 사진을 선택할 수 있습니다 (최대 5MB)</p>
+                                  {completionPhotos.length > 0 && (
+                                    <div className="mt-2 flex flex-wrap gap-2">
+                                      {completionPhotos.map((url, idx) => (
+                                        <div key={idx} className="relative">
+                                          <img
+                                            src={url}
+                                            alt={`처리 완료 사진 ${idx + 1}`}
+                                            className="w-20 h-20 object-cover rounded"
+                                          />
+                                          <button
+                                            onClick={() => {
+                                              setCompletionPhotos((prev) => prev.filter((_, i) => i !== idx))
+                                            }}
+                                            className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs"
+                                          >
+                                            ×
+                                          </button>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  )}
+                                </div>
+                                <div className="flex gap-2">
+                                  <button
+                                    onClick={() => handleCompleteStoreProblem(problem.id)}
+                                    className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+                                  >
+                                    완료
+                                  </button>
+                                  <button
+                                    onClick={() => {
+                                      setShowCompletionForm(null)
+                                      setCompletionDescription('')
+                                      setCompletionPhotos([])
+                                    }}
+                                    className="px-4 py-2 bg-gray-300 text-gray-700 rounded hover:bg-gray-400"
+                                  >
+                                    취소
+                                  </button>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        )
+                      })}
+                    
+                    {/* 완료된 항목 - 아래로 이동하고 연하게 표시 (24시간 이내만 표시) */}
+                    {problemReports.store_problems
+                      .filter((p) => {
+                        if (p.status !== 'completed') return false
+                        // 처리 완료 후 24시간 이내만 표시
+                        if (p.updated_at) {
+                          const completedTime = new Date(p.updated_at).getTime()
+                          const now = new Date().getTime()
+                          const hours24 = 24 * 60 * 60 * 1000
+                          return (now - completedTime) <= hours24
+                        }
+                        // updated_at이 없으면 created_at 기준으로 24시간 체크
+                        const createdTime = new Date(p.created_at).getTime()
+                        const now = new Date().getTime()
+                        const hours24 = 24 * 60 * 60 * 1000
+                        return (now - createdTime) <= hours24
+                      })
+                      .map((problem) => {
+                        // description에서 원본과 처리 완료 내용 분리
+                        const descriptionParts = problem.description?.split('\n\n[처리 완료]') || []
+                        const originalDescription = descriptionParts[0] || ''
+                        const completionDescription = descriptionParts[1] || ''
+                        
+                        // 전체 사진
+                        const allPhotos = problem.photo_url ? getPhotoUrls(problem.photo_url) : []
+                        
+                        return (
+                          <div key={problem.id} className="border border-gray-300 bg-gray-50 rounded-lg p-4 opacity-60">
+                            <div className="flex-1">
+                              {/* 카테고리와 처리 완료 배지 */}
+                              <div className="mb-3 flex items-center gap-2 flex-wrap">
+                                <span className="inline-block px-3 py-1 bg-gray-400 text-white text-sm font-semibold rounded-md">
+                                  {problem.title}
+                                </span>
+                                <span className="inline-block px-3 py-1 bg-green-500 text-white text-sm font-semibold rounded-md">
+                                  처리 완료
+                                </span>
+                              </div>
+                              
+                              {/* 원본 문제 보고 내용 */}
+                              {originalDescription && (
+                                <div className="mb-3 p-3 bg-white border border-gray-200 rounded-md">
+                                  <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">
+                                    {originalDescription}
+                                  </p>
                                 </div>
                               )}
-                            </div>
-                            <div className="flex gap-2">
-                              <button
-                                onClick={() => handleCompleteStoreProblem(problem.id)}
-                                className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700"
-                              >
-                                완료
-                              </button>
-                              <button
-                                onClick={() => {
-                                  setShowCompletionForm(null)
-                                  setCompletionDescription('')
-                                  setCompletionPhotos([])
-                                }}
-                                className="px-4 py-2 bg-gray-300 text-gray-700 rounded hover:bg-gray-400"
-                              >
-                                취소
-                              </button>
+                              
+                              {/* 전체 사진 */}
+                              {allPhotos.length > 0 && (
+                                <div className="mt-3">
+                                  <div className="flex flex-wrap gap-2">
+                                    {allPhotos.map((url, idx) => (
+                                      <img
+                                        key={idx}
+                                        src={url}
+                                        alt={`${problem.title} 사진 ${idx + 1}`}
+                                        className="w-24 h-24 object-cover rounded-lg border border-gray-300 cursor-pointer opacity-70"
+                                        onClick={() => setSelectedImage(url)}
+                                      />
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+                              
+                              {/* 구분선 */}
+                              {completionDescription && (
+                                <>
+                                  <div className="my-4 border-t border-gray-300"></div>
+                                  
+                                  {/* 처리 완료 내용 */}
+                                  <div className="mb-3">
+                                    <p className="text-xs text-gray-500 mb-2 font-semibold">처리 완료</p>
+                                    <div className="p-3 bg-blue-50 border border-blue-200 rounded-md">
+                                      <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">
+                                        {completionDescription}
+                                      </p>
+                                    </div>
+                                  </div>
+                                </>
+                              )}
+                              
+                              {/* 작성 시간 및 처리 완료 시간 */}
+                              <div className="mt-3 space-y-1">
+                                <p className="text-xs text-gray-400">
+                                  작성: {new Date(problem.created_at).toLocaleString('ko-KR')}
+                                </p>
+                                {problem.updated_at && problem.updated_at !== problem.created_at && (
+                                  <p className="text-xs text-green-600">
+                                    처리 완료: {new Date(problem.updated_at).toLocaleString('ko-KR')}
+                                  </p>
+                                )}
+                              </div>
                             </div>
                           </div>
-                        )}
-                        {problem.photo_url && (
-                          <div className="mt-2">
-                            {getPhotoUrls(problem.photo_url).map((url, idx) => (
-                              <img
-                                key={idx}
-                                src={url}
-                                alt={`${problem.title} 사진 ${idx + 1}`}
-                                className="w-32 h-32 object-cover rounded cursor-pointer mr-2"
-                                onClick={() => setSelectedImage(url)}
-                              />
-                            ))}
-                          </div>
-                        )}
+                        )
+                      })}
                       </div>
-                    ))}
-                  </div>
+                    )}
+                  </>
                 )}
               </div>
 
               {/* 자판기 내부 문제 */}
               <div>
-                <h3 className="text-lg font-medium mb-3">자판기 내부 문제</h3>
-                {problemReports.vending_problems.length === 0 ? (
-                  <p className="text-gray-500">자판기 내부 문제 내역이 없습니다.</p>
-                ) : (
-                  <div className="space-y-4">
+                <button
+                  onClick={() => setExpandedSections((prev) => ({ ...prev, vendingProblems: !prev.vendingProblems }))}
+                  className="flex items-center justify-between w-full text-left mb-3 p-4 bg-orange-50 border-2 border-orange-200 rounded-lg hover:bg-orange-100 transition-colors shadow-sm"
+                >
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-lg font-medium text-orange-700">자판기 내부 문제</h3>
+                    {!expandedSections.vendingProblems && (
+                      <span className="text-sm font-semibold text-orange-600 bg-white px-3 py-1 rounded-full">
+                        {problemReports.vending_problems.filter((p) => p.status !== 'completed').length}건
+                      </span>
+                    )}
+                  </div>
+                  <span className="text-orange-500 text-lg">
+                    {expandedSections.vendingProblems ? '▼' : '▶'}
+                  </span>
+                </button>
+                {expandedSections.vendingProblems && (
+                  <>
+                    {problemReports.vending_problems.length === 0 ? (
+                      <p className="text-gray-500">자판기 내부 문제 내역이 없습니다.</p>
+                    ) : (
+                      <div className="space-y-4">
+                    {/* 미확인 항목 */}
                     {problemReports.vending_problems
-                      .filter((p) => !confirmedProblemIds.has(p.id))
+                      .filter((p) => p.status !== 'completed')
                       .map((problem) => (
                         <div key={problem.id} className="border rounded-lg p-4">
                           <div className="flex justify-between items-start mb-2">
@@ -1176,46 +1396,43 @@ export default function BusinessStoresStatusPage() {
                           )}
                         </div>
                       ))}
-                  </div>
-                )}
-              </div>
-
-              {/* 분실물 습득 */}
-              <div>
-                <h3 className="text-lg font-medium mb-3">분실물 습득</h3>
-                {lostItems.length === 0 ? (
-                  <p className="text-gray-500">분실물 습득 내역이 없습니다.</p>
-                ) : (
-                  <div className="space-y-4">
-                    {lostItems
-                      .filter((item) => !confirmedLostItemIds.has(item.id))
-                      .map((item) => (
-                        <div key={item.id} className="border rounded-lg p-4">
+                    
+                    {/* 확인된 항목 - 연하게 표시 */}
+                    {problemReports.vending_problems
+                      .filter((p) => p.status === 'completed')
+                      .map((problem) => (
+                        <div key={problem.id} className="border border-gray-300 bg-gray-50 rounded-lg p-4 opacity-60">
                           <div className="flex justify-between items-start mb-2">
-                            <div>
-                              <h4 className="font-medium">{item.type}</h4>
-                              {item.description && (
-                                <p className="text-sm text-gray-600 mt-1">{item.description}</p>
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2 mb-2">
+                                <h4 className="font-medium text-gray-700">{problem.title}</h4>
+                                <span className="inline-block px-2 py-1 bg-green-500 text-white text-xs font-semibold rounded">
+                                  확인 완료
+                                </span>
+                              </div>
+                              {problem.description && (
+                                <p className="text-sm text-gray-600 mt-1">{problem.description}</p>
                               )}
-                              <p className="text-xs text-gray-400 mt-1">
-                                {new Date(item.created_at).toLocaleString('ko-KR')}
-                              </p>
+                              <div className="mt-2 space-y-1">
+                                <p className="text-xs text-gray-400">
+                                  작성: {new Date(problem.created_at).toLocaleString('ko-KR')}
+                                </p>
+                                {problem.updated_at && problem.updated_at !== problem.created_at && (
+                                  <p className="text-xs text-green-600">
+                                    확인: {new Date(problem.updated_at).toLocaleString('ko-KR')}
+                                  </p>
+                                )}
+                              </div>
                             </div>
-                            <button
-                              onClick={() => handleConfirmLostItem(item.id)}
-                              className="px-3 py-1 bg-green-600 text-white text-sm rounded hover:bg-green-700"
-                            >
-                              확인
-                            </button>
                           </div>
-                          {item.photo_url && (
+                          {problem.photo_url && (
                             <div className="mt-2">
-                              {getPhotoUrls(item.photo_url).map((url, idx) => (
+                              {getPhotoUrls(problem.photo_url).map((url, idx) => (
                                 <img
                                   key={idx}
                                   src={url}
-                                  alt={`${item.type} 사진 ${idx + 1}`}
-                                  className="w-32 h-32 object-cover rounded cursor-pointer mr-2"
+                                  alt={`${problem.title} 사진 ${idx + 1}`}
+                                  className="w-24 h-24 object-cover rounded cursor-pointer mr-2 opacity-70"
                                   onClick={() => setSelectedImage(url)}
                                 />
                               ))}
@@ -1223,7 +1440,120 @@ export default function BusinessStoresStatusPage() {
                           )}
                         </div>
                       ))}
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+
+              {/* 분실물 습득 */}
+              <div>
+                <button
+                  onClick={() => setExpandedSections((prev) => ({ ...prev, lostItems: !prev.lostItems }))}
+                  className="flex items-center justify-between w-full text-left mb-3 p-4 bg-blue-50 border-2 border-blue-200 rounded-lg hover:bg-blue-100 transition-colors shadow-sm"
+                >
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-lg font-medium text-blue-700">분실물 습득</h3>
+                    {!expandedSections.lostItems && (
+                      <span className="text-sm font-semibold text-blue-600 bg-white px-3 py-1 rounded-full">
+                        {lostItems.filter((item) => !confirmedLostItemIds.has(item.id)).length}건
+                      </span>
+                    )}
                   </div>
+                  <span className="text-blue-500 text-lg">
+                    {expandedSections.lostItems ? '▼' : '▶'}
+                  </span>
+                </button>
+                {expandedSections.lostItems && (
+                  <>
+                    {lostItems.length === 0 ? (
+                      <p className="text-gray-500">분실물 습득 내역이 없습니다.</p>
+                    ) : (
+                      <div className="space-y-4">
+                        {lostItems
+                          .filter((item) => !confirmedLostItemIds.has(item.id))
+                          .map((item) => (
+                        <div key={item.id} className="border-2 border-blue-300 bg-blue-50 rounded-lg p-4 shadow-sm">
+                          <div className="flex justify-between items-start mb-3">
+                            <div className="flex-1">
+                              {/* 카테고리 배지 - description에서 카테고리 추출 */}
+                              <div className="mb-3">
+                                {(() => {
+                                  // description에서 [카테고리: ...] 패턴 추출
+                                  const categoryMatch = item.description?.match(/\[카테고리:\s*(.+?)\]/)
+                                  const category = categoryMatch ? categoryMatch[1] : item.type
+                                  return (
+                                    <span className="inline-block px-4 py-2 bg-blue-600 text-white text-base font-semibold rounded-md shadow-sm">
+                                      {category}
+                                    </span>
+                                  )
+                                })()}
+                              </div>
+                              
+                              {/* 보관장소 - 별도 표시 */}
+                              {item.storage_location && (
+                                <div className="mb-3 p-3 bg-white border-2 border-blue-200 rounded-md shadow-sm">
+                                  <p className="text-sm font-semibold text-gray-700 mb-1">보관장소</p>
+                                  <p className="text-base text-gray-800 font-medium">
+                                    {item.storage_location}
+                                  </p>
+                                </div>
+                              )}
+                              
+                              {/* 설명란 - 카테고리와 보관장소 제외한 나머지 설명 */}
+                              {item.description && (() => {
+                                // [카테고리: ...] 제거
+                                let cleanDescription = item.description.replace(/\[카테고리:.*?\]\s*/g, '').trim()
+                                // 보관장소:로 시작하는 라인 제거 (이미 별도로 표시하므로)
+                                cleanDescription = cleanDescription.split('\n')
+                                  .filter(line => !line.trim().startsWith('보관장소:'))
+                                  .join('\n')
+                                  .trim()
+                                return cleanDescription ? (
+                                  <div className="mb-3 p-4 bg-white border-2 border-blue-200 rounded-md shadow-sm">
+                                    <p className="text-base text-gray-800 font-medium leading-relaxed whitespace-pre-wrap">
+                                      {cleanDescription}
+                                    </p>
+                                  </div>
+                                ) : null
+                              })()}
+                              
+                              {/* 사진 - 크기 증가 및 시각성 향상 */}
+                              {item.photo_url && (
+                                <div className="mt-4">
+                                  <div className="flex flex-wrap gap-3">
+                                    {getPhotoUrls(item.photo_url).map((url, idx) => (
+                                      <img
+                                        key={idx}
+                                        src={url}
+                                        alt={`${item.type} 사진 ${idx + 1}`}
+                                        className="w-40 h-40 object-cover rounded-lg border-2 border-blue-200 cursor-pointer hover:border-blue-400 transition-colors shadow-md hover:shadow-lg"
+                                        onClick={() => setSelectedImage(url)}
+                                      />
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+                              
+                              {/* 작성 시간 */}
+                              <p className="text-xs text-gray-500 mt-4">
+                                {new Date(item.created_at).toLocaleString('ko-KR')}
+                              </p>
+                            </div>
+                            
+                            {/* 확인 버튼 */}
+                            <button
+                              onClick={() => handleConfirmLostItem(item.id)}
+                              className="ml-4 px-4 py-2 bg-green-600 text-white text-sm font-semibold rounded-md hover:bg-green-700 transition-colors shadow-sm"
+                            >
+                              확인
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                      </div>
+                    )}
+                  </>
                 )}
               </div>
             </div>

@@ -15,3 +15,4 @@ git commit -m "매장 상태 대시보드 기능 추가
 - CSS 파일 수정 (globals.css에 Tailwind 디렉티브 추가)"
 git push
 
+

@@ -28,7 +28,7 @@ export async function GET(
 
     const { data: lostItems, error } = await supabase
       .from('lost_items')
-      .select('id, type, description, photo_url, status, created_at')
+      .select('id, type, description, photo_url, status, storage_location, created_at')
       .eq('store_id', storeId)
       .gte('created_at', thirtyDaysAgo.toISOString())
       .lte('created_at', todayEnd.toISOString())
@@ -46,5 +46,6 @@ export async function GET(
     return handleApiError(error)
   }
 }
+
 
 

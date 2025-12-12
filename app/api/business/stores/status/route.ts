@@ -85,9 +85,9 @@ export async function GET(request: NextRequest) {
         thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
         thirtyDaysAgo.setHours(0, 0, 0, 0)
 
-        const { data: problemReports } = await supabase
+        const { data: problemReports, error: problemReportsError } = await supabase
           .from('problem_reports')
-          .select('id, category, status')
+          .select('id, category, status, title, created_at')
           .eq('store_id', store.id)
           .gte('created_at', thirtyDaysAgo.toISOString())
           .lte('created_at', todayEnd.toISOString())
@@ -99,29 +99,112 @@ export async function GET(request: NextRequest) {
           .gte('created_at', thirtyDaysAgo.toISOString())
           .lte('created_at', todayEnd.toISOString())
 
+        // 디버깅: 실제 저장된 category 값 확인
+        console.log(`\n=== Store ${store.id} (${store.name}) ===`)
+        if (problemReportsError) {
+          console.error('Error fetching problem reports:', problemReportsError)
+        }
+        console.log(`Total problem reports found: ${problemReports?.length || 0}`)
+        if (problemReports && problemReports.length > 0) {
+          // 모든 고유한 category 값 확인
+          const uniqueCategories = [...new Set(problemReports.map((p: any) => p.category))]
+          console.log(`Unique category values in DB:`, uniqueCategories)
+          
+          console.log('All problem reports with raw category values:')
+          problemReports.forEach((p: any, index: number) => {
+            console.log(`  [${index + 1}] ID: ${p.id}, Category: "${p.category}", Status: ${p.status}, Title: ${p.title?.substring(0, 40)}`)
+          })
+        } else {
+          console.log('No problem reports found for this store')
+        }
+
         // 문제보고 카운트 (카테고리별, 상태별)
-        const storeProblemCount = problemReports?.filter((p: any) => p.category === 'store_problem').length || 0
-        const vendingProblemCount = problemReports?.filter((p: any) => p.category === 'vending_machine').length || 0
+        // category 값이 정확히 일치하지 않을 수 있으므로 다양한 형식 지원
+        // 실제 저장된 값에 따라 필터링 (title이나 다른 필드로도 판단 가능)
+        const storeProblemCount = problemReports?.filter((p: any) => {
+          const cat = String(p.category || '').toLowerCase().trim()
+          const title = String(p.title || '').toLowerCase()
+          
+          // category로 직접 매칭
+          const categoryMatch = cat === 'store_problem' || cat === 'store-problem' || cat === 'storeproblem'
+          
+          // title에 "매장 문제"가 포함되어 있으면 매장 문제로 간주
+          const titleMatch = title.includes('매장 문제') || title.includes('자판기 고장') || title.includes('제품 관련') || title.includes('무인택배함') || title.includes('매장 시설')
+          
+          const matches = categoryMatch || (titleMatch && !title.includes('자판기 수량') && !title.includes('자판기 제품 걸림'))
+          
+          return matches
+        }).length || 0
+        
+        const vendingProblemCount = problemReports?.filter((p: any) => {
+          const cat = String(p.category || '').toLowerCase().trim()
+          const title = String(p.title || '').toLowerCase()
+          
+          // category로 직접 매칭
+          const categoryMatch = cat === 'vending_machine' || cat === 'vending-machine' || cat === 'vendingmachine'
+          
+          // title에 "자판기"가 포함되고 "수량" 또는 "걸림"이 포함되어 있으면 자판기 문제로 간주
+          const titleMatch = (title.includes('자판기 수량') || title.includes('자판기 제품 걸림')) && title.includes('자판기')
+          
+          const matches = categoryMatch || titleMatch
+          
+          return matches
+        }).length || 0
+        
         const lostItemCount = lostItems?.length || 0
 
         // 미처리/처리 완료 카운트 (매장 문제 보고)
-        const unprocessedStoreProblems = problemReports?.filter(
-          (p: any) => p.category === 'store_problem' && (p.status === 'pending' || p.status === 'received')
-        ).length || 0
-        const completedStoreProblems = problemReports?.filter(
-          (p: any) => p.category === 'store_problem' && p.status === 'completed'
-        ).length || 0
+        const unprocessedStoreProblems = problemReports?.filter((p: any) => {
+          const cat = String(p.category || '').toLowerCase().trim()
+          const title = String(p.title || '').toLowerCase()
+          const categoryMatch = cat === 'store_problem' || cat === 'store-problem' || cat === 'storeproblem'
+          const titleMatch = title.includes('매장 문제') || title.includes('자판기 고장') || title.includes('제품 관련') || title.includes('무인택배함') || title.includes('매장 시설')
+          const isStoreProblem = categoryMatch || (titleMatch && !title.includes('자판기 수량') && !title.includes('자판기 제품 걸림'))
+          return isStoreProblem && (p.status === 'pending' || p.status === 'received' || p.status === 'submitted')
+        }).length || 0
+        
+        const completedStoreProblems = problemReports?.filter((p: any) => {
+          const cat = String(p.category || '').toLowerCase().trim()
+          const title = String(p.title || '').toLowerCase()
+          const categoryMatch = cat === 'store_problem' || cat === 'store-problem' || cat === 'storeproblem'
+          const titleMatch = title.includes('매장 문제') || title.includes('자판기 고장') || title.includes('제품 관련') || title.includes('무인택배함') || title.includes('매장 시설')
+          const isStoreProblem = categoryMatch || (titleMatch && !title.includes('자판기 수량') && !title.includes('자판기 제품 걸림'))
+          return isStoreProblem && p.status === 'completed'
+        }).length || 0
 
         // 미확인/확인 카운트 (자판기 내부 문제, 분실물)
-        const unconfirmedVendingProblems = problemReports?.filter(
-          (p: any) => p.category === 'vending_machine' && (p.status === 'pending' || p.status === 'received')
-        ).length || 0
-        const confirmedVendingProblems = problemReports?.filter(
-          (p: any) => p.category === 'vending_machine' && p.status === 'completed'
-        ).length || 0
+        const unconfirmedVendingProblems = problemReports?.filter((p: any) => {
+          const cat = String(p.category || '').toLowerCase().trim()
+          const title = String(p.title || '').toLowerCase()
+          const categoryMatch = cat === 'vending_machine' || cat === 'vending-machine' || cat === 'vendingmachine'
+          const titleMatch = (title.includes('자판기 수량') || title.includes('자판기 제품 걸림')) && title.includes('자판기')
+          const isVendingProblem = categoryMatch || titleMatch
+          return isVendingProblem && (p.status === 'pending' || p.status === 'received' || p.status === 'submitted')
+        }).length || 0
+        
+        const confirmedVendingProblems = problemReports?.filter((p: any) => {
+          const cat = String(p.category || '').toLowerCase().trim()
+          const title = String(p.title || '').toLowerCase()
+          const categoryMatch = cat === 'vending_machine' || cat === 'vending-machine' || cat === 'vendingmachine'
+          const titleMatch = (title.includes('자판기 수량') || title.includes('자판기 제품 걸림')) && title.includes('자판기')
+          const isVendingProblem = categoryMatch || titleMatch
+          return isVendingProblem && p.status === 'completed'
+        }).length || 0
+
+        console.log(`Counts for ${store.name}:`, {
+          storeProblemCount,
+          vendingProblemCount,
+          lostItemCount,
+          totalProblemReports: problemReports?.length || 0,
+          unprocessedStoreProblems,
+          completedStoreProblems,
+          unconfirmedVendingProblems,
+          confirmedVendingProblems
+        })
+        console.log(`=== End Store ${store.id} ===\n`)
 
         const unconfirmedLostItems = lostItems?.filter(
-          (l: any) => l.status === 'pending' || l.status === 'received'
+          (l: any) => l.status === 'pending' || l.status === 'received' || l.status === 'submitted'
         ).length || 0
         const confirmedLostItems = lostItems?.filter(
           (l: any) => l.status === 'completed'

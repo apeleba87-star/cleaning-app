@@ -1,10 +1,7 @@
 {
+  "/platform/dashboard/page": "app/platform/dashboard/page.js",
   "/business/stores/status/page": "app/business/stores/status/page.js",
-  "/business/stores/[id]/detail/page": "app/business/stores/[id]/detail/page.js",
-  "/api/business/stores/[id]/inventory-photos/route": "app/api/business/stores/[id]/inventory-photos/route.js",
-  "/api/business/stores/[id]/problem-reports/route": "app/api/business/stores/[id]/problem-reports/route.js",
-  "/api/business/stores/[id]/lost-items/route": "app/api/business/stores/[id]/lost-items/route.js",
+  "/(staff)/checklist/page": "app/(staff)/checklist/page.js",
   "/(staff)/issues/page": "app/(staff)/issues/page.js",
-  "/(staff)/attendance/page": "app/(staff)/attendance/page.js",
   "/(staff)/mobile-dashboard/page": "app/(staff)/mobile-dashboard/page.js"
 }

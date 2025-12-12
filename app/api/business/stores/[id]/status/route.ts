@@ -194,8 +194,6 @@ export async function GET(
       clockInTime = todayAttendance.clock_in_at
     }
 
-    const hasProblem = (todayIssues?.length || 0) > 0
-
     // 최근 30일 문제보고 (매장 문제 보고, 자판기 내부 문제, 분실물)
     const thirtyDaysAgo = new Date()
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
@@ -221,27 +219,27 @@ export async function GET(
     const lostItemCount = lostItems?.length || 0
 
     // 미처리/처리 완료 카운트 (매장 문제 보고)
-    const unprocessedStoreProblems = problemReports?.filter(
-      (p: any) => p.category === 'store_problem' && (p.status === 'pending' || p.status === 'received')
-    ).length || 0
-    const completedStoreProblems = problemReports?.filter(
-      (p: any) => p.category === 'store_problem' && p.status === 'completed'
-    ).length || 0
+      const unprocessedStoreProblems = problemReports?.filter(
+        (p: any) => p.category === 'store_problem' && (p.status === 'pending' || p.status === 'received' || p.status === 'submitted')
+      ).length || 0
+      const completedStoreProblems = problemReports?.filter(
+        (p: any) => p.category === 'store_problem' && p.status === 'completed'
+      ).length || 0
 
-    // 미확인/확인 카운트 (자판기 내부 문제, 분실물)
-    const unconfirmedVendingProblems = problemReports?.filter(
-      (p: any) => p.category === 'vending_machine' && (p.status === 'pending' || p.status === 'received')
-    ).length || 0
-    const confirmedVendingProblems = problemReports?.filter(
-      (p: any) => p.category === 'vending_machine' && p.status === 'completed'
-    ).length || 0
+      // 미확인/확인 카운트 (자판기 내부 문제, 분실물)
+      const unconfirmedVendingProblems = problemReports?.filter(
+        (p: any) => p.category === 'vending_machine' && (p.status === 'pending' || p.status === 'received' || p.status === 'submitted')
+      ).length || 0
+      const confirmedVendingProblems = problemReports?.filter(
+        (p: any) => p.category === 'vending_machine' && p.status === 'completed'
+      ).length || 0
 
-    const unconfirmedLostItems = lostItems?.filter(
-      (l: any) => l.status === 'pending' || l.status === 'received'
-    ).length || 0
-    const confirmedLostItems = lostItems?.filter(
-      (l: any) => l.status === 'completed'
-    ).length || 0
+      const unconfirmedLostItems = lostItems?.filter(
+        (l: any) => l.status === 'pending' || l.status === 'received' || l.status === 'submitted'
+      ).length || 0
+      const confirmedLostItems = lostItems?.filter(
+        (l: any) => l.status === 'completed'
+      ).length || 0
 
     // 오늘 제품 입고 사진 (product_receipt, order_sheet)
     const { data: todayProductInflow } = await supabase

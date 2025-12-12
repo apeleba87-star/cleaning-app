@@ -663,7 +663,27 @@ export default function MobileDashboardPage() {
                 ⚠️
               </div>
               <div className="flex-1">
-                <div className="font-semibold">매장문제보고</div>
+                <div className="font-semibold">매장 문제 보고</div>
+              </div>
+              <div className="text-gray-400">›</div>
+            </div>
+          </Link>
+
+          <Link
+            href="/requests"
+            className="block bg-white rounded-lg shadow-md p-4 hover:shadow-lg transition-shadow"
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 bg-purple-500 rounded-lg flex items-center justify-center text-2xl relative">
+                📋
+                {todayRequests.length > 0 && (
+                  <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center">
+                    {todayRequests.length}
+                  </span>
+                )}
+              </div>
+              <div className="flex-1">
+                <div className="font-semibold">요청란</div>
               </div>
               <div className="text-gray-400">›</div>
             </div>
