@@ -1,6 +1,5 @@
-import { NextRequest } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient, getServerUser } from '@/lib/supabase/server'
-import { handleApiError, UnauthorizedError, ForbiddenError } from '@/lib/errors'
 
 export async function PATCH(
   request: NextRequest,
@@ -8,37 +7,55 @@ export async function PATCH(
 ) {
   try {
     const user = await getServerUser()
-    if (!user) {
-      throw new UnauthorizedError('Authentication required')
-    }
-
-    if (user.role !== 'business_owner') {
-      throw new ForbiddenError('Only business owners can confirm lost items')
+    if (!user || user.role !== 'business_owner' || !user.company_id) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
     const supabase = await createServerSupabaseClient()
-    const lostItemId = params.id
 
-    const { error } = await supabase
+    // 분실물이 존재하고 사용자의 회사 매장에 속하는지 확인
+    const { data: lostItem, error: fetchError } = await supabase
       .from('lost_items')
-      .update({
-        status: 'completed',
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', lostItemId)
+      .select('id, store_id, stores!inner(company_id)')
+      .eq('id', params.id)
+      .single()
 
-    if (error) {
-      throw new Error(`Failed to confirm lost item: ${error.message}`)
+    if (fetchError || !lostItem) {
+      return NextResponse.json(
+        { error: 'Lost item not found' },
+        { status: 404 }
+      )
     }
 
-    return Response.json({
-      success: true,
-      message: 'Lost item confirmed successfully',
-    })
+    // 권한 확인
+    if ((lostItem.stores as any).company_id !== user.company_id) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
+
+    // status를 'confirmed'로 업데이트
+    const { error: updateError } = await supabase
+      .from('lost_items')
+      .update({ 
+        status: 'confirmed',
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', params.id)
+
+    if (updateError) {
+      console.error('Error updating status:', updateError)
+      return NextResponse.json(
+        { error: 'Failed to update status' },
+        { status: 500 }
+      )
+    }
+
+    return NextResponse.json({ success: true })
   } catch (error: any) {
-    return handleApiError(error)
+    console.error('Error in PATCH /api/business/lost-items/[id]/confirm:', error)
+    return NextResponse.json(
+      { error: 'Internal server error' },
+      { status: 500 }
+    )
   }
 }
-
-
 

@@ -441,63 +441,92 @@ export default function MobileDashboardPage() {
                 배정된 매장이 없습니다.
               </div>
             ) : (
-              stores.map((store) => (
-                <div 
-                  key={store.id} 
-                  className={`flex items-center justify-between p-3 rounded-lg ${
-                    store.isWorkDay
-                      ? 'border-2 border-blue-600 bg-blue-50'
-                      : 'border border-gray-200 bg-white'
-                  }`}
-                >
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-1">
-                      <div
-                        className={`w-2 h-2 rounded-full ${
-                          store.isWorkDay ? 'bg-blue-500' : 'bg-gray-400'
-                        }`}
-                      ></div>
-                      <span className="font-medium">{store.name}</span>
-                    </div>
-                    {store.management_days && (
-                      <div className={`text-xs ml-4 ${
-                        store.isWorkDay ? 'text-blue-700' : 'text-gray-600'
-                      }`}>
-                        {store.management_days}
+              stores.map((store) => {
+                // 박스 색상 결정
+                let boxBgColor = 'bg-gray-50'
+                let boxBorderColor = 'border-gray-300'
+                let boxTextColor = 'text-gray-700'
+                
+                if (!store.isWorkDay) {
+                  // 휴무일 - 회색
+                  boxBgColor = 'bg-gray-100'
+                  boxBorderColor = 'border-gray-300'
+                  boxTextColor = 'text-gray-600'
+                } else if (store.attendanceStatus === 'not_clocked_in') {
+                  // 출근일이고 출근전 - 빨간색
+                  boxBgColor = 'bg-red-50'
+                  boxBorderColor = 'border-red-400'
+                  boxTextColor = 'text-red-700'
+                } else if (store.attendanceStatus === 'clocked_in') {
+                  // 출근일이고 출근중 - 주황색
+                  boxBgColor = 'bg-orange-50'
+                  boxBorderColor = 'border-orange-400'
+                  boxTextColor = 'text-orange-700'
+                } else if (store.attendanceStatus === 'clocked_out') {
+                  // 출근일이고 퇴근 - 파란색
+                  boxBgColor = 'bg-blue-50'
+                  boxBorderColor = 'border-blue-400'
+                  boxTextColor = 'text-blue-700'
+                }
+                
+                return (
+                  <div 
+                    key={store.id} 
+                    className={`flex items-center justify-between p-3 rounded-lg border-2 ${boxBgColor} ${boxBorderColor}`}
+                  >
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-1">
+                        <div
+                          className={`w-2 h-2 rounded-full ${
+                            !store.isWorkDay ? 'bg-gray-400' :
+                            store.attendanceStatus === 'not_clocked_in' ? 'bg-red-500' :
+                            store.attendanceStatus === 'clocked_in' ? 'bg-orange-500' : 'bg-blue-500'
+                          }`}
+                        ></div>
+                        <span className={`font-medium ${boxTextColor}`}>{store.name}</span>
                       </div>
-                    )}
-                  </div>
-                  <div className="flex flex-col items-end gap-1">
-                    <button
-                      className={`px-4 py-2 rounded-md text-sm font-medium ${
-                        store.isWorkDay
-                          ? 'bg-blue-600 text-white'
-                          : 'bg-gray-200 text-gray-600'
-                      }`}
-                      disabled
-                    >
-                      {store.isWorkDay ? '출근일' : '휴무'}
-                    </button>
-                    {store.isWorkDay && (
-                      <span
-                        className={`px-3 py-1 rounded-md text-xs font-medium ${
-                          store.attendanceStatus === 'not_clocked_in'
-                            ? 'bg-red-100 text-red-700'
+                      {store.management_days && (
+                        <div className={`text-xs ml-4 ${boxTextColor}`}>
+                          {store.management_days}
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex flex-col items-end gap-1">
+                      <button
+                        className={`px-4 py-2 rounded-md text-sm font-medium ${
+                          !store.isWorkDay
+                            ? 'bg-gray-200 text-gray-600'
+                            : store.attendanceStatus === 'not_clocked_in'
+                            ? 'bg-red-600 text-white'
                             : store.attendanceStatus === 'clocked_in'
-                            ? 'bg-orange-100 text-orange-700'
-                            : 'bg-green-100 text-green-700'
+                            ? 'bg-orange-500 text-white'
+                            : 'bg-blue-600 text-white'
                         }`}
+                        disabled
                       >
-                        {store.attendanceStatus === 'not_clocked_in'
-                          ? '출근전'
-                          : store.attendanceStatus === 'clocked_in'
-                          ? '출근중'
-                          : '퇴근완료'}
-                      </span>
-                    )}
+                        {store.isWorkDay ? '출근일' : '휴무'}
+                      </button>
+                      {store.isWorkDay && (
+                        <span
+                          className={`px-3 py-1 rounded-md text-xs font-medium ${
+                            store.attendanceStatus === 'not_clocked_in'
+                              ? 'bg-red-100 text-red-700'
+                              : store.attendanceStatus === 'clocked_in'
+                              ? 'bg-orange-100 text-orange-700'
+                              : 'bg-blue-100 text-blue-700'
+                          }`}
+                        >
+                          {store.attendanceStatus === 'not_clocked_in'
+                            ? '출근전'
+                            : store.attendanceStatus === 'clocked_in'
+                            ? '출근중'
+                            : '퇴근완료'}
+                        </span>
+                      )}
+                    </div>
                   </div>
-                </div>
-              ))
+                )
+              })
             )}
           </div>
           </div>
@@ -546,20 +575,42 @@ export default function MobileDashboardPage() {
               </div>
             <div className="space-y-4">
               {todayTasks.map((task) => {
-                // 진행률에 따른 색상 결정
-                let progressColor = 'bg-red-500' // 0-30%
-                let textColor = 'text-red-600'
-                if (task.completion_rate >= 31 && task.completion_rate <= 99) {
-                  progressColor = 'bg-green-400' // 31-99% 연두색
-                  textColor = 'text-green-600'
-                } else if (task.completion_rate === 100) {
-                  progressColor = 'bg-blue-600' // 100% 파란색
+                // 매장 출근 상태 찾기
+                const store = stores.find(s => s.id === task.store_id)
+                let boxBgColor = 'bg-gray-50'
+                let boxBorderColor = 'border-gray-300'
+                let progressColor = 'bg-gray-400'
+                let textColor = 'text-gray-600'
+                
+                if (!store?.isWorkDay) {
+                  // 휴무일 - 회색
+                  boxBgColor = 'bg-gray-100'
+                  boxBorderColor = 'border-gray-300'
+                  progressColor = 'bg-gray-400'
+                  textColor = 'text-gray-600'
+                } else if (store.attendanceStatus === 'not_clocked_in') {
+                  // 출근일이고 출근전 - 빨간색
+                  boxBgColor = 'bg-red-50'
+                  boxBorderColor = 'border-red-400'
+                  progressColor = 'bg-red-500'
+                  textColor = 'text-red-600'
+                } else if (store.attendanceStatus === 'clocked_in') {
+                  // 출근일이고 출근중 - 주황색
+                  boxBgColor = 'bg-orange-50'
+                  boxBorderColor = 'border-orange-400'
+                  progressColor = 'bg-orange-500'
+                  textColor = 'text-orange-600'
+                } else if (store.attendanceStatus === 'clocked_out') {
+                  // 출근일이고 퇴근 - 파란색
+                  boxBgColor = 'bg-blue-50'
+                  boxBorderColor = 'border-blue-400'
+                  progressColor = 'bg-blue-500'
                   textColor = 'text-blue-600'
                 }
                 
                 return (
-                  <div key={task.store_id} className="border border-gray-200 rounded-lg p-3">
-                    <div className="font-medium mb-2">{task.store_name}</div>
+                  <div key={task.store_id} className={`border-2 rounded-lg p-3 ${boxBgColor} ${boxBorderColor}`}>
+                    <div className={`font-medium mb-2 ${textColor}`}>{task.store_name}</div>
                     <div className="w-full bg-gray-200 rounded-full h-2.5 mb-2">
                       <div
                         className={`${progressColor} h-2.5 rounded-full transition-all`}
@@ -570,15 +621,15 @@ export default function MobileDashboardPage() {
                       <div className="flex items-center gap-4">
                         <div className="flex items-center gap-1">
                           <span>✓</span>
-                          <span className="text-gray-600">체크리스트</span>
-                          <span className="font-medium">
+                          <span className={`${textColor}`}>체크리스트</span>
+                          <span className={`font-medium ${textColor}`}>
                             {task.checklist_completed}/{task.checklist_count}
                           </span>
                         </div>
                         <div className="flex items-center gap-1">
                           <span>📷</span>
-                          <span className="text-gray-600">관리 사진</span>
-                          <span className="font-medium">
+                          <span className={`${textColor}`}>관리 사진</span>
+                          <span className={`font-medium ${textColor}`}>
                             {task.photo_completed}/{task.photo_count}
                           </span>
                         </div>
@@ -634,6 +685,7 @@ export default function MobileDashboardPage() {
               </div>
               <div className="flex-1">
                 <div className="font-semibold">출퇴근</div>
+                <div className="text-sm text-gray-600">GPS 기반 출퇴근 관리</div>
               </div>
               <div className="text-gray-400">›</div>
             </div>
@@ -649,6 +701,23 @@ export default function MobileDashboardPage() {
               </div>
               <div className="flex-1">
                 <div className="font-semibold">체크리스트</div>
+                <div className="text-sm text-gray-600">배정된 체크리스트 수행</div>
+              </div>
+              <div className="text-gray-400">›</div>
+            </div>
+          </Link>
+
+          <Link
+            href="/photos"
+            className="block bg-white rounded-lg shadow-md p-4 hover:shadow-lg transition-shadow"
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 bg-purple-500 rounded-lg flex items-center justify-center text-2xl">
+                📷
+              </div>
+              <div className="flex-1">
+                <div className="font-semibold">청소 사진</div>
+                <div className="text-sm text-gray-600">청소 전후 사진 업로드</div>
               </div>
               <div className="text-gray-400">›</div>
             </div>
@@ -663,27 +732,24 @@ export default function MobileDashboardPage() {
                 ⚠️
               </div>
               <div className="flex-1">
-                <div className="font-semibold">매장 문제 보고</div>
+                <div className="font-semibold">매장문제보고</div>
+                <div className="text-sm text-gray-600">매장 문제, 자판기 내부 문제, 분실물 습득</div>
               </div>
               <div className="text-gray-400">›</div>
             </div>
           </Link>
 
           <Link
-            href="/requests"
+            href="/product-photos"
             className="block bg-white rounded-lg shadow-md p-4 hover:shadow-lg transition-shadow"
           >
             <div className="flex items-center gap-3">
-              <div className="w-12 h-12 bg-purple-500 rounded-lg flex items-center justify-center text-2xl relative">
-                📋
-                {todayRequests.length > 0 && (
-                  <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center">
-                    {todayRequests.length}
-                  </span>
-                )}
+              <div className="w-12 h-12 bg-teal-500 rounded-lg flex items-center justify-center text-2xl">
+                📸
               </div>
               <div className="flex-1">
-                <div className="font-semibold">요청란</div>
+                <div className="font-semibold">제품 입고 및 보관 사진</div>
+                <div className="text-sm text-gray-600">제품 입고 사진, 보관 사진 업로드</div>
               </div>
               <div className="text-gray-400">›</div>
             </div>
@@ -699,6 +765,7 @@ export default function MobileDashboardPage() {
               </div>
               <div className="flex-1">
                 <div className="font-semibold">물품 요청</div>
+                <div className="text-sm text-gray-600">물품 요청 및 조회</div>
               </div>
               <div className="text-gray-400">›</div>
             </div>

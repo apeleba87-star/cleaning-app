@@ -554,52 +554,23 @@ export default function ChecklistClient() {
                           미완료 항목이 없습니다.
                         </div>
                       ) : (
-                        incompleteItems.map((item, index) => {
-                          const actualIndex = items.findIndex(i => i.area === item.area && i.type === item.type)
-                          const isChecked = item.type === 'check' ? item.checked : false
-                          
-                          return (
-                            <div
-                              key={index}
-                              className={`flex items-center space-x-3 p-3 border rounded-lg ${
-                                item.type === 'check'
-                                  ? 'cursor-pointer hover:bg-gray-50'
-                                  : 'border-gray-200 hover:bg-gray-50'
-                              }`}
-                              onClick={() => {
-                                if (item.type === 'check') {
-                                  const newItems = [...items]
-                                  if (actualIndex >= 0) {
-                                    newItems[actualIndex] = {
-                                      ...newItems[actualIndex],
-                                      checked: !newItems[actualIndex].checked,
-                                    }
-                                    setItems(newItems)
-                                  }
-                                }
-                              }}
-                            >
-                              {item.type === 'photo' ? (
-                                <div className="w-6 h-6 flex-shrink-0 flex items-center justify-center text-blue-600 text-lg">
-                                  📷
-                                </div>
-                              ) : (
-                                <div className={`w-6 h-6 rounded-full border-2 flex-shrink-0 flex items-center justify-center ${
-                                  isChecked
-                                    ? 'bg-green-500 border-green-600'
-                                    : 'border-gray-300'
-                                }`}>
-                                  {isChecked && (
-                                    <span className="text-white text-sm">✓</span>
-                                  )}
-                                </div>
-                              )}
-                              <span className="flex-1 text-gray-800">
-                                {index + 1}. {item.area}
-                              </span>
-                            </div>
-                          )
-                        })
+                        incompleteItems.map((item, index) => (
+                          <div
+                            key={index}
+                            className="flex items-center space-x-3 p-3 border border-gray-200 rounded-lg hover:bg-gray-50"
+                          >
+                            {item.type === 'photo' ? (
+                              <div className="w-6 h-6 flex-shrink-0 flex items-center justify-center text-blue-600 text-lg">
+                                📷
+                              </div>
+                            ) : (
+                              <div className="w-6 h-6 rounded-full border-2 border-gray-300 flex-shrink-0"></div>
+                            )}
+                            <span className="flex-1 text-gray-800">
+                              {index + 1}. {item.area}
+                            </span>
+                          </div>
+                        ))
                       )}
                     </div>
                   ) : (

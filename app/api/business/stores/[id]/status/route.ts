@@ -262,17 +262,15 @@ export async function GET(
     // 최근 30일 요청란 (진행중, 완료)
     const { data: recentRequests } = await supabase
       .from('requests')
-      .select('id, status, confirmed_at')
+      .select('id, status')
       .eq('store_id', params.id)
       .in('status', ['in_progress', 'completed'])
       .gte('created_at', thirtyDaysAgo.toISOString())
-      .lte('created_at', todayEnd.toISOString())
 
     const inProgressRequestCount = recentRequests?.filter((r: any) => r.status === 'in_progress').length || 0
     const completedRequestCount = recentRequests?.filter((r: any) => r.status === 'completed').length || 0
-    const unconfirmedCompletedCount = recentRequests?.filter(
-      (r: any) => r.status === 'completed' && !r.confirmed_at
-    ).length || 0
+    // confirmed_at 컬럼이 없으므로 모든 completed 요청을 미확인으로 처리
+    const unconfirmedCompletedCount = completedRequestCount
 
     const hasProblem = storeProblemCount > 0 || vendingProblemCount > 0 || lostItemCount > 0
 

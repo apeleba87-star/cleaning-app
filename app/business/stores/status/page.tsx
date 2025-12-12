@@ -63,10 +63,10 @@ interface Request {
   id: string
   title: string
   description: string | null
+  photo_url: string | null
   status: string
-  confirmed_at: string | null
-  completion_photo_url: string | null
   created_at: string
+  updated_at: string | null
 }
 
 interface InventoryPhoto {
@@ -97,6 +97,7 @@ export default function BusinessStoresStatusPage() {
     vendingProblems: false,
     lostItems: false,
   })
+  const [viewingCompletedRequestId, setViewingCompletedRequestId] = useState<string | null>(null)
   const [showCompletionForm, setShowCompletionForm] = useState<string | null>(null)
   const [completionDescription, setCompletionDescription] = useState('')
   const [completionPhotos, setCompletionPhotos] = useState<string[]>([])
@@ -284,6 +285,14 @@ export default function BusinessStoresStatusPage() {
 
       if (response.ok) {
         setConfirmedRequestIds((prev) => new Set(prev).add(requestId))
+        setViewingCompletedRequestId(null)
+        // 요청 목록 다시 로드
+        if (selectedStore) {
+          handleOpenRequestModal(selectedStore)
+        }
+      } else {
+        const data = await response.json()
+        alert(data.error || '확인 처리 중 오류가 발생했습니다.')
       }
     } catch (error) {
       console.error('Error confirming request:', error)
@@ -293,7 +302,7 @@ export default function BusinessStoresStatusPage() {
 
   const handleCreateRequest = async () => {
     if (!requestFormData.category || !requestFormData.description) {
-      alert('카테고리와 요청란 설명을 입력해주세요.')
+      alert('카테고리와 요청 내용을 입력해주세요.')
       return
     }
 
@@ -323,7 +332,7 @@ export default function BusinessStoresStatusPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           store_id: selectedStore.store_id,
-          title: requestFormData.category,
+          category: requestFormData.category,
           description: requestFormData.description,
           photo_urls: photoUrls,
         }),
@@ -334,34 +343,36 @@ export default function BusinessStoresStatusPage() {
         setRequestFormData({ category: '', description: '', photos: [] })
         setRequestPhotos([])
         loadStoreStatuses()
-        alert('요청이 접수되었습니다.')
+        alert('요청이 등록되었습니다. (처리중으로 설정됨)')
       } else {
         const data = await response.json()
-        alert(data.error || '요청 접수 중 오류가 발생했습니다.')
+        alert(data.error || '요청 등록 중 오류가 발생했습니다.')
       }
     } catch (error) {
       console.error('Error creating request:', error)
-      alert('요청 접수 중 오류가 발생했습니다.')
+      alert('요청 등록 중 오류가 발생했습니다.')
     }
   }
 
   const handleApproveRequest = async (requestId: string) => {
     try {
-      const response = await fetch(`/api/business/requests/${requestId}/approve`, {
+      const response = await fetch(`/api/business/requests/${requestId}/status`, {
         method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'in_progress' }),
       })
 
       if (response.ok) {
         loadStoreStatuses()
         handleOpenRequestModal(selectedStore!)
-        alert('요청이 승인되었습니다.')
+        alert('요청이 처리중으로 변경되었습니다.')
       } else {
         const data = await response.json()
-        alert(data.error || '요청 승인 중 오류가 발생했습니다.')
+        alert(data.error || '요청 상태 변경 중 오류가 발생했습니다.')
       }
     } catch (error) {
       console.error('Error approving request:', error)
-      alert('요청 승인 중 오류가 발생했습니다.')
+      alert('요청 상태 변경 중 오류가 발생했습니다.')
     }
   }
 
@@ -401,7 +412,7 @@ export default function BusinessStoresStatusPage() {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          title: requestFormData.category,
+          category: requestFormData.category,
           description: requestFormData.description,
           photo_urls: allPhotoUrls,
         }),
@@ -804,35 +815,56 @@ export default function BusinessStoresStatusPage() {
                   {/* 제품입고 및 보관 상태 */}
                   <div
                     onClick={() => handleOpenInventoryModal(status)}
-                    className="border border-gray-200 rounded-lg p-4 cursor-pointer hover:bg-gray-50 transition-colors"
+                    className="border rounded-lg p-4 cursor-pointer transition-colors border-gray-200 hover:bg-gray-50"
                   >
-                    <h3 className="text-sm font-medium text-gray-700 mb-3">
-                      제품 입고 및 보관 상태
+                    <h3 className="text-sm font-medium text-gray-700 mb-3 flex items-center gap-2">
+                      <span>📦</span>
+                      <span>제품 입고 및 보관 상태</span>
                     </h3>
                     <div className="space-y-2">
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm text-gray-600">오늘 제품 입고</span>
-                        <span className={`text-sm font-semibold ${status.has_product_inflow_today ? 'text-green-600' : 'text-gray-400'}`}>
-                          {status.has_product_inflow_today ? '있음' : '없음'}
-                        </span>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm text-gray-600">보관 사진</span>
-                        {status.storage_photos && status.storage_photos.length > 0 ? (
-                          <div className="flex gap-1">
-                            {status.storage_photos.slice(0, 2).map((photo) => (
-                              <img
-                                key={photo.id}
-                                src={photo.photo_url}
-                                alt="보관 사진"
-                                className="w-8 h-8 object-cover rounded"
-                              />
-                            ))}
+                      {status.has_product_inflow_today && (
+                        <div className="space-y-1 bg-green-50 rounded p-2 -mx-2">
+                          <div className="flex items-center gap-2">
+                            <div className="w-2 h-2 bg-green-500 rounded-full flex-shrink-0"></div>
+                            <span className="text-sm text-gray-900 font-semibold">오늘 제품 입고</span>
+                            <span className="text-sm font-semibold text-gray-900 ml-auto">있음</span>
                           </div>
-                        ) : (
+                        </div>
+                      )}
+                      {!status.has_product_inflow_today && (
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm text-gray-600">오늘 제품 입고</span>
                           <span className="text-sm font-semibold text-gray-400">없음</span>
-                        )}
-                      </div>
+                        </div>
+                      )}
+                      {status.storage_photos && status.storage_photos.length > 0 ? (
+                        <div className="space-y-1 bg-blue-50 rounded p-2 -mx-2">
+                          <div className="flex items-center gap-2">
+                            <div className="w-2 h-2 bg-blue-500 rounded-full flex-shrink-0"></div>
+                            <span className="text-sm text-gray-900 font-semibold">보관 사진</span>
+                            <div className="ml-auto flex items-center gap-1">
+                              {status.storage_photos.slice(0, 2).map((photo) => (
+                                <img
+                                  key={photo.id}
+                                  src={photo.photo_url}
+                                  alt="보관 사진"
+                                  className="w-8 h-8 object-cover rounded"
+                                />
+                              ))}
+                              {status.storage_photos.length > 2 && (
+                                <span className="text-xs text-gray-600 ml-1">
+                                  +{status.storage_photos.length - 2}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm text-gray-600">보관 사진</span>
+                          <span className="text-sm font-semibold text-gray-400">없음</span>
+                        </div>
+                      )}
                     </div>
                   </div>
 
@@ -1003,7 +1035,7 @@ export default function BusinessStoresStatusPage() {
                           onClick={() => setSelectedImage(photo.photo_url)}
                         />
                         <div className="p-2 text-sm text-gray-600">
-                          {photo.photo_type === 'product_receipt' ? '제품 입고' : '주문서'}
+                          제품 입고
                         </div>
                       </div>
                     ))}
@@ -1027,7 +1059,7 @@ export default function BusinessStoresStatusPage() {
                           onClick={() => setSelectedImage(photo.photo_url)}
                         />
                         <div className="p-2 text-sm text-gray-600">
-                          {photo.photo_type === 'store_storage' ? '매장 보관' : '택배함'}
+                          보관 사진
                         </div>
                       </div>
                     ))}
@@ -1090,7 +1122,7 @@ export default function BusinessStoresStatusPage() {
                                 {/* 카테고리 */}
                                 <div className="mb-3">
                                   <span className="inline-block px-3 py-1 bg-red-600 text-white text-sm font-semibold rounded-md">
-                                    {problem.title}
+                                    {problem.title?.replace(/^매장 문제:\s*/, '') || problem.title}
                                   </span>
                                 </div>
                                 
@@ -1264,7 +1296,7 @@ export default function BusinessStoresStatusPage() {
                               {/* 카테고리와 처리 완료 배지 */}
                               <div className="mb-3 flex items-center gap-2 flex-wrap">
                                 <span className="inline-block px-3 py-1 bg-gray-400 text-white text-sm font-semibold rounded-md">
-                                  {problem.title}
+                                  {problem.title?.replace(/^매장 문제:\s*/, '') || problem.title}
                                 </span>
                                 <span className="inline-block px-3 py-1 bg-green-500 text-white text-sm font-semibold rounded-md">
                                   처리 완료
@@ -1592,16 +1624,17 @@ export default function BusinessStoresStatusPage() {
                                 className="w-full px-3 py-2 border border-gray-300 rounded-md"
                               >
                                 <option value="">선택하세요</option>
-                                <option value="제품 관련">제품 관련</option>
-                                <option value="자판기 걸림/사출">자판기 걸림/사출</option>
-                                <option value="자판기 고장/오류">자판기 고장/오류</option>
-                                <option value="매장 시설 환경">매장 시설 환경</option>
+                                <option value="제품 관련 요청">제품 관련 요청</option>
+                                <option value="자판기 관련 요청">자판기 관련 요청</option>
+                                <option value="무인 택배함 관련">무인 택배함 관련</option>
+                                <option value="매장 시설/청결 관련">매장 시설/청결 관련</option>
+                                <option value="운영 관련">운영 관련</option>
                                 <option value="기타">기타</option>
                               </select>
                             </div>
                             <div>
                               <label className="block text-sm font-medium text-gray-700 mb-1">
-                                요청란 설명
+                                요청 내용
                               </label>
                               <textarea
                                 value={requestFormData.description}
@@ -1715,7 +1748,7 @@ export default function BusinessStoresStatusPage() {
                                   onClick={() => handleApproveRequest(request.id)}
                                   className="px-3 py-1 bg-green-600 text-white text-sm rounded hover:bg-green-700"
                                 >
-                                  승인
+                                  처리중으로 변경
                                 </button>
                                 <button
                                   onClick={() => {
@@ -1776,46 +1809,277 @@ export default function BusinessStoresStatusPage() {
                     <div className="space-y-4">
                       {requests.completed
                         .filter((r) => !confirmedRequestIds.has(r.id))
-                        .map((request) => (
-                          <div key={request.id} className="border rounded-lg p-4">
-                            <div className="flex justify-between items-start mb-2">
-                              <div>
-                                <h4 className="font-medium">{request.title}</h4>
-                                {request.description && (
-                                  <p className="text-sm text-gray-600 mt-1">{request.description}</p>
+                        .map((request) => {
+                          // 처리 완료 내용 추출
+                          const hasCompletionDetails = request.completion_description || request.completion_photo_url
+                          const isViewing = viewingCompletedRequestId === request.id
+                          
+                          return (
+                            <div 
+                              key={request.id} 
+                              className={`border rounded-lg p-4 transition-all ${
+                                confirmedRequestIds.has(request.id) ? 'opacity-60 bg-gray-50' : ''
+                              }`}
+                            >
+                              <div className="flex justify-between items-start mb-2">
+                                <div className="flex-1">
+                                  <div className="flex items-center gap-2 mb-1">
+                                    <h4 className="font-medium">{request.title}</h4>
+                                    {confirmedRequestIds.has(request.id) && (
+                                      <span className="text-xs bg-gray-200 text-gray-600 px-2 py-1 rounded">확인 완료</span>
+                                    )}
+                                  </div>
+                                  {request.description && (
+                                    <p className="text-sm text-gray-600 mt-1">{request.description}</p>
+                                  )}
+                                  <p className="text-xs text-gray-400 mt-1">
+                                    작성: {new Date(request.created_at).toLocaleString('ko-KR')}
+                                  </p>
+                                  {request.updated_at && (
+                                    <p className="text-xs text-gray-400">
+                                      처리 완료: {new Date(request.updated_at).toLocaleString('ko-KR')}
+                                    </p>
+                                  )}
+                                </div>
+                                {!confirmedRequestIds.has(request.id) && (
+                                  <button
+                                    onClick={() => {
+                                      if (hasCompletionDetails && !isViewing) {
+                                        // 처리 완료 내용 보기
+                                        setViewingCompletedRequestId(request.id)
+                                      } else {
+                                        // 확인 처리
+                                        handleConfirmRequest(request.id)
+                                      }
+                                    }}
+                                    className="px-3 py-1 bg-blue-600 text-white text-sm rounded hover:bg-blue-700"
+                                  >
+                                    {hasCompletionDetails && !isViewing ? '확인' : '확인'}
+                                  </button>
                                 )}
-                                <p className="text-xs text-gray-400 mt-1">
-                                  {new Date(request.created_at).toLocaleString('ko-KR')}
-                                </p>
                               </div>
-                              <button
-                                onClick={() => handleConfirmRequest(request.id)}
-                                className="px-3 py-1 bg-blue-600 text-white text-sm rounded hover:bg-blue-700"
-                              >
-                                확인
-                              </button>
+
+                              {/* 처리 완료 내용 표시 */}
+                              {isViewing && hasCompletionDetails && (
+                                <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg space-y-3">
+                                  {request.completion_description && (
+                                    <div>
+                                      <h5 className="text-sm font-semibold text-blue-800 mb-2">처리 완료 내용</h5>
+                                      <p className="text-sm text-gray-700 whitespace-pre-wrap">{request.completion_description}</p>
+                                    </div>
+                                  )}
+                                  {request.completion_photo_url && (
+                                    <div>
+                                      <h5 className="text-sm font-semibold text-blue-800 mb-2">처리 완료 사진</h5>
+                                      <div className="flex flex-wrap gap-2">
+                                        {getPhotoUrls(request.completion_photo_url).map((url, idx) => (
+                                          <img
+                                            key={idx}
+                                            src={url}
+                                            alt={`처리 완료 사진 ${idx + 1}`}
+                                            className="w-32 h-32 object-cover rounded-lg border-2 border-blue-300 cursor-pointer"
+                                            onClick={() => setSelectedImage(url)}
+                                          />
+                                        ))}
+                                      </div>
+                                    </div>
+                                  )}
+                                  <div className="flex gap-2">
+                                    <button
+                                      onClick={() => {
+                                        handleConfirmRequest(request.id)
+                                        setViewingCompletedRequestId(null)
+                                      }}
+                                      className="px-4 py-2 bg-blue-600 text-white text-sm rounded hover:bg-blue-700"
+                                    >
+                                      확인
+                                    </button>
+                                    <button
+                                      onClick={() => setViewingCompletedRequestId(null)}
+                                      className="px-4 py-2 bg-gray-300 text-gray-700 text-sm rounded hover:bg-gray-400"
+                                    >
+                                      닫기
+                                    </button>
+                                  </div>
+                                </div>
+                              )}
+
+                              {/* 원본 사진 */}
+                              {request.photo_url && !isViewing && (
+                                <div className="mt-2">
+                                  <div className="flex flex-wrap gap-2">
+                                    {getPhotoUrls(request.photo_url).map((url, idx) => (
+                                      <img
+                                        key={idx}
+                                        src={url}
+                                        alt={`${request.title} 사진 ${idx + 1}`}
+                                        className="w-32 h-32 object-cover rounded-lg border-2 border-gray-300 cursor-pointer"
+                                        onClick={() => setSelectedImage(url)}
+                                      />
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
                             </div>
-                            {request.completion_photo_url && (
-                              <div className="mt-2">
-                                {getPhotoUrls(request.completion_photo_url).map((url, idx) => (
-                                  <img
-                                    key={idx}
-                                    src={url}
-                                    alt={`${request.title} 완료 사진 ${idx + 1}`}
-                                    className="w-32 h-32 object-cover rounded cursor-pointer mr-2"
-                                    onClick={() => setSelectedImage(url)}
-                                  />
-                                ))}
-                              </div>
-                            )}
-                          </div>
-                        ))}
+                          )
+                        })}
                       {requests.completed.filter((r) => !confirmedRequestIds.has(r.id)).length === 0 && (
                         <p className="text-sm text-gray-500">확인 안된 처리완료 항목이 없습니다.</p>
                       )}
                     </div>
                   </>
                 )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 요청 생성 모달 */}
+      {showRequestCreateModal && selectedStore && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50" onClick={() => setShowRequestCreateModal(false)}>
+          <div className="bg-white rounded-lg p-6 max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-xl font-semibold">요청 작성</h2>
+              <button onClick={() => setShowRequestCreateModal(false)} className="text-gray-500 hover:text-gray-700 text-2xl">
+                ×
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  카테고리 <span className="text-red-500">*</span>
+                </label>
+                <select
+                  value={requestFormData.category}
+                  onChange={(e) => setRequestFormData({ ...requestFormData, category: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                >
+                  <option value="">선택하세요</option>
+                  <option value="제품 관련 요청">제품 관련 요청</option>
+                  <option value="자판기 관련 요청">자판기 관련 요청</option>
+                  <option value="무인 택배함 관련">무인 택배함 관련</option>
+                  <option value="매장 시설/청결 관련">매장 시설/청결 관련</option>
+                  <option value="운영 관련">운영 관련</option>
+                  <option value="기타">기타</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  요청 내용 <span className="text-red-500">*</span>
+                </label>
+                <textarea
+                  value={requestFormData.description}
+                  onChange={(e) => setRequestFormData({ ...requestFormData, description: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                  rows={4}
+                  placeholder="요청 내용을 입력하세요"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  사진
+                </label>
+                <div className="flex gap-2 mb-3">
+                  <button
+                    onClick={() => {
+                      const input = document.createElement('input')
+                      input.type = 'file'
+                      input.accept = 'image/*'
+                      input.capture = 'environment'
+                      input.multiple = true
+                      input.onchange = async (e) => {
+                        const files = Array.from((e.target as HTMLInputElement).files || [])
+                        for (const file of files) {
+                          if (file.size > 5 * 1024 * 1024) {
+                            alert(`${file.name}은(는) 5MB를 초과합니다.`)
+                            continue
+                          }
+                          const reader = new FileReader()
+                          reader.onload = (event) => {
+                            setRequestPhotos((prev) => [...prev, event.target?.result as string])
+                          }
+                          reader.readAsDataURL(file)
+                        }
+                      }
+                      input.click()
+                    }}
+                    className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+                  >
+                    📷 즉시 촬영
+                  </button>
+                  <button
+                    onClick={() => {
+                      const input = document.createElement('input')
+                      input.type = 'file'
+                      input.accept = 'image/*'
+                      input.multiple = true
+                      input.onchange = async (e) => {
+                        const files = Array.from((e.target as HTMLInputElement).files || [])
+                        for (const file of files) {
+                          if (file.size > 5 * 1024 * 1024) {
+                            alert(`${file.name}은(는) 5MB를 초과합니다.`)
+                            continue
+                          }
+                          const reader = new FileReader()
+                          reader.onload = (event) => {
+                            setRequestPhotos((prev) => [...prev, event.target?.result as string])
+                          }
+                          reader.readAsDataURL(file)
+                        }
+                      }
+                      input.click()
+                    }}
+                    className="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700"
+                  >
+                    🖼️ 갤러리
+                  </button>
+                </div>
+
+                {requestPhotos.length > 0 && (
+                  <div className="grid grid-cols-3 gap-2">
+                    {requestPhotos.map((url, idx) => (
+                      <div key={idx} className="relative aspect-square">
+                        <img
+                          src={url}
+                          alt={`사진 ${idx + 1}`}
+                          className="w-full h-full object-cover rounded-lg border-2 border-gray-300"
+                        />
+                        <button
+                          onClick={() => {
+                            setRequestPhotos((prev) => prev.filter((_, i) => i !== idx))
+                          }}
+                          className="absolute top-1 right-1 w-6 h-6 bg-red-500 text-white rounded-full flex items-center justify-center text-xs hover:bg-red-600"
+                        >
+                          ×
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div className="flex gap-2 pt-4">
+                <button
+                  onClick={handleCreateRequest}
+                  disabled={!requestFormData.category || !requestFormData.description}
+                  className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed"
+                >
+                  등록하기
+                </button>
+                <button
+                  onClick={() => {
+                    setShowRequestCreateModal(false)
+                    setRequestFormData({ category: '', description: '', photos: [] })
+                    setRequestPhotos([])
+                  }}
+                  className="px-4 py-2 bg-gray-300 text-gray-700 rounded-md hover:bg-gray-400"
+                >
+                  취소
+                </button>
               </div>
             </div>
           </div>

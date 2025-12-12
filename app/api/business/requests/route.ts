@@ -1,65 +1,72 @@
-import { NextRequest } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient, getServerUser } from '@/lib/supabase/server'
-import { handleApiError, UnauthorizedError, ForbiddenError } from '@/lib/errors'
 
+// 요청 생성
 export async function POST(request: NextRequest) {
   try {
     const user = await getServerUser()
-    if (!user) {
-      throw new UnauthorizedError('Authentication required')
-    }
-
-    if (user.role !== 'business_owner') {
-      throw new ForbiddenError('Only business owners can create requests')
+    if (!user || user.role !== 'business_owner') {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
     const body = await request.json()
-    const { store_id, title, description, photo_urls } = body
+    const { store_id, category, description, photo_urls } = body
 
-    if (!store_id || !title || !description) {
-      return Response.json(
-        { error: 'store_id, title, description are required' },
+    if (!store_id || !category || !description) {
+      return NextResponse.json(
+        { error: 'store_id, category, and description are required' },
         { status: 400 }
       )
     }
 
     const supabase = await createServerSupabaseClient()
 
-    // 매장이 회사에 속해있는지 확인
-    const { data: store } = await supabase
+    // 매장이 사용자의 회사에 속하는지 확인
+    const { data: store, error: storeError } = await supabase
       .from('stores')
-      .select('company_id')
+      .select('id, company_id')
       .eq('id', store_id)
       .single()
 
-    if (!store || store.company_id !== user.company_id) {
-      throw new ForbiddenError('Store not found or access denied')
+    if (storeError || !store || store.company_id !== user.company_id) {
+      return NextResponse.json({ error: 'Store not found' }, { status: 404 })
     }
 
-    // 업체관리자가 요청 접수 시 바로 처리중으로 설정
-    const { data: newRequest, error } = await supabase
+    // 업체관리자가 작성하면 즉시 처리중으로 저장
+    // user_id 필드 사용 (다른 테이블과 일관성 유지)
+    const insertData = {
+      store_id,
+      title: category, // 카테고리를 title로 저장
+      description: description.trim(),
+      photo_url: photo_urls && photo_urls.length > 0 ? JSON.stringify(photo_urls) : null,
+      status: 'in_progress', // 업체관리자가 작성하면 처리중
+      user_id: user.id, // created_by 대신 user_id 사용
+    }
+
+    console.log('Creating request with data:', { ...insertData, description: insertData.description.substring(0, 50) + '...' })
+
+    const { data, error } = await supabase
       .from('requests')
-      .insert({
-        store_id,
-        created_by: user.id,
-        created_by_role: 'business_owner',
-        title,
-        description,
-        photo_url: photo_urls && photo_urls.length > 0 ? JSON.stringify(photo_urls) : null,
-        status: 'in_progress', // 업체관리자는 바로 처리중
-      })
+      .insert(insertData)
       .select()
       .single()
 
     if (error) {
-      throw new Error(`Failed to create request: ${error.message}`)
+      console.error('Error creating request:', error)
+      console.error('Error details:', JSON.stringify(error, null, 2))
+      return NextResponse.json(
+        { error: `Failed to create request: ${error.message || error.code || JSON.stringify(error)}` },
+        { status: 500 }
+      )
     }
 
-    return Response.json({
-      success: true,
-      data: newRequest,
-    })
+    console.log('Request created successfully:', data?.id)
+    return NextResponse.json({ success: true, data })
   } catch (error: any) {
-    return handleApiError(error)
+    console.error('Error in POST /api/business/requests:', error)
+    return NextResponse.json(
+      { error: 'Internal server error' },
+      { status: 500 }
+    )
   }
 }

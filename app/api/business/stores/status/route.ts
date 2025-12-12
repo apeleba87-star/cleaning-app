@@ -128,10 +128,20 @@ export async function GET(request: NextRequest) {
           // category로 직접 매칭
           const categoryMatch = cat === 'store_problem' || cat === 'store-problem' || cat === 'storeproblem'
           
-          // title에 "매장 문제"가 포함되어 있으면 매장 문제로 간주
-          const titleMatch = title.includes('매장 문제') || title.includes('자판기 고장') || title.includes('제품 관련') || title.includes('무인택배함') || title.includes('매장 시설')
+          // "자판기 고장/오류"는 매장 문제로 분류
+          if (title.includes('자판기 고장') || title.includes('자판기 오류')) {
+            return true
+          }
           
-          const matches = categoryMatch || (titleMatch && !title.includes('자판기 수량') && !title.includes('자판기 제품 걸림'))
+          // "제품 걸림" 또는 "수량 오류"는 자판기 문제이므로 제외
+          if (title.includes('제품 걸림') || title.includes('수량 오류')) {
+            return false
+          }
+          
+          // title에 "매장 문제"가 포함되어 있으면 매장 문제로 간주
+          const titleMatch = title.includes('매장 문제') || title.includes('제품 관련') || title.includes('무인택배함') || title.includes('매장 시설')
+          
+          const matches = categoryMatch || titleMatch
           
           return matches
         }).length || 0
@@ -143,8 +153,14 @@ export async function GET(request: NextRequest) {
           // category로 직접 매칭
           const categoryMatch = cat === 'vending_machine' || cat === 'vending-machine' || cat === 'vendingmachine'
           
-          // title에 "자판기"가 포함되고 "수량" 또는 "걸림"이 포함되어 있으면 자판기 문제로 간주
-          const titleMatch = (title.includes('자판기 수량') || title.includes('자판기 제품 걸림')) && title.includes('자판기')
+          // "자판기 고장/오류"는 매장 문제이므로 제외
+          if (title.includes('자판기 고장') || title.includes('자판기 오류')) {
+            return false
+          }
+          
+          // "제품 걸림" 또는 "수량 오류"는 자판기 내부 문제로 분류
+          const titleMatch = title.includes('제품 걸림') || title.includes('수량 오류') || 
+            (title.includes('자판기') && (title.includes('제품') || title.includes('수량')))
           
           const matches = categoryMatch || titleMatch
           
@@ -210,40 +226,86 @@ export async function GET(request: NextRequest) {
           (l: any) => l.status === 'completed'
         ).length || 0
 
-        // 오늘 제품 입고 사진 (product_receipt, order_sheet)
-        const { data: todayProductInflow } = await supabase
-          .from('inventory_photos')
-          .select('id')
-          .eq('store_id', store.id)
-          .in('photo_type', ['product_receipt', 'order_sheet'])
-          .gte('created_at', todayStart.toISOString())
-          .lte('created_at', todayEnd.toISOString())
+        // 오늘 제품 입고 사진 (type = 'receipt')
+        // 테이블이 없을 수 있으므로 에러 처리 추가
+        let todayProductInflow: any[] = []
+        try {
+          const { data, error } = await supabase
+            .from('product_photos')
+            .select('id')
+            .eq('store_id', store.id)
+            .eq('type', 'receipt')
+            .gte('created_at', todayStart.toISOString())
+            .lte('created_at', todayEnd.toISOString())
+          
+          if (!error && data) {
+            todayProductInflow = data
+          }
+        } catch (error) {
+          console.error(`Error fetching product inflow for store ${store.id}:`, error)
+          // 테이블이 없거나 오류 발생 시 빈 배열 유지
+        }
 
-        // 최근 보관 사진 (store_storage, parcel_locker) - 최신 사진만 (최대 2개)
-        const { data: recentStoragePhotos } = await supabase
-          .from('inventory_photos')
-          .select('id, photo_url')
-          .eq('store_id', store.id)
-          .in('photo_type', ['store_storage', 'parcel_locker'])
-          .order('created_at', { ascending: false })
-          .limit(2)
+        // 최근 보관 사진 (type = 'storage') - 최신 사진만 (최대 2개)
+        // 테이블이 없을 수 있으므로 에러 처리 추가
+        let recentStoragePhotos: any[] = []
+        try {
+          const { data: recentStoragePhotosData, error: storageError } = await supabase
+            .from('product_photos')
+            .select('id, photo_urls, created_at')
+            .eq('store_id', store.id)
+            .eq('type', 'storage')
+            .order('created_at', { ascending: false })
+            .limit(1)
+
+          if (!storageError && recentStoragePhotosData && recentStoragePhotosData.length > 0) {
+            // photo_urls 배열에서 첫 번째 사진만 추출
+            recentStoragePhotos = recentStoragePhotosData.flatMap((item: any) => {
+              const urls = Array.isArray(item.photo_urls) ? item.photo_urls : []
+              return urls.slice(0, 2).map((url: string, idx: number) => ({
+                id: `${item.id}-${idx}`,
+                photo_url: url,
+              }))
+            })
+          }
+        } catch (error) {
+          console.error(`Error fetching storage photos for store ${store.id}:`, error)
+          // 테이블이 없거나 오류 발생 시 빈 배열 유지
+        }
 
         // 최근 30일 요청란 (접수, 진행중, 완료)
-        const { data: recentRequests } = await supabase
-          .from('requests')
-          .select('id, title, status, confirmed_at, created_at')
-          .eq('store_id', store.id)
-          .gte('created_at', thirtyDaysAgo.toISOString())
-          .lte('created_at', todayEnd.toISOString())
-          .order('created_at', { ascending: false })
+        let receivedRequestCount = 0
+        let inProgressRequestCount = 0
+        let completedRequestCount = 0
+        let unconfirmedCompletedCount = 0
 
-        const receivedRequests = recentRequests?.filter((r: any) => r.status === 'received') || []
-        const inProgressRequests = recentRequests?.filter((r: any) => r.status === 'in_progress') || []
-        const completedRequests = recentRequests?.filter((r: any) => r.status === 'completed') || []
-        const receivedRequestCount = receivedRequests.length
-        const inProgressRequestCount = inProgressRequests.length
-        const completedRequestCount = completedRequests.length
-        const unconfirmedCompletedCount = completedRequests.filter((r: any) => !r.confirmed_at).length
+        try {
+          const { data: recentRequests, error: requestsError } = await supabase
+            .from('requests')
+            .select('id, title, status, created_at')
+            .eq('store_id', store.id)
+            .gte('created_at', thirtyDaysAgo.toISOString())
+            .order('created_at', { ascending: false })
+
+          if (requestsError) {
+            console.error(`Error fetching requests for store ${store.id} (${store.name}):`, requestsError)
+            console.error('Requests error details:', JSON.stringify(requestsError, null, 2))
+          } else {
+            console.log(`Store ${store.id} (${store.name}): Found ${recentRequests?.length || 0} requests in last 30 days`)
+            const receivedRequests = recentRequests?.filter((r: any) => r.status === 'received') || []
+            const inProgressRequests = recentRequests?.filter((r: any) => r.status === 'in_progress') || []
+            const completedRequests = recentRequests?.filter((r: any) => r.status === 'completed') || []
+            receivedRequestCount = receivedRequests.length
+            inProgressRequestCount = inProgressRequests.length
+            completedRequestCount = completedRequests.length
+            // confirmed_at 컬럼이 없으므로 completed 상태인 모든 요청을 미확인으로 처리
+            unconfirmedCompletedCount = completedRequests.length
+            console.log(`Store ${store.id} counts - received: ${receivedRequestCount}, in_progress: ${inProgressRequestCount}, completed: ${completedRequestCount}`)
+          }
+        } catch (error) {
+          console.error(`Error processing requests for store ${store.id}:`, error)
+          // 에러 발생 시 기본값 유지 (모두 0)
+        }
 
         // 오늘 체크리스트 수행률
         const { data: todayChecklists } = await supabase
@@ -359,9 +421,9 @@ export async function GET(request: NextRequest) {
           unconfirmed_lost_items: unconfirmedLostItems,
           confirmed_lost_items: confirmedLostItems,
           // 제품 입고 및 보관 사진
-          has_product_inflow_today: (todayProductInflow?.length || 0) > 0,
-          has_storage_photos: (recentStoragePhotos?.length || 0) > 0,
-          storage_photos: recentStoragePhotos?.map((p: any) => ({ id: p.id, photo_url: p.photo_url })) || [],
+          has_product_inflow_today: todayProductInflow.length > 0,
+          has_storage_photos: recentStoragePhotos.length > 0,
+          storage_photos: recentStoragePhotos,
           // 요청란
           received_request_count: receivedRequestCount,
           in_progress_request_count: inProgressRequestCount,

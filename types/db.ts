@@ -5,8 +5,6 @@ export type ReviewStatus = 'pending' | 'approved' | 'reshoot_requested'
 export type IssueStatus = 'submitted' | 'in_progress' | 'completed' | 'rejected'
 export type SupplyRequestStatus = 'requested' | 'received' | 'completed' | 'rejected'
 export type RequestCategoryType = 'issue' | 'supply'
-export type RequestStatus = 'received' | 'in_progress' | 'completed'
-export type RequestCreatedByRole = 'business_owner' | 'store_owner'
 
 export interface User {
   id: string
@@ -154,23 +152,5 @@ export interface GPSLocation {
   lat: number
   lng: number
   accuracy?: number
-}
-
-export interface Request {
-  id: string
-  store_id: string
-  created_by: string
-  created_by_role: RequestCreatedByRole
-  title: string
-  description: string | null
-  category_id: string | null
-  photo_url: string | null
-  status: RequestStatus
-  approved_by: string | null
-  approved_at: string | null
-  confirmed_at: string | null
-  completion_photo_url: string | null
-  created_at: string
-  updated_at: string
 }
 

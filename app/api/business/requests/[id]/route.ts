@@ -1,59 +1,58 @@
-import { NextRequest } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient, getServerUser } from '@/lib/supabase/server'
-import { handleApiError, UnauthorizedError, ForbiddenError } from '@/lib/errors'
 
+// 요청 수정
 export async function PATCH(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
   try {
     const user = await getServerUser()
-    if (!user) {
-      throw new UnauthorizedError('Authentication required')
-    }
-
-    if (user.role !== 'business_owner') {
-      throw new ForbiddenError('Only business owners can update requests')
+    if (!user || user.role !== 'business_owner') {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
     const body = await request.json()
-    const { title, description, photo_urls } = body
+    const { category, description, photo_urls } = body
 
     const supabase = await createServerSupabaseClient()
 
-    // 요청 조회 및 권한 확인
-    const { data: requestData, error: fetchError } = await supabase
+    // 요청 조회
+    const { data: request, error: requestError } = await supabase
       .from('requests')
-      .select('*, stores:store_id (company_id)')
+      .select(`
+        *,
+        stores:store_id (
+          company_id
+        )
+      `)
       .eq('id', params.id)
       .single()
 
-    if (fetchError || !requestData) {
-      throw new ForbiddenError('Request not found')
+    if (requestError || !request) {
+      return NextResponse.json({ error: 'Request not found' }, { status: 404 })
     }
 
-    // 매장이 회사에 속해있는지 확인
-    if (requestData.stores?.company_id !== user.company_id) {
-      throw new ForbiddenError('Access denied')
+    // 매장이 사용자의 회사에 속하는지 확인
+    if (request.stores?.company_id !== user.company_id) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
-    // 접수 상태인 경우만 수정 가능
-    if (requestData.status !== 'received') {
-      return Response.json(
-        { error: 'Only received requests can be updated' },
+    // 접수 상태인 요청만 수정 가능
+    if (request.status !== 'received') {
+      return NextResponse.json(
+        { error: 'Only received requests can be edited' },
         { status: 400 }
       )
     }
 
-    // 업데이트 데이터 준비
     const updateData: any = {}
-    if (title) updateData.title = title
-    if (description !== undefined) updateData.description = description
+    if (category) updateData.title = category
+    if (description !== undefined) updateData.description = description.trim()
     if (photo_urls !== undefined) {
       updateData.photo_url = photo_urls && photo_urls.length > 0 ? JSON.stringify(photo_urls) : null
     }
 
-    // 요청 수정
     const { data: updatedRequest, error: updateError } = await supabase
       .from('requests')
       .update(updateData)
@@ -62,16 +61,20 @@ export async function PATCH(
       .single()
 
     if (updateError) {
-      throw new Error(`Failed to update request: ${updateError.message}`)
+      console.error('Error updating request:', updateError)
+      return NextResponse.json(
+        { error: `Failed to update request: ${updateError.message}` },
+        { status: 500 }
+      )
     }
 
-    return Response.json({
-      success: true,
-      data: updatedRequest,
-    })
+    return NextResponse.json({ success: true, data: updatedRequest })
   } catch (error: any) {
-    return handleApiError(error)
+    console.error('Error in PATCH /api/business/requests/[id]:', error)
+    return NextResponse.json(
+      { error: 'Internal server error' },
+      { status: 500 }
+    )
   }
 }
-
 

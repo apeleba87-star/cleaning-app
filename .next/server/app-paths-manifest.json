@@ -1,7 +1,9 @@
 {
-  "/platform/dashboard/page": "app/platform/dashboard/page.js",
+  "/_not-found/page": "app/_not-found/page.js",
   "/business/stores/status/page": "app/business/stores/status/page.js",
-  "/(staff)/checklist/page": "app/(staff)/checklist/page.js",
-  "/(staff)/issues/page": "app/(staff)/issues/page.js",
+  "/platform/users/page": "app/platform/users/page.js",
+  "/api/business/stores/status/route": "app/api/business/stores/status/route.js",
+  "/(staff)/product-photos/page": "app/(staff)/product-photos/page.js",
+  "/(staff)/attendance/page": "app/(staff)/attendance/page.js",
   "/(staff)/mobile-dashboard/page": "app/(staff)/mobile-dashboard/page.js"
 }

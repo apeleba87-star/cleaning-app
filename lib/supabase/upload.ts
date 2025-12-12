@@ -6,7 +6,7 @@ import { getStorageBucket, generateFilePath } from './storage'
 export async function uploadPhoto(
   file: File,
   storeId: string,
-  entity: 'cleaning' | 'issue' | 'supply' | 'selfie' | 'checklist' | 'checklist_before' | 'checklist_after',
+  entity: 'cleaning' | 'issue' | 'supply' | 'selfie' | 'checklist' | 'checklist_before' | 'checklist_after' | 'product',
   userId?: string
 ): Promise<string> {
   const supabase = createClient()

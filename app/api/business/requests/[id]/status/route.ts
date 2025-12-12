@@ -75,6 +75,11 @@ export async function PATCH(
       updated_at: new Date().toISOString(),
     }
 
+    // 처리중으로 변경 시 업데이트 시간만 변경
+    if (status === 'in_progress') {
+      // 업체관리자가 접수된 요청을 처리중으로 변경
+    }
+
     // 완료 처리 시 승인 정보 업데이트 (필요한 경우)
     if (status === 'completed' && user.role === 'staff') {
       // 직원이 완료 처리한 경우는 승인 정보가 필요 없음
@@ -109,6 +114,7 @@ export async function PATCH(
     return handleApiError(error)
   }
 }
+
 
 
 

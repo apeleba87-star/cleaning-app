@@ -185,8 +185,8 @@ export default function IssuesPage() {
           return
         }
 
-        // title에 한국어 카테고리 포함 (필터링을 위해)
-        const title = storeProblemForm.category
+        // title에 "매장 문제" 접두사 추가 (업체관리자 앱에서 필터링하기 위해)
+        const title = `매장 문제: ${storeProblemForm.category}`
         const photoUrl = storeProblemForm.photos.length > 0 ? storeProblemForm.photos[0] : null
 
         const response = await fetch('/api/staff/problem-reports', {
@@ -196,18 +196,28 @@ export default function IssuesPage() {
           },
           body: JSON.stringify({
             store_id: attendanceStoreId,
-            category: storeProblemForm.category, // 한국어 카테고리 값 전달 (API에서 변환)
+            category: storeProblemForm.category, // 한국어 카테고리 값 전달 (title에 포함)
             title: title,
             description: storeProblemForm.description?.trim() || null,
             photo_url: photoUrl,
           }),
         })
 
-        const data = await response.json()
-
         if (!response.ok) {
-          throw new Error(data.error || '매장 문제 보고 등록에 실패했습니다.')
+          const contentType = response.headers.get('content-type')
+          let errorMessage = '매장 문제 보고 등록에 실패했습니다.'
+          if (contentType && contentType.includes('application/json')) {
+            try {
+              const data = await response.json()
+              errorMessage = data.error || errorMessage
+            } catch (e) {
+              // JSON 파싱 실패 시 기본 메시지 사용
+            }
+          }
+          throw new Error(errorMessage)
         }
+
+        const data = await response.json()
 
         alert('매장 문제 보고가 등록되었습니다.')
         setStoreProblemForm({
@@ -247,7 +257,7 @@ export default function IssuesPage() {
           },
           body: JSON.stringify({
             store_id: attendanceStoreId,
-            category: vendingMachineForm.category, // 한국어 카테고리 값 전달 (API에서 변환)
+            category: vendingMachineForm.category, // 한국어 카테고리 값 전달 (title에 포함)
             title: title,
             description: description || null,
             vending_machine_number: vendingMachineNum,
@@ -255,11 +265,21 @@ export default function IssuesPage() {
           }),
         })
 
-        const data = await response.json()
-
         if (!response.ok) {
-          throw new Error(data.error || '자판기 내부 문제 등록에 실패했습니다.')
+          const contentType = response.headers.get('content-type')
+          let errorMessage = '자판기 내부 문제 등록에 실패했습니다.'
+          if (contentType && contentType.includes('application/json')) {
+            try {
+              const data = await response.json()
+              errorMessage = data.error || errorMessage
+            } catch (e) {
+              // JSON 파싱 실패 시 기본 메시지 사용
+            }
+          }
+          throw new Error(errorMessage)
         }
+
+        const data = await response.json()
 
         alert('자판기 내부 문제가 등록되었습니다.')
         setVendingMachineForm({
@@ -286,7 +306,8 @@ export default function IssuesPage() {
         }
 
         const photoUrl = lostItemForm.photos[0] || null
-        const description = `보관장소: ${lostItemForm.storage_location}${lostItemForm.description ? `\n${lostItemForm.description}` : ''}`
+        // description에 카테고리 정보 포함 (업체관리자 앱에서 추출하기 위해)
+        const description = `[카테고리: ${lostItemForm.category}]\n보관장소: ${lostItemForm.storage_location}${lostItemForm.description ? `\n${lostItemForm.description}` : ''}`
 
         // lost_items 테이블에 저장
         const response = await fetch('/api/staff/lost-items', {
@@ -296,18 +317,28 @@ export default function IssuesPage() {
           },
           body: JSON.stringify({
             store_id: attendanceStoreId,
-            type: lostItemForm.category,
+            type: 'other', // type은 체크 제약 조건이 있어서 고정값 사용, 실제 카테고리는 description에 포함
             description: description || null,
             photo_url: photoUrl,
             storage_location: lostItemForm.storage_location.trim(),
           }),
         })
 
-        const data = await response.json()
-
         if (!response.ok) {
-          throw new Error(data.error || '분실물 습득 등록에 실패했습니다.')
+          const contentType = response.headers.get('content-type')
+          let errorMessage = '분실물 습득 등록에 실패했습니다.'
+          if (contentType && contentType.includes('application/json')) {
+            try {
+              const data = await response.json()
+              errorMessage = data.error || errorMessage
+            } catch (e) {
+              // JSON 파싱 실패 시 기본 메시지 사용
+            }
+          }
+          throw new Error(errorMessage)
         }
+
+        const data = await response.json()
 
         alert('분실물 습득이 등록되었습니다.')
         setLostItemForm({
@@ -420,10 +451,10 @@ export default function IssuesPage() {
               className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
               <option value="">카테고리 선택</option>
-              <option value="자판기 고장/사출 관련">자판기 고장/사출 관련</option>
-              <option value="제품 관련">제품 관련</option>
-              <option value="무인택배함 관련">무인택배함 관련</option>
               <option value="매장 시설/환경 관련">매장 시설/환경 관련</option>
+              <option value="매장 청소 관련">매장 청소 관련</option>
+              <option value="매장 고장">매장 고장</option>
+              <option value="무인택배함 관련">무인택배함 관련</option>
               <option value="기타">기타</option>
             </select>
           </div>
