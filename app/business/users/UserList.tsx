@@ -257,6 +257,10 @@ export default function UserList({ initialUsers, stores, franchises, userStoreMa
         return '매니저'
       case 'staff':
         return '직원'
+      case 'subcontract_individual':
+        return '도급(개인)'
+      case 'subcontract_company':
+        return '도급(업체)'
       default:
         return role
     }
@@ -482,6 +486,8 @@ export default function UserList({ initialUsers, stores, franchises, userStoreMa
                         <option value="manager">매니저</option>
                         <option value="franchise_manager">프렌차이즈관리자</option>
                         <option value="store_manager">매장관리자(점주)</option>
+                        <option value="subcontract_individual">도급(개인)</option>
+                        <option value="subcontract_company">도급(업체)</option>
                       </select>
                       {user.role === 'franchise_manager' && user.franchise_id && (
                         <div className="text-xs text-gray-500">

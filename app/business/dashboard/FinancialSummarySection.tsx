@@ -2,20 +2,44 @@
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
+import QuickExpenseForm from './QuickExpenseForm'
 
 interface FinancialSummary {
   period: string
   total_revenue: number
+  revenue_count: number
   total_received: number
+  receipt_count: number
   total_unpaid: number
+  unpaid_count: number
   total_expenses: number
+  expense_count: number
   total_payroll: number
   paid_payroll: number
+  paid_payroll_count: number
   scheduled_payroll: number
+  scheduled_payroll_count: number
   top_unpaid_stores: Array<{
     store_id: string
     store_name: string
     unpaid_amount: number
+    payment_day: number | null
+  }>
+  today_salary_users: Array<{
+    id: string
+    name: string
+    salary_date: number | null
+    salary_amount: number | null
+    payroll_status?: 'paid' | 'scheduled' // 지급완료 또는 예정
+    payroll_id?: string | null // 인건비 ID
+  }>
+  today_payment_stores: Array<{
+    id: string
+    name: string
+    payment_day: number | null
+    service_amount: number | null
+    is_paid: boolean
+    is_auto_payment: boolean
   }>
 }
 
@@ -43,6 +67,7 @@ export default function FinancialSummarySection({ companyId }: FinancialSummaryS
   const [partialDate, setPartialDate] = useState('')
   const [partialMemo, setPartialMemo] = useState('')
   const [submitting, setSubmitting] = useState(false)
+  const [payrollSubmitting, setPayrollSubmitting] = useState<string | null>(null) // 특정 인건비 제출 중 상태
 
   useEffect(() => {
     loadFinancialSummary()
@@ -60,6 +85,12 @@ export default function FinancialSummarySection({ companyId }: FinancialSummaryS
 
       const data = await response.json()
       if (data.success) {
+        // 디버깅용 로그
+        console.log('[Financial Summary] Loaded data:', {
+          today_salary_users_count: data.data?.today_salary_users?.length || 0,
+          today_salary_users: data.data?.today_salary_users,
+          today_payment_stores_count: data.data?.today_payment_stores?.length || 0,
+        })
         setSummary(data.data)
       } else {
         throw new Error('재무 데이터를 불러올 수 없습니다.')
@@ -77,6 +108,88 @@ export default function FinancialSummarySection({ companyId }: FinancialSummaryS
       style: 'currency',
       currency: 'KRW',
     }).format(amount)
+  }
+
+  const handleFullPayment = async (storeId: string, storeName: string) => {
+    if (!confirm(`${storeName}의 전체 미수금을 완납 처리하시겠습니까?`)) {
+      return
+    }
+
+    try {
+      // 해당 매장의 미수금 매출 조회
+      const response = await fetch(`/api/business/revenues?store_id=${storeId}`)
+      if (!response.ok) {
+        throw new Error('매출 정보를 불러올 수 없습니다.')
+      }
+
+      const result = await response.json()
+      if (result.success) {
+        // 미수금이 있는 매출만 필터링
+        const unpaidRevenues = (result.data || []).filter(
+          (r: Revenue) => r.status === 'unpaid' || r.status === 'partial'
+        )
+
+        if (unpaidRevenues.length === 0) {
+          alert('완납할 미수금이 없습니다.')
+          return
+        }
+
+        // 각 매출에 대해 전체 완납 처리
+        const today = new Date().toISOString().split('T')[0]
+        let successCount = 0
+        let failCount = 0
+
+        for (const revenue of unpaidRevenues) {
+          // 매출의 남은 미수금액 계산
+          const receiptsResponse = await fetch(`/api/business/receipts?revenue_id=${revenue.id}`)
+          if (receiptsResponse.ok) {
+            const receiptsResult = await receiptsResponse.json()
+            if (receiptsResult.success) {
+              const receipts = receiptsResult.data || []
+              const totalReceived = receipts.reduce((sum: number, r: any) => sum + (r.amount || 0), 0)
+              const remainingAmount = revenue.amount - totalReceived
+
+              if (remainingAmount > 0) {
+                const receiptResponse = await fetch('/api/business/receipts', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    revenue_id: revenue.id,
+                    received_at: new Date(today).toISOString(),
+                    amount: remainingAmount,
+                    memo: '전체 완납',
+                  }),
+                })
+
+                if (receiptResponse.ok) {
+                  const receiptResult = await receiptResponse.json()
+                  if (receiptResult.success) {
+                    successCount++
+                  } else {
+                    failCount++
+                  }
+                } else {
+                  failCount++
+                }
+              }
+            } else {
+              failCount++
+            }
+          } else {
+            failCount++
+          }
+        }
+
+        if (successCount > 0) {
+          alert(`${successCount}건의 매출이 완납 처리되었습니다.${failCount > 0 ? ` (${failCount}건 실패)` : ''}`)
+          loadFinancialSummary()
+        } else {
+          alert('완납 처리에 실패했습니다.')
+        }
+      }
+    } catch (err: any) {
+      alert(err.message || '완납 처리 중 오류가 발생했습니다.')
+    }
   }
 
   const handlePartialPayment = async (storeId: string, storeName: string) => {
@@ -102,6 +215,36 @@ export default function FinancialSummarySection({ companyId }: FinancialSummaryS
       }
     } catch (err: any) {
       alert(err.message || '매출 정보를 불러오는 중 오류가 발생했습니다.')
+    }
+  }
+
+  const handleMarkPayrollAsPaid = async (payrollId: string, userName: string) => {
+    if (!confirm(`${userName}의 인건비를 지급 완료 처리하시겠습니까?`)) {
+      return
+    }
+
+    try {
+      setPayrollSubmitting(payrollId)
+      const response = await fetch(`/api/business/payrolls/${payrollId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          status: 'paid',
+          paid_at: new Date().toISOString(),
+        }),
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || '지급 완료 처리 실패')
+      }
+
+      alert('지급 완료 처리되었습니다.')
+      loadFinancialSummary()
+    } catch (err: any) {
+      alert(err.message || '지급 완료 처리 중 오류가 발생했습니다.')
+    } finally {
+      setPayrollSubmitting(null)
     }
   }
 
@@ -175,8 +318,20 @@ export default function FinancialSummarySection({ companyId }: FinancialSummaryS
     return null
   }
 
+  // 오늘 날짜 포맷팅
+  const today = new Date()
+  const todayFormatted = `${today.getMonth() + 1}월 ${today.getDate()}일`
+
   return (
     <div className="bg-white rounded-lg shadow-md p-6 mb-8">
+      {/* 오늘 날짜 표시 */}
+      <div className="mb-4 pb-4 border-b border-gray-200">
+        <h3 className="text-lg font-semibold text-gray-800">
+          오늘 ({todayFormatted})
+        </h3>
+      </div>
+
+
       <div className="flex justify-between items-center mb-6">
         <h2 className="text-xl font-semibold">재무 현황</h2>
         <span className="text-sm text-gray-500">{summary.period}</span>
@@ -184,41 +339,72 @@ export default function FinancialSummarySection({ companyId }: FinancialSummaryS
 
       {/* 재무 지표 카드 */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
-        <div className="bg-blue-50 rounded-lg p-4 border-l-4 border-blue-500">
+        <Link
+          href="/business/financial?section=revenue"
+          className="bg-blue-50 rounded-lg p-4 border-l-4 border-blue-500 hover:bg-blue-100 transition-colors cursor-pointer"
+        >
           <h3 className="text-sm font-medium text-gray-600 mb-1">이번 달 매출</h3>
           <p className="text-2xl font-bold text-gray-900">{formatCurrency(summary.total_revenue)}</p>
-        </div>
+          <p className="text-xs text-gray-500 mt-1">{summary.revenue_count}건</p>
+          <p className="text-xs text-blue-600 mt-2 font-medium">전체보기 →</p>
+        </Link>
 
-        <div className="bg-green-50 rounded-lg p-4 border-l-4 border-green-500">
+        <Link
+          href="/business/financial?section=receipt"
+          className="bg-green-50 rounded-lg p-4 border-l-4 border-green-500 hover:bg-green-100 transition-colors cursor-pointer"
+        >
           <h3 className="text-sm font-medium text-gray-600 mb-1">이번 달 수금</h3>
           <p className="text-2xl font-bold text-gray-900">{formatCurrency(summary.total_received)}</p>
-        </div>
+          <p className="text-xs text-gray-500 mt-1">{summary.receipt_count}건</p>
+          <p className="text-xs text-green-600 mt-2 font-medium">전체보기 →</p>
+        </Link>
 
-        <div className="bg-red-50 rounded-lg p-4 border-l-4 border-red-500">
+        <Link
+          href="/business/financial?section=unpaid"
+          className="bg-red-50 rounded-lg p-4 border-l-4 border-red-500 hover:bg-red-100 transition-colors cursor-pointer"
+        >
           <h3 className="text-sm font-medium text-gray-600 mb-1">현재 미수금</h3>
           <p className="text-2xl font-bold text-gray-900">{formatCurrency(summary.total_unpaid)}</p>
-        </div>
+          <p className="text-xs text-gray-500 mt-1">{summary.unpaid_count}건</p>
+          <p className="text-xs text-red-600 mt-2 font-medium">전체보기 →</p>
+        </Link>
 
-        <div className="bg-orange-50 rounded-lg p-4 border-l-4 border-orange-500">
+        <Link
+          href="/business/financial?section=expense"
+          className="bg-orange-50 rounded-lg p-4 border-l-4 border-orange-500 hover:bg-orange-100 transition-colors cursor-pointer"
+        >
           <h3 className="text-sm font-medium text-gray-600 mb-1">이번 달 지출</h3>
           <p className="text-2xl font-bold text-gray-900">{formatCurrency(summary.total_expenses)}</p>
-        </div>
+          <p className="text-xs text-gray-500 mt-1">{summary.expense_count}건</p>
+          <p className="text-xs text-orange-600 mt-2 font-medium">전체보기 →</p>
+        </Link>
 
-        <div className="bg-purple-50 rounded-lg p-4 border-l-4 border-purple-500">
+        <Link
+          href="/business/financial?section=payroll"
+          className="bg-purple-50 rounded-lg p-4 border-l-4 border-purple-500 hover:bg-purple-100 transition-colors cursor-pointer"
+        >
           <h3 className="text-sm font-medium text-gray-600 mb-1">이번 달 인건비</h3>
           <p className="text-2xl font-bold text-gray-900">{formatCurrency(summary.total_payroll)}</p>
           <div className="mt-2 space-y-1">
             <div className="flex justify-between text-xs">
               <span className="text-gray-500">지급완료:</span>
-              <span className="font-semibold text-green-600">{formatCurrency(summary.paid_payroll)}</span>
+              <span className="font-semibold text-green-600">
+                {summary.paid_payroll_count}건 {formatCurrency(summary.paid_payroll)}
+              </span>
             </div>
             <div className="flex justify-between text-xs">
               <span className="text-gray-500">예정:</span>
-              <span className="font-semibold text-yellow-600">{formatCurrency(summary.scheduled_payroll)}</span>
+              <span className="font-semibold text-yellow-600">
+                {summary.scheduled_payroll_count}건 {formatCurrency(summary.scheduled_payroll)}
+              </span>
             </div>
           </div>
-        </div>
+          <p className="text-xs text-purple-600 mt-2 font-medium">전체보기 →</p>
+        </Link>
       </div>
+
+      {/* 빠른 지출 등록 */}
+      <QuickExpenseForm onSuccess={loadFinancialSummary} />
 
       {/* 미수금 상위 매장 리스트 */}
       {summary.top_unpaid_stores.length > 0 && (
@@ -234,6 +420,9 @@ export default function FinancialSummarySection({ companyId }: FinancialSummaryS
                   <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
                     미수금액
                   </th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    최근 수금일
+                  </th>
                   <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
                     작업
                   </th>
@@ -248,12 +437,23 @@ export default function FinancialSummarySection({ companyId }: FinancialSummaryS
                     <td className="px-4 py-3 whitespace-nowrap text-sm font-semibold text-red-600 text-right">
                       {formatCurrency(store.unpaid_amount)}
                     </td>
-                    <td className="px-4 py-3 whitespace-nowrap text-right">
+                    <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
+                      {store.payment_day 
+                        ? `매월 ${store.payment_day}일`
+                        : '-'}
+                    </td>
+                    <td className="px-4 py-3 whitespace-nowrap text-right space-x-2">
                       <button
                         onClick={() => handlePartialPayment(store.store_id, store.store_name)}
                         className="px-3 py-1 bg-yellow-500 text-white text-xs rounded-md hover:bg-yellow-600"
                       >
                         부분 완납
+                      </button>
+                      <button
+                        onClick={() => handleFullPayment(store.store_id, store.store_name)}
+                        className="px-3 py-1 bg-green-500 text-white text-xs rounded-md hover:bg-green-600"
+                      >
+                        전체 완납
                       </button>
                     </td>
                   </tr>

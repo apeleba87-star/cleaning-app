@@ -105,7 +105,23 @@ export async function PATCH(
       }
     }
 
-    const { data: payroll, error } = await supabase
+    // Service role key를 사용하여 RLS 우회
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+    
+    if (!serviceRoleKey || !supabaseUrl) {
+      throw new Error('Server configuration error: Service role key is required')
+    }
+
+    const { createClient } = await import('@supabase/supabase-js')
+    const adminSupabase = createClient(supabaseUrl, serviceRoleKey, {
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false,
+      },
+    })
+
+    const { data: payroll, error } = await adminSupabase
       .from('payrolls')
       .update(updateData)
       .eq('id', params.id)
@@ -116,10 +132,14 @@ export async function PATCH(
           name
         )
       `)
-      .single()
+      .maybeSingle()
 
     if (error) {
       throw new Error(`Failed to update payroll: ${error.message}`)
+    }
+
+    if (!payroll) {
+      throw new Error('Payroll not found after update')
     }
 
     return Response.json({

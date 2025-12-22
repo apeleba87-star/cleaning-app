@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, FormEvent, useEffect } from 'react'
-import { User, Store, UserFile } from '@/types/db'
+import { User, Store, UserFile, UserRole } from '@/types/db'
 import { DocumentUploader } from '@/components/DocumentUploader'
 
 // UserForm에서 사용하는 최소 필드 타입
@@ -18,6 +18,7 @@ interface UserFormProps {
 export default function UserForm({ user, stores, assignedStoreIds = [], onSuccess, onCancel }: UserFormProps) {
   const [name, setName] = useState(user.name)
   const [phone, setPhone] = useState(user.phone || '')
+  const [role, setRole] = useState<UserRole>(user.role)
   const [position, setPosition] = useState(user.position || '') // 직급
   const [selectedStoreIds, setSelectedStoreIds] = useState<string[]>(assignedStoreIds)
   const [salaryDate, setSalaryDate] = useState(user.salary_date?.toString() || '')
@@ -28,15 +29,16 @@ export default function UserForm({ user, stores, assignedStoreIds = [], onSucces
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   
-  // 탭 상태 (직원이 아니면 기본 정보만 표시)
+  // 탭 상태
   const [activeTab, setActiveTab] = useState<'basic' | 'salary' | 'employment' | 'contracts'>('basic')
   
-  // 직원이 아닌 경우 기본 정보 탭으로 강제 이동
+  // 역할 또는 탭 변경 시 탭 업데이트
   useEffect(() => {
-    if (user.role !== 'staff' && activeTab !== 'basic') {
+    // 직원, 도급 역할이 아니면 기본 정보 탭으로 강제 이동
+    if (!['staff', 'subcontract_individual', 'subcontract_company'].includes(role) && activeTab !== 'basic') {
       setActiveTab('basic')
     }
-  }, [user.role, activeTab])
+  }, [role, activeTab])
   
   // 급여 방식/지급 구조
   const [payType, setPayType] = useState<'monthly' | 'contract' | ''>(user.pay_type === 'daily' ? '' : (user.pay_type || ''))
@@ -54,9 +56,23 @@ export default function UserForm({ user, stores, assignedStoreIds = [], onSucces
   const [residentRegistrationNumber, setResidentRegistrationNumber] = useState('')
   const [loadingSensitive, setLoadingSensitive] = useState(false)
   
+  // 사업자등록번호 (도급(업체) 선택사항)
+  const [businessRegistrationNumber, setBusinessRegistrationNumber] = useState(user.business_registration_number || '')
+  
   // 계약서
   const [userFiles, setUserFiles] = useState<UserFile[]>([])
   
+  // user prop이 변경될 때 state 업데이트
+  useEffect(() => {
+    if (user) {
+      setName(user.name)
+      setPhone(user.phone || '')
+      setRole(user.role)
+      setPosition(user.position || '')
+      setBusinessRegistrationNumber(user.business_registration_number || '')
+    }
+  }, [user])
+
   // 매장 ID가 있으면 문서 로드 및 매장 배정 정보 초기화
   useEffect(() => {
     if (user?.id) {
@@ -78,9 +94,15 @@ export default function UserForm({ user, stores, assignedStoreIds = [], onSucces
       const response = await fetch(`/api/business/users/${user.id}/sensitive`)
       if (response.ok) {
         const data = await response.json()
-        if (data.success && data.data?.resident_registration_number) {
-          setResidentRegistrationNumber(data.data.resident_registration_number)
+        if (data.success && data.data) {
+          if (data.data.resident_registration_number) {
+            setResidentRegistrationNumber(data.data.resident_registration_number)
+          }
         }
+      }
+      // 사업자등록번호는 일반 사용자 정보에서 가져옴
+      if (user.business_registration_number) {
+        setBusinessRegistrationNumber(user.business_registration_number)
       }
     } catch (err) {
       console.error('Failed to load sensitive data:', err)
@@ -125,6 +147,8 @@ export default function UserForm({ user, stores, assignedStoreIds = [], onSucces
         body: JSON.stringify({
           name: name.trim(),
           phone: phone.trim() || null,
+          role: role,
+          position: position.trim() || null,
           salary_date: salaryDate ? parseInt(salaryDate.replace(/[^0-9]/g, '')) : null,
           salary_amount: salaryAmount ? parseFloat(salaryAmount.replace(/[^0-9]/g, '')) : null,
           employment_active: employmentActive,
@@ -138,6 +162,8 @@ export default function UserForm({ user, stores, assignedStoreIds = [], onSucces
           hire_date: hireDate || null,
           resignation_date: resignationDate || null,
           employment_type: employmentType || null,
+          // 도급 관련 필드
+          business_registration_number: role === 'subcontract_company' ? businessRegistrationNumber.trim() || null : null,
         }),
       })
 
@@ -252,11 +278,11 @@ export default function UserForm({ user, stores, assignedStoreIds = [], onSucces
         <nav className="flex space-x-4">
           {[
             { id: 'basic', label: '기본 정보' },
-            // 직원 역할인 경우에만 급여 방식, 근로 상태, 계약서 탭 표시
-            ...(user.role === 'staff' ? [
+            // 직원 또는 도급 역할인 경우 급여 방식, 근로 상태 탭 표시, 계약서 탭은 직원만
+            ...((role === 'staff' || role === 'subcontract_individual' || role === 'subcontract_company') ? [
               { id: 'salary', label: '급여 방식' },
               { id: 'employment', label: '근로 상태' },
-              { id: 'contracts', label: '계약서' },
+              ...(role === 'staff' ? [{ id: 'contracts', label: '계약서' }] : []),
             ] : []),
           ].map((tab) => (
             <button
@@ -284,20 +310,27 @@ export default function UserForm({ user, stores, assignedStoreIds = [], onSucces
             <label htmlFor="role" className="block text-sm font-medium text-gray-700 mb-1">
               역할
             </label>
-            <input
+            <select
               id="role"
-              type="text"
-              value={
-                user.role === 'staff' ? '직원' :
-                user.role === 'manager' ? '매니저' :
-                user.role === 'franchise_manager' ? '프렌차이즈관리자' :
-                user.role === 'store_manager' ? '매장관리자(점주)' :
-                user.role === 'business_owner' ? '업체관리자' :
-                user.role
-              }
-              disabled
-              className="w-full px-4 py-2 border border-gray-300 rounded-md bg-gray-50 text-gray-600 cursor-not-allowed"
-            />
+              value={role}
+              onChange={(e) => {
+                const newRole = e.target.value as UserRole
+                setRole(newRole)
+                // 역할 변경 시 관련 필드 초기화
+                if (newRole !== 'subcontract_individual' && newRole !== 'subcontract_company') {
+                  setResidentRegistrationNumber('')
+                  setBusinessRegistrationNumber('')
+                }
+              }}
+              className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="staff">직원</option>
+              <option value="manager">매니저</option>
+              <option value="franchise_manager">프렌차이즈관리자</option>
+              <option value="store_manager">매장관리자(점주)</option>
+              <option value="subcontract_individual">도급(개인)</option>
+              <option value="subcontract_company">도급(업체)</option>
+            </select>
           </div>
 
           <div>
@@ -489,34 +522,69 @@ export default function UserForm({ user, stores, assignedStoreIds = [], onSucces
                     placeholder="도급 금액을 입력하세요"
                   />
                 </div>
-                <div>
-                  <label htmlFor="resident_registration_number" className="block text-sm font-medium text-gray-700 mb-1">
-                    주민등록번호
-                    <span className="ml-2 text-xs text-gray-500">(선택사항, 세금 처리를 위해 필요할 수 있음)</span>
-                  </label>
-                  <input
-                    id="resident_registration_number"
-                    type="text"
-                    value={residentRegistrationNumber}
-                    onChange={(e) => {
-                      // 하이픈 자동 추가 및 숫자만 입력
-                      const value = e.target.value.replace(/[^0-9]/g, '')
-                      if (value.length <= 13) {
-                        let formatted = value
-                        if (value.length > 6) {
-                          formatted = `${value.substring(0, 6)}-${value.substring(6)}`
+                {role === 'subcontract_individual' && (
+                  <div>
+                    <label htmlFor="resident_registration_number" className="block text-sm font-medium text-gray-700 mb-1">
+                      주민등록번호
+                      <span className="ml-2 text-xs text-gray-500">(선택사항, 세금 처리를 위해 필요할 수 있음)</span>
+                    </label>
+                    <input
+                      id="resident_registration_number"
+                      type="text"
+                      value={residentRegistrationNumber}
+                      onChange={(e) => {
+                        // 하이픈 자동 추가 및 숫자만 입력
+                        const value = e.target.value.replace(/[^0-9]/g, '')
+                        if (value.length <= 13) {
+                          let formatted = value
+                          if (value.length > 6) {
+                            formatted = `${value.substring(0, 6)}-${value.substring(6)}`
+                          }
+                          setResidentRegistrationNumber(formatted)
                         }
-                        setResidentRegistrationNumber(formatted)
-                      }
-                    }}
-                    placeholder="900101-1234567"
-                    maxLength={14}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                  <p className="mt-1 text-xs text-gray-500">
-                    ⚠️ 주민등록번호는 암호화되어 안전하게 저장됩니다.
-                  </p>
-                </div>
+                      }}
+                      placeholder="900101-1234567"
+                      maxLength={14}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                    <p className="mt-1 text-xs text-gray-500">
+                      ⚠️ 주민등록번호는 암호화되어 안전하게 저장됩니다.
+                    </p>
+                  </div>
+                )}
+                {role === 'subcontract_company' && (
+                  <div>
+                    <label htmlFor="business_registration_number" className="block text-sm font-medium text-gray-700 mb-1">
+                      사업자등록번호
+                      <span className="ml-2 text-xs text-gray-500">(선택사항, 세금 처리를 위해 필요할 수 있음)</span>
+                    </label>
+                    <input
+                      id="business_registration_number"
+                      type="text"
+                      value={businessRegistrationNumber}
+                      onChange={(e) => {
+                        // 하이픈 자동 추가 및 숫자만 입력
+                        const value = e.target.value.replace(/[^0-9]/g, '')
+                        if (value.length <= 10) {
+                          let formatted = value
+                          if (value.length > 3) {
+                            formatted = `${value.substring(0, 3)}-${value.substring(3)}`
+                          }
+                          if (value.length > 5) {
+                            formatted = `${value.substring(0, 3)}-${value.substring(3, 5)}-${value.substring(5)}`
+                          }
+                          setBusinessRegistrationNumber(formatted)
+                        }
+                      }}
+                      placeholder="123-45-67890"
+                      maxLength={12}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                    <p className="mt-1 text-xs text-gray-500">
+                      사업자등록번호 형식: XXX-XX-XXXXX
+                    </p>
+                  </div>
+                )}
               </>
             )}
 

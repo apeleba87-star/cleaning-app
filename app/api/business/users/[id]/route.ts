@@ -38,6 +38,7 @@ export async function PATCH(
     const {
       name,
       phone,
+      role,
       position,
       employment_contract_date,
       salary_date,
@@ -52,6 +53,7 @@ export async function PATCH(
       hire_date,
       resignation_date,
       employment_type,
+      business_registration_number,
     } = body
 
     if (!name || typeof name !== 'string' || name.trim().length === 0) {
@@ -61,26 +63,60 @@ export async function PATCH(
       )
     }
 
+    // role이 제공된 경우 유효성 검사
+    if (role) {
+      const allowedRoles = ['staff', 'manager', 'franchise_manager', 'store_manager', 'subcontract_individual', 'subcontract_company']
+      if (!allowedRoles.includes(role)) {
+        return NextResponse.json(
+          { error: '유효하지 않은 역할입니다.' },
+          { status: 400 }
+        )
+      }
+    }
+
+    const updateData: any = {
+      name: name.trim(),
+      phone: phone?.trim() || null,
+      position: position?.trim() || null,
+      employment_contract_date: employment_contract_date || null,
+      salary_date: salary_date ? parseInt(salary_date) : null,
+      salary_amount: salary_amount ? parseFloat(salary_amount) : null,
+      employment_active: employment_active !== undefined ? employment_active : true,
+      pay_type: pay_type || null,
+      pay_amount: pay_amount ? parseFloat(pay_amount) : null,
+      salary_payment_method: salary_payment_method || null,
+      bank_name: bank_name?.trim() || null,
+      account_number: account_number?.trim() || null,
+      hire_date: hire_date || null,
+      resignation_date: resignation_date || null,
+      employment_type: employment_type || null,
+      updated_at: new Date().toISOString(),
+    }
+
+    // role 업데이트
+    if (role) {
+      updateData.role = role
+    }
+
+    // business_registration_number 업데이트 (도급(업체)인 경우에만)
+    if (business_registration_number !== undefined) {
+      if (role === 'subcontract_company' || !role) {
+        // role이 업체 도급이거나 role이 변경되지 않은 경우 기존 role 확인
+        const { data: currentUser } = await supabase
+          .from('users')
+          .select('role')
+          .eq('id', params.id)
+          .single()
+        
+        if (role === 'subcontract_company' || currentUser?.role === 'subcontract_company') {
+          updateData.business_registration_number = business_registration_number?.trim() || null
+        }
+      }
+    }
+
     const { data: updatedUser, error } = await supabase
       .from('users')
-      .update({
-        name: name.trim(),
-        phone: phone?.trim() || null,
-        position: position?.trim() || null,
-        employment_contract_date: employment_contract_date || null,
-        salary_date: salary_date ? parseInt(salary_date) : null,
-        salary_amount: salary_amount ? parseFloat(salary_amount) : null,
-        employment_active: employment_active !== undefined ? employment_active : true,
-        pay_type: pay_type || null,
-        pay_amount: pay_amount ? parseFloat(pay_amount) : null,
-        salary_payment_method: salary_payment_method || null,
-        bank_name: bank_name?.trim() || null,
-        account_number: account_number?.trim() || null,
-        hire_date: hire_date || null,
-        resignation_date: resignation_date || null,
-        employment_type: employment_type || null,
-        updated_at: new Date().toISOString(),
-      })
+      .update(updateData)
       .eq('id', params.id)
       .select()
       .single()

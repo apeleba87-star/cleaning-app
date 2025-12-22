@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server'
 import { createServerSupabaseClient, getServerUser } from '@/lib/supabase/server'
 import { handleApiError, UnauthorizedError, ForbiddenError } from '@/lib/errors'
+import { createClient } from '@supabase/supabase-js'
 
 // 지출 목록 조회
 export async function GET(request: NextRequest) {
@@ -23,6 +24,7 @@ export async function GET(request: NextRequest) {
     const storeId = searchParams.get('store_id')
     const startDate = searchParams.get('start_date')
     const endDate = searchParams.get('end_date')
+    const period = searchParams.get('period') // YYYY-MM 형식
 
     let query = supabase
       .from('expenses')
@@ -40,12 +42,21 @@ export async function GET(request: NextRequest) {
       query = query.eq('store_id', storeId)
     }
 
-    if (startDate) {
-      query = query.gte('date', startDate)
-    }
+    if (period) {
+      // period가 YYYY-MM 형식이면 해당 월의 시작일과 종료일로 필터링
+      const startOfMonth = `${period}-01`
+      const endOfMonth = new Date(new Date(startOfMonth).getFullYear(), new Date(startOfMonth).getMonth() + 1, 0)
+        .toISOString()
+        .slice(0, 10)
+      query = query.gte('date', startOfMonth).lte('date', endOfMonth)
+    } else {
+      if (startDate) {
+        query = query.gte('date', startDate)
+      }
 
-    if (endDate) {
-      query = query.lte('date', endDate)
+      if (endDate) {
+        query = query.lte('date', endDate)
+      }
     }
 
     const { data: expenses, error } = await query.order('date', { ascending: false })
@@ -89,7 +100,8 @@ export async function POST(request: NextRequest) {
     const supabase = await createServerSupabaseClient()
 
     // 매장이 회사에 속해있는지 확인 (store_id가 있는 경우)
-    if (store_id) {
+    // store_id가 빈 문자열이 아닌 유효한 값인지 확인
+    if (store_id && store_id.trim() !== '') {
       const { data: store } = await supabase
         .from('stores')
         .select('id, company_id')
@@ -103,14 +115,29 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    const { data: expense, error } = await supabase
+    // RLS 우회를 위해 서비스 역할 키 사용
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+    
+    if (!serviceRoleKey || !supabaseUrl) {
+      throw new Error('Server configuration error: Service role key is required')
+    }
+
+    const adminSupabase = createClient(supabaseUrl, serviceRoleKey, {
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false,
+      },
+    })
+
+    const { data: expense, error } = await adminSupabase
       .from('expenses')
       .insert({
         date,
         category,
         amount: parseFloat(amount),
         memo: memo?.trim() || null,
-        store_id: store_id || null,
+        store_id: (store_id && store_id.trim() !== '') ? store_id : null,
         company_id: user.company_id,
         created_by: user.id,
       })

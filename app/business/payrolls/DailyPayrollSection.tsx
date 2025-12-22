@@ -1,0 +1,222 @@
+'use client'
+
+import { useState, useEffect } from 'react'
+import { Payroll } from '@/types/db'
+
+interface DailyEmployee {
+  id: string
+  name: string
+  pay_amount: number | null
+  attendance_count: number
+  calculated_amount: number
+}
+
+interface DailyPayroll {
+  id: string
+  worker_name: string | null
+  pay_period: string
+  work_days: number | null
+  daily_wage: number | null
+  amount: number
+  paid_at: string | null
+  status: 'scheduled' | 'paid'
+}
+
+interface DailyPayrollSectionProps {
+  selectedPeriod: string
+  onRefresh: () => void
+  existingDailyPayrolls?: DailyPayroll[]
+  onDelete?: (id: string) => void
+}
+
+export default function DailyPayrollSection({
+  selectedPeriod,
+  onRefresh,
+  existingDailyPayrolls = [],
+  onDelete,
+}: DailyPayrollSectionProps) {
+  const [dailyEmployees, setDailyEmployees] = useState<DailyEmployee[]>([])
+  const [loading, setLoading] = useState(true)
+  const [generating, setGenerating] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (selectedPeriod) {
+      loadDailySummary()
+    }
+  }, [selectedPeriod])
+
+  const loadDailySummary = async () => {
+    try {
+      setLoading(true)
+      setError(null)
+      const response = await fetch(`/api/business/payrolls/daily-summary?period=${selectedPeriod}`)
+      if (!response.ok) {
+        throw new Error('일당 직원 출근 기록을 불러올 수 없습니다.')
+      }
+      const data = await response.json()
+      if (data.success) {
+        setDailyEmployees(data.data || [])
+      }
+    } catch (err: any) {
+      setError(err.message || '일당 직원 정보를 불러오는 중 오류가 발생했습니다.')
+      console.error('Error loading daily summary:', err)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleGenerateDailyPayrolls = async () => {
+    if (!selectedPeriod) {
+      alert('기간을 선택해주세요.')
+      return
+    }
+
+    if (dailyEmployees.length === 0) {
+      alert('생성할 일당 인건비가 없습니다.')
+      return
+    }
+
+    if (!confirm(`${selectedPeriod} 기간의 일당 인건비를 자동 생성하시겠습니까?`)) {
+      return
+    }
+
+    try {
+      setGenerating(true)
+      setError(null)
+      const response = await fetch('/api/business/payrolls/generate-daily', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pay_period: selectedPeriod }),
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || '일당 인건비 생성 실패')
+      }
+
+      alert('일당 인건비가 자동 생성되었습니다.')
+      onRefresh()
+      loadDailySummary()
+    } catch (err: any) {
+      setError(err.message || '일당 인건비 생성 중 오류가 발생했습니다.')
+      console.error('Error generating daily payrolls:', err)
+    } finally {
+      setGenerating(false)
+    }
+  }
+
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat('ko-KR', {
+      style: 'currency',
+      currency: 'KRW',
+    }).format(amount)
+  }
+
+  if (loading) {
+    return (
+      <div className="bg-white rounded-lg shadow-md p-6">
+        <div className="text-center py-8">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-2"></div>
+          <p className="text-sm text-gray-500">일당 직원 정보를 불러오는 중...</p>
+        </div>
+      </div>
+    )
+  }
+
+  const totalAmount = dailyEmployees.reduce((sum, emp) => sum + emp.calculated_amount, 0)
+  const totalDays = dailyEmployees.reduce((sum, emp) => sum + emp.attendance_count, 0)
+
+  return (
+    <div className="bg-white rounded-lg shadow-md p-6">
+      <div className="flex justify-between items-center mb-6">
+        <h2 className="text-xl font-semibold">일당 관리</h2>
+      </div>
+
+      {error && (
+        <div className="mb-4 bg-red-50 border border-red-200 rounded-lg p-3">
+          <p className="text-red-800 text-sm">{error}</p>
+        </div>
+      )}
+
+      <div className="mt-4 p-4 bg-yellow-50 rounded-lg border-l-4 border-yellow-400">
+        <p className="text-sm text-yellow-800">
+          ⚠️ <strong>안내:</strong> 일당 인건비는 수동 등록만 가능합니다. 대량 등록 기능을 이용하여 여러 일당 근로자를 한 번에 등록할 수 있습니다.
+        </p>
+      </div>
+
+      {/* 등록된 일당 인건비 목록 */}
+      {existingDailyPayrolls.length > 0 && (
+        <div className="mt-6">
+          <h3 className="text-lg font-semibold mb-4">등록된 일당 인건비</h3>
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">이름</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">기간</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">일당</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">일수</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">총액</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">지급일</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">상태</th>
+                  {onDelete && (
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">작업</th>
+                  )}
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200">
+                {existingDailyPayrolls.map((payroll) => (
+                  <tr key={payroll.id} className="hover:bg-gray-50">
+                    <td className="px-4 py-3 text-sm font-medium text-gray-900">
+                      {payroll.worker_name || '-'}
+                    </td>
+                    <td className="px-4 py-3 text-sm text-gray-500">{payroll.pay_period}</td>
+                    <td className="px-4 py-3 text-sm text-gray-500">
+                      {payroll.daily_wage ? formatCurrency(payroll.daily_wage) : '-'}
+                    </td>
+                    <td className="px-4 py-3 text-sm text-gray-500">
+                      {payroll.work_days ? `${payroll.work_days}일` : '-'}
+                    </td>
+                    <td className="px-4 py-3 text-sm font-semibold text-gray-900">
+                      {formatCurrency(payroll.amount)}
+                    </td>
+                    <td className="px-4 py-3 text-sm text-gray-500">
+                      {payroll.paid_at
+                        ? typeof payroll.paid_at === 'string'
+                          ? payroll.paid_at.split('T')[0]
+                          : new Date(payroll.paid_at).toISOString().split('T')[0]
+                        : '-'}
+                    </td>
+                    <td className="px-4 py-3 text-sm">
+                      <span
+                        className={`px-2 py-1 rounded text-xs ${
+                          payroll.status === 'paid'
+                            ? 'bg-green-100 text-green-800'
+                            : 'bg-yellow-100 text-yellow-800'
+                        }`}
+                      >
+                        {payroll.status === 'paid' ? '지급완료' : '예정'}
+                      </span>
+                    </td>
+                    {onDelete && (
+                      <td className="px-4 py-3 text-sm">
+                        <button
+                          onClick={() => onDelete(payroll.id)}
+                          className="text-red-600 hover:text-red-800"
+                        >
+                          삭제
+                        </button>
+                      </td>
+                    )}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+

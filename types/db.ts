@@ -1,5 +1,5 @@
 // Type inference from Supabase (수동 타입 정의)
-export type UserRole = 'staff' | 'manager' | 'business_owner' | 'platform_admin' | 'admin' | 'franchise_manager' | 'store_manager' // admin은 하위 호환성
+export type UserRole = 'staff' | 'manager' | 'business_owner' | 'platform_admin' | 'admin' | 'franchise_manager' | 'store_manager' | 'subcontract_individual' | 'subcontract_company' // admin은 하위 호환성
 export type CleaningPhotoKind = 'before' | 'after'
 export type ReviewStatus = 'pending' | 'approved' | 'reshoot_requested'
 export type IssueStatus = 'submitted' | 'in_progress' | 'completed' | 'rejected'
@@ -28,6 +28,8 @@ export interface User {
   resignation_date: string | null
   employment_type: string | null
   is_active: boolean
+  // 도급 관련 필드
+  business_registration_number: string | null // 도급(업체)인 경우 사업자등록번호
   created_at: string
   updated_at: string
 }
@@ -350,5 +352,56 @@ export interface Payroll {
   created_at: string
   updated_at: string
   deleted_at: string | null
+}
+
+export type SubcontractType = 'company' | 'individual'
+export type SubcontractStatus = 'active' | 'inactive' | 'terminated'
+
+export interface Subcontract {
+  id: string
+  company_id: string
+  subcontract_type: SubcontractType // 'company' | 'individual'
+  subcontractor_id: string | null // 업체 간 도급 시 하청업체 ID (franchises 테이블 참조)
+  worker_id: string | null // 개인 도급 시 개인 ID (users 테이블 참조)
+  worker_name: string | null // 개인 도급 시 이름
+  resident_registration_number_encrypted: string | null // 개인 도급 시 암호화된 주민등록번호
+  bank_name: string | null
+  account_number: string | null
+  contract_period_start: string // 계약 시작일
+  contract_period_end: string | null // 계약 종료일
+  monthly_amount: number // 월 도급금액
+  tax_rate: number // 세율 (개인은 3.3%, 업체는 0% 또는 별도)
+  status: SubcontractStatus
+  memo: string | null
+  created_at: string
+  updated_at: string
+  deleted_at: string | null
+  // 관계 데이터 (API 응답에 포함될 수 있음)
+  subcontractor?: {
+    id: string
+    name: string
+  } | null
+  worker?: {
+    id: string
+    name: string
+  } | null
+}
+
+export interface SubcontractPayment {
+  id: string
+  subcontract_id: string
+  company_id: string
+  pay_period: string // 'YYYY-MM' 형식
+  amount: number // 실제 지급 금액 (공제 후)
+  base_amount: number // 원금액
+  deduction_amount: number // 공제액
+  paid_at: string | null
+  status: 'scheduled' | 'paid'
+  memo: string | null
+  created_at: string
+  updated_at: string
+  deleted_at: string | null
+  // 관계 데이터
+  subcontract?: Subcontract
 }
 

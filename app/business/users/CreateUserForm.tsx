@@ -54,8 +54,11 @@ export default function CreateUserForm({ stores, franchises, companyId, currentU
   const [resignationDate, setResignationDate] = useState('')
   const [employmentType, setEmploymentType] = useState('')
   
-  // 주민등록번호 (민감 정보, 월급/도급 선택사항)
+  // 주민등록번호 (민감 정보, 월급/도급(개인) 선택사항)
   const [residentRegistrationNumber, setResidentRegistrationNumber] = useState('')
+  
+  // 사업자등록번호 (도급(업체) 선택사항)
+  const [businessRegistrationNumber, setBusinessRegistrationNumber] = useState('')
 
   // 역할이 franchise_manager일 때 프렌차이즈 선택 필수
   useEffect(() => {
@@ -129,6 +132,8 @@ export default function CreateUserForm({ stores, franchises, companyId, currentU
           hire_date: hireDate || null,
           resignation_date: resignationDate || null,
           employment_type: employmentType || null,
+          // 도급 관련 필드
+          business_registration_number: role === 'subcontract_company' ? businessRegistrationNumber.trim() || null : null,
         }),
       })
 
@@ -138,8 +143,8 @@ export default function CreateUserForm({ stores, franchises, companyId, currentU
         throw new Error(data.error || `사용자 초대에 실패했습니다. (${response.status})`)
       }
 
-      // 주민등록번호 저장 (월급/도급 선택사항, 사용자 생성 후)
-      if ((payType === 'monthly' || payType === 'contract') && residentRegistrationNumber && data.user?.id) {
+      // 주민등록번호 저장 (월급/도급(개인) 선택사항, 사용자 생성 후)
+      if ((role === 'subcontract_individual' || payType === 'monthly' || payType === 'contract') && residentRegistrationNumber && data.user?.id) {
         try {
           const sensitiveResponse = await fetch(`/api/business/users/${data.user.id}/sensitive`, {
             method: 'PATCH',
@@ -184,8 +189,8 @@ export default function CreateUserForm({ stores, franchises, companyId, currentU
         <nav className="flex space-x-4">
           {[
             { id: 'basic', label: '기본 정보' },
-            // 직원 역할인 경우에만 급여 방식, 근로 상태 탭 표시
-            ...(role === 'staff' ? [
+            // 직원 또는 도급 역할인 경우 급여 방식, 근로 상태 탭 표시
+            ...((role === 'staff' || role === 'subcontract_individual' || role === 'subcontract_company') ? [
               { id: 'salary', label: '급여 방식' },
               { id: 'employment', label: '근로 상태' },
             ] : []),
@@ -291,6 +296,12 @@ export default function CreateUserForm({ stores, franchises, companyId, currentU
                 if (e.target.value !== 'franchise_manager') {
                   setSelectedFranchiseId('')
                 }
+                // 도급 역할이 아니면 도급 관련 필드 초기화
+                if (e.target.value !== 'subcontract_individual' && e.target.value !== 'subcontract_company') {
+                  setResidentRegistrationNumber('')
+                  setBusinessRegistrationNumber('')
+                  setPayAmount('')
+                }
               }}
               required
               className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -299,6 +310,8 @@ export default function CreateUserForm({ stores, franchises, companyId, currentU
               <option value="manager">매니저</option>
               <option value="franchise_manager">프렌차이즈관리자</option>
               <option value="store_manager">매장관리자(점주)</option>
+              <option value="subcontract_individual">도급(개인)</option>
+              <option value="subcontract_company">도급(업체)</option>
             </select>
           </div>
 
@@ -390,24 +403,142 @@ export default function CreateUserForm({ stores, franchises, companyId, currentU
           </>
         )}
 
-        {/* 급여 방식 탭 (직원만) */}
-        {activeTab === 'salary' && role === 'staff' && (
+        {/* 급여 방식 탭 (직원 및 도급 역할) */}
+        {activeTab === 'salary' && (role === 'staff' || role === 'subcontract_individual' || role === 'subcontract_company') && (
           <div className="space-y-4">
-            <div>
-              <label htmlFor="pay_type" className="block text-sm font-medium text-gray-700 mb-1">
-                급여 형태
-              </label>
-              <select
-                id="pay_type"
-                value={payType}
-                onChange={(e) => setPayType(e.target.value as any)}
-                className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="">선택하세요</option>
-                <option value="monthly">월급</option>
-                <option value="contract">도급</option>
-              </select>
-            </div>
+            {/* 직원 역할인 경우만 급여 형태 선택 */}
+            {role === 'staff' && (
+              <div>
+                <label htmlFor="pay_type" className="block text-sm font-medium text-gray-700 mb-1">
+                  급여 형태
+                </label>
+                <select
+                  id="pay_type"
+                  value={payType}
+                  onChange={(e) => setPayType(e.target.value as any)}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="">선택하세요</option>
+                  <option value="monthly">월급</option>
+                  <option value="contract">도급</option>
+                </select>
+              </div>
+            )}
+
+            {/* 도급(개인) 역할인 경우 도급 관련 필드 */}
+            {role === 'subcontract_individual' && (
+              <>
+                <div>
+                  <label htmlFor="pay_amount_subcontract_individual" className="block text-sm font-medium text-gray-700 mb-1">
+                    월 도급금액 <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    id="pay_amount_subcontract_individual"
+                    type="number"
+                    value={payAmount}
+                    onChange={(e) => setPayAmount(e.target.value)}
+                    required
+                    min="0"
+                    step="0.01"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="월 도급금액을 입력하세요"
+                  />
+                </div>
+                <div>
+                  <label htmlFor="resident_registration_number_subcontract_individual" className="block text-sm font-medium text-gray-700 mb-1">
+                    주민등록번호
+                    <span className="ml-2 text-xs text-gray-500">(선택사항, 세금 처리를 위해 필요할 수 있음)</span>
+                  </label>
+                  <input
+                    id="resident_registration_number_subcontract_individual"
+                    type="text"
+                    value={residentRegistrationNumber}
+                    onChange={(e) => {
+                      const value = e.target.value.replace(/[^0-9]/g, '')
+                      if (value.length <= 13) {
+                        let formatted = value
+                        if (value.length > 6) {
+                          formatted = `${value.substring(0, 6)}-${value.substring(6)}`
+                        }
+                        setResidentRegistrationNumber(formatted)
+                      }
+                    }}
+                    placeholder="900101-1234567"
+                    maxLength={14}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                  <p className="mt-1 text-xs text-gray-500">
+                    ⚠️ 주민등록번호는 암호화되어 안전하게 저장됩니다.
+                  </p>
+                </div>
+              </>
+            )}
+
+            {/* 도급(업체) 역할인 경우 도급 관련 필드 */}
+            {role === 'subcontract_company' && (
+              <>
+                <div>
+                  <label htmlFor="pay_amount_subcontract_company" className="block text-sm font-medium text-gray-700 mb-1">
+                    월 도급금액 <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    id="pay_amount_subcontract_company"
+                    type="number"
+                    value={payAmount}
+                    onChange={(e) => setPayAmount(e.target.value)}
+                    required
+                    min="0"
+                    step="0.01"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="월 도급금액을 입력하세요"
+                  />
+                </div>
+                <div>
+                  <label htmlFor="business_registration_number_subcontract" className="block text-sm font-medium text-gray-700 mb-1">
+                    사업자등록번호
+                    <span className="ml-2 text-xs text-gray-500">(선택사항, 세금 처리를 위해 필요할 수 있음)</span>
+                  </label>
+                  <input
+                    id="business_registration_number_subcontract"
+                    type="text"
+                    value={businessRegistrationNumber}
+                    onChange={(e) => {
+                      // 숫자만 추출
+                      const numbers = e.target.value.replace(/[^0-9]/g, '')
+                      if (numbers.length <= 10) {
+                        let formatted = numbers
+                        // 하이픈 자동 추가: 123-45-67890 형식
+                        if (numbers.length > 3) {
+                          formatted = `${numbers.substring(0, 3)}-${numbers.substring(3)}`
+                        }
+                        if (numbers.length > 5) {
+                          formatted = `${numbers.substring(0, 3)}-${numbers.substring(3, 5)}-${numbers.substring(5)}`
+                        }
+                        setBusinessRegistrationNumber(formatted)
+                      }
+                    }}
+                    placeholder="123-45-67890"
+                    maxLength={13}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                <div>
+                  <label htmlFor="business_registration_file" className="block text-sm font-medium text-gray-700 mb-1">
+                    사업자등록증 업로드
+                    <span className="ml-2 text-xs text-gray-500">(선택사항)</span>
+                  </label>
+                  <input
+                    id="business_registration_file"
+                    type="file"
+                    accept="image/*,.pdf"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                  <p className="mt-1 text-xs text-gray-500">
+                    사업자등록증 이미지 또는 PDF 파일을 업로드할 수 있습니다.
+                  </p>
+                </div>
+              </>
+            )}
 
             <div>
               <label htmlFor="salary_date" className="block text-sm font-medium text-gray-700 mb-1">
@@ -580,8 +711,8 @@ export default function CreateUserForm({ stores, franchises, companyId, currentU
           </div>
         )}
 
-        {/* 근로 상태 탭 (직원만) */}
-        {activeTab === 'employment' && role === 'staff' && (
+        {/* 근로 상태 탭 (직원 및 도급 역할) */}
+        {activeTab === 'employment' && (role === 'staff' || role === 'subcontract_individual' || role === 'subcontract_company') && (
           <div className="space-y-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">

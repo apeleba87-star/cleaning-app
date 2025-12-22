@@ -611,7 +611,7 @@ export default function StoreForm({ store, franchises, categoryTemplates, compan
           <div className="space-y-4">
             <div>
               <label htmlFor="service_amount" className="block text-sm font-medium text-gray-700 mb-1">
-                서비스 금액
+                서비스 금액 (VAT포함)
               </label>
               <div className="relative">
                 <input

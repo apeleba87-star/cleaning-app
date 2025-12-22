@@ -102,6 +102,7 @@ export async function POST(request: NextRequest) {
       hire_date,
       resignation_date,
       employment_type,
+      business_registration_number,
     } = body
 
     if (!email || !password || !name) {
@@ -119,7 +120,7 @@ export async function POST(request: NextRequest) {
     }
 
     // 업체관리자 역할은 부여 불가 (각 업체는 1명만 존재)
-    const allowedRoles: UserRole[] = ['staff', 'manager', 'franchise_manager', 'store_manager']
+    const allowedRoles: UserRole[] = ['staff', 'manager', 'franchise_manager', 'store_manager', 'subcontract_individual', 'subcontract_company']
 
     if (!role || !allowedRoles.includes(role as UserRole)) {
       return NextResponse.json(
@@ -243,6 +244,7 @@ export async function POST(request: NextRequest) {
         hire_date: hire_date || null,
         resignation_date: resignation_date || null,
         employment_type: employment_type || null,
+        business_registration_number: business_registration_number?.trim() || null,
         updated_at: new Date().toISOString(),
       }, {
         onConflict: 'id',

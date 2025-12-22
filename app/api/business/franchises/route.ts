@@ -2,6 +2,60 @@ import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerUser } from '@/lib/supabase/server'
 
+// 프렌차이즈 목록 조회
+export async function GET(request: NextRequest) {
+  try {
+    const user = await getServerUser()
+
+    if (!user || (user.role !== 'business_owner' && user.role !== 'platform_admin')) {
+      return NextResponse.json(
+        { error: '권한이 없습니다.' },
+        { status: 403 }
+      )
+    }
+
+    if (user.role === 'business_owner' && !user.company_id) {
+      return NextResponse.json(
+        { error: '회사 정보가 없습니다.' },
+        { status: 400 }
+      )
+    }
+
+    const supabase = await createServerSupabaseClient()
+
+    let query = supabase
+      .from('franchises')
+      .select('id, name')
+      .is('deleted_at', null)
+      .eq('status', 'active')
+
+    if (user.role === 'business_owner') {
+      query = query.eq('company_id', user.company_id)
+    }
+
+    const { data: franchises, error } = await query.order('name')
+
+    if (error) {
+      console.error('Error fetching franchises:', error)
+      return NextResponse.json(
+        { error: '프렌차이즈 조회에 실패했습니다.' },
+        { status: 500 }
+      )
+    }
+
+    return NextResponse.json({ 
+      success: true,
+      franchises: franchises || [] 
+    })
+  } catch (error: any) {
+    console.error('Error in GET /api/business/franchises:', error)
+    return NextResponse.json(
+      { error: '서버 오류가 발생했습니다.' },
+      { status: 500 }
+    )
+  }
+}
+
 export async function POST(request: NextRequest) {
   try {
     const user = await getServerUser()

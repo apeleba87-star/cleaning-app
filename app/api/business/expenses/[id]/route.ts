@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server'
 import { createServerSupabaseClient, getServerUser } from '@/lib/supabase/server'
 import { handleApiError, UnauthorizedError, ForbiddenError } from '@/lib/errors'
+import { createClient } from '@supabase/supabase-js'
 
 // 지출 수정
 export async function PATCH(
@@ -40,7 +41,8 @@ export async function PATCH(
     }
 
     // 매장이 회사에 속해있는지 확인 (store_id가 변경되는 경우)
-    if (store_id) {
+    // store_id가 빈 문자열이 아닌 유효한 값인지 확인
+    if (store_id !== undefined && store_id !== null && store_id !== '' && store_id.trim() !== '') {
       const { data: store } = await supabase
         .from('stores')
         .select('id, company_id')
@@ -59,9 +61,26 @@ export async function PATCH(
     if (category) updateData.category = category
     if (amount !== undefined) updateData.amount = parseFloat(amount)
     if (memo !== undefined) updateData.memo = memo?.trim() || null
-    if (store_id !== undefined) updateData.store_id = store_id || null
+    if (store_id !== undefined) {
+      updateData.store_id = (store_id && store_id.trim() !== '') ? store_id : null
+    }
 
-    const { data: expense, error } = await supabase
+    // RLS 우회를 위해 서비스 역할 키 사용
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+    
+    if (!serviceRoleKey || !supabaseUrl) {
+      throw new Error('Server configuration error: Service role key is required')
+    }
+
+    const adminSupabase = createClient(supabaseUrl, serviceRoleKey, {
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false,
+      },
+    })
+
+    const { data: expense, error } = await adminSupabase
       .from('expenses')
       .update(updateData)
       .eq('id', params.id)
@@ -121,7 +140,22 @@ export async function DELETE(
       throw new ForbiddenError('Expense not found or access denied')
     }
 
-    const { error } = await supabase
+    // RLS 우회를 위해 서비스 역할 키 사용
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+    
+    if (!serviceRoleKey || !supabaseUrl) {
+      throw new Error('Server configuration error: Service role key is required')
+    }
+
+    const adminSupabase = createClient(supabaseUrl, serviceRoleKey, {
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false,
+      },
+    })
+
+    const { error } = await adminSupabase
       .from('expenses')
       .update({ deleted_at: new Date().toISOString() })
       .eq('id', params.id)
