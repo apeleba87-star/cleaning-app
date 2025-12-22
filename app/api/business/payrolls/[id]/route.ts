@@ -40,7 +40,7 @@ export async function PATCH(
     // 인건비가 회사에 속해있는지 확인
     const { data: existingPayroll } = await supabase
       .from('payrolls')
-      .select('id, company_id, user_id, worker_name')
+      .select('id, company_id, user_id, worker_name, daily_wage, work_days')
       .eq('id', params.id)
       .eq('company_id', user.company_id)
       .is('deleted_at', null)
