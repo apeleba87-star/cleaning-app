@@ -72,6 +72,15 @@ export default function CreateUserForm({ stores, franchises, companyId, currentU
     )
   }
 
+  const handleEmailChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value
+    setEmail(value)
+    // 이메일 에러 초기화
+    if (emailError) {
+      setEmailError(null)
+    }
+  }
+
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()
     setLoading(true)
