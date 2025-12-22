@@ -236,7 +236,7 @@ export interface StoreFile {
   id: string
   store_id: string
   company_id: string
-  doc_type: 'service_contract' | 'subcontract_contract' | 'invoice' | 'receipt' | 'other'
+  doc_type: 'service_contract' | 'subcontract_contract' | 'invoice' | 'receipt' | 'other' | 'business_registration'
   file_url: string
   file_name: string
   file_size: number | null
