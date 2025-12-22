@@ -16,6 +16,12 @@ interface CreateUserFormProps {
   onCancel: () => void
 }
 
+// 이메일 형식 검증 함수
+function validateEmail(email: string): boolean {
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+  return emailRegex.test(email)
+}
+
 export default function CreateUserForm({ stores, franchises, companyId, currentUserRole, onSuccess, onCancel }: CreateUserFormProps) {
   const [email, setEmail] = useState('')
   const [emailError, setEmailError] = useState<string | null>(null)
