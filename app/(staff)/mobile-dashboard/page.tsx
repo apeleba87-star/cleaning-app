@@ -1395,158 +1395,289 @@ export default function MobileDashboardPage() {
           </div>
 
           {/* 오늘 탭 */}
-          {workHistoryTab === 'today' && (
-            <div className="space-y-3">
-              {todayWorkStats.length === 0 ? (
-                <div className="text-center py-8 text-sm text-gray-500">
-                  오늘의 업무 기록이 없습니다.
-                </div>
-              ) : (
-                todayWorkStats.map((stat) => {
-                  const isExpanded = expandedStores.has(stat.store_id)
-                  
-                  return (
-                    <div key={stat.store_id} className="border border-gray-200 rounded-lg bg-gray-50">
-                      <button
-                        onClick={() => {
-                          setExpandedStores((prev) => {
-                            const newSet = new Set(prev)
-                            if (isExpanded) {
-                              newSet.delete(stat.store_id)
-                            } else {
-                              newSet.add(stat.store_id)
-                            }
-                            return newSet
-                          })
-                        }}
-                        className="w-full flex items-center justify-between p-3 sm:p-4 text-left hover:bg-gray-100 transition-colors"
-                      >
-                        <div className="font-semibold text-sm sm:text-base text-gray-800">{stat.store_name}</div>
-                        <span className="text-gray-500 text-lg">
-                          {isExpanded ? '▼' : '▶'}
-                        </span>
-                      </button>
-                      {isExpanded && (
-                        <div className="px-3 sm:px-4 pb-3 sm:pb-4">
-                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 sm:gap-3 text-xs sm:text-sm">
-                      <div>
-                        <span className="text-gray-600">체크리스트 완료:</span>
-                        <span className="ml-1 font-medium">{stat.checklist_completed}건</span>
-                      </div>
-                      <div>
-                        <span className="text-gray-600">요청 완료:</span>
-                        <span className="ml-1 font-medium">{stat.request_completed}건</span>
-                      </div>
-                      <div>
-                        <span className="text-gray-600">매장 문제:</span>
-                        <span className="ml-1 font-medium">{stat.store_problem_count}건</span>
-                      </div>
-                      <div>
-                        <span className="text-gray-600">자판기 문제:</span>
-                        <span className="ml-1 font-medium">{stat.vending_problem_count}건</span>
-                      </div>
-                      <div>
-                        <span className="text-gray-600">제품 입고:</span>
-                        <span className={`ml-1 font-medium ${stat.has_product_inflow ? 'text-green-600' : 'text-gray-400'}`}>
-                          {stat.has_product_inflow ? '있음' : '없음'}
-                        </span>
-                      </div>
-                      <div>
-                        <span className="text-gray-600">보관사진:</span>
-                        <span className={`ml-1 font-medium ${stat.has_storage_photo ? 'text-green-600' : 'text-gray-400'}`}>
-                          {stat.has_storage_photo ? '있음' : '없음'}
-                        </span>
-                      </div>
-                    </div>
+          {workHistoryTab === 'today' && (() => {
+            // 업무 기록이 있는 매장만 필터링
+            const filteredStats = todayWorkStats.filter(stat => {
+              return stat.checklist_completed > 0 ||
+                     stat.request_completed > 0 ||
+                     stat.store_problem_count > 0 ||
+                     stat.vending_problem_count > 0 ||
+                     stat.has_product_inflow ||
+                     stat.has_storage_photo
+            })
+            
+            return (
+              <div className="space-y-3">
+                {filteredStats.length === 0 ? (
+                  <div className="text-center py-12">
+                    <div className="text-4xl mb-3">📋</div>
+                    <div className="text-sm text-gray-500">오늘의 업무 기록이 없습니다.</div>
                   </div>
-                      )}
-                    </div>
-                  )
-                })
-              )}
-            </div>
-          )}
+                ) : (
+                  filteredStats.map((stat) => {
+                    const isExpanded = expandedStores.has(stat.store_id)
+                    const hasActivity = stat.checklist_completed > 0 || stat.request_completed > 0 || 
+                                       stat.store_problem_count > 0 || stat.vending_problem_count > 0
+                    
+                    return (
+                      <div key={stat.store_id} className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition-shadow">
+                        <button
+                          onClick={() => {
+                            setExpandedStores((prev) => {
+                              const newSet = new Set(prev)
+                              if (isExpanded) {
+                                newSet.delete(stat.store_id)
+                              } else {
+                                newSet.add(stat.store_id)
+                              }
+                              return newSet
+                            })
+                          }}
+                          className="w-full flex items-center justify-between p-4 text-left hover:bg-gray-50 transition-colors"
+                        >
+                          <div className="flex items-center gap-3 flex-1 min-w-0">
+                            <div className="flex-shrink-0 w-10 h-10 bg-gradient-to-br from-blue-500 to-blue-600 rounded-lg flex items-center justify-center text-white font-semibold text-sm">
+                              📍
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="font-semibold text-base text-gray-900 truncate">{stat.store_name}</div>
+                              {!isExpanded && hasActivity && (
+                                <div className="flex items-center gap-3 mt-1 text-xs text-gray-500">
+                                  {stat.checklist_completed > 0 && (
+                                    <span className="flex items-center gap-1">
+                                      <span className="w-1.5 h-1.5 bg-blue-500 rounded-full"></span>
+                                      체크리스트 {stat.checklist_completed}
+                                    </span>
+                                  )}
+                                  {stat.request_completed > 0 && (
+                                    <span className="flex items-center gap-1">
+                                      <span className="w-1.5 h-1.5 bg-green-500 rounded-full"></span>
+                                      요청 {stat.request_completed}
+                                    </span>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                          <div className="flex-shrink-0 ml-3">
+                            <span className={`text-gray-400 transition-transform ${isExpanded ? 'rotate-180' : ''}`}>
+                              ▼
+                            </span>
+                          </div>
+                        </button>
+                        {isExpanded && (
+                          <div className="px-4 pb-4 border-t border-gray-100 bg-gray-50">
+                            <div className="grid grid-cols-2 gap-3 pt-4">
+                              <div className="bg-white rounded-lg p-3 border border-gray-100">
+                                <div className="flex items-center gap-2 mb-1">
+                                  <span className="text-blue-500 text-sm">✅</span>
+                                  <span className="text-xs text-gray-600 font-medium">체크리스트</span>
+                                </div>
+                                <div className="text-lg font-bold text-gray-900">{stat.checklist_completed}</div>
+                                <div className="text-xs text-gray-500">완료</div>
+                              </div>
+                              <div className="bg-white rounded-lg p-3 border border-gray-100">
+                                <div className="flex items-center gap-2 mb-1">
+                                  <span className="text-green-500 text-sm">📝</span>
+                                  <span className="text-xs text-gray-600 font-medium">요청 완료</span>
+                                </div>
+                                <div className="text-lg font-bold text-gray-900">{stat.request_completed}</div>
+                                <div className="text-xs text-gray-500">건</div>
+                              </div>
+                              <div className="bg-white rounded-lg p-3 border border-gray-100">
+                                <div className="flex items-center gap-2 mb-1">
+                                  <span className="text-orange-500 text-sm">⚠️</span>
+                                  <span className="text-xs text-gray-600 font-medium">매장 문제</span>
+                                </div>
+                                <div className="text-lg font-bold text-gray-900">{stat.store_problem_count}</div>
+                                <div className="text-xs text-gray-500">건</div>
+                              </div>
+                              <div className="bg-white rounded-lg p-3 border border-gray-100">
+                                <div className="flex items-center gap-2 mb-1">
+                                  <span className="text-purple-500 text-sm">🔧</span>
+                                  <span className="text-xs text-gray-600 font-medium">자판기 문제</span>
+                                </div>
+                                <div className="text-lg font-bold text-gray-900">{stat.vending_problem_count}</div>
+                                <div className="text-xs text-gray-500">건</div>
+                              </div>
+                              <div className="bg-white rounded-lg p-3 border border-gray-100">
+                                <div className="flex items-center gap-2 mb-1">
+                                  <span className="text-teal-500 text-sm">📦</span>
+                                  <span className="text-xs text-gray-600 font-medium">제품 입고</span>
+                                </div>
+                                <div className={`text-lg font-bold ${stat.has_product_inflow ? 'text-green-600' : 'text-gray-400'}`}>
+                                  {stat.has_product_inflow ? '완료' : '-'}
+                                </div>
+                                <div className="text-xs text-gray-500">처리</div>
+                              </div>
+                              <div className="bg-white rounded-lg p-3 border border-gray-100">
+                                <div className="flex items-center gap-2 mb-1">
+                                  <span className="text-indigo-500 text-sm">📸</span>
+                                  <span className="text-xs text-gray-600 font-medium">보관사진</span>
+                                </div>
+                                <div className={`text-lg font-bold ${stat.has_storage_photo ? 'text-green-600' : 'text-gray-400'}`}>
+                                  {stat.has_storage_photo ? '완료' : '-'}
+                                </div>
+                                <div className="text-xs text-gray-500">처리</div>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })
+                )}
+              </div>
+            )
+          })()}
 
           {/* 최근 1주일 탭 */}
-          {workHistoryTab === 'weekly' && (
-            <div className="space-y-4">
-              {weeklyWorkStats.length === 0 ? (
-                <div className="text-center py-8 text-sm text-gray-500">
-                  최근 1주일 업무 기록이 없습니다.
-                </div>
-              ) : (
-                weeklyWorkStats.map((stat) => {
-                  const isExpanded = expandedStores.has(stat.store_id)
-                  
-                  return (
-                    <div key={stat.store_id} className="border border-gray-200 rounded-lg bg-gray-50">
-                      <button
-                        onClick={() => {
-                          setExpandedStores((prev) => {
-                            const newSet = new Set(prev)
-                            if (isExpanded) {
-                              newSet.delete(stat.store_id)
-                            } else {
-                              newSet.add(stat.store_id)
-                            }
-                            return newSet
-                          })
-                        }}
-                        className="w-full flex items-center justify-between p-3 sm:p-4 text-left hover:bg-gray-100 transition-colors"
-                      >
-                        <div className="font-semibold text-sm sm:text-base text-gray-800">{stat.store_name}</div>
-                        <span className="text-gray-500 text-lg">
-                          {isExpanded ? '▼' : '▶'}
-                        </span>
-                      </button>
-                      {isExpanded && (
-                        <div className="px-3 sm:px-4 pb-3 sm:pb-4">
-                    {/* 날짜별 체크리스트 건수 */}
-                    {stat.daily_checklists.length > 0 && (
-                      <div className="mb-4">
-                        <div className="text-xs sm:text-sm font-medium text-gray-700 mb-2">날짜별 체크리스트 건수</div>
-                        <div className="space-y-1">
-                          {stat.daily_checklists.map((daily, idx) => (
-                            <div key={idx} className="flex items-center justify-between text-xs sm:text-sm bg-white rounded px-2 sm:px-3 py-1.5">
-                              <span className="text-gray-700">{daily.date}</span>
-                              <span className="font-medium text-gray-900">{daily.count}건</span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* 최근 7일간 건수 */}
-                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 sm:gap-3 text-xs sm:text-sm">
-                      <div>
-                        <span className="text-gray-600">매장 문제:</span>
-                        <span className="ml-1 font-medium">{stat.store_problem_count}건</span>
-                      </div>
-                      <div>
-                        <span className="text-gray-600">요청 완료:</span>
-                        <span className="ml-1 font-medium">{stat.request_completed}건</span>
-                      </div>
-                      <div>
-                        <span className="text-gray-600">제품 입고:</span>
-                        <span className="ml-1 font-medium">{stat.product_inflow_count}건</span>
-                      </div>
-                      <div>
-                        <span className="text-gray-600">자판기 문제:</span>
-                        <span className="ml-1 font-medium">{stat.vending_problem_count}건</span>
-                      </div>
-                      <div>
-                        <span className="text-gray-600">분실물:</span>
-                        <span className="ml-1 font-medium">{stat.lost_item_count}건</span>
-                      </div>
-                    </div>
+          {workHistoryTab === 'weekly' && (() => {
+            // 업무 기록이 있는 매장만 필터링
+            const filteredStats = weeklyWorkStats.filter(stat => {
+              return stat.daily_checklists.length > 0 ||
+                     stat.store_problem_count > 0 ||
+                     stat.request_completed > 0 ||
+                     stat.product_inflow_count > 0 ||
+                     stat.vending_problem_count > 0 ||
+                     stat.lost_item_count > 0
+            })
+            
+            return (
+              <div className="space-y-3">
+                {filteredStats.length === 0 ? (
+                  <div className="text-center py-12">
+                    <div className="text-4xl mb-3">📊</div>
+                    <div className="text-sm text-gray-500">최근 1주일 업무 기록이 없습니다.</div>
                   </div>
-                      )}
-                    </div>
-                  )
-                })
-              )}
-            </div>
-          )}
+                ) : (
+                  filteredStats.map((stat) => {
+                    const isExpanded = expandedStores.has(stat.store_id)
+                    const totalChecklists = stat.daily_checklists.reduce((sum, d) => sum + d.count, 0)
+                    const hasActivity = totalChecklists > 0 || stat.request_completed > 0 || 
+                                       stat.store_problem_count > 0 || stat.vending_problem_count > 0
+                    
+                    return (
+                      <div key={stat.store_id} className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition-shadow">
+                        <button
+                          onClick={() => {
+                            setExpandedStores((prev) => {
+                              const newSet = new Set(prev)
+                              if (isExpanded) {
+                                newSet.delete(stat.store_id)
+                              } else {
+                                newSet.add(stat.store_id)
+                              }
+                              return newSet
+                            })
+                          }}
+                          className="w-full flex items-center justify-between p-4 text-left hover:bg-gray-50 transition-colors"
+                        >
+                          <div className="flex items-center gap-3 flex-1 min-w-0">
+                            <div className="flex-shrink-0 w-10 h-10 bg-gradient-to-br from-purple-500 to-purple-600 rounded-lg flex items-center justify-center text-white font-semibold text-sm">
+                              📍
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="font-semibold text-base text-gray-900 truncate">{stat.store_name}</div>
+                              {!isExpanded && hasActivity && (
+                                <div className="flex items-center gap-3 mt-1 text-xs text-gray-500">
+                                  {totalChecklists > 0 && (
+                                    <span className="flex items-center gap-1">
+                                      <span className="w-1.5 h-1.5 bg-purple-500 rounded-full"></span>
+                                      체크리스트 {totalChecklists}
+                                    </span>
+                                  )}
+                                  {stat.request_completed > 0 && (
+                                    <span className="flex items-center gap-1">
+                                      <span className="w-1.5 h-1.5 bg-green-500 rounded-full"></span>
+                                      요청 {stat.request_completed}
+                                    </span>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                          <div className="flex-shrink-0 ml-3">
+                            <span className={`text-gray-400 transition-transform ${isExpanded ? 'rotate-180' : ''}`}>
+                              ▼
+                            </span>
+                          </div>
+                        </button>
+                        {isExpanded && (
+                          <div className="px-4 pb-4 border-t border-gray-100 bg-gray-50">
+                            {/* 날짜별 체크리스트 건수 */}
+                            {stat.daily_checklists.length > 0 && (
+                              <div className="mb-4 pt-4">
+                                <div className="flex items-center gap-2 mb-3">
+                                  <span className="text-purple-500">📅</span>
+                                  <div className="text-sm font-semibold text-gray-700">날짜별 체크리스트</div>
+                                </div>
+                                <div className="space-y-2">
+                                  {stat.daily_checklists.map((daily, idx) => (
+                                    <div key={idx} className="flex items-center justify-between bg-white rounded-lg px-3 py-2.5 border border-gray-100">
+                                      <span className="text-sm text-gray-700">{daily.date}</span>
+                                      <div className="flex items-center gap-2">
+                                        <span className="text-sm font-bold text-gray-900">{daily.count}</span>
+                                        <span className="text-xs text-gray-500">건</span>
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+
+                            {/* 최근 7일간 통계 */}
+                            <div className="grid grid-cols-2 gap-3">
+                              <div className="bg-white rounded-lg p-3 border border-gray-100">
+                                <div className="flex items-center gap-2 mb-1">
+                                  <span className="text-orange-500 text-sm">⚠️</span>
+                                  <span className="text-xs text-gray-600 font-medium">매장 문제</span>
+                                </div>
+                                <div className="text-lg font-bold text-gray-900">{stat.store_problem_count}</div>
+                                <div className="text-xs text-gray-500">건</div>
+                              </div>
+                              <div className="bg-white rounded-lg p-3 border border-gray-100">
+                                <div className="flex items-center gap-2 mb-1">
+                                  <span className="text-green-500 text-sm">📝</span>
+                                  <span className="text-xs text-gray-600 font-medium">요청 완료</span>
+                                </div>
+                                <div className="text-lg font-bold text-gray-900">{stat.request_completed}</div>
+                                <div className="text-xs text-gray-500">건</div>
+                              </div>
+                              <div className="bg-white rounded-lg p-3 border border-gray-100">
+                                <div className="flex items-center gap-2 mb-1">
+                                  <span className="text-teal-500 text-sm">📦</span>
+                                  <span className="text-xs text-gray-600 font-medium">제품 입고</span>
+                                </div>
+                                <div className="text-lg font-bold text-gray-900">{stat.product_inflow_count}</div>
+                                <div className="text-xs text-gray-500">건</div>
+                              </div>
+                              <div className="bg-white rounded-lg p-3 border border-gray-100">
+                                <div className="flex items-center gap-2 mb-1">
+                                  <span className="text-purple-500 text-sm">🔧</span>
+                                  <span className="text-xs text-gray-600 font-medium">자판기 문제</span>
+                                </div>
+                                <div className="text-lg font-bold text-gray-900">{stat.vending_problem_count}</div>
+                                <div className="text-xs text-gray-500">건</div>
+                              </div>
+                              <div className="bg-white rounded-lg p-3 border border-gray-100 col-span-2">
+                                <div className="flex items-center gap-2 mb-1">
+                                  <span className="text-yellow-500 text-sm">🔍</span>
+                                  <span className="text-xs text-gray-600 font-medium">분실물</span>
+                                </div>
+                                <div className="text-lg font-bold text-gray-900">{stat.lost_item_count}</div>
+                                <div className="text-xs text-gray-500">건</div>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })
+                )}
+              </div>
+            )
+          })()}
         </div>
 
         {/* 메뉴 버튼들 - 반응형 */}

@@ -249,19 +249,29 @@ export default function ChecklistClient() {
   const handleSelectChecklist = (checklist: Checklist) => {
     setSelectedChecklist(checklist)
     const checklistItems = Array.isArray(checklist.items) ? checklist.items : []
-    const normalizedItems = checklistItems.map((item: any, originalIndex: number) => ({
-      ...item,
-      type: item.type || 'check',
-      checked: item.checked || false,
-      originalIndex, // 원래 순서를 유지하기 위해 인덱스 추가
-    }))
+    const normalizedItems = checklistItems.map((item: any, originalIndex: number) => {
+      // 기존 'photo' 타입을 'before_after_photo'로 변환 (하위 호환성)
+      let itemType = item.type || 'check'
+      if (itemType === 'photo') {
+        itemType = 'before_after_photo'
+      }
+      
+      return {
+        ...item,
+        type: itemType,
+        checked: item.checked || false,
+        originalIndex, // 원래 순서를 유지하기 위해 인덱스 추가
+      }
+    })
     // 사진 타입 항목을 먼저, 체크 타입 항목을 나중에 정렬
     const sortedItems = normalizedItems.sort((a, b) => {
       // 사진 타입이 체크 타입보다 먼저 오도록 정렬
-      if (a.type === 'photo' && b.type === 'check') {
+      const aIsPhoto = a.type !== 'check'
+      const bIsPhoto = b.type !== 'check'
+      if (aIsPhoto && !bIsPhoto) {
         return -1
       }
-      if (a.type === 'check' && b.type === 'photo') {
+      if (!aIsPhoto && bIsPhoto) {
         return 1
       }
       // 같은 타입이면 원래 순서 유지
@@ -273,7 +283,9 @@ export default function ChecklistClient() {
     setCameraMode(null) // 카메라 모드 자동 시작 비활성화
     
     // 저장된 상태 확인 메시지
-    const hasBeforePhotos = sortedItems.some(item => item.type === 'photo' && item.before_photo_url)
+    const hasBeforePhotos = sortedItems.some(item => 
+      (item.type === 'before_photo' || item.type === 'before_after_photo') && item.before_photo_url
+    )
     const hasCheckedItems = sortedItems.some(item => item.type === 'check' && item.checked)
     if (hasBeforePhotos || hasCheckedItems) {
       console.log('저장된 체크리스트 진행 상황을 불러왔습니다.')
@@ -365,9 +377,15 @@ export default function ChecklistClient() {
       return
     }
 
-    // 관리후 사진은 모든 체크리스트 완료 후에만 가능
-    const photoItems = validItems.filter((item) => item.type === 'photo')
+    // 각 타입별 필수 사진 및 체크 항목 확인
     const checkItems = validItems.filter((item) => item.type === 'check')
+    const beforePhotoItems = validItems.filter((item) => 
+      (item.type === 'before_photo' || item.type === 'before_after_photo')
+    )
+    const afterPhotoItems = validItems.filter((item) => 
+      (item.type === 'after_photo' || item.type === 'before_after_photo')
+    )
+    const beforeAfterPhotoItems = validItems.filter((item) => item.type === 'before_after_photo')
     
     // 모든 체크리스트 항목이 완료되었는지 확인
     const hasAllCheckItemsCompleted = checkItems.length === 0 || checkItems.every(item => item.checked)
@@ -377,12 +395,21 @@ export default function ChecklistClient() {
       return
     }
 
-    // 관리후 사진이 모두 촬영되었는지 확인
-    const incompletePhotoItems = photoItems.filter(
-      (item) => !item.before_photo_url || !item.after_photo_url
+    // 관리전 사진이 모두 촬영되었는지 확인
+    const incompleteBeforePhotos = beforePhotoItems.filter(
+      (item) => !item.before_photo_url
     )
-    if (incompletePhotoItems.length > 0) {
-      setError('사진 필요 항목은 관리 전/후 사진을 모두 촬영해야 합니다.')
+    if (incompleteBeforePhotos.length > 0) {
+      setError('관리 전 사진이 필요한 항목의 사진을 모두 촬영해야 합니다.')
+      return
+    }
+
+    // 관리후 사진이 모두 촬영되었는지 확인
+    const incompleteAfterPhotos = afterPhotoItems.filter(
+      (item) => !item.after_photo_url
+    )
+    if (incompleteAfterPhotos.length > 0) {
+      setError('관리 후 사진이 필요한 항목의 사진을 모두 촬영해야 합니다.')
       return
     }
 
@@ -468,12 +495,19 @@ export default function ChecklistClient() {
 
   // 카메라 모드
   if (selectedChecklist && cameraMode) {
-    const photoItems = items.filter(item => item.type === 'photo' && item.area?.trim())
-    
-    // 관리 후 사진 모드일 때는 관리 전 사진이 있는 항목만 필터링
-    const itemsForCamera = cameraMode === 'after' 
-      ? photoItems.filter(item => item.before_photo_url)
-      : photoItems
+    // 관리전 사진이 필요한 항목: before_photo 또는 before_after_photo
+    // 관리후 사진이 필요한 항목: after_photo 또는 before_after_photo
+    const itemsForCamera = cameraMode === 'before'
+      ? items.filter(item => 
+          (item.type === 'before_photo' || item.type === 'before_after_photo') && 
+          item.area?.trim() && 
+          !item.before_photo_url
+        )
+      : items.filter(item => 
+          (item.type === 'after_photo' || item.type === 'before_after_photo') && 
+          item.area?.trim() && 
+          !item.after_photo_url
+        )
     
     if (itemsForCamera.length === 0) {
       // 사진 촬영할 항목이 없으면 카메라 모드 종료
@@ -487,17 +521,15 @@ export default function ChecklistClient() {
         mode={cameraMode}
         storeId={selectedChecklist.store_id}
         onComplete={async (updatedItems) => {
-          // 업데이트된 photo 항목을 전체 items에 반영
+          // 업데이트된 사진 항목을 전체 items에 반영
           const updatedAllItems = items.map(item => {
-            if (item.type === 'photo') {
-              const updated = updatedItems.find(u => u.area === item.area)
-              if (updated) {
-                if (cameraMode === 'before') {
-                  // 관리전 사진이 촬영되면 자동으로 체크 (checked 상태 추가)
-                  return { ...item, before_photo_url: updated.before_photo_url, checked: true }
-                } else {
-                  return { ...item, after_photo_url: updated.after_photo_url }
-                }
+            const updated = updatedItems.find(u => u.area === item.area)
+            if (updated) {
+              if (cameraMode === 'before') {
+                // 관리전 사진이 촬영되면 자동으로 체크 (checked 상태 추가)
+                return { ...item, before_photo_url: updated.before_photo_url, checked: true }
+              } else {
+                return { ...item, after_photo_url: updated.after_photo_url }
               }
             }
             return item
@@ -512,9 +544,11 @@ export default function ChecklistClient() {
                 alert('관리전 사진이 저장되었습니다. 대시보드로 돌아가 다른 업무를 진행할 수 있습니다.')
               } else {
                 // 관리후 사진 저장 완료 시 체크리스트 완료 여부 확인
-                const photoItems = updatedAllItems.filter(item => item.type === 'photo' && item.area?.trim())
+                const afterPhotoItems = updatedAllItems.filter(item => 
+                  (item.type === 'after_photo' || item.type === 'before_after_photo') && item.area?.trim()
+                )
                 const checkItems = updatedAllItems.filter(item => item.type === 'check' && item.area?.trim())
-                const hasAllAfterPhotos = photoItems.length === 0 || photoItems.every(item => item.after_photo_url)
+                const hasAllAfterPhotos = afterPhotoItems.length === 0 || afterPhotoItems.every(item => item.after_photo_url)
                 const hasAllCheckItemsCompleted = checkItems.length === 0 || checkItems.every(item => item.checked)
                 
                 if (hasAllAfterPhotos && hasAllCheckItemsCompleted) {
@@ -603,11 +637,6 @@ export default function ChecklistClient() {
                 비고: {selectedChecklist.note}
               </p>
             )}
-            {selectedChecklist.requires_photos && (
-              <p className="text-sm text-red-600 mt-2 p-2 bg-red-50 rounded font-medium">
-                ⚠️ 이 체크리스트는 관리 전/후 사진 촬영이 필수입니다.
-              </p>
-            )}
           </div>
 
           {error && (
@@ -640,17 +669,22 @@ export default function ChecklistClient() {
 
           {/* 사진 촬영 및 제출 버튼 */}
           {(() => {
-            const photoItems = items.filter(item => item.type === 'photo' && item.area?.trim())
             const checkItems = items.filter(item => item.type === 'check' && item.area?.trim())
+            const beforePhotoItems = items.filter(item => 
+              (item.type === 'before_photo' || item.type === 'before_after_photo') && item.area?.trim()
+            )
+            const afterPhotoItems = items.filter(item => 
+              (item.type === 'after_photo' || item.type === 'before_after_photo') && item.area?.trim()
+            )
             
-            const hasAllBeforePhotos = photoItems.length === 0 || photoItems.every(item => item.before_photo_url)
-            const hasAllAfterPhotos = photoItems.length === 0 || photoItems.every(item => item.after_photo_url)
+            const hasAllBeforePhotos = beforePhotoItems.length === 0 || beforePhotoItems.every(item => item.before_photo_url)
+            const hasAllAfterPhotos = afterPhotoItems.length === 0 || afterPhotoItems.every(item => item.after_photo_url)
             const hasAllCheckItemsCompleted = checkItems.length === 0 || checkItems.every(item => item.checked)
 
             // 관리 전 사진이 없으면 관리 전 사진 촬영 버튼 표시
             if (!hasAllBeforePhotos) {
-              const incompletePhotoItems = photoItems.filter(item => !item.before_photo_url)
-              const beforePhotoCount = incompletePhotoItems.length
+              const incompleteBeforePhotoItems = beforePhotoItems.filter(item => !item.before_photo_url)
+              const beforePhotoCount = incompleteBeforePhotoItems.length
               return (
                 <button
                   onClick={() => setCameraMode('before')}
@@ -664,7 +698,8 @@ export default function ChecklistClient() {
 
             // 관리 전 사진은 모두 있고, 모든 체크리스트 항목이 완료되었을 때만 관리 후 사진 촬영 버튼 표시
             if (hasAllBeforePhotos && hasAllCheckItemsCompleted && !hasAllAfterPhotos) {
-              const afterPhotoCount = photoItems.filter(item => item.before_photo_url && !item.after_photo_url).length
+              const incompleteAfterPhotoItems = afterPhotoItems.filter(item => !item.after_photo_url)
+              const afterPhotoCount = incompleteAfterPhotoItems.length
               return (
                 <button
                   onClick={() => setCameraMode('after')}
@@ -757,13 +792,18 @@ export default function ChecklistClient() {
                   const checklistItems = Array.isArray(checklist.items) ? checklist.items : []
                   // 사진 타입 항목을 먼저, 체크 타입 항목을 나중에 정렬
                   const sortedChecklistItems = [...checklistItems].sort((a: any, b: any) => {
-                    const aType = a.type || 'check'
-                    const bType = b.type || 'check'
+                    let aType = a.type || 'check'
+                    let bType = b.type || 'check'
+                    // 기존 'photo' 타입을 'before_after_photo'로 변환
+                    if (aType === 'photo') aType = 'before_after_photo'
+                    if (bType === 'photo') bType = 'before_after_photo'
                     // 사진 타입이 체크 타입보다 먼저 오도록 정렬
-                    if (aType === 'photo' && bType === 'check') {
+                    const aIsPhoto = aType !== 'check'
+                    const bIsPhoto = bType !== 'check'
+                    if (aIsPhoto && !bIsPhoto) {
                       return -1
                     }
-                    if (aType === 'check' && bType === 'photo') {
+                    if (!aIsPhoto && bIsPhoto) {
                       return 1
                     }
                     // 같은 타입이면 원래 순서 유지 (인덱스 기반)
@@ -813,7 +853,7 @@ export default function ChecklistClient() {
                           >
                             <div className="flex items-start gap-3">
                               <div className="flex-shrink-0">
-                                {item.type === 'photo' ? (
+                                {item.type !== 'check' ? (
                                   <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center">
                                     <span className="text-blue-600 text-lg">📷</span>
                                   </div>
@@ -828,10 +868,10 @@ export default function ChecklistClient() {
                                   {item.area || `항목 ${index + 1}`}
                                 </div>
                                 
-                                {/* 사진 항목 - 관리 전/후 사진 표시 */}
-                                {item.type === 'photo' && (
-                                  <div className="grid grid-cols-2 gap-3 mt-2">
-                                    {item.before_photo_url && (
+                                {/* 사진 항목 - 타입별 사진 표시 */}
+                                {item.type !== 'check' && (
+                                  <div className={`mt-2 ${(item.type === 'before_after_photo' && item.before_photo_url && item.after_photo_url) ? 'grid grid-cols-2 gap-3' : ''}`}>
+                                    {(item.type === 'before_photo' || item.type === 'before_after_photo') && item.before_photo_url && (
                                       <div>
                                         <p className="text-xs text-gray-500 mb-1">관리 전</p>
                                         <button
@@ -852,7 +892,7 @@ export default function ChecklistClient() {
                                         </button>
                                       </div>
                                     )}
-                                    {item.after_photo_url && (
+                                    {(item.type === 'after_photo' || item.type === 'before_after_photo') && item.after_photo_url && (
                                       <div>
                                         <p className="text-xs text-gray-500 mb-1">관리 후</p>
                                         <button
@@ -897,6 +937,15 @@ export default function ChecklistClient() {
                                         {item.comment}
                                       </div>
                                     )}
+                                  </div>
+                                )}
+                                
+                                {/* 사진 항목 - 코멘트 */}
+                                {item.type !== 'check' && item.comment && (
+                                  <div className="mt-2">
+                                    <div className="text-gray-600 text-sm p-2 bg-gray-50 rounded">
+                                      {item.comment}
+                                    </div>
                                   </div>
                                 )}
                               </div>

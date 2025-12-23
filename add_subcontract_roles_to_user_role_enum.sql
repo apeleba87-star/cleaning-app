@@ -12,3 +12,4 @@ ALTER TYPE user_role ADD VALUE IF NOT EXISTS 'subcontract_company';
 -- SELECT enum_range(NULL::user_role);
 
 
+

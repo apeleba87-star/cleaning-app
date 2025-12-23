@@ -6,3 +6,4 @@ ADD COLUMN IF NOT EXISTS business_registration_number TEXT NULL;
 COMMENT ON COLUMN public.users.business_registration_number IS '도급(업체) 역할인 경우 사업자등록번호';
 
 
+

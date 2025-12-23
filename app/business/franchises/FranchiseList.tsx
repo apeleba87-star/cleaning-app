@@ -234,3 +234,4 @@ export default function FranchiseList({ initialFranchises, companyId }: Franchis
 
 
 
+

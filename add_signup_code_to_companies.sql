@@ -25,3 +25,4 @@ UPDATE companies
 SET signup_code = 'COMPANY-' || UPPER(SUBSTRING(id::text, 1, 8))
 WHERE signup_code IS NULL;
 
+

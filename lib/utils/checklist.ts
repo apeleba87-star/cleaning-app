@@ -21,8 +21,20 @@ export function calculateChecklistProgress(checklist: Checklist): ChecklistProgr
       if (item.checked) {
         completedItems++
       }
-    } else if (item.type === 'photo') {
-      // 각 사진 항목은 before + after 2개로 간주
+    } else if (item.type === 'before_photo') {
+      // 관리 전 사진: before_photo_url만 확인
+      totalItems++
+      if (item.before_photo_url) {
+        completedItems++
+      }
+    } else if (item.type === 'after_photo') {
+      // 관리 후 사진: after_photo_url만 확인
+      totalItems++
+      if (item.after_photo_url) {
+        completedItems++
+      }
+    } else if (item.type === 'before_after_photo') {
+      // 관리 전/후 사진: before + after 2개로 간주
       totalItems += 2
       if (item.before_photo_url) {
         completedItems++

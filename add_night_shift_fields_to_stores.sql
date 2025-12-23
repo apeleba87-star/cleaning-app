@@ -19,3 +19,4 @@ ADD CONSTRAINT chk_work_start_hour CHECK (work_start_hour >= 0 AND work_start_ho
 ALTER TABLE stores
 ADD CONSTRAINT chk_work_end_hour CHECK (work_end_hour >= 0 AND work_end_hour <= 23);
 
+

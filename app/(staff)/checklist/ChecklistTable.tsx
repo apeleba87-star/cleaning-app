@@ -15,24 +15,17 @@ export function ChecklistTable({ items, storeId, onItemsChange, onCameraModeRequ
   const [viewingPhotoIndex, setViewingPhotoIndex] = useState<number | null>(null)
   const [viewingPhotoMode, setViewingPhotoMode] = useState<'before' | 'after' | null>(null)
 
-  // 수행해야 할 항목: 관리 전 사진이 없는 사진 항목 + 체크 안된 체크 항목
-  // 관리 후 완료된 항목: 관리 후 사진이 있는 사진 항목
-  const itemsToShow = items.map((item, originalIndex) => ({ item, originalIndex })).filter(({ item }) => {
-    if (item.type === 'photo') {
-      // 사진 항목: 관리 전 사진이 없거나 (수행해야 할) 관리 후 사진이 있는 경우 (완료된 항목)
-      return !item.before_photo_url || item.after_photo_url
-    } else {
-      // 체크 항목: 항상 표시
-      return true
-    }
-  })
+  // 모든 항목 표시 (사진 항목도 코멘트 입력을 위해 항상 표시)
+  const itemsToShow = items.map((item, originalIndex) => ({ item, originalIndex }))
   // 사진 타입 항목을 먼저, 체크 타입 항목을 나중에 정렬
   .sort((a, b) => {
     // 사진 타입이 체크 타입보다 먼저 오도록 정렬
-    if (a.item.type === 'photo' && b.item.type === 'check') {
+    const aIsPhoto = a.item.type !== 'check'
+    const bIsPhoto = b.item.type !== 'check'
+    if (aIsPhoto && !bIsPhoto) {
       return -1
     }
-    if (a.item.type === 'check' && b.item.type === 'photo') {
+    if (!aIsPhoto && bIsPhoto) {
       return 1
     }
     // 같은 타입이면 원래 순서 유지
@@ -60,8 +53,11 @@ export function ChecklistTable({ items, storeId, onItemsChange, onCameraModeRequ
   return (
     <div className="space-y-2">
       {itemsToShow.map(({ item, originalIndex }, displayIndex) => {
-        // 관리 후 사진이 있으면 완료된 항목 (연하게 표시 + 밑줄)
-        const isPhotoCompleted = item.type === 'photo' && item.after_photo_url
+        // 사진 항목 완료 체크
+        const isPhotoCompleted = 
+          (item.type === 'before_photo' && item.before_photo_url) ||
+          (item.type === 'after_photo' && item.after_photo_url) ||
+          (item.type === 'before_after_photo' && item.before_photo_url && item.after_photo_url)
         // 체크 항목이 체크되었으면 완료된 항목 (연하게 표시 + 밑줄)
         const isCheckCompleted = item.type === 'check' && item.checked
         const isCompleted = isPhotoCompleted || isCheckCompleted
@@ -69,7 +65,7 @@ export function ChecklistTable({ items, storeId, onItemsChange, onCameraModeRequ
         return (
           <div
             key={originalIndex}
-            className={`border rounded-lg p-3 transition-all ${
+            className={`border rounded-lg p-3 transition-all space-y-2 ${
               isCompleted
                 ? 'bg-gray-50 opacity-60 border-gray-200'
                 : 'bg-white border-gray-300 shadow-sm hover:shadow-md'
@@ -80,7 +76,7 @@ export function ChecklistTable({ items, storeId, onItemsChange, onCameraModeRequ
               <div className="flex items-center gap-2 flex-1 min-w-0">
                 {/* 타입 아이콘 */}
                 <div className="flex-shrink-0">
-                  {item.type === 'photo' ? (
+                  {item.type !== 'check' ? (
                     <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center">
                       <span className="text-blue-600 text-sm">📷</span>
                     </div>
@@ -128,20 +124,19 @@ export function ChecklistTable({ items, storeId, onItemsChange, onCameraModeRequ
                     )}
                   </button>
                 ) : (
-                  // 사진 항목
+                  // 사진 항목 - 타입별로 다르게 처리
                   <div className="flex gap-2">
-                    {!item.before_photo_url ? (
-                      // 관리 전 사진 촬영 필요
-                      <button
-                        onClick={() => handleStartPhotoUpload('before')}
-                        className="px-3 py-1.5 bg-blue-500 text-white rounded-lg hover:bg-blue-600 font-medium text-xs flex items-center gap-1.5"
-                      >
-                        <span>📷</span>
-                        <span>관리 전</span>
-                      </button>
-                    ) : !item.after_photo_url ? (
-                      // 관리 후 사진 촬영 필요
-                      <>
+                    {item.type === 'before_photo' ? (
+                      // 관리전 사진만 필요한 경우
+                      !item.before_photo_url ? (
+                        <button
+                          onClick={() => handleStartPhotoUpload('before')}
+                          className="px-3 py-1.5 bg-blue-500 text-white rounded-lg hover:bg-blue-600 font-medium text-xs flex items-center gap-1.5"
+                        >
+                          <span>📷</span>
+                          <span>관리 전</span>
+                        </button>
+                      ) : (
                         <button
                           onClick={() => {
                             setViewingPhotoIndex(originalIndex)
@@ -161,10 +156,11 @@ export function ChecklistTable({ items, storeId, onItemsChange, onCameraModeRequ
                           <div className="absolute -bottom-1 left-1/2 transform -translate-x-1/2 bg-blue-500 text-white text-xs px-1.5 py-0.5 rounded">
                             전
                           </div>
-                          <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-10 rounded transition-opacity flex items-center justify-center">
-                            <span className="text-white text-xs opacity-0 group-hover:opacity-100">확인</span>
-                          </div>
                         </button>
+                      )
+                    ) : item.type === 'after_photo' ? (
+                      // 관리후 사진만 필요한 경우
+                      !item.after_photo_url ? (
                         <button
                           onClick={() => handleStartPhotoUpload('after')}
                           className="px-3 py-1.5 bg-green-500 text-white rounded-lg hover:bg-green-600 font-medium text-xs flex items-center gap-1.5"
@@ -172,46 +168,108 @@ export function ChecklistTable({ items, storeId, onItemsChange, onCameraModeRequ
                           <span>📷</span>
                           <span>관리 후</span>
                         </button>
-                      </>
-                    ) : (
-                      // 완료된 항목 (두 사진 모두 있음)
-                      <div className="flex gap-2">
-                        <button
-                          onClick={() => {
-                            setViewingPhotoIndex(originalIndex)
-                            setViewingPhotoMode('before')
-                          }}
-                          className="relative group"
-                          title="클릭하여 관리 전 사진 확인"
-                        >
-                          <img
-                            src={item.before_photo_url}
-                            alt="관리 전"
-                            className="w-12 h-12 object-cover rounded border-2 border-blue-300 opacity-60 group-hover:opacity-80 transition-opacity"
-                          />
-                          <div className="absolute -bottom-1 left-1/2 transform -translate-x-1/2 bg-blue-500 text-white text-xs px-1.5 py-0.5 rounded opacity-70">
-                            전
-                          </div>
-                        </button>
+                      ) : (
                         <button
                           onClick={() => {
                             setViewingPhotoIndex(originalIndex)
                             setViewingPhotoMode('after')
                           }}
                           className="relative group"
-                          title="클릭하여 관리 후 사진 확인"
                         >
                           <img
                             src={item.after_photo_url}
                             alt="관리 후"
-                            className="w-12 h-12 object-cover rounded border-2 border-green-300 opacity-60 group-hover:opacity-80 transition-opacity"
+                            className="w-12 h-12 object-cover rounded border-2 border-green-300 hover:border-green-500 transition-colors cursor-pointer"
+                            onError={() => {
+                              console.error('Image load error:', item.after_photo_url)
+                              setImageErrors(prev => ({ ...prev, [`after-${originalIndex}`]: true }))
+                            }}
                           />
-                          <div className="absolute -bottom-1 left-1/2 transform -translate-x-1/2 bg-green-500 text-white text-xs px-1.5 py-0.5 rounded opacity-70">
+                          <div className="absolute -bottom-1 left-1/2 transform -translate-x-1/2 bg-green-500 text-white text-xs px-1.5 py-0.5 rounded">
                             후
                           </div>
                         </button>
-                      </div>
-                    )}
+                      )
+                    ) : item.type === 'before_after_photo' ? (
+                      // 관리전후 사진 모두 필요한 경우
+                      !item.before_photo_url ? (
+                        <button
+                          onClick={() => handleStartPhotoUpload('before')}
+                          className="px-3 py-1.5 bg-blue-500 text-white rounded-lg hover:bg-blue-600 font-medium text-xs flex items-center gap-1.5"
+                        >
+                          <span>📷</span>
+                          <span>관리 전</span>
+                        </button>
+                      ) : !item.after_photo_url ? (
+                        <>
+                          <button
+                            onClick={() => {
+                              setViewingPhotoIndex(originalIndex)
+                              setViewingPhotoMode('before')
+                            }}
+                            className="relative group"
+                          >
+                            <img
+                              src={item.before_photo_url}
+                              alt="관리 전"
+                              className="w-12 h-12 object-cover rounded border-2 border-blue-300 hover:border-blue-500 transition-colors cursor-pointer"
+                              onError={() => {
+                                console.error('Image load error:', item.before_photo_url)
+                                setImageErrors(prev => ({ ...prev, [`before-${originalIndex}`]: true }))
+                              }}
+                            />
+                            <div className="absolute -bottom-1 left-1/2 transform -translate-x-1/2 bg-blue-500 text-white text-xs px-1.5 py-0.5 rounded">
+                              전
+                            </div>
+                          </button>
+                          <button
+                            onClick={() => handleStartPhotoUpload('after')}
+                            className="px-3 py-1.5 bg-green-500 text-white rounded-lg hover:bg-green-600 font-medium text-xs flex items-center gap-1.5"
+                          >
+                            <span>📷</span>
+                            <span>관리 후</span>
+                          </button>
+                        </>
+                      ) : (
+                        // 완료된 항목 (두 사진 모두 있음)
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => {
+                              setViewingPhotoIndex(originalIndex)
+                              setViewingPhotoMode('before')
+                            }}
+                            className="relative group"
+                            title="클릭하여 관리 전 사진 확인"
+                          >
+                            <img
+                              src={item.before_photo_url}
+                              alt="관리 전"
+                              className="w-12 h-12 object-cover rounded border-2 border-blue-300 opacity-60 group-hover:opacity-80 transition-opacity"
+                            />
+                            <div className="absolute -bottom-1 left-1/2 transform -translate-x-1/2 bg-blue-500 text-white text-xs px-1.5 py-0.5 rounded opacity-70">
+                              전
+                            </div>
+                          </button>
+                          <button
+                            onClick={() => {
+                              setViewingPhotoIndex(originalIndex)
+                              setViewingPhotoMode('after')
+                            }}
+                            className="relative group"
+                            title="클릭하여 관리 후 사진 확인"
+                          >
+                            <img
+                              src={item.after_photo_url}
+                              alt="관리 후"
+                              className="w-12 h-12 object-cover rounded border-2 border-green-300 opacity-60 group-hover:opacity-80 transition-opacity"
+                            />
+                            <div className="absolute -bottom-1 left-1/2 transform -translate-x-1/2 bg-green-500 text-white text-xs px-1.5 py-0.5 rounded opacity-70">
+                              후
+                            </div>
+                          </button>
+                        </div>
+                      )
+                    ) : null}
                   </div>
                 )}
               </div>
@@ -236,6 +294,35 @@ export function ChecklistTable({ items, storeId, onItemsChange, onCameraModeRequ
                 {item.comment && (
                   <div className="text-gray-600 text-xs p-1.5 bg-gray-50 rounded">
                     {item.comment}
+                  </div>
+                )}
+              </div>
+            )}
+            
+            {/* 사진 항목의 코멘트 - 모든 사진 타입 항목에 표시 */}
+            {item.type !== 'check' && (
+              <div className="mt-3 pt-3 border-t border-gray-200 bg-gray-50 p-3 rounded">
+                <label className="block text-xs font-medium text-gray-700 mb-2">
+                  코멘트 (선택)
+                </label>
+                <textarea
+                  rows={2}
+                  placeholder="이 항목에 대한 코멘트를 입력하세요"
+                  value={item.comment || ''}
+                  onChange={(e) => {
+                    const newItems = [...items]
+                    newItems[originalIndex] = {
+                      ...newItems[originalIndex],
+                      comment: e.target.value
+                    }
+                    onItemsChange(newItems)
+                  }}
+                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white resize-none"
+                />
+                {item.comment && item.comment.trim() && (
+                  <div className="mt-2 text-gray-700 text-xs p-2 bg-white rounded border border-gray-200">
+                    <span className="font-medium text-blue-600">입력된 코멘트:</span>
+                    <div className="mt-1">{item.comment}</div>
                   </div>
                 )}
               </div>

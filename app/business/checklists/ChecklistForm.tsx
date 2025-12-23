@@ -39,11 +39,16 @@ export default function ChecklistForm({
   const isEditMode = !!initialChecklist
   const [items, setItems] = useState<ChecklistItem[]>(
     initialChecklist?.items?.length > 0
-      ? initialChecklist.items
+      ? initialChecklist.items.map((item) => {
+          // 기존 'photo' 타입을 'before_after_photo'로 변환
+          if (item.type === 'photo') {
+            return { ...item, type: 'before_after_photo' as const }
+          }
+          return item
+        })
       : [{ area: '', type: 'check', status: 'good', checked: false, comment: '' }]
   )
   const [note, setNote] = useState(initialChecklist?.note || '')
-  const [requiresPhotos, setRequiresPhotos] = useState(initialChecklist?.requires_photos ?? false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -53,12 +58,12 @@ export default function ChecklistForm({
     setItems([...items, { area: '', type: 'check', status: 'good', checked: false, comment: '' }])
   }
 
-  const handleItemTypeChange = (index: number, type: 'check' | 'photo') => {
+  const handleItemTypeChange = (index: number, type: 'check' | 'before_photo' | 'after_photo' | 'before_after_photo') => {
     const newItems = [...items]
     if (type === 'check') {
       newItems[index] = { ...newItems[index], type: 'check', status: 'good', checked: false, before_photo_url: null, after_photo_url: null }
     } else {
-      newItems[index] = { ...newItems[index], type: 'photo', status: undefined, checked: undefined, before_photo_url: null, after_photo_url: null }
+      newItems[index] = { ...newItems[index], type, status: undefined, checked: undefined, before_photo_url: null, after_photo_url: null }
     }
     setItems(newItems)
   }
@@ -118,11 +123,10 @@ export default function ChecklistForm({
             status: item.type === 'check' ? item.status : undefined,
             checked: item.type === 'check' ? item.checked || false : undefined,
             comment: item.comment?.trim() || undefined,
-            before_photo_url: item.type === 'photo' ? item.before_photo_url : undefined,
-            after_photo_url: item.type === 'photo' ? item.after_photo_url : undefined,
+            before_photo_url: (item.type === 'before_photo' || item.type === 'before_after_photo') ? item.before_photo_url : undefined,
+            after_photo_url: (item.type === 'after_photo' || item.type === 'before_after_photo') ? item.after_photo_url : undefined,
           })),
           note: note.trim() || null,
-          requires_photos: requiresPhotos,
         }),
       })
 
@@ -161,23 +165,6 @@ export default function ChecklistForm({
 
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
-          <label className="flex items-center space-x-2">
-            <input
-              type="checkbox"
-              checked={requiresPhotos}
-              onChange={(e) => setRequiresPhotos(e.target.checked)}
-              className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-            />
-            <span className="text-sm font-medium text-gray-700">
-              필수 사진 촬영 (관리 전/후 사진 필수)
-            </span>
-          </label>
-          <p className="mt-1 text-xs text-gray-500">
-            체크 시, 직원이 체크리스트 수행 시 관리 전/후 사진을 반드시 촬영해야 합니다.
-          </p>
-        </div>
-
-        <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">
             체크리스트 항목 <span className="text-red-500">*</span>
           </label>
@@ -195,11 +182,13 @@ export default function ChecklistForm({
                   <div className="flex items-center space-x-2">
                     <select
                       value={item.type}
-                      onChange={(e) => handleItemTypeChange(index, e.target.value as 'check' | 'photo')}
+                      onChange={(e) => handleItemTypeChange(index, e.target.value as 'check' | 'before_photo' | 'after_photo' | 'before_after_photo')}
                       className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                     >
                       <option value="check">일반 체크</option>
-                      <option value="photo">사진 필요</option>
+                      <option value="before_photo">관리 전 사진</option>
+                      <option value="after_photo">관리 후 사진</option>
+                      <option value="before_after_photo">관리 전/후 사진</option>
                     </select>
                     {item.type === 'check' && (
                       <>
@@ -226,9 +215,20 @@ export default function ChecklistForm({
                         />
                       </>
                     )}
-                    {item.type === 'photo' && (
-                      <div className="flex-1 text-sm text-gray-600">
-                        사진 필요 항목: 관리 전/후 사진을 촬영해야 합니다.
+                    {(item.type === 'before_photo' || item.type === 'after_photo' || item.type === 'before_after_photo') && (
+                      <div className="flex-1">
+                        <div className="text-sm text-gray-600 mb-2">
+                          {item.type === 'before_photo' && '관리 전 사진만 촬영합니다.'}
+                          {item.type === 'after_photo' && '관리 후 사진만 촬영합니다.'}
+                          {item.type === 'before_after_photo' && '관리 전/후 사진을 모두 촬영해야 합니다.'}
+                        </div>
+                        <input
+                          type="text"
+                          placeholder="코멘트 입력 (선택)"
+                          value={item.comment || ''}
+                          onChange={(e) => handleItemChange(index, 'comment', e.target.value)}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                        />
                       </div>
                     )}
                     {items.length > 1 && (

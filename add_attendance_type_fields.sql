@@ -34,3 +34,4 @@ CREATE INDEX IF NOT EXISTS idx_attendance_type ON attendance(attendance_type);
 CREATE INDEX IF NOT EXISTS idx_attendance_scheduled_date ON attendance(scheduled_date) WHERE scheduled_date IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_attendance_problem_report_id ON attendance(problem_report_id) WHERE problem_report_id IS NOT NULL;
 
+

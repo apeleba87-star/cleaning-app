@@ -18,8 +18,8 @@ export function ChecklistCamera({ items, mode, storeId, onComplete, onCancel }: 
   const videoRef = useRef<HTMLVideoElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
 
-  // 사진이 필요한 항목만 필터링
-  const photoItems = items.filter(item => item.area?.trim() && item.type === 'photo')
+  // 전달받은 항목들이 이미 필터링되어 있음
+  const photoItems = items.filter(item => item.area?.trim())
 
   const [cameraError, setCameraError] = useState<string | null>(null)
 
@@ -159,8 +159,8 @@ export function ChecklistCamera({ items, mode, storeId, onComplete, onCancel }: 
   }
 
   const handleSave = async () => {
-    // 관리전 사진은 확인 없이 자동 저장, 관리후 사진은 확인 필요
-    if (mode === 'after' && !confirm('저장할까요?')) {
+    // 관리전/관리후 사진 모두 확인 필요
+    if (!confirm('저장할까요?')) {
       return
     }
 

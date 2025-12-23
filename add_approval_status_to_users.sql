@@ -25,3 +25,4 @@ ADD COLUMN IF NOT EXISTS rejection_reason TEXT;
 CREATE INDEX IF NOT EXISTS idx_users_approval_status ON users(approval_status, company_id) 
 WHERE approval_status = 'pending';
 
+

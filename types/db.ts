@@ -159,12 +159,12 @@ export interface CleaningPhoto {
 
 export interface ChecklistItem {
   area: string
-  type: 'check' | 'photo' // 'check': 일반 체크리스트, 'photo': 사진 필요
+  type: 'check' | 'before_photo' | 'after_photo' | 'before_after_photo' // 'check': 일반 체크리스트, 'before_photo': 관리 전 사진, 'after_photo': 관리 후 사진, 'before_after_photo': 관리 전/후 사진
   status?: 'good' | 'bad' // 일반 체크리스트용
   checked?: boolean // 일반 체크리스트 체크 여부
   comment?: string
-  before_photo_url?: string | null // 사진 필요 항목 - 관리 전 사진
-  after_photo_url?: string | null // 사진 필요 항목 - 관리 후 사진
+  before_photo_url?: string | null // 관리 전 사진 항목 - 관리 전 사진
+  after_photo_url?: string | null // 관리 후 사진 항목 - 관리 후 사진
 }
 
 export interface Checklist {

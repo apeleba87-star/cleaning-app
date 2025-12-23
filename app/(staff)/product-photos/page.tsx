@@ -28,6 +28,7 @@ export default function ProductPhotosPage() {
   
   const cameraInputRef = useRef<HTMLInputElement>(null)
   const galleryInputRef = useRef<HTMLInputElement>(null)
+  const storageGalleryInputRef = useRef<HTMLInputElement>(null)
   const [showCamera, setShowCamera] = useState(false)
   const [cameraPhotoType, setCameraPhotoType] = useState<PhotoSubType>('product')
   const videoRef = useRef<HTMLVideoElement>(null)
@@ -74,8 +75,17 @@ export default function ProductPhotosPage() {
       return
     }
     setActivePhotoType(photoType)
-    if (galleryInputRef.current) {
-      galleryInputRef.current.click()
+    
+    // 보관 사진 탭인 경우 별도의 input 사용
+    if (activeTab === 'storage') {
+      if (storageGalleryInputRef.current) {
+        storageGalleryInputRef.current.click()
+      }
+    } else {
+      // 제품 입고 탭인 경우 기존 input 사용
+      if (galleryInputRef.current) {
+        galleryInputRef.current.click()
+      }
     }
   }
 
@@ -694,6 +704,16 @@ export default function ProductPhotosPage() {
                   <p className="mt-2 text-xs text-gray-500">
                     최대 10장까지 업로드 가능합니다. (현재 {currentPhotos.length}/10)
                   </p>
+                  
+                  {/* 보관 사진용 갤러리 input */}
+                  <input
+                    ref={storageGalleryInputRef}
+                    type="file"
+                    accept="image/*"
+                    onChange={handleFileSelect}
+                    className="hidden"
+                    multiple
+                  />
                 </div>
               </>
             )}

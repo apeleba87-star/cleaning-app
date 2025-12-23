@@ -14,3 +14,4 @@ DROP CONSTRAINT IF EXISTS expenses_category_check;
 -- WHERE table_name = 'expenses' AND constraint_type = 'CHECK';
 
 
+
