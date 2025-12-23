@@ -2,7 +2,7 @@ import { NextRequest } from 'next/server'
 import { createServerSupabaseClient, getServerUser } from '@/lib/supabase/server'
 import { clockOutSchema } from '@/zod/schemas'
 import { handleApiError, ValidationError, UnauthorizedError, ForbiddenError, NotFoundError } from '@/lib/errors'
-import { getTodayDateKST } from '@/lib/utils/date'
+import { getTodayDateKST, getYesterdayDateKST } from '@/lib/utils/date'
 
 export async function POST(request: NextRequest) {
   try {
@@ -25,21 +25,35 @@ export async function POST(request: NextRequest) {
     const { store_id, location } = validated.data
     const supabase = await createServerSupabaseClient()
 
-    // 특정 매장의 오늘 출근 기록 찾기
+    // 특정 매장의 출근 기록 찾기 (오늘 날짜로 먼저 검색)
     const today = getTodayDateKST()
-    const { data: attendance, error: findError } = await supabase
+    const yesterday = getYesterdayDateKST()
+    
+    let attendance = await supabase
       .from('attendance')
-      .select('id, clock_out_at, store_id')
+      .select('id, clock_out_at, store_id, work_date')
       .eq('user_id', user.id)
       .eq('store_id', store_id)
       .eq('work_date', today)
       .maybeSingle()
 
-    if (findError || !attendance) {
+    // 없으면 어제 날짜의 미퇴근 기록도 확인 (날짜 경계를 넘는 야간 근무 고려)
+    if (!attendance.data) {
+      attendance = await supabase
+        .from('attendance')
+        .select('id, clock_out_at, store_id, work_date')
+        .eq('user_id', user.id)
+        .eq('store_id', store_id)
+        .eq('work_date', yesterday)
+        .is('clock_out_at', null)
+        .maybeSingle()
+    }
+
+    if (attendance.error || !attendance.data) {
       throw new NotFoundError('해당 매장의 출근 기록을 찾을 수 없습니다.')
     }
 
-    if (attendance.clock_out_at) {
+    if (attendance.data.clock_out_at) {
       return Response.json(
         {
           error: 'AlreadyClockedOut',
@@ -58,7 +72,7 @@ export async function POST(request: NextRequest) {
         clock_out_latitude: location.lat.toString(),
         clock_out_longitude: location.lng.toString(),
       })
-      .eq('id', attendance.id)
+      .eq('id', attendance.data.id)
       .select()
       .single()
 

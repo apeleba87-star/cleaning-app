@@ -9,12 +9,13 @@ interface StoreSelectorProps {
   onSelectStore: (storeId: string) => void
   disabled?: boolean // 출근 후 매장 선택 불가
   excludeStoreIds?: string[] // 제외할 매장 ID 목록 (이미 출근한 매장)
+  showOnlyTodayManagement?: boolean // true: 오늘 관리 요일인 매장만, false: 오늘 관리 요일이 아닌 매장만, undefined: 모든 매장
 }
 
 // StoreSelector에서 사용하는 최소 필드 타입
 type StoreSelectorStore = Pick<Store, 'id' | 'name' | 'company_id' | 'deleted_at' | 'management_days'>
 
-export default function StoreSelector({ selectedStoreId: propSelectedStoreId, onSelectStore, disabled = false, excludeStoreIds = [] }: StoreSelectorProps) {
+export default function StoreSelector({ selectedStoreId: propSelectedStoreId, onSelectStore, disabled = false, excludeStoreIds = [], showOnlyTodayManagement = true }: StoreSelectorProps) {
   const [stores, setStores] = useState<StoreSelectorStore[]>([])
   const [selectedStoreId, setSelectedStoreId] = useState<string>(propSelectedStoreId)
   const [loading, setLoading] = useState(true)
@@ -22,7 +23,7 @@ export default function StoreSelector({ selectedStoreId: propSelectedStoreId, on
 
   useEffect(() => {
     loadAssignedStores()
-  }, [])
+  }, [showOnlyTodayManagement, excludeStoreIds])
 
   const loadAssignedStores = async () => {
     const supabase = createClient()
@@ -111,11 +112,12 @@ export default function StoreSelector({ selectedStoreId: propSelectedStoreId, on
     const dayNames = ['일', '월', '화', '수', '목', '금', '토']
     const todayDayName = dayNames[dayOfWeek]
     
-    // 오늘이 관리 요일인 매장만 필터링
-    const todayManagementStores = (storesData || []).filter((store) => {
+    // showOnlyTodayManagement에 따라 필터링
+    const filteredStores = (storesData || []).filter((store) => {
       // management_days가 없으면 모든 요일 허용 (기존 매장 호환성)
       if (!store.management_days || store.management_days.trim() === '') {
-        return true
+        // management_days가 없으면 showOnlyTodayManagement가 false일 때만 포함
+        return showOnlyTodayManagement === false
       }
       
       // management_days에서 오늘 요일이 포함되어 있는지 확인
@@ -124,21 +126,32 @@ export default function StoreSelector({ selectedStoreId: propSelectedStoreId, on
       const dayList = managementDays.split(',').map(d => d.trim())
       
       // 쉼표로 구분된 경우와 그렇지 않은 경우 모두 처리
+      let isTodayManagement = false
       if (dayList.length > 1) {
         // "월,수,금" 형식
-        return dayList.includes(todayDayName)
+        isTodayManagement = dayList.includes(todayDayName)
       } else {
         // "월수금" 형식 - 각 요일 글자 하나씩 확인
-        return managementDays.includes(todayDayName)
+        isTodayManagement = managementDays.includes(todayDayName)
+      }
+      
+      // showOnlyTodayManagement에 따라 반환
+      if (showOnlyTodayManagement === true) {
+        return isTodayManagement // 오늘 관리 요일인 매장만
+      } else if (showOnlyTodayManagement === false) {
+        return !isTodayManagement // 오늘 관리 요일이 아닌 매장만
+      } else {
+        return true // 모든 매장
       }
     })
 
     console.log('Today:', todayDayName)
-    console.log('Today management stores:', todayManagementStores)
+    console.log('Filtered stores:', filteredStores)
+    console.log('showOnlyTodayManagement:', showOnlyTodayManagement)
 
     // excludeStoreIds에는 이미 출근한 매장만 포함 (퇴근 완료된 매장은 제외하지 않음)
     // 따라서 퇴근 완료된 매장은 다시 출근 가능
-    const availableStores = todayManagementStores.filter(
+    const availableStores = filteredStores.filter(
       store => !excludeStoreIds.includes(store.id)
     )
     
@@ -193,11 +206,13 @@ export default function StoreSelector({ selectedStoreId: propSelectedStoreId, on
     const dayNames = ['일', '월', '화', '수', '목', '금', '토']
     const todayDayName = dayNames[dayOfWeek]
     
-    if (excludeStoreIds.length > 0) {
+    if (excludeStoreIds.length > 0 && showOnlyTodayManagement) {
       return (
         <div className="w-full px-3 py-2 border border-gray-300 rounded-md bg-blue-50">
           <p className="text-sm text-blue-800">
-            오늘({todayDayName}요일) 관리 요일인 모든 매장에 출근했습니다.
+            {showOnlyTodayManagement 
+              ? `오늘(${todayDayName}요일) 관리 요일인 모든 매장에 출근했습니다.`
+              : '모든 매장에 출근했습니다.'}
           </p>
         </div>
       )
@@ -205,7 +220,11 @@ export default function StoreSelector({ selectedStoreId: propSelectedStoreId, on
     return (
       <div className="w-full px-3 py-2 border border-gray-300 rounded-md bg-yellow-50">
         <p className="text-sm text-yellow-800">
-          오늘({todayDayName}요일) 관리 요일인 배정 매장이 없습니다.
+          {showOnlyTodayManagement === false
+            ? `오늘(${todayDayName}요일) 관리 요일이 아닌 배정 매장이 없습니다.`
+            : showOnlyTodayManagement === true
+            ? `오늘(${todayDayName}요일) 관리 요일인 배정 매장이 없습니다.`
+            : '배정된 매장이 없습니다.'}
         </p>
         <p className="text-xs text-yellow-700 mt-1">
           관리자에게 문의하거나 매장의 관리 요일을 확인하세요.

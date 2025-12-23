@@ -4,7 +4,7 @@ import { createServerSupabaseClient, getServerUser } from '@/lib/supabase/server
 import { clockInSchema, clockOutSchema } from '@/zod/schemas'
 import { revalidatePath } from 'next/cache'
 import { GPSLocation } from '@/types/db'
-import { getTodayDateKST } from '@/lib/utils/date'
+import { getTodayDateKST, getYesterdayDateKST } from '@/lib/utils/date'
 
 export interface ServerActionResponse<T = unknown> {
   success: boolean
@@ -15,7 +15,11 @@ export interface ServerActionResponse<T = unknown> {
 export async function clockInAction(
   store_id: string,
   location: GPSLocation,
-  selfie_url?: string
+  selfie_url?: string,
+  attendance_type: 'regular' | 'rescheduled' | 'emergency' = 'regular',
+  scheduled_date?: string | null,
+  problem_report_id?: string | null,
+  change_reason?: string | null
 ): Promise<ServerActionResponse> {
   try {
     const user = await getServerUser()
@@ -27,13 +31,18 @@ export async function clockInAction(
       store_id,
       location,
       selfie_url,
+      attendance_type,
+      scheduled_date: scheduled_date || null,
+      problem_report_id: problem_report_id || null,
+      change_reason: change_reason || null,
     })
 
     const supabase = await createServerSupabaseClient()
     const today = getTodayDateKST()
+    const yesterday = getYesterdayDateKST()
 
     // 오늘 날짜에 출근 중인 매장이 있는지 확인 (퇴근하지 않은 매장)
-    const { data: activeAttendance } = await supabase
+    let activeAttendance = await supabase
       .from('attendance')
       .select('id, store_id, clock_out_at')
       .eq('user_id', user.id)
@@ -41,12 +50,23 @@ export async function clockInAction(
       .is('clock_out_at', null)
       .maybeSingle()
 
-    if (activeAttendance) {
+    // 없으면 어제 날짜의 미퇴근 기록도 확인 (날짜 경계를 넘는 야간 근무 고려)
+    if (!activeAttendance.data) {
+      activeAttendance = await supabase
+        .from('attendance')
+        .select('id, store_id, clock_out_at')
+        .eq('user_id', user.id)
+        .eq('work_date', yesterday)
+        .is('clock_out_at', null)
+        .maybeSingle()
+    }
+
+    if (activeAttendance.data) {
       return { success: false, error: '먼저 출근 중인 매장의 퇴근 처리를 완료해주세요.' }
     }
 
-    // 동일 매장의 중복 출근 확인
-    const { data: existing } = await supabase
+    // 동일 매장의 중복 출근 확인 (오늘 날짜)
+    let existing = await supabase
       .from('attendance')
       .select('id')
       .eq('user_id', user.id)
@@ -54,15 +74,34 @@ export async function clockInAction(
       .eq('work_date', today)
       .maybeSingle()
 
-    if (existing) {
+    // 없으면 어제 날짜의 미퇴근 기록도 확인 (날짜 경계를 넘는 야간 근무 고려)
+    if (!existing.data) {
+      existing = await supabase
+        .from('attendance')
+        .select('id')
+        .eq('user_id', user.id)
+        .eq('store_id', validated.store_id)
+        .eq('work_date', yesterday)
+        .is('clock_out_at', null)
+        .maybeSingle()
+    }
+
+    if (existing.data) {
       return { success: false, error: '이미 해당 매장에 출근하셨습니다.' }
     }
+
+    // 출근 유형에 따라 work_date 결정
+    // 모든 경우에 실제 출근일은 오늘 날짜
+    const workDate = today
 
     console.log('Clock-in attempt:', {
       user_id: user.id,
       store_id: validated.store_id,
       location: validated.location,
-      work_date: today,
+      work_date: workDate,
+      attendance_type: validated.attendance_type,
+      scheduled_date: validated.scheduled_date,
+      problem_report_id: validated.problem_report_id,
     })
 
     // DECIMAL 타입 호환성을 위해 문자열로 변환
@@ -71,13 +110,17 @@ export async function clockInAction(
       .insert({
         user_id: user.id,
         store_id: validated.store_id,
-        work_date: today,
+        work_date: workDate,
         clock_in_at: new Date().toISOString(),
         clock_in_latitude: validated.location.lat.toString(),
         clock_in_longitude: validated.location.lng.toString(),
         selfie_url: validated.selfie_url || null,
+        attendance_type: validated.attendance_type,
+        scheduled_date: validated.scheduled_date || null,
+        problem_report_id: validated.problem_report_id || null,
+        change_reason: validated.change_reason || null,
       })
-      .select('id, user_id, store_id, work_date, clock_in_at, clock_in_latitude, clock_in_longitude, clock_out_at, clock_out_latitude, clock_out_longitude, selfie_url, created_at, updated_at')
+      .select('id, user_id, store_id, work_date, clock_in_at, clock_in_latitude, clock_in_longitude, clock_out_at, clock_out_latitude, clock_out_longitude, selfie_url, attendance_type, scheduled_date, problem_report_id, change_reason, created_at, updated_at')
       .single()
 
     if (error) {
@@ -211,17 +254,30 @@ export async function clockOutAction(
 
     const supabase = await createServerSupabaseClient()
     const today = getTodayDateKST()
+    const yesterday = getYesterdayDateKST()
 
-    // 특정 매장의 출근 기록 찾기
-    const { data: attendance, error: findError } = await supabase
+    // 특정 매장의 출근 기록 찾기 (오늘 날짜로 먼저 검색)
+    let attendance = await supabase
       .from('attendance')
-      .select('id, clock_out_at, store_id')
+      .select('id, clock_out_at, store_id, work_date')
       .eq('user_id', user.id)
       .eq('store_id', store_id)
       .eq('work_date', today)
       .maybeSingle()
 
-    if (findError || !attendance) {
+    // 없으면 어제 날짜의 미퇴근 기록도 확인 (날짜 경계를 넘는 야간 근무 고려)
+    if (!attendance.data) {
+      attendance = await supabase
+        .from('attendance')
+        .select('id, clock_out_at, store_id, work_date')
+        .eq('user_id', user.id)
+        .eq('store_id', store_id)
+        .eq('work_date', yesterday)
+        .is('clock_out_at', null)
+        .maybeSingle()
+    }
+
+    if (attendance.error || !attendance.data) {
       return { success: false, error: '해당 매장의 출근 기록을 찾을 수 없습니다.' }
     }
 
@@ -229,12 +285,13 @@ export async function clockOutAction(
       return { success: false, error: '이미 해당 매장에서 퇴근하셨습니다.' }
     }
 
-    // 퇴근 전 체크리스트 완료 여부 확인
+    // 퇴근 전 체크리스트 완료 여부 확인 (출근일 기준으로 조회)
+    const checklistWorkDate = attendance.data.work_date
     const { data: checklists, error: checklistError } = await supabase
       .from('checklist')
       .select('id, items')
       .eq('store_id', store_id)
-      .eq('work_date', today)
+      .eq('work_date', checklistWorkDate)
       .eq('assigned_user_id', user.id)
 
     if (checklistError) {
@@ -314,8 +371,8 @@ export async function clockOutAction(
         clock_out_latitude: validated.location.lat.toString(),
         clock_out_longitude: validated.location.lng.toString(),
       })
-      .eq('id', attendance.id)
-      .select('id, user_id, store_id, work_date, clock_in_at, clock_in_latitude, clock_in_longitude, clock_out_at, clock_out_latitude, clock_out_longitude, selfie_url, created_at, updated_at')
+      .eq('id', attendance.data.id)
+      .select('id, user_id, store_id, work_date, clock_in_at, clock_in_latitude, clock_in_longitude, clock_out_at, clock_out_latitude, clock_out_longitude, selfie_url, attendance_type, scheduled_date, problem_report_id, change_reason, created_at, updated_at')
       .single()
 
     if (error) {

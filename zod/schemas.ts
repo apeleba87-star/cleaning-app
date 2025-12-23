@@ -19,6 +19,11 @@ export const clockInSchema = z.object({
   store_id: z.string().uuid(),
   location: gpsLocationSchema,
   selfie_url: z.string().url().optional(),
+  // 출근 유형 관련 필드
+  attendance_type: z.enum(['regular', 'rescheduled', 'emergency']).default('regular'),
+  scheduled_date: z.string().date().optional().nullable(), // 원래 예정일 (rescheduled인 경우)
+  problem_report_id: z.string().uuid().optional().nullable(), // 긴급 출동인 경우 해결한 문제 ID
+  change_reason: z.string().optional().nullable(), // 출근일 변경 사유
 })
 
 // Clock Out

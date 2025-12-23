@@ -8,7 +8,7 @@ import { calculateChecklistProgress } from '@/lib/utils/checklist'
 import { GeoGuard } from '@/components/GeoGuard'
 import { clockInAction, clockOutAction } from '../attendance/actions'
 import { GPSLocation } from '@/types/db'
-import { getTodayDateKST } from '@/lib/utils/date'
+import { getTodayDateKST, getYesterdayDateKST } from '@/lib/utils/date'
 
 interface StoreWithAssignment {
   id: string
@@ -17,6 +17,7 @@ interface StoreWithAssignment {
   isWorkDay: boolean
   attendanceStatus: 'not_clocked_in' | 'clocked_in' | 'clocked_out'
   attendanceWorkDate: string | null
+  attendanceType?: string | null // 출근 유형 (regular, rescheduled, emergency)
 }
 
 interface Request {
@@ -283,28 +284,48 @@ export default function MobileDashboardPage() {
         }
 
         const today = getTodayDateKST()
+        const yesterday = getYesterdayDateKST()
 
-        // 오늘 날짜의 출근 기록만 조회 (어제 기록 제외)
-        const { data: todayAttendance, error: attendanceError } = await supabase
+        // 오늘 날짜의 출근 기록 조회 (attendance_type 포함)
+        const { data: todayAttendance, error: todayAttendanceError } = await supabase
             .from('attendance')
-            .select('store_id, clock_out_at, work_date')
+            .select('store_id, clock_out_at, work_date, attendance_type')
             .eq('user_id', session.user.id)
           .eq('work_date', today)
 
-        if (attendanceError) {
-          console.error('Error loading attendance:', attendanceError)
+        // 어제 날짜의 미퇴근 기록도 조회 (날짜 경계를 넘는 야간 근무 고려)
+        const { data: yesterdayAttendance, error: yesterdayAttendanceError } = await supabase
+            .from('attendance')
+            .select('store_id, clock_out_at, work_date, attendance_type')
+            .eq('user_id', session.user.id)
+          .eq('work_date', yesterday)
+          .is('clock_out_at', null)
+
+        if (todayAttendanceError || yesterdayAttendanceError) {
+          console.error('Error loading attendance:', todayAttendanceError || yesterdayAttendanceError)
         }
 
-        const attendanceMap = new Map<string, { status: 'not_clocked_in' | 'clocked_in' | 'clocked_out', workDate: string | null }>()
+        const attendanceMap = new Map<string, { status: 'not_clocked_in' | 'clocked_in' | 'clocked_out', workDate: string | null, attendanceType: string | null }>()
+        
+        // 오늘 날짜의 출근 기록 처리
         if (todayAttendance) {
           todayAttendance.forEach((attendance: any) => {
-            // 오늘 날짜의 출근 기록만 처리
             if (attendance.work_date === today) {
               if (attendance.clock_out_at) {
-                attendanceMap.set(attendance.store_id, { status: 'clocked_out', workDate: attendance.work_date })
+                attendanceMap.set(attendance.store_id, { status: 'clocked_out', workDate: attendance.work_date, attendanceType: attendance.attendance_type || null })
               } else {
-                attendanceMap.set(attendance.store_id, { status: 'clocked_in', workDate: attendance.work_date })
+                attendanceMap.set(attendance.store_id, { status: 'clocked_in', workDate: attendance.work_date, attendanceType: attendance.attendance_type || null })
               }
+            }
+          })
+        }
+        
+        // 어제 날짜의 미퇴근 기록 처리 (오늘 출근 기록이 없는 경우에만)
+        if (yesterdayAttendance) {
+          yesterdayAttendance.forEach((attendance: any) => {
+            // 오늘 날짜로 이미 처리된 매장이 아니고, 미퇴근인 경우만 처리
+            if (!attendanceMap.has(attendance.store_id) && !attendance.clock_out_at) {
+              attendanceMap.set(attendance.store_id, { status: 'clocked_in', workDate: attendance.work_date, attendanceType: attendance.attendance_type || null })
             }
           })
         }
@@ -318,19 +339,25 @@ export default function MobileDashboardPage() {
             
             let attendanceStatus: 'not_clocked_in' | 'clocked_in' | 'clocked_out' = 'not_clocked_in'
             let attendanceWorkDate: string | null = null
+            let attendanceType: string | null = null
             if (attendanceMap.has(store.id)) {
               const attendanceData = attendanceMap.get(store.id)
               attendanceStatus = attendanceData?.status || 'not_clocked_in'
               attendanceWorkDate = attendanceData?.workDate || null
+              attendanceType = attendanceData?.attendanceType || null
             }
+            
+            // 출근일 변경으로 출근한 경우, isWorkDay가 false여도 출근 상태로 처리
+            const isRescheduledAttendance = attendanceType === 'rescheduled' && attendanceStatus === 'clocked_in'
             
             return {
               id: store.id,
               name: store.name,
               management_days: store.management_days,
-              isWorkDay: isTodayWorkDay(store.management_days),
+              isWorkDay: isTodayWorkDay(store.management_days) || isRescheduledAttendance, // 출근일 변경 출근도 근무일로 처리
               attendanceStatus,
               attendanceWorkDate,
+              attendanceType,
             }
           })
           .filter((s: any): s is StoreWithAssignment => s !== null)
@@ -925,19 +952,22 @@ export default function MobileDashboardPage() {
       </div>
 
       {/* 직원 기본 정보 - 반응형 */}
-      <div className="bg-blue-600 text-white p-4 sm:p-6 mb-4">
-        <div className="flex items-center gap-3 sm:gap-4">
-          <div className="w-12 h-12 sm:w-16 sm:h-16 bg-purple-400 rounded-full flex items-center justify-center text-xl sm:text-2xl flex-shrink-0">
-            👤
-          </div>
-          <div className="min-w-0 flex-1">
-            <div className="text-base sm:text-lg font-semibold mb-1 truncate">{user.name || '직원'}</div>
-            <div className="text-xs sm:text-sm text-blue-100">
-              총 {totalStores}개 매장 관리
+      <Link href="/profile" className="block mb-4">
+        <div className="bg-blue-600 text-white p-4 sm:p-6 hover:bg-blue-700 transition-colors cursor-pointer rounded-lg">
+          <div className="flex items-center gap-3 sm:gap-4">
+            <div className="w-12 h-12 sm:w-16 sm:h-16 bg-purple-400 rounded-full flex items-center justify-center text-xl sm:text-2xl flex-shrink-0">
+              👤
             </div>
+            <div className="min-w-0 flex-1">
+              <div className="text-base sm:text-lg font-semibold mb-1 truncate">{user.name || '직원'}</div>
+              <div className="text-xs sm:text-sm text-blue-100">
+                총 {totalStores}개 매장 관리
+              </div>
+            </div>
+            <div className="text-white text-xl">›</div>
           </div>
         </div>
-      </div>
+      </Link>
 
       <div className="px-3 sm:px-4 space-y-4">
         {/* 공지사항 - 최상단 */}
@@ -1034,16 +1064,16 @@ export default function MobileDashboardPage() {
                       return
                     }
                     const result = await clockInAction(store.id, location)
-                    if (result.success) {
-                      // 출근 상태를 즉시 업데이트
-                      const today = getTodayDateKST()
+                    if (result.success && result.data) {
+                      // 출근 상태를 즉시 업데이트 (출근 기록의 work_date 사용)
+                      const workDate = result.data.work_date || getTodayDateKST()
                       setStores((prevStores) =>
                         prevStores.map((s) =>
                           s.id === store.id
                             ? {
                                 ...s,
                                 attendanceStatus: 'clocked_in' as const,
-                                attendanceWorkDate: today,
+                                attendanceWorkDate: workDate,
                               }
                             : s
                         )
@@ -1052,8 +1082,8 @@ export default function MobileDashboardPage() {
                       const supabase = createClient()
                       supabase.auth.getSession().then(({ data: { session } }) => {
                         if (session) {
-                          // 체크리스트 진행율 다시 로드
-                          loadChecklistProgressForStore(store.id, today, session.user.id)
+                          // 체크리스트 진행율 다시 로드 (출근일 기준)
+                          loadChecklistProgressForStore(store.id, workDate, session.user.id)
                         }
                       })
                     } else {
@@ -1190,7 +1220,7 @@ export default function MobileDashboardPage() {
                             ) : store.attendanceStatus === 'clocked_in' ? (
                               <>
                                 <span className="px-2 sm:px-3 py-0.5 sm:py-1 rounded-md text-xs font-medium bg-orange-100 text-orange-700 mb-1">
-                                  출근중
+                                  {store.attendanceType === 'rescheduled' ? '출근일 변경 출근중' : '출근중'}
                                 </span>
                                 <button
                                   onClick={handleClockOut}
@@ -1207,13 +1237,29 @@ export default function MobileDashboardPage() {
                           </span>
                             )
                           ) : (
-                            <button
-                              disabled
-                              className="px-3 sm:px-4 py-1.5 sm:py-2 rounded-md text-xs sm:text-sm font-medium bg-gray-200 text-gray-600 cursor-not-allowed"
-                            >
-                              휴무
-                            </button>
-                        )}
+                            // 출근일 변경으로 출근한 경우 퇴근 버튼 표시
+                            store.attendanceStatus === 'clocked_in' && store.attendanceType === 'rescheduled' ? (
+                              <>
+                                <span className="px-2 sm:px-3 py-0.5 sm:py-1 rounded-md text-xs font-medium bg-orange-100 text-orange-700 mb-1">
+                                  출근일 변경 출근중
+                                </span>
+                                <button
+                                  onClick={handleClockOut}
+                                  disabled={!location || clockingOut === store.id}
+                                  className="px-3 sm:px-4 py-1.5 sm:py-2 rounded-md text-xs sm:text-sm font-medium bg-red-600 text-white hover:bg-red-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
+                                >
+                                  {clockingOut === store.id ? '처리 중...' : '퇴근하기'}
+                                </button>
+                              </>
+                            ) : (
+                              <button
+                                disabled
+                                className="px-3 sm:px-4 py-1.5 sm:py-2 rounded-md text-xs sm:text-sm font-medium bg-gray-200 text-gray-600 cursor-not-allowed"
+                              >
+                                휴무
+                              </button>
+                            )
+                          )}
                       </div>
                       </div>
                       {/* 경고 메시지 */}

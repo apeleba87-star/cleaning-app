@@ -7,6 +7,7 @@ export type SupplyRequestStatus = 'requested' | 'received' | 'completed' | 'reje
 export type RequestCategoryType = 'issue' | 'supply'
 
 export type ApprovalStatus = 'pending' | 'approved' | 'rejected'
+export type AttendanceType = 'regular' | 'rescheduled' | 'emergency'
 
 export interface User {
   id: string
@@ -133,6 +134,11 @@ export interface Attendance {
   clock_out_latitude: number | null
   clock_out_longitude: number | null
   selfie_url: string | null
+  // 출근 유형 관련 필드
+  attendance_type: AttendanceType
+  scheduled_date: string | null // 원래 예정일 (출근일 변경 출근인 경우)
+  problem_report_id: string | null // 긴급 출동인 경우 해결한 문제 ID
+  change_reason: string | null // 출근일 변경 사유
   created_at: string
   updated_at: string
 }

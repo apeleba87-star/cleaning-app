@@ -8,7 +8,7 @@ import { clockInAction, clockOutAction } from './actions'
 import { createClient } from '@/lib/supabase/client'
 import { Attendance } from '@/types/db'
 import StoreSelector from './StoreSelector'
-import { getTodayDateKST } from '@/lib/utils/date'
+import { getTodayDateKST, getYesterdayDateKST } from '@/lib/utils/date'
 
 interface AttendanceWithStore extends Attendance {
   stores?: { name: string }
@@ -23,6 +23,16 @@ export default function AttendancePage() {
   const [error, setError] = useState<string | null>(null)
   const [selectedStoreId, setSelectedStoreId] = useState<string>('')
   const [checklistProgress, setChecklistProgress] = useState<Record<string, { completed: number; total: number; percentage: number }>>({})
+  // 출근 유형 관련 상태
+  const [attendanceType, setAttendanceType] = useState<'regular' | 'rescheduled' | 'emergency'>('regular')
+  const [scheduledDate, setScheduledDate] = useState<string>('')
+  const [problemReportId, setProblemReportId] = useState<string>('')
+  const [changeReason, setChangeReason] = useState<string>('')
+
+  // 출근 유형 변경 시 매장 선택 초기화
+  useEffect(() => {
+    setSelectedStoreId('')
+  }, [attendanceType])
 
   // 출근 중인 매장이 있는지 확인 (퇴근하지 않은 매장)
   const hasActiveAttendance = todayAttendances.some(a => !a.clock_out_at)
@@ -63,7 +73,10 @@ export default function AttendancePage() {
     if (!session) return
 
     const today = getTodayDateKST()
-    const { data, error: queryError } = await supabase
+    const yesterday = getYesterdayDateKST()
+    
+    // 오늘 날짜의 출근 기록 조회
+    const { data: todayData, error: todayError } = await supabase
       .from('attendance')
       .select(`
         id, 
@@ -87,6 +100,36 @@ export default function AttendancePage() {
       .eq('user_id', session.user.id)
       .eq('work_date', today)
       .order('clock_in_at', { ascending: false })
+
+    // 어제 날짜의 미퇴근 기록도 조회 (날짜 경계를 넘는 야간 근무 고려)
+    const { data: yesterdayData, error: yesterdayError } = await supabase
+      .from('attendance')
+      .select(`
+        id, 
+        user_id, 
+        store_id, 
+        work_date, 
+        clock_in_at, 
+        clock_in_latitude, 
+        clock_in_longitude, 
+        clock_out_at, 
+        clock_out_latitude, 
+        clock_out_longitude, 
+        selfie_url, 
+        created_at, 
+        updated_at,
+        stores:store_id (
+          id,
+          name
+        )
+      `)
+      .eq('user_id', session.user.id)
+      .eq('work_date', yesterday)
+      .is('clock_out_at', null)
+      .order('clock_in_at', { ascending: false })
+
+    const queryError = todayError || yesterdayError
+    const data = [...(todayData || []), ...(yesterdayData || [])]
 
     if (queryError) {
       console.error('Error loading attendance:', queryError)
@@ -128,7 +171,6 @@ export default function AttendancePage() {
 
     if (!session) return
 
-    const today = getTodayDateKST()
     const activeAttendances = todayAttendances.filter(a => !a.clock_out_at)
     
     if (activeAttendances.length === 0) {
@@ -136,14 +178,32 @@ export default function AttendancePage() {
       return
     }
 
-    const storeIds = activeAttendances.map(a => a.store_id)
+    // 각 출근 기록의 work_date를 기준으로 체크리스트 조회
+    const checklistPromises = activeAttendances.map(async (attendance) => {
+      const { data: checklists, error } = await supabase
+        .from('checklist')
+        .select('id, store_id, items')
+        .eq('store_id', attendance.store_id)
+        .eq('work_date', attendance.work_date)
+        .eq('assigned_user_id', session.user.id)
+
+      if (error) {
+        console.error(`Error loading checklist for store ${attendance.store_id}:`, error)
+        return { storeId: attendance.store_id, checklists: [] }
+      }
+
+      return { storeId: attendance.store_id, checklists: checklists || [] }
+    })
+
+    const checklistResults = await Promise.all(checklistPromises)
     
-    const { data: checklists, error } = await supabase
-      .from('checklist')
-      .select('id, store_id, items')
-      .in('store_id', storeIds)
-      .eq('work_date', today)
-      .eq('assigned_user_id', session.user.id)
+    // 모든 체크리스트를 하나의 배열로 합치기
+    const allChecklists = checklistResults.flatMap(result => 
+      result.checklists.map((cl: any) => ({ ...cl, _storeId: result.storeId }))
+    )
+    
+    // 기존 로직과 호환을 위해 store_id로 그룹화
+    const checklists = allChecklists
 
     if (error) {
       console.error('Error loading checklist progress:', error)
@@ -191,10 +251,24 @@ export default function AttendancePage() {
       return
     }
 
+    // 출근일 변경 출근인 경우 원래 예정일 확인
+    if (attendanceType === 'rescheduled' && !scheduledDate) {
+      setError('원래 예정일을 선택해주세요.')
+      return
+    }
+
     setSubmitting(true)
     setError(null)
 
-    const result = await clockInAction(selectedStoreId, location)
+    const result = await clockInAction(
+      selectedStoreId,
+      location,
+      undefined, // selfie_url
+      attendanceType,
+      attendanceType === 'rescheduled' ? scheduledDate : null,
+      attendanceType === 'emergency' ? (problemReportId || null) : null,
+      attendanceType === 'rescheduled' ? (changeReason || null) : null
+    )
 
     if (result.success && result.data) {
       // 출근 정보 다시 로드 (매장 정보 포함)
@@ -293,12 +367,14 @@ export default function AttendancePage() {
                 매장 선택 <span className="text-red-500">*</span>
               </label>
             <StoreSelector 
+              key={`store-selector-${attendanceType}`} // 출근 유형 변경 시 재렌더링
               selectedStoreId={selectedStoreId} 
               onSelectStore={setSelectedStoreId} 
               disabled={hasActiveAttendance} // 출근 중인 매장이 있으면 비활성화
               excludeStoreIds={todayAttendances
                 .filter(a => !a.clock_out_at) // 퇴근하지 않은 매장만 제외
                 .map(a => a.store_id)}
+              showOnlyTodayManagement={attendanceType === 'rescheduled' ? false : true} // 출근일 변경이면 오늘 관리 요일이 아닌 매장만
             />
             {hasActiveAttendance && (
               <p className="mt-2 text-sm text-orange-600">
@@ -306,10 +382,102 @@ export default function AttendancePage() {
               </p>
             )}
           </div>
+
+          {/* 출근 유형 선택 */}
+          <div className="mt-4">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              출근 유형
+            </label>
+            <div className="space-y-2">
+              <label className="flex items-center">
+                <input
+                  type="radio"
+                  name="attendanceType"
+                  value="regular"
+                  checked={attendanceType === 'regular'}
+                  onChange={(e) => setAttendanceType(e.target.value as 'regular')}
+                  className="mr-2"
+                />
+                <span className="text-sm">정규 출근 (오늘)</span>
+              </label>
+              <label className="flex items-center">
+                <input
+                  type="radio"
+                  name="attendanceType"
+                  value="rescheduled"
+                  checked={attendanceType === 'rescheduled'}
+                  onChange={(e) => setAttendanceType(e.target.value as 'rescheduled')}
+                  className="mr-2"
+                />
+                <span className="text-sm">출근일 변경</span>
+              </label>
+              <label className="flex items-center">
+                <input
+                  type="radio"
+                  name="attendanceType"
+                  value="emergency"
+                  checked={attendanceType === 'emergency'}
+                  onChange={(e) => setAttendanceType(e.target.value as 'emergency')}
+                  className="mr-2"
+                />
+                <span className="text-sm">긴급 출동</span>
+              </label>
+            </div>
+          </div>
+
+          {/* 출근일 변경 출근인 경우 */}
+          {attendanceType === 'rescheduled' && (
+            <div className="mt-4 space-y-3">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  원래 예정일 <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="date"
+                  value={scheduledDate}
+                  onChange={(e) => setScheduledDate(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  변경 사유 (선택)
+                </label>
+                <textarea
+                  value={changeReason}
+                  onChange={(e) => setChangeReason(e.target.value)}
+                  placeholder="출근일 변경 사유를 입력하세요"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  rows={3}
+                />
+              </div>
+            </div>
+          )}
+
+          {/* 긴급 출동인 경우 */}
+          {attendanceType === 'emergency' && (
+            <div className="mt-4">
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                관련 문제 ID (선택)
+              </label>
+              <input
+                type="text"
+                value={problemReportId}
+                onChange={(e) => setProblemReportId(e.target.value)}
+                placeholder="해결할 문제 보고 ID를 입력하세요"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+              <p className="mt-1 text-xs text-gray-500">
+                긴급 출동으로 해결할 문제 보고가 있으면 ID를 입력하세요.
+              </p>
+            </div>
+          )}
+
           <button
             onClick={handleClockIn}
-            disabled={!location || !selectedStoreId || submitting || hasActiveAttendance}
-            className="w-full px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors font-medium"
+            disabled={!location || !selectedStoreId || submitting || hasActiveAttendance || (attendanceType === 'rescheduled' && !scheduledDate)}
+            className="w-full mt-4 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors font-medium"
           >
             {submitting ? '처리 중...' : '출근하기'}
           </button>
@@ -334,6 +502,16 @@ export default function AttendancePage() {
                     <p className="text-sm text-gray-600 mt-1">
                       출근 시간: {new Date(attendance.clock_in_at).toLocaleString('ko-KR')}
                     </p>
+                    {/* 출근 유형 표시 */}
+                    {attendance.attendance_type && attendance.attendance_type !== 'regular' && (
+                      <p className="text-xs text-gray-500 mt-1">
+                        {attendance.attendance_type === 'rescheduled' && '📅 출근일 변경'}
+                        {attendance.attendance_type === 'emergency' && '🚨 긴급 출동'}
+                        {attendance.scheduled_date && attendance.attendance_type === 'rescheduled' && (
+                          <span className="ml-1">(원래 예정일: {new Date(attendance.scheduled_date).toLocaleDateString('ko-KR')})</span>
+                        )}
+                      </p>
+                    )}
                     {attendance.clock_out_at ? (
                       <>
                         <p className="text-sm text-gray-600 mt-1">
