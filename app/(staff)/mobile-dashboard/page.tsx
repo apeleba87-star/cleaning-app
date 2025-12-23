@@ -1066,7 +1066,8 @@ export default function MobileDashboardPage() {
                     const result = await clockInAction(store.id, location)
                     if (result.success && result.data) {
                       // 출근 상태를 즉시 업데이트 (출근 기록의 work_date 사용)
-                      const workDate = result.data.work_date || getTodayDateKST()
+                      const attendanceData = result.data as { work_date?: string }
+                      const workDate = attendanceData.work_date || getTodayDateKST()
                       setStores((prevStores) =>
                         prevStores.map((s) =>
                           s.id === store.id
