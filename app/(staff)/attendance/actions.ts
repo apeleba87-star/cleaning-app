@@ -281,7 +281,7 @@ export async function clockOutAction(
       return { success: false, error: '해당 매장의 출근 기록을 찾을 수 없습니다.' }
     }
 
-    if (attendance.clock_out_at) {
+    if (attendance.data.clock_out_at) {
       return { success: false, error: '이미 해당 매장에서 퇴근하셨습니다.' }
     }
 
