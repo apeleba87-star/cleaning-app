@@ -85,7 +85,7 @@ export async function GET(request: NextRequest) {
     // 이메일 매핑
     const emailMap = new Map<string, string>()
     if (authUsersData?.users) {
-      authUsersData.users.forEach((authUser) => {
+      authUsersData.users.forEach((authUser: any) => {
         if (authUser.email) {
           emailMap.set(authUser.id, authUser.email)
         }
