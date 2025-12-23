@@ -15,6 +15,10 @@ interface Payroll {
     id: string
     name: string
   } | null
+  type?: 'payroll' | 'subcontract' // 인건비 타입
+  payment_id?: string // 도급 정산 ID (도급인 경우)
+  subcontract_type?: 'company' | 'individual' // 도급 타입
+  role?: string // 역할 (도급인 경우)
 }
 
 interface PayrollDetailSectionProps {
@@ -73,10 +77,23 @@ export default function PayrollDetailSection({ period, onRefresh }: PayrollDetai
   }
 
   const getWorkerName = (payroll: Payroll) => {
+    // 도급인 경우
+    if (payroll.type === 'subcontract') {
+      return payroll.worker_name || payroll.users?.name || '-'
+    }
+    // 정규직원 또는 일당직원인 경우
     if (payroll.user_id && payroll.users) {
       return payroll.users.name
     }
     return payroll.worker_name || '-'
+  }
+
+  const getRoleLabel = (payroll: Payroll) => {
+    if (payroll.type === 'subcontract') {
+      if (payroll.role === 'subcontract_company') return '도급(업체)'
+      if (payroll.role === 'subcontract_individual') return '도급(개인)'
+    }
+    return null
   }
 
   const filteredPayrolls = payrolls.filter((payroll) => {
@@ -96,7 +113,13 @@ export default function PayrollDetailSection({ period, onRefresh }: PayrollDetai
 
     try {
       setSubmitting(true)
-      const response = await fetch(`/api/business/payrolls/${payroll.id}`, {
+      
+      // 도급인 경우 다른 API 사용
+      const url = payroll.type === 'subcontract' && payroll.payment_id
+        ? `/api/business/subcontracts/payments/${payroll.payment_id}`
+        : `/api/business/payrolls/${payroll.id}`
+      
+      const response = await fetch(url, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -121,6 +144,12 @@ export default function PayrollDetailSection({ period, onRefresh }: PayrollDetai
   }
 
   const handleOpenDetail = (payroll: Payroll) => {
+    // 도급인 경우 모달 열지 않음
+    if (payroll.type === 'subcontract') {
+      alert('도급 정산은 인건비 관리 > 도급 관리 탭에서 관리해주세요.')
+      return
+    }
+    
     setSelectedPayroll(payroll)
     setEditStatus(payroll.status)
     setEditPaidAt(payroll.paid_at ? new Date(payroll.paid_at).toISOString().split('T')[0] : '')
@@ -131,6 +160,12 @@ export default function PayrollDetailSection({ period, onRefresh }: PayrollDetai
   const handleSaveDetail = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!selectedPayroll) return
+
+    // 도급인 경우 수정 불가 (도급 정산은 별도 관리)
+    if (selectedPayroll.type === 'subcontract') {
+      alert('도급 정산은 별도로 관리됩니다. 인건비 관리 > 도급 관리 탭에서 수정해주세요.')
+      return
+    }
 
     try {
       setSubmitting(true)
@@ -172,6 +207,13 @@ export default function PayrollDetailSection({ period, onRefresh }: PayrollDetai
 
   const handleDelete = async () => {
     if (!selectedPayroll) return
+    
+    // 도급인 경우 삭제 불가
+    if (selectedPayroll.type === 'subcontract') {
+      alert('도급 정산은 삭제할 수 없습니다. 인건비 관리 > 도급 관리 탭에서 관리해주세요.')
+      return
+    }
+    
     if (!confirm(`${getWorkerName(selectedPayroll)}의 인건비를 삭제하시겠습니까?`)) {
       return
     }
@@ -279,14 +321,27 @@ export default function PayrollDetailSection({ period, onRefresh }: PayrollDetai
                 </td>
               </tr>
             ) : (
-              filteredPayrolls.map((payroll) => (
+              filteredPayrolls.map((payroll) => {
+                const roleLabel = getRoleLabel(payroll)
+                return (
                 <tr 
                   key={payroll.id} 
-                  className="hover:bg-gray-50 cursor-pointer"
-                  onClick={() => handleOpenDetail(payroll)}
+                  className={`hover:bg-gray-50 ${payroll.type === 'subcontract' ? '' : 'cursor-pointer'}`}
+                  onClick={() => {
+                    if (payroll.type !== 'subcontract') {
+                      handleOpenDetail(payroll)
+                    }
+                  }}
                 >
                   <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
-                    {getWorkerName(payroll)}
+                    <div className="flex items-center gap-2">
+                      <span>{getWorkerName(payroll)}</span>
+                      {roleLabel && (
+                        <span className="text-xs px-2 py-0.5 bg-purple-100 text-purple-700 rounded">
+                          {roleLabel}
+                        </span>
+                      )}
+                    </div>
                   </td>
                   <td className="px-4 py-3 whitespace-nowrap text-sm font-semibold text-gray-900 text-right">
                     {formatCurrency(payroll.amount)}
@@ -324,7 +379,12 @@ export default function PayrollDetailSection({ period, onRefresh }: PayrollDetai
                       <button
                         onClick={(e) => {
                           e.stopPropagation()
-                          handleOpenDetail(payroll)
+                          // 도급인 경우 상세 모달 대신 안내 메시지
+                          if (payroll.type === 'subcontract') {
+                            alert('도급 정산은 인건비 관리 > 도급 관리 탭에서 관리해주세요.')
+                          } else {
+                            handleOpenDetail(payroll)
+                          }
                         }}
                         className="px-3 py-1 bg-gray-500 text-white text-xs rounded-md hover:bg-gray-600"
                       >
@@ -333,7 +393,7 @@ export default function PayrollDetailSection({ period, onRefresh }: PayrollDetai
                     )}
                   </td>
                 </tr>
-              ))
+              )})
             )}
           </tbody>
         </table>

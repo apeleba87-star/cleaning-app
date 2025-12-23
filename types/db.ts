@@ -6,6 +6,8 @@ export type IssueStatus = 'submitted' | 'in_progress' | 'completed' | 'rejected'
 export type SupplyRequestStatus = 'requested' | 'received' | 'completed' | 'rejected'
 export type RequestCategoryType = 'issue' | 'supply'
 
+export type ApprovalStatus = 'pending' | 'approved' | 'rejected'
+
 export interface User {
   id: string
   role: UserRole
@@ -30,6 +32,11 @@ export interface User {
   is_active: boolean
   // 도급 관련 필드
   business_registration_number: string | null // 도급(업체)인 경우 사업자등록번호
+  // 승인 관련 필드
+  approval_status: ApprovalStatus
+  approved_at: string | null
+  approved_by: string | null
+  rejection_reason: string | null
   created_at: string
   updated_at: string
 }
@@ -42,6 +49,11 @@ export interface Company {
   subscription_plan: 'free' | 'basic' | 'premium'
   subscription_status: 'active' | 'suspended' | 'cancelled'
   trial_ends_at: string | null
+  // 가입 코드 관련 필드
+  signup_code: string | null
+  signup_code_active: boolean
+  requires_approval: boolean
+  default_role: UserRole
   created_at: string
   updated_at: string
   deleted_at: string | null
@@ -70,6 +82,10 @@ export interface Store {
   billing_memo: string | null
   special_notes: string | null
   access_info: string | null
+  // 야간 매장 관련 필드
+  is_night_shift: boolean
+  work_start_hour: number // 근무 시작 시간 (0-23)
+  work_end_hour: number // 근무 종료 시간 (0-23, 다음날을 의미할 수 있음)
   is_active: boolean
   created_at: string
   updated_at: string

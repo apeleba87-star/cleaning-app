@@ -11,12 +11,65 @@ export default async function BusinessUsersPage() {
     redirect('/business/dashboard')
   }
 
-  // 회사 직원 조회
-  const { data: users, error: usersError } = await supabase
-    .from('users')
-    .select('*')
-    .eq('company_id', user.company_id)
-    .order('created_at', { ascending: false })
+  // 회사 직원 조회 - Service role key로 이메일 포함하여 가져오기
+  const { createClient } = await import('@supabase/supabase-js')
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+  
+  let users: any[] = []
+  let usersError: any = null
+  
+  if (serviceRoleKey && supabaseUrl) {
+    const adminSupabase = createClient(supabaseUrl, serviceRoleKey, {
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false,
+      },
+    })
+    
+    // users 테이블에서 조회
+    const { data: usersData, error: queryError } = await supabase
+      .from('users')
+      .select('*')
+      .eq('company_id', user.company_id)
+      .order('created_at', { ascending: false })
+    
+    if (queryError) {
+      usersError = queryError
+    } else {
+      users = usersData || []
+      
+      // auth.users에서 이메일 가져오기
+      try {
+        const { data: authUsersData, error: authError } = await adminSupabase.auth.admin.listUsers()
+        
+        if (!authError && authUsersData?.users) {
+          const emailMap = new Map<string, string>()
+          authUsersData.users.forEach((authUser: any) => {
+            if (authUser.email) {
+              emailMap.set(authUser.id, authUser.email)
+            }
+          })
+          
+          users = users.map((u: any) => ({
+            ...u,
+            email: emailMap.get(u.id) || null,
+          }))
+        }
+      } catch (authErr) {
+        console.error('Error fetching auth users:', authErr)
+      }
+    }
+  } else {
+    // Service role key가 없으면 기본 조회
+    const { data: usersData, error: queryError } = await supabase
+      .from('users')
+      .select('*')
+      .eq('company_id', user.company_id)
+      .order('created_at', { ascending: false })
+    users = usersData || []
+    usersError = queryError
+  }
 
   // 회사 매장 조회
   const { data: stores, error: storesError } = await supabase
@@ -47,6 +100,11 @@ export default async function BusinessUsersPage() {
         <p className="text-red-800">데이터를 불러오는 중 오류가 발생했습니다.</p>
       </div>
     )
+  }
+
+  // users가 비어있고 에러가 없으면 빈 배열로 초기화
+  if (!users) {
+    users = []
   }
 
   // 매장 배정을 맵으로 변환

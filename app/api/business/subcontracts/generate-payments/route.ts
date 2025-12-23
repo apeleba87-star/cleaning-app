@@ -3,7 +3,7 @@ import { createServerSupabaseClient, getServerUser } from '@/lib/supabase/server
 import { handleApiError, UnauthorizedError, ForbiddenError } from '@/lib/errors'
 import { createClient } from '@supabase/supabase-js'
 
-// 월별 정산 자동 생성
+// 월별 도급 자동 생성 (사용자 관리의 급여일과 도급 금액 기준)
 export async function POST(request: NextRequest) {
   try {
     const user = await getServerUser()
@@ -43,48 +43,55 @@ export async function POST(request: NextRequest) {
       },
     })
 
-    // 활성 도급 조회 (기존 subcontracts 테이블)
-    const { data: activeSubcontracts, error: subcontractsError } = await adminSupabase
-      .from('subcontracts')
-      .select('*')
-      .eq('company_id', user.company_id)
-      .eq('status', 'active')
-      .is('deleted_at', null)
-
-    if (subcontractsError) {
-      throw new Error(`Failed to fetch subcontracts: ${subcontractsError.message}`)
-    }
-
-    // 사용자 관리에 등록된 도급 사용자 조회
+    // 사용자 관리에 등록된 도급 사용자 조회 (급여일과 도급 금액이 있는 사용자만)
     const { data: subcontractUsers, error: usersError } = await adminSupabase
       .from('users')
-      .select('id, name, role, salary_date, pay_amount, business_registration_number')
+      .select('id, name, role, salary_date, pay_amount, salary_amount, business_registration_number')
       .eq('company_id', user.company_id)
       .in('role', ['subcontract_individual', 'subcontract_company'])
       .eq('employment_active', true)
-      .is('deleted_at', null)
+      .not('salary_date', 'is', null)
 
     if (usersError) {
-      console.error('Error fetching subcontract users:', usersError)
+      throw new Error(`Failed to fetch subcontract users: ${usersError.message}`)
     }
 
-    // 사용자 기반 도급을 subcontracts 테이블에 자동 생성/조회
-    const userBasedSubcontracts = []
-    for (const subcontractUser of (subcontractUsers || [])) {
-      // 해당 사용자의 활성 도급이 있는지 확인
-      const { data: existingSubcontract } = await adminSupabase
-        .from('subcontracts')
-        .select('*')
-        .eq('company_id', user.company_id)
-        .or(`worker_id.eq.${subcontractUser.id},worker_name.eq.${subcontractUser.name}`)
-        .eq('status', 'active')
-        .is('deleted_at', null)
-        .maybeSingle()
+    if (!subcontractUsers || subcontractUsers.length === 0) {
+      return Response.json({
+        success: true,
+        message: '생성할 도급 정산이 없습니다. (급여일이 설정된 도급 사용자가 없습니다.)',
+        created: 0,
+      })
+    }
 
-      if (!existingSubcontract) {
-        // 도급이 없으면 자동 생성
-        const monthlyAmount = subcontractUser.pay_amount || 0
-        if (monthlyAmount > 0) {
+    // 각 사용자에 대해 subcontract와 payment 생성/조회
+    const [year, month] = pay_period.split('-').map(Number)
+    const createdPayments = []
+    const errors = []
+
+    for (const subcontractUser of subcontractUsers) {
+      try {
+        // 도급 금액 확인 (pay_amount 또는 salary_amount)
+        const monthlyAmount = subcontractUser.pay_amount || subcontractUser.salary_amount || 0
+        if (monthlyAmount <= 0) {
+          continue // 도급 금액이 없으면 건너뜀
+        }
+
+        // 해당 사용자의 활성 도급(subcontract)이 있는지 확인 또는 생성
+        let subcontractId: string
+        const { data: existingSubcontract } = await adminSupabase
+          .from('subcontracts')
+          .select('id')
+          .eq('company_id', user.company_id)
+          .or(`worker_id.eq.${subcontractUser.id},worker_name.eq.${subcontractUser.name}`)
+          .eq('status', 'active')
+          .is('deleted_at', null)
+          .maybeSingle()
+
+        if (existingSubcontract) {
+          subcontractId = existingSubcontract.id
+        } else {
+          // 도급이 없으면 자동 생성
           const taxRate = subcontractUser.role === 'subcontract_individual' ? 0.033 : 0
           const { data: newSubcontract, error: createError } = await adminSupabase
             .from('subcontracts')
@@ -92,91 +99,45 @@ export async function POST(request: NextRequest) {
               company_id: user.company_id,
               subcontract_type: subcontractUser.role === 'subcontract_individual' ? 'individual' : 'company',
               worker_id: subcontractUser.role === 'subcontract_individual' ? subcontractUser.id : null,
-              worker_name: subcontractUser.role === 'subcontract_individual' ? subcontractUser.name : subcontractUser.name,
+              worker_name: subcontractUser.name,
               monthly_amount: monthlyAmount,
               tax_rate: taxRate,
               contract_period_start: new Date().toISOString().slice(0, 10),
               status: 'active',
             })
-            .select()
+            .select('id')
             .single()
 
-          if (!createError && newSubcontract) {
-            userBasedSubcontracts.push(newSubcontract)
+          if (createError || !newSubcontract) {
+            throw new Error(`도급 생성 실패: ${createError?.message || 'Unknown error'}`)
           }
+          subcontractId = newSubcontract.id
         }
-      } else {
-        userBasedSubcontracts.push(existingSubcontract)
-      }
-    }
 
-    // 기존 도급과 사용자 기반 도급 합치기
-    const allSubcontracts = [...(activeSubcontracts || []), ...userBasedSubcontracts]
-    
-    // 중복 제거 (같은 worker_id 또는 worker_name이 있는 경우)
-    const uniqueSubcontracts = allSubcontracts.filter((sub, index, self) =>
-      index === self.findIndex((s) => {
-        if (sub.subcontract_type === 'individual') {
-          return (s.worker_id === sub.worker_id && sub.worker_id) || 
-                 (s.worker_name === sub.worker_name && sub.worker_name && !sub.worker_id)
-        } else {
-          return s.subcontractor_id === sub.subcontractor_id && sub.subcontractor_id
-        }
-      })
-    )
+        // 이미 생성된 정산 확인
+        const { data: existingPayment } = await adminSupabase
+          .from('subcontract_payments')
+          .select('id')
+          .eq('subcontract_id', subcontractId)
+          .eq('company_id', user.company_id)
+          .eq('pay_period', pay_period)
+          .is('deleted_at', null)
+          .maybeSingle()
 
-    if (uniqueSubcontracts.length === 0) {
-      return Response.json({
-        success: true,
-        message: '생성할 도급 정산이 없습니다.',
-        created: 0,
-      })
-    }
-
-    // 기간 검증 (계약 기간 내인지 확인)
-    const [year, month] = pay_period.split('-').map(Number)
-    const periodDate = new Date(year, month - 1, 1)
-
-    const validSubcontracts = uniqueSubcontracts.filter((sub) => {
-      const startDate = new Date(sub.contract_period_start)
-      if (sub.contract_period_end) {
-        const endDate = new Date(sub.contract_period_end)
-        return periodDate >= startDate && periodDate <= endDate
-      }
-      return periodDate >= startDate
-    })
-
-    // 이미 생성된 정산 확인
-    const { data: existingPayments } = await adminSupabase
-      .from('subcontract_payments')
-      .select('subcontract_id, pay_period')
-      .eq('company_id', user.company_id)
-      .eq('pay_period', pay_period)
-      .is('deleted_at', null)
-
-    const existingKeys = new Set(
-      existingPayments?.map((p) => `${p.subcontract_id}_${p.pay_period}`) || []
-    )
-
-    // 각 도급에 대해 정산 생성
-    const createdPayments = []
-    const errors = []
-
-    for (const subcontract of validSubcontracts) {
-      try {
-        const key = `${subcontract.id}_${pay_period}`
-        if (existingKeys.has(key)) {
+        if (existingPayment) {
           continue // 이미 생성된 정산은 건너뜀
         }
 
-        const baseAmount = subcontract.monthly_amount
-        const deductionAmount = baseAmount * subcontract.tax_rate
-        const finalAmount = Math.floor(baseAmount * (1 - subcontract.tax_rate))
+        // 정산 생성
+        const taxRate = subcontractUser.role === 'subcontract_individual' ? 0.033 : 0
+        const baseAmount = monthlyAmount
+        const deductionAmount = baseAmount * taxRate
+        const finalAmount = Math.floor(baseAmount * (1 - taxRate))
 
         const { data: payment, error: paymentError } = await adminSupabase
           .from('subcontract_payments')
           .insert({
-            subcontract_id: subcontract.id,
+            subcontract_id: subcontractId,
             company_id: user.company_id,
             pay_period: pay_period,
             amount: finalAmount,
@@ -194,10 +155,7 @@ export async function POST(request: NextRequest) {
 
         createdPayments.push(payment)
       } catch (err: any) {
-        const name = subcontract.subcontract_type === 'company'
-          ? `업체: ${subcontract.subcontractor_id}`
-          : `개인: ${subcontract.worker_name || '이름 없음'}`
-        errors.push(`${name}: ${err.message}`)
+        errors.push(`${subcontractUser.name}: ${err.message}`)
       }
     }
 

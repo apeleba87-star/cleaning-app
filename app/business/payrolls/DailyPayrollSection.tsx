@@ -27,6 +27,8 @@ interface DailyPayrollSectionProps {
   onRefresh: () => void
   existingDailyPayrolls?: DailyPayroll[]
   onDelete?: (id: string) => void
+  onMarkAsPaid?: (id: string, workerName: string) => void
+  onUpdate?: (id: string, data: { amount?: number; paid_at?: string | null; status?: 'scheduled' | 'paid'; memo?: string | null }) => Promise<void>
 }
 
 export default function DailyPayrollSection({
@@ -34,11 +36,19 @@ export default function DailyPayrollSection({
   onRefresh,
   existingDailyPayrolls = [],
   onDelete,
+  onMarkAsPaid,
+  onUpdate,
 }: DailyPayrollSectionProps) {
   const [dailyEmployees, setDailyEmployees] = useState<DailyEmployee[]>([])
   const [loading, setLoading] = useState(true)
   const [generating, setGenerating] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [submitting, setSubmitting] = useState<string | null>(null)
+  const [editingPayroll, setEditingPayroll] = useState<DailyPayroll | null>(null)
+  const [editAmount, setEditAmount] = useState('')
+  const [editPaidAt, setEditPaidAt] = useState('')
+  const [editStatus, setEditStatus] = useState<'scheduled' | 'paid'>('scheduled')
+  const [editMemo, setEditMemo] = useState('')
 
   useEffect(() => {
     if (selectedPeriod) {
@@ -113,6 +123,52 @@ export default function DailyPayrollSection({
     }).format(amount)
   }
 
+  const handleMarkAsPaidInternal = async (id: string, workerName: string) => {
+    if (onMarkAsPaid) {
+      setSubmitting(id)
+      try {
+        await onMarkAsPaid(id, workerName)
+      } finally {
+        setSubmitting(null)
+      }
+    }
+  }
+
+  const handleEdit = (payroll: DailyPayroll) => {
+    setEditingPayroll(payroll)
+    setEditAmount(payroll.amount.toString())
+    setEditPaidAt(payroll.paid_at ? (typeof payroll.paid_at === 'string' ? payroll.paid_at.split('T')[0] : new Date(payroll.paid_at).toISOString().split('T')[0]) : '')
+    setEditStatus(payroll.status)
+    setEditMemo('') // 메모는 일당 관리에서 사용하지 않을 수도 있음
+  }
+
+  const handleCancelEdit = () => {
+    setEditingPayroll(null)
+    setEditAmount('')
+    setEditPaidAt('')
+    setEditStatus('scheduled')
+    setEditMemo('')
+  }
+
+  const handleUpdatePayroll = async () => {
+    if (!editingPayroll || !onUpdate) return
+
+    try {
+      setSubmitting(editingPayroll.id)
+      await onUpdate(editingPayroll.id, {
+        amount: parseFloat(editAmount),
+        paid_at: editPaidAt || null,
+        status: editStatus,
+        memo: editMemo || null,
+      })
+      handleCancelEdit()
+    } catch (err: any) {
+      setError(err.message || '수정 중 오류가 발생했습니다.')
+    } finally {
+      setSubmitting(null)
+    }
+  }
+
   if (loading) {
     return (
       <div className="bg-white rounded-lg shadow-md p-6">
@@ -160,9 +216,7 @@ export default function DailyPayrollSection({
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">총액</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">지급일</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">상태</th>
-                  {onDelete && (
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">작업</th>
-                  )}
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">작업</th>
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
@@ -179,36 +233,102 @@ export default function DailyPayrollSection({
                       {payroll.work_days ? `${payroll.work_days}일` : '-'}
                     </td>
                     <td className="px-4 py-3 text-sm font-semibold text-gray-900">
-                      {formatCurrency(payroll.amount)}
+                      {editingPayroll?.id === payroll.id ? (
+                        <input
+                          type="number"
+                          value={editAmount}
+                          onChange={(e) => setEditAmount(e.target.value)}
+                          className="w-24 px-2 py-1 border border-gray-300 rounded text-sm"
+                        />
+                      ) : (
+                        formatCurrency(payroll.amount)
+                      )}
                     </td>
                     <td className="px-4 py-3 text-sm text-gray-500">
-                      {payroll.paid_at
-                        ? typeof payroll.paid_at === 'string'
-                          ? payroll.paid_at.split('T')[0]
-                          : new Date(payroll.paid_at).toISOString().split('T')[0]
-                        : '-'}
+                      {editingPayroll?.id === payroll.id ? (
+                        <input
+                          type="date"
+                          value={editPaidAt}
+                          onChange={(e) => setEditPaidAt(e.target.value)}
+                          className="px-2 py-1 border border-gray-300 rounded text-sm"
+                        />
+                      ) : (
+                        payroll.paid_at
+                          ? typeof payroll.paid_at === 'string'
+                            ? payroll.paid_at.split('T')[0]
+                            : new Date(payroll.paid_at).toISOString().split('T')[0]
+                          : '-'
+                      )}
                     </td>
                     <td className="px-4 py-3 text-sm">
-                      <span
-                        className={`px-2 py-1 rounded text-xs ${
-                          payroll.status === 'paid'
-                            ? 'bg-green-100 text-green-800'
-                            : 'bg-yellow-100 text-yellow-800'
-                        }`}
-                      >
-                        {payroll.status === 'paid' ? '지급완료' : '예정'}
-                      </span>
-                    </td>
-                    {onDelete && (
-                      <td className="px-4 py-3 text-sm">
-                        <button
-                          onClick={() => onDelete(payroll.id)}
-                          className="text-red-600 hover:text-red-800"
+                      {editingPayroll?.id === payroll.id ? (
+                        <select
+                          value={editStatus}
+                          onChange={(e) => setEditStatus(e.target.value as 'scheduled' | 'paid')}
+                          className="px-2 py-1 border border-gray-300 rounded text-sm"
                         >
-                          삭제
-                        </button>
-                      </td>
-                    )}
+                          <option value="scheduled">예정</option>
+                          <option value="paid">지급완료</option>
+                        </select>
+                      ) : (
+                        <span
+                          className={`px-2 py-1 rounded text-xs ${
+                            payroll.status === 'paid'
+                              ? 'bg-green-100 text-green-800'
+                              : 'bg-yellow-100 text-yellow-800'
+                          }`}
+                        >
+                          {payroll.status === 'paid' ? '지급완료' : '예정'}
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3 text-sm">
+                      <div className="flex space-x-2">
+                        {editingPayroll?.id === payroll.id ? (
+                          <>
+                            <button
+                              onClick={handleUpdatePayroll}
+                              disabled={submitting === payroll.id}
+                              className="text-blue-600 hover:text-blue-800 text-xs disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                              저장
+                            </button>
+                            <button
+                              onClick={handleCancelEdit}
+                              className="text-gray-600 hover:text-gray-800 text-xs"
+                            >
+                              취소
+                            </button>
+                          </>
+                        ) : (
+                          <>
+                            <button
+                              onClick={() => handleEdit(payroll)}
+                              className="text-blue-600 hover:text-blue-800 text-xs"
+                            >
+                              수정
+                            </button>
+                            {payroll.status === 'scheduled' && onMarkAsPaid && (
+                              <button
+                                onClick={() => handleMarkAsPaidInternal(payroll.id, payroll.worker_name || '')}
+                                disabled={submitting === payroll.id}
+                                className="text-green-600 hover:text-green-800 text-xs disabled:opacity-50 disabled:cursor-not-allowed"
+                              >
+                                지급완료
+                              </button>
+                            )}
+                            {onDelete && (
+                              <button
+                                onClick={() => onDelete(payroll.id)}
+                                className="text-red-600 hover:text-red-800 text-xs"
+                              >
+                                삭제
+                              </button>
+                            )}
+                          </>
+                        )}
+                      </div>
+                    </td>
                   </tr>
                 ))}
               </tbody>

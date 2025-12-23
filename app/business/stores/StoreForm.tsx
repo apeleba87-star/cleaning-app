@@ -73,6 +73,33 @@ export default function StoreForm({ store, franchises, categoryTemplates, compan
   const [specialNotes, setSpecialNotes] = useState(store?.special_notes || '')
   const [accessInfo, setAccessInfo] = useState(store?.access_info || '')
   
+  // 야간 매장 관련 필드 (초기값은 useEffect에서 설정)
+  const [isNightShift, setIsNightShift] = useState(false)
+  const [workStartHour, setWorkStartHour] = useState('18')
+  const [workEndHour, setWorkEndHour] = useState('2')
+  
+  // store prop이 변경될 때 야간 매장 필드 초기화
+  useEffect(() => {
+    if (store) {
+      setIsNightShift(store.is_night_shift ?? false)
+      setWorkStartHour(
+        store.work_start_hour !== undefined && store.work_start_hour !== null 
+          ? store.work_start_hour.toString() 
+          : '18'
+      )
+      setWorkEndHour(
+        store.work_end_hour !== undefined && store.work_end_hour !== null 
+          ? store.work_end_hour.toString() 
+          : '2'
+      )
+    } else {
+      // 새 매장 추가 시 기본값
+      setIsNightShift(false)
+      setWorkStartHour('18')
+      setWorkEndHour('2')
+    }
+  }, [store])
+
   // 매장 ID가 있으면 담당자와 문서 로드
   useEffect(() => {
     if (store?.id) {
@@ -157,6 +184,10 @@ export default function StoreForm({ store, franchises, categoryTemplates, compan
           billing_memo: billingMemo.trim() || null,
           special_notes: specialNotes.trim() || null,
           access_info: accessInfo.trim() || null,
+          // 야간 매장 관련 필드
+          is_night_shift: isNightShift,
+          work_start_hour: isNightShift ? parseInt(workStartHour) : 0,
+          work_end_hour: isNightShift ? parseInt(workEndHour) : 0,
         }),
       })
 
@@ -602,6 +633,86 @@ export default function StoreForm({ store, franchises, categoryTemplates, compan
             />
             <span className="text-sm font-medium text-gray-700">서비스 진행 여부</span>
           </label>
+        </div>
+
+        {/* 야간 매장 설정 */}
+        <div className="border-t border-gray-200 pt-4 mt-4">
+          <div className="mb-4">
+            <label className="flex items-center space-x-2">
+              <input
+                type="checkbox"
+                checked={isNightShift}
+                onChange={(e) => {
+                  setIsNightShift(e.target.checked)
+                  if (!e.target.checked) {
+                    setWorkStartHour('18')
+                    setWorkEndHour('2')
+                  }
+                }}
+                className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+              />
+              <span className="text-sm font-medium text-gray-700">야간 매장</span>
+            </label>
+            <p className="mt-1 text-xs text-gray-500">
+              야간 매장으로 설정하면 근무일이 자정 기준이 아닌 설정한 시간 기준으로 계산됩니다.
+            </p>
+          </div>
+
+          {isNightShift && (
+            <div className="ml-6 space-y-4 bg-gray-50 p-4 rounded-md">
+              <div>
+                <label htmlFor="work_start_hour" className="block text-sm font-medium text-gray-700 mb-1">
+                  근무 시작 시간 <span className="text-red-500">*</span>
+                </label>
+                <select
+                  id="work_start_hour"
+                  value={workStartHour}
+                  onChange={(e) => setWorkStartHour(e.target.value)}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  required={isNightShift}
+                >
+                  {Array.from({ length: 24 }, (_, i) => (
+                    <option key={i} value={i}>
+                      {i < 12 ? `오전 ${i === 0 ? 12 : i}시` : `오후 ${i === 12 ? 12 : i - 12}시`}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label htmlFor="work_end_hour" className="block text-sm font-medium text-gray-700 mb-1">
+                  근무 종료 시간 (다음날) <span className="text-red-500">*</span>
+                </label>
+                <select
+                  id="work_end_hour"
+                  value={workEndHour}
+                  onChange={(e) => setWorkEndHour(e.target.value)}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  required={isNightShift}
+                >
+                  {Array.from({ length: 24 }, (_, i) => (
+                    <option key={i} value={i}>
+                      {i < 12 ? `오전 ${i === 0 ? 12 : i}시` : `오후 ${i === 12 ? 12 : i - 12}시`}
+                    </option>
+                  ))}
+                </select>
+                <p className="mt-1 text-xs text-gray-500">
+                  예: 오후 6시 ~ 다음날 오후 2시 선택 시, 오후 6시부터 다음날 오후 2시까지가 1 근무일로 계산됩니다.
+                </p>
+              </div>
+
+              {isNightShift && (
+                <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-md">
+                  <p className="text-sm text-blue-800 font-medium">
+                    ✓ 야간 매장으로 설정됨
+                  </p>
+                  <p className="text-xs text-blue-600 mt-1">
+                    근무 시간: {parseInt(workStartHour) < 12 ? `오전 ${parseInt(workStartHour) === 0 ? 12 : parseInt(workStartHour)}시` : `오후 ${parseInt(workStartHour) === 12 ? 12 : parseInt(workStartHour) - 12}시`} ~ 다음날 {parseInt(workEndHour) < 12 ? `오전 ${parseInt(workEndHour) === 0 ? 12 : parseInt(workEndHour)}시` : `오후 ${parseInt(workEndHour) === 12 ? 12 : parseInt(workEndHour) - 12}시`}
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
         </div>
           </>
         )}

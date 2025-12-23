@@ -13,3 +13,4 @@ DROP CONSTRAINT IF EXISTS expenses_category_check;
 -- FROM information_schema.table_constraints 
 -- WHERE table_name = 'expenses' AND constraint_type = 'CHECK';
 
+

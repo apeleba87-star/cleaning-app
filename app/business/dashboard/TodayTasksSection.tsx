@@ -9,20 +9,21 @@ interface TodayTasksSectionProps {
     name: string
     salary_date: number | null
     salary_amount: number | null
+    subcontract_amount: number | null
     payroll_status?: 'paid' | 'scheduled'
     payroll_id?: string | null
+    payment_id?: string | null
+    role?: string
   }>
-  todaySubcontractUsers?: Array<{
+  todayDailyPayrolls?: Array<{
     id: string
-    name: string
-    role: 'subcontract_individual' | 'subcontract_company'
-    salary_date: number | null
-    pay_amount: number | null
-    payment_status: 'paid' | 'scheduled'
-    payment_id: string | null
-    payment_amount: number
-    base_amount: number
-    deduction_amount: number
+    worker_name: string
+    pay_period: string
+    work_days: number | null
+    daily_wage: number | null
+    amount: number
+    paid_at: string | null
+    status: 'scheduled' | 'paid'
   }>
   todayPaymentStores: Array<{
     id: string
@@ -37,28 +38,44 @@ interface TodayTasksSectionProps {
   formatCurrency: (amount: number) => string
   onMarkPayrollAsPaid?: (payrollId: string, userName: string) => void
   onMarkSubcontractAsPaid?: (paymentId: string, userName: string) => void
+  onMarkDailyPayrollAsPaid?: (payrollId: string, workerName: string) => void
   onPartialPayment?: (storeId: string, storeName: string) => void
   onFullPayment?: (storeId: string, storeName: string) => void
 }
 
 export default function TodayTasksSection({
   todaySalaryUsers,
-  todaySubcontractUsers = [],
+  todayDailyPayrolls = [],
   todayPaymentStores,
   totalUnpaid,
   unpaidCount,
   formatCurrency,
   onMarkPayrollAsPaid,
   onMarkSubcontractAsPaid,
+  onMarkDailyPayrollAsPaid,
   onPartialPayment,
   onFullPayment,
 }: TodayTasksSectionProps) {
   const [payrollSubmitting, setPayrollSubmitting] = useState<string | null>(null)
   const [subcontractSubmitting, setSubcontractSubmitting] = useState<string | null>(null)
+  const [dailyPayrollSubmitting, setDailyPayrollSubmitting] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
 
+  const getRoleLabel = (role?: string) => {
+    if (role === 'subcontract_individual') return '도급(개인)'
+    if (role === 'subcontract_company') return '도급(업체)'
+    return null
+  }
+
+  const isSubcontract = (role?: string) => {
+    return role === 'subcontract_individual' || role === 'subcontract_company'
+  }
+
   const hasTasks =
-    todaySalaryUsers.length > 0 || todaySubcontractUsers.length > 0 || todayPaymentStores.length > 0 || unpaidCount > 0
+    todaySalaryUsers.length > 0 || 
+    todayDailyPayrolls.length > 0 || 
+    todayPaymentStores.length > 0 || 
+    unpaidCount > 0
 
   if (!hasTasks) {
     return null
@@ -109,7 +126,7 @@ export default function TodayTasksSection({
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-lg font-semibold text-gray-900">오늘의 작업</h2>
         <span className="text-xs text-gray-500">
-          {todaySalaryUsers.length + todaySubcontractUsers.length + todayPaymentStores.length + (unpaidCount > 0 ? 1 : 0)}개 작업
+          {todaySalaryUsers.length + todayDailyPayrolls.length + todayPaymentStores.length + (unpaidCount > 0 ? 1 : 0)}개 작업
         </span>
       </div>
 
@@ -130,35 +147,66 @@ export default function TodayTasksSection({
               </Link>
             </div>
             <div className="space-y-2">
-              {todaySalaryUsers.slice(0, 3).map((user) => (
+              {todaySalaryUsers.slice(0, 3).map((user) => {
+                const roleLabel = getRoleLabel(user.role)
+                const isSubcontractUser = isSubcontract(user.role)
+                // 도급 직원/업체는 도급금액, 일반 직원은 급여 표시
+                const displayAmount = isSubcontractUser ? user.subcontract_amount : user.salary_amount
+                const isPaid = user.payroll_status === 'paid'
+                
+                return (
                 <div
                   key={user.id}
-                  className="bg-white rounded p-3 flex items-center justify-between"
+                  className={`bg-white rounded p-3 flex items-center justify-between ${isPaid ? 'opacity-60' : ''}`}
                 >
                   <div>
-                    <p className="font-medium text-gray-900">{user.name}</p>
-                    {user.salary_amount && (
-                      <p className="text-xs text-gray-500">{formatCurrency(user.salary_amount)}</p>
+                    <div className="flex items-center gap-2">
+                      <p className={`font-medium ${isPaid ? 'text-gray-500' : 'text-gray-900'}`}>{user.name}</p>
+                      {roleLabel && (
+                        <span className="text-xs px-2 py-0.5 bg-purple-100 text-purple-700 rounded">
+                          {roleLabel}
+                        </span>
+                      )}
+                    </div>
+                    {displayAmount !== null && displayAmount !== undefined && (
+                      <p className={`text-xs ${isPaid ? 'text-gray-400' : 'text-gray-500'}`}>{formatCurrency(displayAmount)}</p>
                     )}
                   </div>
                   <div className="flex items-center gap-2">
-                    {user.payroll_status === 'scheduled' && user.payroll_id && (
+                    {isPaid ? (
                       <button
-                        onClick={() => handleMarkPayrollAsPaid(user.payroll_id!, user.name)}
-                        disabled={payrollSubmitting === user.payroll_id}
-                        className="px-3 py-1.5 text-xs bg-green-500 text-white rounded hover:bg-green-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                        disabled
+                        className="px-3 py-1.5 text-xs bg-gray-300 text-gray-500 rounded cursor-not-allowed"
                       >
                         지급 완료
                       </button>
-                    )}
-                    {user.payroll_status === 'paid' && (
-                      <span className="px-2 py-1 text-xs bg-green-100 text-green-700 rounded">
-                        지급완료
-                      </span>
+                    ) : (
+                      <>
+                        {isSubcontractUser && user.payment_id && onMarkSubcontractAsPaid ? (
+                          <button
+                            onClick={() => {
+                              setSubcontractSubmitting(user.payment_id!)
+                              onMarkSubcontractAsPaid(user.payment_id!, user.name)
+                            }}
+                            disabled={subcontractSubmitting === user.payment_id}
+                            className="px-3 py-1.5 text-xs bg-green-500 text-white rounded hover:bg-green-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            지급 완료
+                          </button>
+                        ) : user.payroll_id && onMarkPayrollAsPaid ? (
+                          <button
+                            onClick={() => handleMarkPayrollAsPaid(user.payroll_id!, user.name)}
+                            disabled={payrollSubmitting === user.payroll_id}
+                            className="px-3 py-1.5 text-xs bg-green-500 text-white rounded hover:bg-green-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            지급 완료
+                          </button>
+                        ) : null}
+                      </>
                     )}
                   </div>
                 </div>
-              ))}
+              )})}
               {todaySalaryUsers.length > 3 && (
                 <p className="text-xs text-gray-500 text-center">
                   외 {todaySalaryUsers.length - 3}명
@@ -168,72 +216,61 @@ export default function TodayTasksSection({
           </div>
         )}
 
-        {/* 도급 직원/업체 */}
-        {todaySubcontractUsers.length > 0 && (
-          <div className="bg-purple-50 rounded-lg p-4 border-l-4 border-purple-500">
+        {/* 일당 직원 */}
+        {todayDailyPayrolls.length > 0 && (
+          <div className="bg-orange-50 rounded-lg p-4 border-l-4 border-orange-500">
             <div className="flex items-center justify-between mb-3">
               <div>
-                <h3 className="text-sm font-semibold text-gray-700">도급 직원/업체</h3>
-                <p className="text-xs text-gray-500">{todaySubcontractUsers.length}명/개</p>
+                <h3 className="text-sm font-semibold text-gray-700">일당 직원</h3>
+                <p className="text-xs text-gray-500">{todayDailyPayrolls.length}명</p>
               </div>
               <Link
-                href="/business/payrolls?tab=subcontract"
-                className="text-xs text-purple-600 hover:text-purple-800 font-medium"
+                href="/business/payrolls?tab=daily"
+                className="text-xs text-orange-600 hover:text-orange-800 font-medium"
               >
                 전체보기 →
               </Link>
             </div>
             <div className="space-y-2">
-              {todaySubcontractUsers.slice(0, 3).map((user) => (
+              {todayDailyPayrolls.slice(0, 3).map((payroll) => {
+                const isPaid = payroll.status === 'paid'
+                return (
                 <div
-                  key={user.id}
-                  className="bg-white rounded p-3 flex items-center justify-between"
+                  key={payroll.id}
+                  className={`bg-white rounded p-3 flex items-center justify-between ${isPaid ? 'opacity-60' : ''}`}
                 >
                   <div>
-                    <div className="flex items-center gap-2">
-                      <p className="font-medium text-gray-900">{user.name}</p>
-                      <span className="text-xs px-2 py-0.5 bg-purple-100 text-purple-700 rounded">
-                        {user.role === 'subcontract_individual' ? '개인' : '업체'}
-                      </span>
-                    </div>
-                    {user.pay_amount && (
-                      <div className="text-xs text-gray-500 mt-1">
-                        {user.role === 'subcontract_individual' && user.deduction_amount > 0 && (
-                          <>
-                            <span className="line-through">{formatCurrency(user.base_amount)}</span>
-                            <span className="ml-2">→ {formatCurrency(user.payment_amount)}</span>
-                            <span className="ml-1 text-red-600">
-                              (-{formatCurrency(user.deduction_amount)})
-                            </span>
-                          </>
-                        )}
-                        {user.role === 'subcontract_company' && (
-                          <span>{formatCurrency(user.payment_amount)}</span>
-                        )}
-                      </div>
-                    )}
+                    <p className={`font-medium ${isPaid ? 'text-gray-500' : 'text-gray-900'}`}>{payroll.worker_name}</p>
+                    <p className={`text-xs ${isPaid ? 'text-gray-400' : 'text-gray-500'}`}>{formatCurrency(payroll.amount)}</p>
                   </div>
                   <div className="flex items-center gap-2">
-                    {user.payment_status === 'scheduled' && user.payment_id && (
+                    {isPaid ? (
                       <button
-                        onClick={() => handleMarkSubcontractAsPaid(user.payment_id!, user.name)}
-                        disabled={subcontractSubmitting === user.payment_id}
-                        className="px-3 py-1.5 text-xs bg-green-500 text-white rounded hover:bg-green-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                        disabled
+                        className="px-3 py-1.5 text-xs bg-gray-300 text-gray-500 rounded cursor-not-allowed"
                       >
                         지급 완료
                       </button>
-                    )}
-                    {user.payment_status === 'paid' && (
-                      <span className="px-2 py-1 text-xs bg-green-100 text-green-700 rounded">
-                        지급완료
-                      </span>
+                    ) : (
+                      onMarkDailyPayrollAsPaid && (
+                        <button
+                          onClick={() => {
+                            setDailyPayrollSubmitting(payroll.id)
+                            onMarkDailyPayrollAsPaid(payroll.id, payroll.worker_name)
+                          }}
+                          disabled={dailyPayrollSubmitting === payroll.id}
+                          className="px-3 py-1.5 text-xs bg-green-500 text-white rounded hover:bg-green-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          지급 완료
+                        </button>
+                      )
                     )}
                   </div>
                 </div>
-              ))}
-              {todaySubcontractUsers.length > 3 && (
+              )})}
+              {todayDailyPayrolls.length > 3 && (
                 <p className="text-xs text-gray-500 text-center">
-                  외 {todaySubcontractUsers.length - 3}명/개
+                  외 {todayDailyPayrolls.length - 3}명
                 </p>
               )}
             </div>

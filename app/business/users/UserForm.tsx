@@ -32,6 +32,23 @@ export default function UserForm({ user, stores, assignedStoreIds = [], onSucces
   // 탭 상태
   const [activeTab, setActiveTab] = useState<'basic' | 'salary' | 'employment' | 'contracts'>('basic')
   
+  // 역할 변경 시 급여 방식과 고용 형태 자동 설정
+  useEffect(() => {
+    if (role === 'staff') {
+      // 직원: 월급, 정규
+      setPayType('monthly')
+      setEmploymentType('regular')
+    } else if (role === 'subcontract_individual') {
+      // 도급(개인): 월급, 도급
+      setPayType('monthly')
+      setEmploymentType('contract')
+    } else if (role === 'subcontract_company') {
+      // 도급(업체): 도급, 도급
+      setPayType('contract')
+      setEmploymentType('contract')
+    }
+  }, [role])
+
   // 역할 또는 탭 변경 시 탭 업데이트
   useEffect(() => {
     // 직원, 도급 역할이 아니면 기본 정보 탭으로 강제 이동

@@ -162,8 +162,15 @@ export default function StoreList({ initialStores, franchises, categoryTemplates
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm font-medium text-gray-900">
-                      {store.name}
+                    <div className="flex items-center gap-2">
+                      <div className="text-sm font-medium text-gray-900">
+                        {store.name}
+                      </div>
+                      {store.is_night_shift && (
+                        <span className="inline-flex items-center px-2 py-1 text-xs font-medium bg-orange-100 text-orange-800 rounded">
+                          야간
+                        </span>
+                      )}
                     </div>
                     {store.address && (
                       <div className="text-xs text-gray-500 mt-1">
@@ -188,18 +195,12 @@ export default function StoreList({ initialStores, franchises, categoryTemplates
                     </span>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                    <a
-                      href={`${basePath}/stores/${store.id}/detail`}
-                      className="text-blue-600 hover:text-blue-900 mr-4"
-                    >
-                      상세보기
-                    </a>
                     {basePath === '/business' && (
                       <a
                         href={`${basePath}/stores/${store.id}/personnel`}
                         className="text-blue-600 hover:text-blue-900 mr-4"
                       >
-                        인원
+                        인원배정
                       </a>
                     )}
                     <button

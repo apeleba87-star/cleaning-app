@@ -15,6 +15,7 @@ interface StoreStatusData {
   unconfirmed_lost_items: number
   unconfirmed_completed_request_count: number
   unconfirmed_rejected_request_count: number
+  received_request_count: number
 }
 
 interface StoreStatusSummary {
@@ -23,6 +24,7 @@ interface StoreStatusSummary {
   totalStores: number
   warning: number
   urgent: number
+  received: number
   stores: StoreStatusData[]
 }
 
@@ -56,6 +58,7 @@ export default function StoreStatusSection() {
           unconfirmed_lost_items: store.unconfirmed_lost_items || 0,
           unconfirmed_completed_request_count: store.unconfirmed_completed_request_count || 0,
           unconfirmed_rejected_request_count: store.unconfirmed_rejected_request_count || 0,
+          received_request_count: store.received_request_count || 0,
         }))
 
         // 오늘 출근한 매장 수 계산
@@ -71,6 +74,9 @@ export default function StoreStatusSection() {
         // 상태 분류 로직
         let warning = 0
         let urgent = 0
+        
+        // 접수 요청 총합 계산
+        const received = stores.reduce((sum, store) => sum + store.received_request_count, 0)
 
         stores.forEach((store) => {
           const totalUnresolved =
@@ -87,7 +93,7 @@ export default function StoreStatusSection() {
           }
         })
 
-        setStatusSummary({ todayAttended, todayShouldAttend, totalStores, warning, urgent, stores })
+        setStatusSummary({ todayAttended, todayShouldAttend, totalStores, warning, urgent, received, stores })
       }
     } catch (error: any) {
       console.error('Error loading store status:', error)
@@ -141,29 +147,29 @@ export default function StoreStatusSection() {
           </div>
         </Link>
 
-        {/* 주의 */}
+        {/* 접수 */}
         <Link
-          href="/business/stores/status?filter=warning"
-          className="bg-yellow-50 rounded-lg p-4 border-2 border-yellow-200 hover:bg-yellow-100 transition-all cursor-pointer"
+          href="/business/stores/status"
+          className="bg-purple-50 rounded-lg p-4 border-2 border-purple-200 hover:bg-purple-100 transition-all cursor-pointer"
         >
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-gray-600 mb-1">주의</p>
-              <p className="text-3xl font-bold text-yellow-600">{statusSummary.warning}</p>
+              <p className="text-sm text-gray-600 mb-1">접수</p>
+              <p className="text-3xl font-bold text-purple-600">{statusSummary.received}개</p>
             </div>
-            <div className="text-3xl">⚠️</div>
+            <div className="text-3xl">📋</div>
           </div>
         </Link>
 
-        {/* 긴급 */}
+        {/* 문제 발생 */}
         <Link
           href="/business/stores/status?filter=urgent"
           className="bg-red-50 rounded-lg p-4 border-2 border-red-200 hover:bg-red-100 transition-all cursor-pointer"
         >
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-gray-600 mb-1">긴급</p>
-              <p className="text-3xl font-bold text-red-600">{statusSummary.urgent}</p>
+              <p className="text-sm text-gray-600 mb-1">문제 발생</p>
+              <p className="text-3xl font-bold text-red-600">{statusSummary.urgent}곳</p>
             </div>
             <div className="text-3xl">🚨</div>
           </div>
@@ -235,7 +241,7 @@ export default function StoreStatusSection() {
                             : 'bg-yellow-500 text-white'
                         }`}
                       >
-                        {isUrgent ? '긴급' : '주의'}
+                        {isUrgent ? '문제 보고' : '주의'}
                       </span>
                     </div>
                   </Link>

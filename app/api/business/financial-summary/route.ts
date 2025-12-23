@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server'
 import { createServerSupabaseClient, getServerUser } from '@/lib/supabase/server'
 import { handleApiError, UnauthorizedError, ForbiddenError } from '@/lib/errors'
+import { getTodayDateKST } from '@/lib/utils/date'
 
 // 재무 요약 조회
 export async function GET(request: NextRequest) {
@@ -196,16 +197,18 @@ export async function GET(request: NextRequest) {
       .sort((a, b) => b.unpaid_amount - a.unpaid_amount)
       .slice(0, 10)
 
-    // 오늘 급여일인 직원 조회
-    const today = new Date()
-    const todayDay = today.getDate() // 1-31
+    // 오늘 급여일인 직원 조회 (KST 기준)
+    const todayKST = getTodayDateKST() // 'YYYY-MM-DD' 형식
+    const todayDay = parseInt(todayKST.split('-')[2], 10) // 일(day) 추출 (1-31)
+    
+    console.log('[Financial Summary] Today KST:', todayKST, 'Today Day:', todayDay)
     
     // salary_date가 숫자 타입이므로 명시적으로 숫자로 비교
     // 모든 사용자를 가져온 후 필터링하여 타입 불일치 문제 방지
     // 일당 직원 제외: pay_type이 'monthly'이거나 null이거나, salary_date가 있는 직원만
     const { data: allUsers, error: allUsersError } = await supabase
       .from('users')
-      .select('id, name, salary_date, salary_amount, pay_type')
+      .select('id, name, salary_date, salary_amount, pay_amount, pay_type, role')
       .eq('company_id', user.company_id)
       .eq('employment_active', true)
       .order('name')
@@ -214,19 +217,30 @@ export async function GET(request: NextRequest) {
       console.error('Error fetching users:', allUsersError)
     }
 
+    console.log('[Financial Summary] All users:', allUsers?.map((u: any) => ({
+      name: u.name,
+      salary_date: u.salary_date,
+      pay_type: u.pay_type,
+      role: u.role
+    })))
+
     // 오늘 급여일인 직원 필터링 및 인건비 상태 확인
     // 일당 직원 제외: pay_type이 'daily'인 직원은 제외
+    // 도급 직원/업체 포함
+    const companyId = user.company_id // 변수명 충돌 방지
     const todaySalaryUsersWithStatus = await Promise.all(
-      (allUsers || []).map(async (user) => {
+      (allUsers || []).map(async (userRecord) => {
         // 일당 직원 제외
-        if (user.pay_type === 'daily') {
+        if (userRecord.pay_type === 'daily') {
+          console.log(`[Financial Summary] User ${userRecord.name} excluded: pay_type is daily`)
           return null
         }
         
-        const salaryDate = user.salary_date
+        const salaryDate = userRecord.salary_date
         
-        // null이 아니고 숫자이며 오늘 날짜와 일치하는 경우
+        // null이 아니고 숫자인 경우
         if (salaryDate === null || salaryDate === undefined) {
+          console.log(`[Financial Summary] User ${userRecord.name} excluded: salary_date is null/undefined`)
           return null
         }
         
@@ -235,40 +249,160 @@ export async function GET(request: NextRequest) {
           ? parseInt(salaryDate.trim(), 10) 
           : Number(salaryDate)
         
-        const isMatch = !isNaN(salaryDateNum) && salaryDateNum === todayDay
-        
-        if (!isMatch) {
+        if (isNaN(salaryDateNum)) {
+          console.log(`[Financial Summary] User ${userRecord.name} excluded: salary_date is not a valid number`)
           return null
         }
+        
+        console.log(`[Financial Summary] User ${userRecord.name}: salary_date=${salaryDate}, salaryDateNum=${salaryDateNum}, todayDay=${todayDay}`)
+        
+        // 급여일이 오늘인 경우 또는 이미 지났지만 이번 달인 경우 포함
+        // 이번 달에 급여일이 지났거나 오늘인 경우 포함 (아직 다음 달 급여일이 아님)
+        const isMatch = salaryDateNum <= todayDay
+        
+        if (!isMatch) {
+          console.log(`[Financial Summary] User ${userRecord.name} excluded: salary_date (${salaryDateNum}) is after today (${todayDay})`)
+          return null
+        }
+        
+        console.log(`[Financial Summary] User ${userRecord.name} matched! salary_date=${salaryDateNum} <= todayDay=${todayDay}`)
 
+        const isSubcontract = userRecord.role === 'subcontract_individual' || userRecord.role === 'subcontract_company'
+
+        // 도급 직원/업체인 경우 도급 정산 정보 조회
+        if (isSubcontract) {
+          // 사용자 테이블의 도급 금액 (우선 사용)
+          const userAmount = userRecord.pay_amount || userRecord.salary_amount || 0
+          
+          // 해당 사용자의 활성 도급 조회
+          const { data: subcontract } = await supabase
+            .from('subcontracts')
+            .select('id, subcontract_type, monthly_amount, tax_rate')
+            .eq('company_id', companyId)
+            .or(`worker_id.eq.${userRecord.id},worker_name.eq.${userRecord.name}`)
+            .eq('status', 'active')
+            .is('deleted_at', null)
+            .maybeSingle()
+
+          // 도급 정산이 있으면 정산 금액 사용, 없으면 사용자 테이블의 금액 사용
+          let subcontractAmount = userAmount
+          let paymentStatus: 'paid' | 'scheduled' = 'scheduled'
+          let paymentId: string | null = null
+          
+          if (subcontract) {
+            // 이번 달 도급 정산 조회 (subcontract_payments)
+            const { data: subcontractPayments } = await supabase
+              .from('subcontract_payments')
+              .select('id, status, amount, base_amount, deduction_amount, paid_at')
+              .eq('subcontract_id', subcontract.id)
+              .eq('pay_period', period)
+              .is('deleted_at', null)
+              .order('created_at', { ascending: false })
+              .limit(1)
+
+            const payment = subcontractPayments && subcontractPayments.length > 0 ? subcontractPayments[0] : null
+            if (payment) {
+              // 정산이 있으면 정산 금액 사용
+              subcontractAmount = payment.amount || userAmount
+              
+              // 지급완료된 경우, paid_at이 오늘인지 확인하여 당일만 표시
+              if (payment.status === 'paid') {
+                if (payment.paid_at) {
+                  const paidDate = payment.paid_at.split('T')[0] // 'YYYY-MM-DD'
+                  if (paidDate === todayKST) {
+                    paymentStatus = 'paid' // 오늘 지급완료된 것만 표시
+                  } else {
+                    // 오늘이 아닌 날 지급완료된 것은 null 반환하여 제외
+                    return null
+                  }
+                } else {
+                  paymentStatus = 'scheduled'
+                }
+              } else {
+                paymentStatus = 'scheduled'
+              }
+              
+              paymentId = payment.id
+            } else {
+              // 정산이 없으면 사용자 테이블의 금액에 세율 적용
+              const taxRate = subcontract.tax_rate || (userRecord.role === 'subcontract_individual' ? 0.033 : 0)
+              subcontractAmount = Math.floor(userAmount * (1 - taxRate))
+            }
+          } else {
+            // 도급이 등록되지 않았으면 사용자 테이블의 금액에 기본 세율 적용
+            const taxRate = userRecord.role === 'subcontract_individual' ? 0.033 : 0
+            subcontractAmount = Math.floor(userAmount * (1 - taxRate))
+          }
+
+          return {
+            id: userRecord.id,
+            name: userRecord.name,
+            salary_date: userRecord.salary_date,
+            salary_amount: null, // 도급은 salary_amount 사용 안 함
+            subcontract_amount: subcontractAmount, // 도급금액
+            payroll_status: paymentStatus,
+            payroll_id: null,
+            payment_id: paymentId, // 도급 정산 ID
+            role: userRecord.role,
+          }
+        }
+
+        // 일반 직원인 경우 인건비 조회
         // 이번 달 인건비 조회하여 지급 상태 확인
         const { data: payrolls } = await supabase
           .from('payrolls')
-          .select('id, status, paid_at')
-          .eq('user_id', user.id)
+          .select('id, status, paid_at, amount')
+          .eq('user_id', userRecord.id)
           .eq('pay_period', period)
           .is('deleted_at', null)
           .order('created_at', { ascending: false })
           .limit(1)
 
-        const payrollStatus = payrolls && payrolls.length > 0 
-          ? (payrolls[0].status === 'paid' ? 'paid' : 'scheduled')
-          : 'scheduled' // 인건비가 없으면 예정 상태
+        const payroll = payrolls && payrolls.length > 0 ? payrolls[0] : null
+        let payrollStatus: 'paid' | 'scheduled' = 'scheduled'
+        
+        if (payroll) {
+          if (payroll.status === 'paid') {
+            // 지급완료된 경우, paid_at이 오늘인지 확인하여 당일만 표시
+            if (payroll.paid_at) {
+              const paidDate = payroll.paid_at.split('T')[0] // 'YYYY-MM-DD'
+              if (paidDate === todayKST) {
+                payrollStatus = 'paid' // 오늘 지급완료된 것만 표시
+              } else {
+                // 오늘이 아닌 날 지급완료된 것은 null 반환하여 제외
+                return null
+              }
+            } else {
+              // paid_at이 없으면 scheduled로 처리
+              payrollStatus = 'scheduled'
+            }
+          } else {
+            payrollStatus = 'scheduled'
+          }
+        }
 
-        const payrollId = payrolls && payrolls.length > 0 ? payrolls[0].id : null
+        const payrollId = payroll ? payroll.id : null
+        
+        // 인건비가 있으면 인건비 금액을 사용, 없으면 사용자의 salary_amount 사용
+        const displaySalaryAmount = payroll && payroll.amount !== null
+          ? payroll.amount
+          : userRecord.salary_amount
 
         return {
-          id: user.id,
-          name: user.name,
-          salary_date: user.salary_date,
-          salary_amount: user.salary_amount,
+          id: userRecord.id,
+          name: userRecord.name,
+          salary_date: userRecord.salary_date,
+          salary_amount: displaySalaryAmount,
+          subcontract_amount: null, // 일반 직원은 도급금액 없음
           payroll_status: payrollStatus, // 'paid' 또는 'scheduled'
           payroll_id: payrollId, // 인건비 ID 추가
+          payment_id: null,
+          role: userRecord.role, // 역할 추가 (도급 역할 표시용)
         }
       })
     )
 
-    // null이 아닌 항목만 필터링
+    // null이 아닌 항목만 필터링 (지급완료된 항목도 포함하여 당일 표시용으로 포함)
     const todaySalaryUsers = todaySalaryUsersWithStatus.filter((user): user is NonNullable<typeof user> => user !== null)
 
     // 오늘 수금일인 매장 조회 및 결제 상태 확인
@@ -330,94 +464,106 @@ export async function GET(request: NextRequest) {
       })
     )
 
-    // 도급 직원/업체 조회 (오늘 급여일 기준)
-    const subcontractUsers = (allUsers || []).filter(
-      (u) => u.role === 'subcontract_individual' || u.role === 'subcontract_company'
-    )
 
-    const todaySubcontractUsers = await Promise.all(
-      subcontractUsers.map(async (subcontractUser) => {
-        // salary_date가 오늘인 경우만
-        const salaryDate = subcontractUser.salary_date
-        if (salaryDate === null || salaryDate === undefined) {
-          return null
+    // 일당 직원 조회 (worker_name이 있는 payrolls)
+    // 지급완료된 것도 포함하여 당일 표시 (paid_at이 오늘인 것만)
+    const { data: dailyPayrolls, error: dailyPayrollsError } = await supabase
+      .from('payrolls')
+      .select('id, worker_name, pay_period, work_days, daily_wage, amount, paid_at, status')
+      .eq('company_id', user.company_id)
+      .not('worker_name', 'is', null) // worker_name이 있는 것만 (일당 직원)
+      .is('deleted_at', null)
+      .order('created_at', { ascending: false })
+
+    if (dailyPayrollsError) {
+      console.error('Error fetching daily payrolls:', dailyPayrollsError)
+    }
+
+    // 예정 상태이거나 오늘 지급완료된 일당만 필터링
+    const todayDailyPayrolls = (dailyPayrolls || [])
+      .filter((payroll) => {
+        // 예정 상태는 항상 포함
+        if (payroll.status === 'scheduled') return true
+        // 지급완료된 것은 paid_at이 오늘인 것만 포함 (당일만 표시)
+        if (payroll.status === 'paid' && payroll.paid_at) {
+          const paidDate = payroll.paid_at.split('T')[0] // 'YYYY-MM-DD'
+          return paidDate === todayKST
         }
-        
-        const salaryDateNum = typeof salaryDate === 'string' 
-          ? parseInt(salaryDate.trim(), 10) 
-          : Number(salaryDate)
-        
-        if (isNaN(salaryDateNum) || salaryDateNum !== todayDay) {
-          return null
-        }
-
-        // 해당 사용자의 활성 도급 조회
-        const { data: subcontract } = await supabase
-          .from('subcontracts')
-          .select('id, subcontract_type, monthly_amount, tax_rate')
-          .eq('company_id', user.company_id)
-          .or(`worker_id.eq.${subcontractUser.id},worker_name.eq.${subcontractUser.name}`)
-          .eq('status', 'active')
-          .is('deleted_at', null)
-          .single()
-
-        if (!subcontract) {
-          // 도급이 등록되지 않았으면 기본 정보만 반환
-          return {
-            id: subcontractUser.id,
-            name: subcontractUser.name,
-            role: subcontractUser.role,
-            salary_date: subcontractUser.salary_date,
-            pay_amount: subcontractUser.pay_amount || subcontractUser.salary_amount || 0,
-            payment_status: 'scheduled' as const,
-            payment_id: null,
-            payment_amount: subcontractUser.pay_amount || subcontractUser.salary_amount || 0,
-            base_amount: subcontractUser.pay_amount || subcontractUser.salary_amount || 0,
-            deduction_amount: 0,
-          }
-        }
-
-        // 이번 달 도급 정산 조회 (subcontract_payments)
-        const { data: subcontractPayments } = await supabase
-          .from('subcontract_payments')
-          .select('id, status, amount, base_amount, deduction_amount')
-          .eq('subcontract_id', subcontract.id)
-          .eq('pay_period', period)
-          .is('deleted_at', null)
-          .order('created_at', { ascending: false })
-          .limit(1)
-
-        const payment = subcontractPayments && subcontractPayments.length > 0 ? subcontractPayments[0] : null
-        const paymentStatus = payment ? (payment.status === 'paid' ? 'paid' : 'scheduled') : 'scheduled'
-        const paymentId = payment?.id || null
-        const monthlyAmount = subcontract.monthly_amount || subcontractUser.pay_amount || subcontractUser.salary_amount || 0
-        const taxRate = subcontract.tax_rate || 0
-
-        return {
-          id: subcontractUser.id,
-          name: subcontractUser.name,
-          role: subcontractUser.role,
-          salary_date: subcontractUser.salary_date,
-          pay_amount: monthlyAmount,
-          payment_status: paymentStatus,
-          payment_id: paymentId,
-          payment_amount: payment?.amount || Math.floor(monthlyAmount * (1 - taxRate)),
-          base_amount: payment?.base_amount || monthlyAmount,
-          deduction_amount: payment?.deduction_amount || Math.floor(monthlyAmount * taxRate),
-        }
+        return false
       })
-    )
+      .map((payroll) => ({
+        id: payroll.id,
+        worker_name: payroll.worker_name || '',
+        pay_period: payroll.pay_period,
+        work_days: payroll.work_days,
+        daily_wage: payroll.daily_wage,
+        amount: payroll.amount,
+        paid_at: payroll.paid_at,
+        status: payroll.status,
+      }))
+
+    // 월별 성장률 계산 (수금액 기준)
+    const nowForGrowth = new Date()
+    // 한국 시간대로 현재 날짜 가져오기
+    const koreaTimeForGrowth = new Date(nowForGrowth.toLocaleString('en-US', { timeZone: 'Asia/Seoul' }))
     
-    const todaySubcontractUsersFiltered = todaySubcontractUsers.filter((u): u is NonNullable<typeof u> => u !== null)
+    // 이번 달 시작일/종료일 (KST 기준)
+    const growthCurrentYear = koreaTimeForGrowth.getFullYear()
+    const growthCurrentMonth = koreaTimeForGrowth.getMonth()
+    const currentMonthStart = new Date(growthCurrentYear, growthCurrentMonth, 1, 0, 0, 0, 0)
+    const currentMonthEnd = new Date(growthCurrentYear, growthCurrentMonth + 1, 0, 23, 59, 59, 999)
+    
+    // 전월 시작일/종료일 (KST 기준)
+    const previousMonthStart = new Date(growthCurrentYear, growthCurrentMonth - 1, 1, 0, 0, 0, 0)
+    const previousMonthEnd = new Date(growthCurrentYear, growthCurrentMonth, 0, 23, 59, 59, 999)
+    
+    // 이번 달 수금액 계산 (received_at 기준)
+    const { data: currentMonthReceipts, error: currentMonthReceiptsError } = await supabase
+      .from('receipts')
+      .select('amount')
+      .eq('company_id', user.company_id)
+      .gte('received_at', currentMonthStart.toISOString())
+      .lte('received_at', currentMonthEnd.toISOString())
+      .is('deleted_at', null)
+    
+    if (currentMonthReceiptsError) {
+      console.error('Error fetching current month receipts:', currentMonthReceiptsError)
+    }
+    
+    const currentMonthRevenue = currentMonthReceipts?.reduce((sum, r) => sum + (r.amount || 0), 0) || 0
+    
+    // 전월 수금액 계산 (received_at 기준)
+    const { data: previousMonthReceipts, error: previousMonthReceiptsError } = await supabase
+      .from('receipts')
+      .select('amount')
+      .eq('company_id', user.company_id)
+      .gte('received_at', previousMonthStart.toISOString())
+      .lte('received_at', previousMonthEnd.toISOString())
+      .is('deleted_at', null)
+    
+    if (previousMonthReceiptsError) {
+      console.error('Error fetching previous month receipts:', previousMonthReceiptsError)
+    }
+    
+    const previousMonthRevenue = previousMonthReceipts?.reduce((sum, r) => sum + (r.amount || 0), 0) || 0
+    
+    // 성장률 계산
+    let monthlyGrowthRate: number | null = null
+    if (previousMonthRevenue > 0) {
+      monthlyGrowthRate = ((currentMonthRevenue - previousMonthRevenue) / previousMonthRevenue) * 100
+    } else if (currentMonthRevenue > 0) {
+      // 전월은 없지만 이번 달 수입이 있으면 null로 설정 (신규로 표시)
+      monthlyGrowthRate = null
+    }
 
     // 디버깅용 로그
     console.log('[Financial Summary API] Today data:', {
       todayDay,
       totalUsers: allUsers?.length || 0,
       todaySalaryUsersCount: todaySalaryUsers.length,
-      todaySalaryUsers: todaySalaryUsers.map(u => ({ name: u.name, salary_date: u.salary_date })),
-      todaySubcontractUsersCount: todaySubcontractUsersFiltered.length,
-      todaySubcontractUsers: todaySubcontractUsersFiltered.map(u => ({ name: u.name, role: u.role })),
+      todaySalaryUsers: todaySalaryUsers.map(u => ({ name: u.name, role: u.role, salary_date: u.salary_date, salary_amount: u.salary_amount, subcontract_amount: u.subcontract_amount })),
+      todayDailyPayrollsCount: todayDailyPayrolls.length,
+      todayDailyPayrolls: todayDailyPayrolls.map(p => ({ worker_name: p.worker_name, amount: p.amount })),
       todayPaymentStoresCount: todayPaymentStores.length,
       todayPaymentStores: todayPaymentStores.map(s => ({ 
         name: s.name, 
@@ -445,8 +591,11 @@ export async function GET(request: NextRequest) {
         scheduled_payroll_count: scheduledPayrollCount,
         top_unpaid_stores: topUnpaidStores,
         today_salary_users: todaySalaryUsers || [],
-        today_subcontract_users: todaySubcontractUsersFiltered || [],
+        today_daily_payrolls: todayDailyPayrolls || [],
         today_payment_stores: todayPaymentStores || [],
+        monthly_growth_rate: monthlyGrowthRate,
+        current_month_revenue: currentMonthRevenue,
+        previous_month_revenue: previousMonthRevenue,
       },
     })
   } catch (error: any) {

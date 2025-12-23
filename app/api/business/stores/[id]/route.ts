@@ -84,6 +84,9 @@ export async function PATCH(
       billing_memo,
       special_notes,
       access_info,
+      is_night_shift,
+      work_start_hour,
+      work_end_hour,
     } = body
 
     if (!name || typeof name !== 'string' || name.trim().length === 0) {
@@ -140,6 +143,9 @@ export async function PATCH(
         billing_memo: billing_memo?.trim() || null,
         special_notes: special_notes?.trim() || null,
         access_info: access_info?.trim() || null,
+        is_night_shift: is_night_shift !== undefined ? is_night_shift : false,
+        work_start_hour: work_start_hour !== undefined && work_start_hour !== null ? parseInt(work_start_hour) : 0,
+        work_end_hour: work_end_hour !== undefined && work_end_hour !== null ? parseInt(work_end_hour) : 0,
         updated_at: new Date().toISOString(),
       })
       .eq('id', params.id)

@@ -1,40 +1,51 @@
 @echo off
-chcp 65001 > nul
+chcp 65001 >nul
 cd /d "%~dp0"
+
 echo ========================================
-echo GitHub 저장 시작
+echo 깃허브 저장 시작
 echo ========================================
 echo.
 
-echo [1/3] 변경된 파일 추가 중...
+echo [1/4] Git 상태 확인...
+git status
+echo.
+
+echo [2/4] 모든 변경사항 추가...
 git add .
-if %errorlevel% neq 0 (
-    echo 오류: 파일 추가 실패
+echo.
+
+echo [3/4] 커밋 생성...
+git commit -m "야간 매장 기능 추가, 회사 관리 비밀번호 변경 기능 추가, 매장 목록 UI 개선
+
+- 야간 매장 기능 구현 (is_night_shift, work_start_hour, work_end_hour 필드 추가)
+- StoreForm에 야간 매장 설정 UI 추가 (체크박스, 근무 시간 선택)
+- StoreList에 야간 매장 배지 표시 추가
+- 매장 목록에서 상세보기 링크 제거, 인원을 인원배정으로 변경
+- 회사 관리 페이지에 비밀번호 변경 기능 추가
+- 비밀번호 변경 시 실시간 유효성 검사 (현재 비밀번호, 새 비밀번호 확인)
+- form 중첩 문제 해결 (비밀번호 변경 폼을 별도 폼으로 분리)
+- 현재 비밀번호 오류 표시 기능 추가 (빨간색 필드, 에러 메시지)
+- 새 비밀번호 확인 실시간 검증 추가"
+echo.
+
+if %ERRORLEVEL% NEQ 0 (
+    echo 커밋 실패!
     pause
     exit /b 1
 )
-echo 파일 추가 완료
+
+echo [4/4] 깃허브에 푸시...
+git push
 echo.
 
-echo [2/3] 커밋 중...
-git commit -m "사용자 역할 수정 기능 추가: 도급(개인), 도급(업체) 역할 지원 및 사용자 목록 표시 수정"
-if %errorlevel% neq 0 (
-    echo 경고: 커밋 실패 (변경사항이 없거나 이미 커밋된 파일일 수 있음)
-    echo.
-)
-echo 커밋 완료
-echo.
-
-echo [3/3] GitHub에 푸시 중...
-git push origin main
-if %errorlevel% neq 0 (
-    echo 오류: 푸시 실패
+if %ERRORLEVEL% NEQ 0 (
+    echo 푸시 실패!
     pause
     exit /b 1
 )
-echo.
+
 echo ========================================
-echo GitHub 저장 완료!
+echo 깃허브 저장 완료!
 echo ========================================
 pause
-

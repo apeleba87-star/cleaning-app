@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 
 export default function LoginPage() {
   const [email, setEmail] = useState('')
@@ -36,6 +37,39 @@ export default function LoginPage() {
         setError(error.message || '로그인에 실패했습니다.')
         setLoading(false)
       } else if (data.session) {
+        // 승인 상태 확인
+        const { data: userData, error: userError } = await supabase
+          .from('users')
+          .select('approval_status, rejection_reason')
+          .eq('id', data.session.user.id)
+          .single()
+
+        if (userError || !userData) {
+          // 사용자 정보가 없는 경우 (일반적으로 발생하지 않음)
+          console.error('User data error:', userError)
+        } else {
+          // 승인 상태 확인
+          if (userData.approval_status === 'pending') {
+            // 로그아웃 (승인 대기 중이면 세션 삭제)
+            await supabase.auth.signOut()
+            setError('가입 신청이 승인 대기 중입니다. 관리자 승인 후 로그인하실 수 있습니다.')
+            setLoading(false)
+            return
+          }
+
+          if (userData.approval_status === 'rejected') {
+            // 로그아웃 (거절된 경우 세션 삭제)
+            await supabase.auth.signOut()
+            const reasonMessage = userData.rejection_reason
+              ? ` 가입 신청이 거절되었습니다. 사유: ${userData.rejection_reason}`
+              : ' 가입 신청이 거절되었습니다.'
+            setError(reasonMessage)
+            setLoading(false)
+            return
+          }
+        }
+
+        // 승인된 사용자는 로그인 성공
         // 세션이 생성되면 router.refresh()를 호출하여 서버 컴포넌트가 세션을 읽을 수 있도록 함
         router.refresh()
         // 잠시 대기 후 홈으로 이동
@@ -100,6 +134,11 @@ export default function LoginPage() {
             {loading ? '로그인 중...' : '로그인'}
           </button>
         </form>
+        <div className="mt-4 text-center text-sm">
+          <Link href="/signup" className="text-blue-600 hover:text-blue-800">
+            계정이 없으신가요? 회원가입
+          </Link>
+        </div>
       </div>
     </div>
   )

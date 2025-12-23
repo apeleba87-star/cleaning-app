@@ -318,6 +318,139 @@ export default function PayrollsPage() {
     }
   }
 
+  const handleMarkAsPaid = async (id: string, userName: string) => {
+    if (!confirm(`${userName}의 인건비를 지급 완료 처리하시겠습니까?`)) {
+      return
+    }
+
+    try {
+      setError(null)
+      const response = await fetch(`/api/business/payrolls/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          status: 'paid',
+          paid_at: new Date().toISOString(),
+        }),
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || '지급 완료 처리 실패')
+      }
+
+      alert('지급 완료 처리되었습니다.')
+      loadData()
+    } catch (err: any) {
+      setError(err.message || '지급 완료 처리 중 오류가 발생했습니다.')
+      console.error('Mark as paid error:', err)
+    }
+  }
+
+  const handleMarkDailyPayrollAsPaid = async (id: string, workerName: string) => {
+    if (!confirm(`${workerName}의 일당을 지급 완료 처리하시겠습니까?`)) {
+      return
+    }
+
+    try {
+      setError(null)
+      const response = await fetch(`/api/business/payrolls/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          status: 'paid',
+          paid_at: new Date().toISOString(),
+        }),
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || '지급 완료 처리 실패')
+      }
+
+      alert('지급 완료 처리되었습니다.')
+      loadData()
+    } catch (err: any) {
+      setError(err.message || '지급 완료 처리 중 오류가 발생했습니다.')
+      console.error('Mark daily payroll as paid error:', err)
+    }
+  }
+
+  const handleUpdateDailyPayroll = async (id: string, data: { amount?: number; paid_at?: string | null; status?: 'scheduled' | 'paid'; memo?: string | null }) => {
+    try {
+      setError(null)
+      const response = await fetch(`/api/business/payrolls/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || '수정 실패')
+      }
+
+      alert('일당 인건비가 수정되었습니다.')
+      loadData()
+    } catch (err: any) {
+      setError(err.message || '수정 중 오류가 발생했습니다.')
+      console.error('Update daily payroll error:', err)
+      throw err // DailyPayrollSection에서 처리할 수 있도록 에러를 다시 던짐
+    }
+  }
+
+  const [editingPayroll, setEditingPayroll] = useState<Payroll | null>(null)
+  const [editAmount, setEditAmount] = useState('')
+  const [editPaidAt, setEditPaidAt] = useState('')
+  const [editStatus, setEditStatus] = useState<'scheduled' | 'paid'>('scheduled')
+  const [editMemo, setEditMemo] = useState('')
+
+  const handleEdit = (payroll: Payroll) => {
+    setEditingPayroll(payroll)
+    setEditAmount(payroll.amount.toString())
+    setEditPaidAt(payroll.paid_at ? (typeof payroll.paid_at === 'string' ? payroll.paid_at.split('T')[0] : new Date(payroll.paid_at).toISOString().split('T')[0]) : '')
+    setEditStatus(payroll.status)
+    setEditMemo(payroll.memo || '')
+  }
+
+  const handleCancelEdit = () => {
+    setEditingPayroll(null)
+    setEditAmount('')
+    setEditPaidAt('')
+    setEditStatus('scheduled')
+    setEditMemo('')
+  }
+
+  const handleUpdatePayroll = async () => {
+    if (!editingPayroll) return
+
+    try {
+      setError(null)
+      const response = await fetch(`/api/business/payrolls/${editingPayroll.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          amount: parseFloat(editAmount),
+          paid_at: editPaidAt || null,
+          status: editStatus,
+          memo: editMemo || null,
+        }),
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || '수정 실패')
+      }
+
+      alert('인건비가 수정되었습니다.')
+      handleCancelEdit()
+      loadData()
+    } catch (err: any) {
+      setError(err.message || '수정 중 오류가 발생했습니다.')
+      console.error('Update error:', err)
+    }
+  }
+
   // 기간별 필터링
   const filteredPayrolls = selectedPeriod
     ? payrolls.filter(p => p.pay_period === selectedPeriod)
@@ -416,8 +549,19 @@ export default function PayrollsPage() {
           <DailyPayrollSection
             selectedPeriod={selectedPeriod}
             onRefresh={loadData}
-            existingDailyPayrolls={dailyPayrolls}
+            existingDailyPayrolls={dailyPayrolls.map(p => ({
+              id: p.id,
+              worker_name: p.worker_name || '',
+              pay_period: p.pay_period,
+              work_days: p.work_days,
+              daily_wage: p.daily_wage,
+              amount: p.amount,
+              paid_at: p.paid_at,
+              status: p.status,
+            }))}
             onDelete={handleDelete}
+            onMarkAsPaid={handleMarkDailyPayrollAsPaid}
+            onUpdate={handleUpdateDailyPayroll}
           />
           
           {/* 일당 근로자 등록 버튼 */}
@@ -902,28 +1046,94 @@ export default function PayrollsPage() {
                       <tr key={payroll.id}>
                         <td className="px-4 py-3 text-sm">{payroll.users?.name || '-'}</td>
                         <td className="px-4 py-3 text-sm">{payroll.pay_period}</td>
-                        <td className="px-4 py-3 text-sm">{payroll.amount.toLocaleString('ko-KR')}원</td>
                         <td className="px-4 py-3 text-sm">
-                          {payroll.paid_at 
-                            ? (typeof payroll.paid_at === 'string' 
-                                ? payroll.paid_at.split('T')[0] 
-                                : new Date(payroll.paid_at).toISOString().split('T')[0])
-                            : '-'}
+                          {editingPayroll?.id === payroll.id ? (
+                            <input
+                              type="number"
+                              value={editAmount}
+                              onChange={(e) => setEditAmount(e.target.value)}
+                              className="w-24 px-2 py-1 border border-gray-300 rounded text-sm"
+                            />
+                          ) : (
+                            `${payroll.amount.toLocaleString('ko-KR')}원`
+                          )}
                         </td>
                         <td className="px-4 py-3 text-sm">
-                          <span className={`px-2 py-1 rounded text-xs ${
-                            payroll.status === 'paid' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'
-                          }`}>
-                            {payroll.status === 'paid' ? '지급완료' : '예정'}
-                          </span>
+                          {editingPayroll?.id === payroll.id ? (
+                            <input
+                              type="date"
+                              value={editPaidAt}
+                              onChange={(e) => setEditPaidAt(e.target.value)}
+                              className="px-2 py-1 border border-gray-300 rounded text-sm"
+                            />
+                          ) : (
+                            payroll.paid_at 
+                              ? (typeof payroll.paid_at === 'string' 
+                                  ? payroll.paid_at.split('T')[0] 
+                                  : new Date(payroll.paid_at).toISOString().split('T')[0])
+                              : '-'
+                          )}
                         </td>
                         <td className="px-4 py-3 text-sm">
-                          <button
-                            onClick={() => handleDelete(payroll.id)}
-                            className="text-red-600 hover:text-red-800"
-                          >
-                            삭제
-                          </button>
+                          {editingPayroll?.id === payroll.id ? (
+                            <select
+                              value={editStatus}
+                              onChange={(e) => setEditStatus(e.target.value as 'scheduled' | 'paid')}
+                              className="px-2 py-1 border border-gray-300 rounded text-sm"
+                            >
+                              <option value="scheduled">예정</option>
+                              <option value="paid">지급완료</option>
+                            </select>
+                          ) : (
+                            <span className={`px-2 py-1 rounded text-xs ${
+                              payroll.status === 'paid' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'
+                            }`}>
+                              {payroll.status === 'paid' ? '지급완료' : '예정'}
+                            </span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 text-sm">
+                          <div className="flex space-x-2">
+                            {editingPayroll?.id === payroll.id ? (
+                              <>
+                                <button
+                                  onClick={handleUpdatePayroll}
+                                  className="text-blue-600 hover:text-blue-800 text-xs"
+                                >
+                                  저장
+                                </button>
+                                <button
+                                  onClick={handleCancelEdit}
+                                  className="text-gray-600 hover:text-gray-800 text-xs"
+                                >
+                                  취소
+                                </button>
+                              </>
+                            ) : (
+                              <>
+                                <button
+                                  onClick={() => handleEdit(payroll)}
+                                  className="text-blue-600 hover:text-blue-800 text-xs"
+                                >
+                                  수정
+                                </button>
+                                {payroll.status === 'scheduled' && (
+                                  <button
+                                    onClick={() => handleMarkAsPaid(payroll.id, payroll.users?.name || '')}
+                                    className="text-green-600 hover:text-green-800 text-xs"
+                                  >
+                                    지급완료
+                                  </button>
+                                )}
+                                <button
+                                  onClick={() => handleDelete(payroll.id)}
+                                  className="text-red-600 hover:text-red-800 text-xs"
+                                >
+                                  삭제
+                                </button>
+                              </>
+                            )}
+                          </div>
                         </td>
                       </tr>
                     ))}

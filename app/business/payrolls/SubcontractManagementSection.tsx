@@ -20,6 +20,7 @@ export default function SubcontractManagementSection({
   const [activeSection, setActiveSection] = useState<'company' | 'individual'>('company')
   const [showForm, setShowForm] = useState(false)
   const [formType, setFormType] = useState<'company' | 'individual'>('company')
+  const [paymentSubmitting, setPaymentSubmitting] = useState<string | null>(null)
 
   // 폼 상태
   const [subcontractorId, setSubcontractorId] = useState('')
@@ -34,7 +35,7 @@ export default function SubcontractManagementSection({
   const [taxRate, setTaxRate] = useState('3.3')
   const [memo, setMemo] = useState('')
 
-  // 하청업체 목록 (프렌차이즈)
+  // 도급업체 목록 (프렌차이즈)
   const [franchises, setFranchises] = useState<Array<{ id: string; name: string }>>([])
   const [users, setUsers] = useState<Array<{ id: string; name: string }>>([])
 
@@ -136,7 +137,7 @@ export default function SubcontractManagementSection({
 
     try {
       if (formType === 'company' && !subcontractorId) {
-        setError('하청업체를 선택해주세요.')
+        setError('도급업체를 선택해주세요.')
         return
       }
 
@@ -217,6 +218,38 @@ export default function SubcontractManagementSection({
     }
   }
 
+  const handleMarkPaymentAsPaid = async (paymentId: string, companyName: string) => {
+    if (!confirm(`${companyName}의 도급 정산을 지급 완료 처리하시겠습니까?`)) {
+      return
+    }
+
+    try {
+      setPaymentSubmitting(paymentId)
+      setError(null)
+      const response = await fetch(`/api/business/subcontracts/payments/${paymentId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          status: 'paid',
+          paid_at: new Date().toISOString(),
+        }),
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || '지급 완료 처리 실패')
+      }
+
+      alert('지급 완료 처리되었습니다.')
+      loadData()
+      onRefresh()
+    } catch (err: any) {
+      setError(err.message || '지급 완료 처리 중 오류가 발생했습니다.')
+    } finally {
+      setPaymentSubmitting(null)
+    }
+  }
+
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('ko-KR', {
       style: 'currency',
@@ -262,7 +295,7 @@ export default function SubcontractManagementSection({
                   : 'bg-purple-600 text-white hover:bg-purple-700'
               }`}
             >
-              {generating ? '생성 중...' : '월별 정산 자동 생성'}
+              {generating ? '생성 중...' : '월별 도급 자동생성'}
             </button>
             <button
               onClick={() => {
@@ -320,7 +353,7 @@ export default function SubcontractManagementSection({
             {formType === 'company' ? (
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  하청업체 <span className="text-red-500">*</span>
+                  도급업체 <span className="text-red-500">*</span>
                 </label>
                 <select
                   value={subcontractorId}
@@ -328,7 +361,7 @@ export default function SubcontractManagementSection({
                   required
                   className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
-                  <option value="">하청업체 선택</option>
+                  <option value="">도급업체 선택</option>
                   {franchises.map((f) => (
                     <option key={f.id} value={f.id}>
                       {f.name}
@@ -551,7 +584,7 @@ export default function SubcontractManagementSection({
               <table className="min-w-full divide-y divide-gray-200">
                 <thead className="bg-gray-50">
                   <tr>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">하청업체</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">도급업체</th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">계약 기간</th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">월 도급금액</th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">은행명</th>
@@ -564,7 +597,7 @@ export default function SubcontractManagementSection({
                   {companySubcontracts.map((sub) => (
                     <tr key={sub.id} className="hover:bg-gray-50">
                       <td className="px-4 py-3 text-sm font-medium text-gray-900">
-                        {sub.subcontractor?.name || '-'}
+                        {sub.subcontractor?.name || sub.worker_name || sub.worker?.name || '-'}
                       </td>
                       <td className="px-4 py-3 text-sm text-gray-500">
                         {sub.contract_period_start.split('T')[0]}
@@ -611,18 +644,19 @@ export default function SubcontractManagementSection({
                 <table className="min-w-full divide-y divide-gray-200">
                   <thead className="bg-blue-50">
                     <tr>
-                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">하청업체</th>
+                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">도급업체</th>
                       <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">원금액</th>
                       <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">지급 금액</th>
                       <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">지급일</th>
-                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">상태</th>
+                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">지급 상태</th>
+                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">작업</th>
                     </tr>
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
                     {companyPayments.map((payment) => (
                       <tr key={payment.id} className="hover:bg-gray-50">
                         <td className="px-4 py-2 text-sm font-medium text-gray-900">
-                          {payment.subcontract?.subcontractor?.name || '-'}
+                          {payment.subcontract?.subcontractor?.name || payment.subcontract?.worker_name || payment.subcontract?.worker?.name || '-'}
                         </td>
                         <td className="px-4 py-2 text-sm text-gray-500">
                           {formatCurrency(payment.base_amount)}
@@ -643,6 +677,17 @@ export default function SubcontractManagementSection({
                           >
                             {payment.status === 'paid' ? '지급완료' : '예정'}
                           </span>
+                        </td>
+                        <td className="px-4 py-2 text-sm">
+                          {payment.status === 'scheduled' && (
+                            <button
+                              onClick={() => handleMarkPaymentAsPaid(payment.id, payment.subcontract?.subcontractor?.name || payment.subcontract?.worker_name || '')}
+                              disabled={paymentSubmitting === payment.id}
+                              className="px-3 py-1.5 text-xs bg-green-500 text-white rounded hover:bg-green-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                              지급완료
+                            </button>
+                          )}
                         </td>
                       </tr>
                     ))}
@@ -741,7 +786,8 @@ export default function SubcontractManagementSection({
                       <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">공제액</th>
                       <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">지급 금액</th>
                       <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">지급일</th>
-                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">상태</th>
+                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">지급 상태</th>
+                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">작업</th>
                     </tr>
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
@@ -772,6 +818,17 @@ export default function SubcontractManagementSection({
                           >
                             {payment.status === 'paid' ? '지급완료' : '예정'}
                           </span>
+                        </td>
+                        <td className="px-4 py-2 text-sm">
+                          {payment.status === 'scheduled' && (
+                            <button
+                              onClick={() => handleMarkPaymentAsPaid(payment.id, payment.subcontract?.worker?.name || payment.subcontract?.worker_name || '')}
+                              disabled={paymentSubmitting === payment.id}
+                              className="px-3 py-1.5 text-xs bg-green-500 text-white rounded hover:bg-green-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                              지급완료
+                            </button>
+                          )}
                         </td>
                       </tr>
                     ))}

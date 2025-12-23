@@ -41,8 +41,18 @@ export default async function BusinessOwnerDashboardPage() {
 
   const storeIds = storeRows?.map((s) => s.id) || []
 
+  // 월별 성장률 계산을 위한 날짜 계산 (KST 기준)
+  const now = new Date()
+  const koreaTime = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Seoul' }))
+  const currentYear = koreaTime.getFullYear()
+  const currentMonth = koreaTime.getMonth()
+  const currentMonthStart = new Date(currentYear, currentMonth, 1, 0, 0, 0, 0)
+  const currentMonthEnd = new Date(currentYear, currentMonth + 1, 0, 23, 59, 59, 999)
+  const previousMonthStart = new Date(currentYear, currentMonth - 1, 1, 0, 0, 0, 0)
+  const previousMonthEnd = new Date(currentYear, currentMonth, 0, 23, 59, 59, 999)
+
   // 통계 조회
-  const [storesResult, usersResult, issuesResult] = await Promise.all([
+  const [storesResult, usersResult, issuesResult, usersByRoleResult, currentMonthReceipts, previousMonthReceipts] = await Promise.all([
     supabase
       .from('stores')
       .select('id', { count: 'exact', head: true })
@@ -59,12 +69,73 @@ export default async function BusinessOwnerDashboardPage() {
           .select('id', { count: 'exact', head: true })
           .in('store_id', storeIds)
           .gte('created_at', new Date(new Date().setDate(1)).toISOString()),
+    supabase
+      .from('users')
+      .select('role')
+      .eq('company_id', user.company_id),
+    supabase
+      .from('receipts')
+      .select('amount')
+      .eq('company_id', user.company_id)
+      .gte('received_at', currentMonthStart.toISOString())
+      .lte('received_at', currentMonthEnd.toISOString())
+      .is('deleted_at', null),
+    supabase
+      .from('receipts')
+      .select('amount')
+      .eq('company_id', user.company_id)
+      .gte('received_at', previousMonthStart.toISOString())
+      .lte('received_at', previousMonthEnd.toISOString())
+      .is('deleted_at', null),
   ])
+
+  // 월별 성장률 계산
+  const currentMonthRevenue = currentMonthReceipts.data?.reduce((sum, r) => sum + (r.amount || 0), 0) || 0
+  const previousMonthRevenue = previousMonthReceipts.data?.reduce((sum, r) => sum + (r.amount || 0), 0) || 0
+  
+  let monthlyGrowthRate: number | null = null
+  if (previousMonthRevenue > 0) {
+    monthlyGrowthRate = ((currentMonthRevenue - previousMonthRevenue) / previousMonthRevenue) * 100
+  } else if (currentMonthRevenue > 0) {
+    monthlyGrowthRate = null // 신규 (전월 데이터 없음)
+  }
+
+  // 역할별 사용자 카운트 계산
+  const usersByRole = (usersByRoleResult.data || []).reduce((acc: Record<string, number>, user: any) => {
+    const role = user.role || 'unknown'
+    acc[role] = (acc[role] || 0) + 1
+    return acc
+  }, {})
+
+  // 역할 레이블 함수
+  const getRoleLabel = (role: string) => {
+    switch (role) {
+      case 'staff':
+        return '직원'
+      case 'franchise_manager':
+        return '프렌차이즈 관리자'
+      case 'manager':
+        return '매니저'
+      case 'store_manager':
+        return '매장 관리자'
+      case 'business_owner':
+        return '업체 관리자'
+      case 'subcontract_individual':
+        return '도급(개인)'
+      case 'subcontract_company':
+        return '도급(업체)'
+      default:
+        return role
+    }
+  }
 
   const stats = {
     totalStores: storesResult.count || 0,
     totalUsers: usersResult.count || 0,
     monthlyIssues: issuesResult.count || 0,
+    usersByRole,
+    getRoleLabel,
+    monthlyGrowthRate,
   }
 
   // 카테고리별 섹션 정의
@@ -79,7 +150,6 @@ export default async function BusinessOwnerDashboardPage() {
     { title: '체크리스트 관리', href: '/business/checklists', description: '매장별 체크리스트 생성 및 관리', category: 'operation' },
     { title: '공지사항 관리', href: '/business/announcements', description: '점주용/직원용 공지사항 작성 및 확인 현황', category: 'operation' },
     { title: '리포트', href: '/business/reports', description: '월간/주간 리포트 조회', category: 'operation' },
-    { title: '요청/미흡사항', href: '/business/issues', description: '모든 매장의 요청/미흡 조회', category: 'operation' },
     { title: '회사 관리', href: '/business/company', description: '회사 정보 및 요금제 관리', category: 'settings' },
   ]
 
@@ -117,16 +187,43 @@ export default async function BusinessOwnerDashboardPage() {
       {/* 통계 카드 */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
         <div className="bg-white rounded-lg shadow-md p-6">
-          <h3 className="text-sm font-medium text-gray-500 mb-2">전체 매장</h3>
-          <p className="text-3xl font-bold text-gray-900">{stats.totalStores}</p>
+          <h3 className="text-sm font-medium text-gray-500 mb-2">전체 관리매장</h3>
+          <p className="text-3xl font-bold text-gray-900">{stats.totalStores}곳</p>
         </div>
         <div className="bg-white rounded-lg shadow-md p-6">
-          <h3 className="text-sm font-medium text-gray-500 mb-2">전체 직원</h3>
-          <p className="text-3xl font-bold text-gray-900">{stats.totalUsers}</p>
+          <h3 className="text-sm font-medium text-gray-500 mb-2">전체 사용자</h3>
+          <p className="text-3xl font-bold text-gray-900 mb-2">{stats.totalUsers} 명</p>
+          <div className="space-y-1">
+            {Object.keys(stats.usersByRole).filter(role => role !== 'business_owner' && role !== 'platform_admin').length > 0 ? (
+              Object.entries(stats.usersByRole)
+                .filter(([role]) => role !== 'business_owner' && role !== 'platform_admin')
+                .sort(([a], [b]) => {
+                  // 직원을 먼저, 그 다음 프렌차이즈 관리자, 나머지는 알파벳 순
+                  if (a === 'staff') return -1
+                  if (b === 'staff') return 1
+                  if (a === 'franchise_manager') return -1
+                  if (b === 'franchise_manager') return 1
+                  return a.localeCompare(b)
+                })
+                .map(([role, count]) => (
+                  <p key={role} className="text-sm text-gray-600 pl-2">
+                    -{stats.getRoleLabel(role)} {count}명
+                  </p>
+                ))
+            ) : (
+              <p className="text-sm text-gray-500 pl-2">-사용자 없음</p>
+            )}
+          </div>
         </div>
         <div className="bg-white rounded-lg shadow-md p-6">
-          <h3 className="text-sm font-medium text-gray-500 mb-2">이번 달 이슈</h3>
-          <p className="text-3xl font-bold text-gray-900">{stats.monthlyIssues}</p>
+          <h3 className="text-sm font-medium text-gray-500 mb-2">월별 성장률</h3>
+          {stats.monthlyGrowthRate !== null ? (
+            <p className={`text-3xl font-bold ${stats.monthlyGrowthRate >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+              {stats.monthlyGrowthRate >= 0 ? '+' : ''}{stats.monthlyGrowthRate.toFixed(1)}%
+            </p>
+          ) : (
+            <p className="text-3xl font-bold text-gray-600">신규</p>
+          )}
         </div>
       </div>
 

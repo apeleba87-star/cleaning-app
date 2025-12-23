@@ -17,6 +17,21 @@ export async function GET(request: NextRequest) {
       )
     }
 
+    // Service role key를 사용하여 auth.users에서 이메일 가져오기
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+
+    let adminSupabase: any = null
+    if (serviceRoleKey && supabaseUrl) {
+      const { createClient } = await import('@supabase/supabase-js')
+      adminSupabase = createClient(supabaseUrl, serviceRoleKey, {
+        auth: {
+          autoRefreshToken: false,
+          persistSession: false,
+        },
+      })
+    }
+
     let query = supabase
       .from('users')
       .select('*')
@@ -50,7 +65,31 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    return NextResponse.json({ users: users || [] })
+    // auth.users에서 이메일 가져오기
+    let usersWithEmail = users || []
+    if (adminSupabase) {
+      try {
+        const { data: authUsersData, error: authError } = await adminSupabase.auth.admin.listUsers()
+        
+        if (!authError && authUsersData?.users) {
+          const emailMap = new Map<string, string>()
+          authUsersData.users.forEach((authUser: any) => {
+            if (authUser.email) {
+              emailMap.set(authUser.id, authUser.email)
+            }
+          })
+
+          usersWithEmail = usersWithEmail.map((u: any) => ({
+            ...u,
+            email: emailMap.get(u.id) || null,
+          }))
+        }
+      } catch (authErr) {
+        console.error('Error fetching auth users:', authErr)
+      }
+    }
+
+    return NextResponse.json({ users: usersWithEmail })
   } catch (error: any) {
     console.error('Error in GET /api/business/users:', error)
     return NextResponse.json(

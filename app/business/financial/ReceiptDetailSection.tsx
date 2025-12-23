@@ -180,3 +180,4 @@ export default function ReceiptDetailSection({ period, onRefresh }: ReceiptDetai
   )
 }
 
+

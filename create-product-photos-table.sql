@@ -84,3 +84,4 @@ COMMENT ON COLUMN public.product_photos.photo_urls IS '사진 URL 배열 (JSONB)
 
 
 
+

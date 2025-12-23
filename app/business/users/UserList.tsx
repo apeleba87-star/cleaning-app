@@ -5,6 +5,7 @@ import { User, UserRole, Franchise, Store } from '@/types/db'
 import UserForm from './UserForm'
 import UserStoreAssign from './UserStoreAssign'
 import CreateUserForm from './CreateUserForm'
+import PendingUsersSection from './PendingUsersSection'
 
 // UserList에서 사용하는 최소 필드 타입
 type UserListStore = Pick<Store, 'id' | 'name'>
@@ -271,8 +272,20 @@ export default function UserList({ initialUsers, stores, franchises, userStoreMa
     return stores.filter((s) => storeIds.includes(s.id))
   }
 
+  const handleApprovalComplete = () => {
+    // 승인 완료 후 사용자 목록 새로고침
+    // 실제로는 페이지 새로고침이 필요할 수 있음
+    window.location.reload()
+  }
+
+  // 승인된 사용자만 필터링 (승인 대기 제외)
+  const approvedUsers = users.filter((u) => u.approval_status !== 'pending')
+
   return (
     <div>
+      {/* 승인 대기 섹션 */}
+      <PendingUsersSection stores={stores} onApprove={handleApprovalComplete} />
+
       <div className="flex justify-between items-center mb-4">
         <button
           onClick={handleCreate}
@@ -443,6 +456,9 @@ export default function UserList({ initialUsers, stores, franchises, userStoreMa
                 이름
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                이메일
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 역할
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -460,18 +476,23 @@ export default function UserList({ initialUsers, stores, franchises, userStoreMa
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
-            {users.length === 0 ? (
+            {approvedUsers.length === 0 ? (
               <tr>
-                <td colSpan={6} className="px-6 py-4 text-center text-gray-500">
+                <td colSpan={7} className="px-6 py-4 text-center text-gray-500">
                   등록된 사용자가 없습니다.
                 </td>
               </tr>
             ) : (
-              users.map((user) => (
+              approvedUsers.map((user) => (
                 <tr key={user.id} className="hover:bg-gray-50">
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="text-sm font-medium text-gray-900">
                       {user.name}
+                    </div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="text-sm text-gray-500">
+                      {(user as any).email || '-'}
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">

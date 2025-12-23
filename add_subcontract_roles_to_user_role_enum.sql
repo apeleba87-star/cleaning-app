@@ -11,3 +11,4 @@ ALTER TYPE user_role ADD VALUE IF NOT EXISTS 'subcontract_company';
 -- 확인
 -- SELECT enum_range(NULL::user_role);
 
+

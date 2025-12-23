@@ -54,9 +54,139 @@ export async function GET(request: NextRequest) {
       throw new Error(`Failed to fetch payrolls: ${error.message}`)
     }
 
+    // 도급 정산 데이터도 함께 조회 (기간이 지정된 경우)
+    let subcontractPayments: any[] = []
+    if (period && /^\d{4}-(0[1-9]|1[0-2])$/.test(period)) {
+      // Service role key를 사용하여 RLS 우회
+      const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+      if (serviceRoleKey && supabaseUrl) {
+        const adminSupabase = createClient(supabaseUrl, serviceRoleKey, {
+          auth: {
+            autoRefreshToken: false,
+            persistSession: false,
+          },
+        })
+
+        const { data: payments, error: paymentsError } = await adminSupabase
+          .from('subcontract_payments')
+          .select(`
+            *,
+            subcontract:subcontract_id (
+              id,
+              subcontract_type,
+              worker_name,
+              subcontractor:subcontractor_id (
+                id,
+                name
+              ),
+              worker:worker_id (
+                id,
+                name,
+                role
+              )
+            )
+          `)
+          .eq('company_id', user.company_id)
+          .eq('pay_period', period)
+          .is('deleted_at', null)
+          .order('created_at', { ascending: false })
+
+        if (!paymentsError && payments) {
+          subcontractPayments = payments
+        }
+      }
+    }
+
+    // payrolls와 subcontract_payments를 통합하여 반환
+    // payrolls는 그대로, subcontract_payments는 payroll 형식으로 변환
+    const payrollData = (payrolls || []).map((p: any) => ({
+      ...p,
+      type: 'payroll' as const, // 정규직원 또는 일당직원
+    }))
+
+    const subcontractData = await Promise.all(subcontractPayments.map(async (sp: any) => {
+      // 도급 정산에서 이름 가져오기
+      const subcontract = sp.subcontract
+      let name = '-'
+      let role: string | null = null
+
+      if (subcontract) {
+        if (subcontract.subcontract_type === 'company') {
+          // 도급 업체인 경우
+          if (subcontract.subcontractor) {
+            // franchises 테이블에서 가져온 경우
+            name = subcontract.subcontractor.name
+            role = 'subcontract_company'
+          } else if (subcontract.worker_id) {
+            // users 테이블에서 가져온 경우 (subcontract_company 역할)
+            const { data: user } = await supabase
+              .from('users')
+              .select('id, name, role')
+              .eq('id', subcontract.worker_id)
+              .single()
+            if (user) {
+              name = user.name
+              role = user.role || 'subcontract_company'
+            }
+          } else if (subcontract.worker_name) {
+            // worker_name 필드에 직접 저장된 경우 (자동 생성된 도급)
+            name = subcontract.worker_name
+            role = 'subcontract_company'
+          }
+        } else if (subcontract.subcontract_type === 'individual') {
+          // 도급 개인인 경우
+          if (subcontract.worker) {
+            // users 테이블에서 가져온 경우
+            name = subcontract.worker.name
+            role = subcontract.worker.role || 'subcontract_individual'
+          } else if (subcontract.worker_name) {
+            // worker_name 필드에 직접 저장된 경우
+            name = subcontract.worker_name
+            role = 'subcontract_individual'
+          } else if (subcontract.worker_id) {
+            // worker_id만 있고 worker 관계가 없는 경우 (직접 조회)
+            const { data: user } = await supabase
+              .from('users')
+              .select('id, name, role')
+              .eq('id', subcontract.worker_id)
+              .single()
+            if (user) {
+              name = user.name
+              role = user.role || 'subcontract_individual'
+            }
+          }
+        }
+      }
+
+      return {
+        id: sp.id,
+        type: 'subcontract' as const,
+        payment_id: sp.id, // 도급 정산 ID
+        pay_period: sp.pay_period,
+        amount: sp.amount,
+        paid_at: sp.paid_at,
+        status: sp.status as 'paid' | 'scheduled',
+        memo: sp.memo,
+        // 도급 관련 정보
+        subcontract_type: subcontract?.subcontract_type,
+        worker_name: name,
+        role: role,
+        users: name !== '-' ? { id: subcontract?.worker_id || subcontract?.subcontractor?.id || '', name: name } : null, // UI 호환성을 위해
+      }
+    }))
+
+    // 모든 데이터를 합치고 날짜순으로 정렬
+    const allData = [...payrollData, ...subcontractData].sort((a, b) => {
+      // paid_at이 있으면 paid_at 기준, 없으면 created_at 기준
+      const dateA = a.paid_at || (a as any).created_at || ''
+      const dateB = b.paid_at || (b as any).created_at || ''
+      return dateB.localeCompare(dateA)
+    })
+
     return Response.json({
       success: true,
-      data: payrolls || [],
+      data: allData,
     })
   } catch (error: any) {
     return handleApiError(error)

@@ -152,16 +152,44 @@ export default function TodayTasksWrapperClient({ companyId }: { companyId: stri
     }
   }
 
+  const handleMarkDailyPayrollAsPaid = async (payrollId: string, workerName: string) => {
+    if (!confirm(`${workerName}의 일당을 지급 완료 처리하시겠습니까?`)) {
+      return
+    }
+
+    try {
+      const response = await fetch(`/api/business/payrolls/${payrollId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          status: 'paid',
+          paid_at: new Date().toISOString(),
+        }),
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || '지급 완료 처리 실패')
+      }
+
+      alert('지급 완료 처리되었습니다.')
+      loadFinancialData()
+    } catch (err: any) {
+      alert(err.message || '지급 완료 처리 중 오류가 발생했습니다.')
+    }
+  }
+
   return (
     <TodayTasksSection
       todaySalaryUsers={financialData.today_salary_users || []}
-      todaySubcontractUsers={financialData.today_subcontract_users || []}
+      todayDailyPayrolls={financialData.today_daily_payrolls || []}
       todayPaymentStores={financialData.today_payment_stores || []}
       totalUnpaid={financialData.total_unpaid || 0}
       unpaidCount={financialData.unpaid_count || 0}
       formatCurrency={formatCurrency}
       onMarkPayrollAsPaid={handleMarkPayrollAsPaid}
       onMarkSubcontractAsPaid={handleMarkSubcontractAsPaid}
+      onMarkDailyPayrollAsPaid={handleMarkDailyPayrollAsPaid}
       onPartialPayment={handlePartialPayment}
       onFullPayment={handleFullPayment}
     />

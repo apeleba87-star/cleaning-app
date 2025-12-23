@@ -91,6 +91,22 @@ export default function FinancialSummarySection({ companyId }: FinancialSummaryS
           today_salary_users: data.data?.today_salary_users,
           today_payment_stores_count: data.data?.today_payment_stores?.length || 0,
         })
+        
+        // 각 급여일 직원의 상세 정보 출력
+        if (data.data?.today_salary_users && data.data.today_salary_users.length > 0) {
+          console.log('[Financial Summary] Today salary users details:')
+          data.data.today_salary_users.forEach((user: any) => {
+            console.log('  -', user.name, {
+              role: user.role,
+              salary_date: user.salary_date,
+              salary_amount: user.salary_amount,
+              subcontract_amount: user.subcontract_amount,
+              payroll_status: user.payroll_status
+            })
+          })
+        } else {
+          console.log('[Financial Summary] No salary users found for today!')
+        }
         setSummary(data.data)
       } else {
         throw new Error('재무 데이터를 불러올 수 없습니다.')
