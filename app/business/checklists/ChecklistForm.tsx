@@ -117,15 +117,25 @@ export default function ChecklistForm({
         },
         body: JSON.stringify({
           store_id: storeId,
-          items: validItems.map((item) => ({
-            area: item.area.trim(),
-            type: item.type,
-            status: item.type === 'check' ? item.status : undefined,
-            checked: item.type === 'check' ? item.checked || false : undefined,
-            comment: item.comment?.trim() || undefined,
-            before_photo_url: (item.type === 'before_photo' || item.type === 'before_after_photo') ? item.before_photo_url : undefined,
-            after_photo_url: (item.type === 'after_photo' || item.type === 'before_after_photo') ? item.after_photo_url : undefined,
-          })),
+          items: validItems.map((item) => {
+            const itemToSave = {
+              area: item.area.trim(),
+              type: item.type,
+              status: item.type === 'check' ? item.status : undefined,
+              checked: item.type === 'check' ? item.checked || false : undefined,
+              comment: item.comment?.trim() || undefined,
+              before_photo_url: (item.type === 'before_photo' || item.type === 'before_after_photo') ? item.before_photo_url : undefined,
+              after_photo_url: (item.type === 'after_photo' || item.type === 'before_after_photo') ? item.after_photo_url : undefined,
+            }
+            // 디버깅: 저장되는 타입 확인
+            console.log('💾 Saving checklist item:', {
+              area: itemToSave.area,
+              type: itemToSave.type,
+              before_photo_url: itemToSave.before_photo_url ? 'exists' : 'null',
+              after_photo_url: itemToSave.after_photo_url ? 'exists' : 'null'
+            })
+            return itemToSave
+          }),
           note: note.trim() || null,
         }),
       })

@@ -6,7 +6,7 @@ interface ChecklistProgress {
   percentage: number
 }
 
-export function calculateChecklistProgress(checklist: Checklist): ChecklistProgress {
+export function calculateChecklistProgress(checklist: Checklist, stage?: 'before' | 'after'): ChecklistProgress {
   let totalItems = 0
   let completedItems = 0
 
@@ -23,24 +23,43 @@ export function calculateChecklistProgress(checklist: Checklist): ChecklistProgr
       }
     } else if (item.type === 'before_photo') {
       // 관리 전 사진: before_photo_url만 확인
-      totalItems++
-      if (item.before_photo_url) {
-        completedItems++
+      if (!stage || stage === 'before') {
+        totalItems++
+        if (item.before_photo_url) {
+          completedItems++
+        }
       }
     } else if (item.type === 'after_photo') {
       // 관리 후 사진: after_photo_url만 확인
-      totalItems++
-      if (item.after_photo_url) {
-        completedItems++
+      if (!stage || stage === 'after') {
+        totalItems++
+        if (item.after_photo_url) {
+          completedItems++
+        }
       }
     } else if (item.type === 'before_after_photo') {
-      // 관리 전/후 사진: before + after 2개로 간주
-      totalItems += 2
-      if (item.before_photo_url) {
-        completedItems++
-      }
-      if (item.after_photo_url) {
-        completedItems++
+      // 관리 전/후 사진: 단계별로 다르게 계산
+      if (!stage) {
+        // 단계가 지정되지 않으면 둘 다 계산
+        totalItems += 2
+        if (item.before_photo_url) {
+          completedItems++
+        }
+        if (item.after_photo_url) {
+          completedItems++
+        }
+      } else if (stage === 'before') {
+        // 관리전 단계: 관리전 사진만 계산
+        totalItems++
+        if (item.before_photo_url) {
+          completedItems++
+        }
+      } else {
+        // 관리후 단계: 관리후 사진만 계산
+        totalItems++
+        if (item.after_photo_url) {
+          completedItems++
+        }
       }
     }
   })
