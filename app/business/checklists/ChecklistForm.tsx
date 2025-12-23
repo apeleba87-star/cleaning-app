@@ -39,8 +39,8 @@ export default function ChecklistForm({
   const isEditMode = !!initialChecklist
   const [items, setItems] = useState<ChecklistItem[]>(
     initialChecklist?.items?.length > 0
-      ? initialChecklist.items.map((item) => {
-          // 기존 'photo' 타입을 'before_after_photo'로 변환
+      ? initialChecklist.items.map((item: any) => {
+          // 기존 'photo' 타입을 'before_after_photo'로 변환 (하위 호환성)
           if (item.type === 'photo') {
             return { ...item, type: 'before_after_photo' as const }
           }
