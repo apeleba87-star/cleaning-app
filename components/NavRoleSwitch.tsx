@@ -228,8 +228,8 @@ export function NavRoleSwitch({ userRole, userName }: NavRoleSwitchProps) {
   }
 
   const renderNavItem = (item: NavItem | NavGroup, index: number) => {
-    // 단일 링크인 경우
-    if ('href' in item && !item.items) {
+    // 단일 링크인 경우 (items가 없는 경우)
+    if ('href' in item && !('items' in item)) {
       const navItem = item as NavItem
       return (
         <Link
