@@ -778,7 +778,7 @@ export default function PayrollsPage() {
                       type="button"
                       onClick={() => {
                         setShowBulkForm(false)
-                        setBulkEntries([{ workerName: '', residentRegistrationNumber: '', workDays: '', dailyWage: '', paidAt: '', status: 'scheduled', memo: '', applyDeduction: false }])
+                        setBulkEntries([{ workerName: '', residentRegistrationNumber: '', workDays: '', dailyWage: '', paidAt: '', status: 'scheduled', memo: '', applyDeduction: false, bankName: '', accountNumber: '' }])
                       }}
                       className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50"
                     >
