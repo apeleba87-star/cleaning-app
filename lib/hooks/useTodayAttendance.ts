@@ -29,7 +29,7 @@ export function useTodayAttendance() {
     // 오늘 출근 기록만 조회 (한국 시간대 기준)
     const { data: todayData, error: todayError } = await supabase
       .from('attendance')
-      .select('id, user_id, store_id, work_date, clock_in_at, clock_in_latitude, clock_in_longitude, clock_out_at, clock_out_latitude, clock_out_longitude, selfie_url, created_at, updated_at')
+      .select('id, user_id, store_id, work_date, clock_in_at, clock_in_latitude, clock_in_longitude, clock_out_at, clock_out_latitude, clock_out_longitude, selfie_url, attendance_type, scheduled_date, problem_report_id, change_reason, created_at, updated_at')
       .eq('user_id', session.user.id)
       .eq('work_date', today)
     
