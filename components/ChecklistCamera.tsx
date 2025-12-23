@@ -193,7 +193,8 @@ export function ChecklistCamera({ items, mode, storeId, onComplete, onCancel }: 
       if (tempPhotos[i]) {
         const url = await uploadPhotoFile(i, tempPhotos[i])
         if (url) {
-          const itemToUpdate = updatedItems.find(item => item.area === photoItems[i].area && item.type === 'photo')
+          // area로 매칭하여 해당 아이템 찾기 (photoItems는 이미 필터링된 사진 아이템들)
+          const itemToUpdate = updatedItems.find(item => item.area === photoItems[i].area && (item.type === 'before_photo' || item.type === 'after_photo' || item.type === 'before_after_photo'))
           if (itemToUpdate) {
             const itemIndex = updatedItems.indexOf(itemToUpdate)
             if (mode === 'before') {
