@@ -359,7 +359,7 @@ export async function clockOutAction(
     }
 
     console.log('Clock-out attempt:', {
-      attendance_id: attendance.id,
+      attendance_id: attendance.data.id,
       location: validated.location,
     })
 
