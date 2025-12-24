@@ -353,10 +353,10 @@ export default function AttendancePage() {
   return (
     <GeoGuard
       onLocationReady={setLocation}
-      className="max-w-2xl mx-auto"
+      className="max-w-2xl mx-auto px-2 md:px-4"
     >
-      <div className="bg-white rounded-lg shadow-md p-6 mb-20 md:mb-0">
-        <h1 className="text-2xl font-bold mb-6">출퇴근 관리</h1>
+      <div className="bg-white rounded-lg shadow-md p-4 md:p-6 mb-16 md:mb-0">
+        <h1 className="text-xl md:text-2xl font-bold mb-4 md:mb-6">출퇴근 관리</h1>
 
         {error && (
           <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-md text-red-800 text-sm">
@@ -371,8 +371,8 @@ export default function AttendancePage() {
         )}
 
         {/* 새 출근하기 섹션 */}
-        <div className="mb-6 p-4 bg-gray-50 rounded-md border border-gray-200">
-          <h2 className="text-lg font-semibold mb-3">새 매장 출근</h2>
+        <div className="mb-4 md:mb-6 p-3 md:p-4 bg-gray-50 rounded-md border border-gray-200">
+          <h2 className="text-base md:text-lg font-semibold mb-3">새 매장 출근</h2>
           <div className="space-y-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -489,7 +489,7 @@ export default function AttendancePage() {
           <button
             onClick={handleClockIn}
             disabled={!location || !selectedStoreId || submitting || hasActiveAttendance || (attendanceType === 'rescheduled' && !scheduledDate)}
-            className="w-full mt-4 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors font-medium flex items-center justify-center gap-2"
+            className="w-full mt-4 px-4 py-3 md:py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors font-medium flex items-center justify-center gap-2 touch-manipulation text-base md:text-sm"
           >
             {submitting ? (
               <>
@@ -504,15 +504,15 @@ export default function AttendancePage() {
         </div>
 
         {/* 오늘 출근한 매장 목록 */}
-        <div className="space-y-4">
-          <h2 className="text-lg font-semibold">오늘 출근한 매장</h2>
+        <div className="space-y-3 md:space-y-4">
+          <h2 className="text-base md:text-lg font-semibold">오늘 출근한 매장</h2>
           {todayAttendances.length === 0 ? (
             <div className="p-4 bg-gray-50 rounded-md text-center text-gray-500">
               아직 출근한 매장이 없습니다.
             </div>
           ) : (
             todayAttendances.map((attendance) => (
-              <div key={attendance.id} className="p-4 bg-blue-50 rounded-md border border-blue-200">
+              <div key={attendance.id} className="p-3 md:p-4 bg-blue-50 rounded-md border border-blue-200">
                 <div className="flex items-start justify-between mb-2">
                   <div className="flex-1">
                     <h3 className="font-semibold text-gray-900">
@@ -571,7 +571,7 @@ export default function AttendancePage() {
                     <button
                       onClick={() => handleClockOut(attendance.store_id)}
                       disabled={!location || submitting}
-                      className="ml-4 px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors font-medium text-sm whitespace-nowrap flex items-center justify-center gap-2"
+                      className="ml-2 md:ml-4 px-3 md:px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors font-medium text-xs md:text-sm whitespace-nowrap flex items-center justify-center gap-2 touch-manipulation"
                     >
                       {submitting ? (
                         <>

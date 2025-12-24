@@ -94,7 +94,7 @@ export default function PhotosPage() {
   // 출근하지 않았거나 퇴근한 경우 안내 메시지
   if (!isClockedIn) {
     return (
-      <div className="max-w-4xl mx-auto px-4 py-6 mb-20 md:mb-0">
+      <div className="max-w-4xl mx-auto px-4 py-6 mb-16 md:mb-0">
         <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-6 text-center">
           <p className="text-yellow-800 font-medium mb-2">
             출근 후 청소 사진을 확인할 수 있습니다.
@@ -179,9 +179,9 @@ export default function PhotosPage() {
       </div>
 
       {/* 사진 리스트 */}
-      <div className="bg-white rounded-lg shadow-md p-6">
-        <h2 className="text-lg font-semibold mb-4">업로드된 사진</h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+      <div className="bg-white rounded-lg shadow-md p-4 md:p-6">
+        <h2 className="text-base md:text-lg font-semibold mb-4">업로드된 사진</h2>
+        <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4">
           {photos.map((photo) => (
             <div key={photo.id} className="border border-gray-300 rounded-lg p-3">
               <img

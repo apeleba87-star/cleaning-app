@@ -1014,7 +1014,7 @@ export default function MobileDashboardPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 pb-20">
+    <div className="min-h-screen bg-gray-50 pb-16 md:pb-0">
       {/* 헤더 - 반응형 */}
       <div className="bg-white border-b border-gray-200 px-3 sm:px-4 py-3">
         <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2">

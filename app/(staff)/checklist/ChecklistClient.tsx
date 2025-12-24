@@ -648,7 +648,7 @@ export default function ChecklistClient() {
   // 로딩 중
   if (attendanceLoading || loading) {
     return (
-      <div className="max-w-6xl mx-auto px-4 py-6 space-y-6 mb-20 md:mb-0">
+      <div className="max-w-6xl mx-auto px-4 py-6 space-y-6 mb-16 md:mb-0">
         <div className="flex items-center justify-center py-12">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
         </div>
@@ -659,7 +659,7 @@ export default function ChecklistClient() {
   // 출근하지 않았거나 퇴근한 경우 안내 메시지
   if (!isClockedIn) {
     return (
-      <div className="max-w-6xl mx-auto px-4 py-6 mb-20 md:mb-0">
+      <div className="max-w-6xl mx-auto px-4 py-6 mb-16 md:mb-0">
         <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-6 text-center">
           <p className="text-yellow-800 font-medium mb-2">
             출근 후 체크리스트를 확인할 수 있습니다.
@@ -754,9 +754,9 @@ export default function ChecklistClient() {
 
   if (selectedChecklist) {
     return (
-      <div className="max-w-6xl mx-auto px-4 py-6 space-y-6 mb-20 md:mb-0">
+      <div className="max-w-6xl mx-auto px-4 py-6 space-y-6 mb-16 md:mb-0">
         <div className="flex items-center justify-between">
-          <h1 className="text-2xl font-bold">체크리스트 수행</h1>
+          <h1 className="text-xl md:text-2xl font-bold">체크리스트 수행</h1>
           <button
             onClick={() => {
               setSelectedChecklist(null)
@@ -972,7 +972,7 @@ export default function ChecklistClient() {
     })
 
     return (
-      <div className="max-w-6xl mx-auto px-4 py-6 space-y-6 mb-20 md:mb-0">
+      <div className="max-w-6xl mx-auto px-4 py-6 space-y-6 mb-16 md:mb-0">
         <div className="flex items-center justify-between">
           <h1 className="text-2xl font-bold">
             완료된 체크리스트 - {new Date(selectedDate).toLocaleDateString('ko-KR', { 

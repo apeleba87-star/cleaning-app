@@ -200,9 +200,9 @@ export default function SuppliesPage() {
   ]
 
   return (
-    <div className="max-w-4xl mx-auto px-4 py-6 space-y-6 mb-20 md:mb-0">
+    <div className="max-w-4xl mx-auto px-2 md:px-4 py-4 md:py-6 space-y-4 md:space-y-6 mb-16 md:mb-0">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">물품 요청</h1>
+        <h1 className="text-xl md:text-2xl font-bold">물품 요청</h1>
         <button
           onClick={() => {
             setShowForm(!showForm)

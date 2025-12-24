@@ -289,7 +289,7 @@ export default function ProfilePage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 pb-20">
+    <div className="min-h-screen bg-gray-50 pb-16 md:pb-0">
       {/* 헤더 */}
       <div className="bg-blue-600 text-white p-4 mb-4">
         <div className="flex items-center gap-3">

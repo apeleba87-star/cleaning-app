@@ -808,7 +808,7 @@ export default function IssuesPage() {
 
   if (!isClockedIn) {
     return (
-      <div className="max-w-4xl mx-auto px-4 py-6 mb-20 md:mb-0">
+      <div className="max-w-4xl mx-auto px-4 py-6 mb-16 md:mb-0">
         <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-6 text-center">
           <p className="text-yellow-800 font-medium mb-2">
             출근 후 매장 문제를 보고할 수 있습니다.
@@ -826,8 +826,8 @@ export default function IssuesPage() {
   const canAddMorePhotos = currentPhotos.length < maxPhotos
 
   return (
-    <div className="max-w-4xl mx-auto px-4 py-6 space-y-6 mb-20 md:mb-0">
-      <h1 className="text-2xl font-bold">매장 문제 보고</h1>
+    <div className="max-w-4xl mx-auto px-2 md:px-4 py-4 md:py-6 space-y-4 md:space-y-6 mb-16 md:mb-0">
+      <h1 className="text-xl md:text-2xl font-bold">매장 문제 보고</h1>
 
       {/* 탭 메뉴 */}
       <div className="flex border-b border-gray-200">
