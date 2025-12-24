@@ -263,12 +263,14 @@ export default function StoreManagerDashboardPage() {
                     const photoId = `checklist-${photo.id}-before`
                     if (!photoIdSet.has(photoId)) {
                       photoIdSet.add(photoId)
+                      // work_date나 created_at을 사용, 없으면 오늘 날짜
+                      const photoDate = photo.work_date || photo.created_at || new Date().toISOString()
                       photos.push({
                         id: photoId,
                         title: `${photo.area || '체크리스트'} - 관리 전`,
                         photo_url: photo.before_photo_url,
                         store_name: store.store_name,
-                        created_at: new Date().toISOString(), // 오늘 날짜 사진이므로 오늘 날짜 사용
+                        created_at: photoDate,
                         status: 'completed',
                         category: 'before_after',
                         photo_type: 'before',
@@ -280,12 +282,14 @@ export default function StoreManagerDashboardPage() {
                     const photoId = `checklist-${photo.id}-after`
                     if (!photoIdSet.has(photoId)) {
                       photoIdSet.add(photoId)
+                      // work_date나 created_at을 사용, 없으면 오늘 날짜
+                      const photoDate = photo.work_date || photo.created_at || new Date().toISOString()
                       photos.push({
                         id: photoId,
                         title: `${photo.area || '체크리스트'} - 관리 후`,
                         photo_url: photo.after_photo_url,
                         store_name: store.store_name,
-                        created_at: new Date().toISOString(), // 오늘 날짜 사진이므로 오늘 날짜 사용
+                        created_at: photoDate,
                         status: 'completed',
                         category: 'before_after',
                         photo_type: 'after',
@@ -773,19 +777,19 @@ export default function StoreManagerDashboardPage() {
   }
 
   return (
-    <div className="max-w-7xl mx-auto p-6 bg-gray-50 min-h-screen">
+    <div className="max-w-7xl mx-auto px-2 md:px-6 py-2 md:py-6 bg-gray-50 min-h-screen">
       {/* 헤더 */}
-      <div className="mb-6">
-        <div className="flex justify-between items-center mb-2">
-          <h1 className="text-3xl font-bold text-gray-900">전체 매장 현황</h1>
-          <div className="flex items-center gap-4">
+      <div className="mb-4 md:mb-6">
+        <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-3 mb-2">
+          <h1 className="text-xl md:text-3xl font-bold text-gray-900">전체 매장 현황</h1>
+          <div className="flex flex-col md:flex-row md:items-center gap-2 md:gap-4">
             {storeStatuses.length > 0 && (
               <>
                 {storeStatuses.length > 1 ? (
                   <select
                     value={selectedStoreId || ''}
                     onChange={(e) => setSelectedStoreId(e.target.value || null)}
-                    className="px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="px-3 md:px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm md:text-base"
                   >
                     <option value="">전체 매장</option>
                     {storeStatuses.map((store) => (
@@ -795,11 +799,11 @@ export default function StoreManagerDashboardPage() {
                     ))}
                   </select>
                 ) : (
-                  <span className="text-sm font-medium text-gray-900">{storeStatuses[0]?.store_name}</span>
+                  <span className="text-sm md:text-base font-medium text-gray-900">{storeStatuses[0]?.store_name}</span>
                 )}
                 <Link
                   href={selectedStoreId ? `/store-manager/stores/${selectedStoreId}/detail` : (storeStatuses.length === 1 ? `/store-manager/stores/${storeStatuses[0]?.store_id}/detail` : '#')}
-                  className={`px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors font-medium ${
+                  className={`px-3 md:px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors font-medium text-sm md:text-base text-center ${
                     !selectedStoreId && storeStatuses.length > 1 ? 'opacity-50 cursor-not-allowed' : ''
                   }`}
                   onClick={(e) => {
@@ -813,83 +817,61 @@ export default function StoreManagerDashboardPage() {
                 </Link>
               </>
             )}
-            <div className="text-right">
-              <div className="text-sm text-gray-600">{now}</div>
-              <div className="text-sm font-medium text-gray-900">{storeStatuses.length}개 매장</div>
+            <div className="text-left md:text-right">
+              <div className="text-xs md:text-sm text-gray-600">{now}</div>
+              <div className="text-xs md:text-sm font-medium text-gray-900">{storeStatuses.length}개 매장</div>
             </div>
           </div>
         </div>
 
-        {/* 긴급 대응 필요 알림 */}
-        {urgentAlerts.length > 0 && (
-          <div className="mt-3 bg-red-50 border border-red-200 rounded-lg p-4">
-            <div className="flex items-start gap-3">
-              <div className="flex-shrink-0">
-                <svg className="w-6 h-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                </svg>
-              </div>
-              <p className="text-sm text-red-800 flex-1">
-                <strong>긴급 대응 필요:</strong>{' '}
-                {urgentAlerts.map((alert, idx) => (
-                  <span key={idx}>
-                    {alert.store} {alert.message} {alert.count}건
-                    {idx < urgentAlerts.length - 1 ? ', ' : ''}
-                  </span>
-                ))}
-                이 대기 중입니다
-              </p>
-            </div>
-          </div>
-        )}
       </div>
 
       {/* KPI 카드 */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-        <div className="bg-white rounded-lg shadow-md p-6 border-l-4 border-blue-500">
-          <div className="text-sm text-gray-600 mb-1">금일 보고 건수</div>
-          <div className="text-3xl font-bold text-gray-900">{stats.todayPhotoCount}건</div>
-          <div className="text-sm text-blue-600 mt-2">사진 보고 완료</div>
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-2 md:gap-4 mb-4 md:mb-6">
+        <div className="bg-white rounded-lg shadow-md p-3 md:p-6 border-l-4 border-blue-500">
+          <div className="text-xs md:text-sm text-gray-600 mb-1">금일 보고 건수</div>
+          <div className="text-xl md:text-3xl font-bold text-gray-900">{stats.todayPhotoCount}건</div>
+          <div className="text-xs md:text-sm text-blue-600 mt-1 md:mt-2">사진 보고 완료</div>
         </div>
-        <div className="bg-white rounded-lg shadow-md p-6 border-l-4 border-orange-500">
-          <div className="flex justify-between items-start">
+        <div className="bg-white rounded-lg shadow-md p-3 md:p-6 border-l-4 border-orange-500">
+          <div className="flex flex-col md:flex-row md:justify-between md:items-start">
             <div className="flex-1">
-              <div className="text-sm text-gray-600 mb-1">물품 요청</div>
-              <div className="text-3xl font-bold text-gray-900">{stats.supplyRequestCount}건</div>
-              <div className="text-sm text-orange-600 mt-2">
+              <div className="text-xs md:text-sm text-gray-600 mb-1">물품 요청</div>
+              <div className="text-xl md:text-3xl font-bold text-gray-900">{stats.supplyRequestCount}건</div>
+              <div className="text-xs md:text-sm text-orange-600 mt-1 md:mt-2">
                 점주 처리 대기 중
               </div>
             </div>
             {stats.supplyRequestCount > 0 && (
               <Link
                 href="/store-manager/supplies"
-                className="px-3 py-1.5 bg-orange-500 text-white rounded-md text-xs font-medium hover:bg-orange-600 inline-block"
+                className="mt-2 md:mt-0 px-2 md:px-3 py-1 md:py-1.5 bg-orange-500 text-white rounded-md text-xs font-medium hover:bg-orange-600 inline-block text-center"
               >
                 확인
               </Link>
             )}
           </div>
         </div>
-        <div className="bg-white rounded-lg shadow-md p-6 border-l-4 border-green-500">
-          <div className="text-sm text-gray-600 mb-1">금일 완료</div>
-          <div className="flex items-baseline gap-2">
-            <div className="text-3xl font-bold text-gray-900">{stats.completionRate}%</div>
-            <div className="text-lg text-gray-600">({stats.completedToday}건)</div>
+        <div className="bg-white rounded-lg shadow-md p-3 md:p-6 border-l-4 border-green-500">
+          <div className="text-xs md:text-sm text-gray-600 mb-1">금일 완료</div>
+          <div className="flex items-baseline gap-1 md:gap-2">
+            <div className="text-xl md:text-3xl font-bold text-gray-900">{stats.completionRate}%</div>
+            <div className="text-sm md:text-lg text-gray-600">({stats.completedToday}건)</div>
           </div>
-          <div className="text-sm text-green-600 mt-2">체크리스트 완료</div>
+          <div className="text-xs md:text-sm text-green-600 mt-1 md:mt-2">체크리스트 완료</div>
         </div>
-        <div className="bg-white rounded-lg shadow-md p-6 border-l-4 border-purple-500">
-          <div className="text-sm text-gray-600 mb-1">관리완료율</div>
-          <div className="text-3xl font-bold text-gray-900">{stats.completionRateForStores}%</div>
-          <div className="text-sm text-purple-600 mt-2">
+        <div className="bg-white rounded-lg shadow-md p-3 md:p-6 border-l-4 border-purple-500">
+          <div className="text-xs md:text-sm text-gray-600 mb-1">관리완료율</div>
+          <div className="text-xl md:text-3xl font-bold text-gray-900">{stats.completionRateForStores}%</div>
+          <div className="text-xs md:text-sm text-purple-600 mt-1 md:mt-2">
             {stats.completedCount}/{stats.totalStores} 관리 완료
           </div>
         </div>
       </div>
 
       {/* 탭 네비게이션 */}
-      <div className="mb-6 border-b border-gray-200">
-        <nav className="flex space-x-8">
+      <div className="mb-4 md:mb-6 border-b border-gray-200 overflow-x-auto">
+        <nav className="flex space-x-4 md:space-x-8 min-w-max">
           {[
             { id: 'overview', label: '전체 현황' },
             { id: 'photos', label: '사진 보고' },
@@ -899,7 +881,7 @@ export default function StoreManagerDashboardPage() {
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id as any)}
-              className={`py-4 px-1 border-b-2 font-medium text-sm ${
+              className={`py-3 md:py-4 px-2 md:px-1 border-b-2 font-medium text-sm md:text-base whitespace-nowrap ${
                 activeTab === tab.id
                   ? 'border-blue-500 text-blue-600'
                   : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
@@ -915,59 +897,59 @@ export default function StoreManagerDashboardPage() {
       {activeTab === 'overview' && (
         <div className="space-y-6">
           {/* 요청란 상태 */}
-          <div className="bg-white rounded-lg shadow-md p-6">
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="text-xl font-semibold">요청란 상태</h2>
+          <div className="bg-white rounded-lg shadow-md p-4 md:p-6">
+            <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-3 mb-4">
+              <h2 className="text-lg md:text-xl font-semibold">요청란 상태</h2>
               <button
                 onClick={() => {
                   setShowStoreSelector(true)
                 }}
-                className="px-4 py-2 bg-blue-600 text-white rounded-md text-sm font-medium hover:bg-blue-700 transition-colors"
+                className="px-4 py-2 bg-blue-600 text-white rounded-md text-sm font-medium hover:bg-blue-700 transition-colors w-full md:w-auto"
               >
                 요청란 접수하기
               </button>
             </div>
-            <div className="grid grid-cols-4 gap-4">
-              <div className="bg-blue-50 rounded-lg p-4 text-center">
-                <div className="text-2xl font-bold text-blue-600 mb-2">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-2 md:gap-4">
+              <div className="bg-blue-50 rounded-lg p-3 md:p-4 text-center">
+                <div className="text-xl md:text-2xl font-bold text-blue-600 mb-2">
                   {storeStatuses.reduce((sum, s) => sum + s.received_request_count, 0)}건
                 </div>
                 <button 
                   onClick={() => handleRequestStatusClick('received')}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-md text-sm font-medium hover:bg-blue-700 transition-colors"
+                  className="w-full px-3 md:px-4 py-2 bg-blue-600 text-white rounded-md text-xs md:text-sm font-medium hover:bg-blue-700 transition-colors touch-manipulation"
                 >
                   접수
                 </button>
               </div>
-              <div className="bg-yellow-50 rounded-lg p-4 text-center">
-                <div className="text-2xl font-bold text-yellow-600 mb-2">
+              <div className="bg-yellow-50 rounded-lg p-3 md:p-4 text-center">
+                <div className="text-xl md:text-2xl font-bold text-yellow-600 mb-2">
                   {storeStatuses.reduce((sum, s) => sum + s.in_progress_request_count, 0)}건
                 </div>
                 <button 
                   onClick={() => handleRequestStatusClick('in_progress')}
-                  className="px-4 py-2 bg-yellow-600 text-white rounded-md text-sm font-medium hover:bg-yellow-700 transition-colors"
+                  className="w-full px-3 md:px-4 py-2 bg-yellow-600 text-white rounded-md text-xs md:text-sm font-medium hover:bg-yellow-700 transition-colors touch-manipulation"
                 >
                   처리중
                 </button>
               </div>
-              <div className="bg-green-50 rounded-lg p-4 text-center">
-                <div className="text-2xl font-bold text-green-600 mb-2">
+              <div className="bg-green-50 rounded-lg p-3 md:p-4 text-center">
+                <div className="text-xl md:text-2xl font-bold text-green-600 mb-2">
                   {unconfirmedCompletedCount}건
                 </div>
                 <button
                   onClick={() => handleRequestStatusClick('completed')}
-                  className="px-4 py-2 bg-green-600 text-white rounded-md text-sm font-medium hover:bg-green-700 transition-colors"
+                  className="w-full px-3 md:px-4 py-2 bg-green-600 text-white rounded-md text-xs md:text-sm font-medium hover:bg-green-700 transition-colors touch-manipulation"
                 >
                   처리완료
                 </button>
               </div>
-              <div className="bg-red-50 rounded-lg p-4 text-center">
-                <div className="text-2xl font-bold text-red-600 mb-2">
+              <div className="bg-red-50 rounded-lg p-3 md:p-4 text-center">
+                <div className="text-xl md:text-2xl font-bold text-red-600 mb-2">
                   {unconfirmedRejectedCount}건
                 </div>
                 <button
                   onClick={() => handleRequestStatusClick('rejected')}
-                  className="px-4 py-2 bg-red-600 text-white rounded-md text-sm font-medium hover:bg-red-700 transition-colors"
+                  className="w-full px-3 md:px-4 py-2 bg-red-600 text-white rounded-md text-xs md:text-sm font-medium hover:bg-red-700 transition-colors touch-manipulation"
                 >
                   반려처리
                 </button>
@@ -976,15 +958,15 @@ export default function StoreManagerDashboardPage() {
           </div>
 
           {/* 매장 상태 확인 */}
-          <div className="bg-white rounded-lg shadow-md p-6">
+          <div className="bg-white rounded-lg shadow-md p-4 md:p-6">
             <div className="flex justify-between items-center mb-4">
-              <h2 className="text-xl font-semibold">매장 상태 확인</h2>
-              <span className="text-sm text-gray-500">오늘 기준</span>
+              <h2 className="text-lg md:text-xl font-semibold">매장 상태 확인</h2>
+              <span className="text-xs md:text-sm text-gray-500">오늘 기준</span>
             </div>
             
             {/* 사진 카테고리 탭 */}
-            <div className="mb-4 border-b border-gray-200">
-              <nav className="flex space-x-4">
+            <div className="mb-4 border-b border-gray-200 overflow-x-auto">
+              <nav className="flex space-x-3 md:space-x-4 min-w-max">
                 {[
                   { id: 'before_after', label: '관리 전후' },
                   { id: 'problem', label: '매장 문제' },
@@ -1111,12 +1093,12 @@ export default function StoreManagerDashboardPage() {
                           </div>
                         </button>
                         {isExpanded && (
-                          <div className="p-4">
-                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                          <div className="p-3 md:p-4">
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-2 md:gap-4">
                               {photos.map((photo) => (
                                 <div
                                   key={photo.id}
-                                  className="border rounded-lg overflow-hidden cursor-pointer hover:shadow-lg transition-shadow"
+                                  className="border rounded-lg overflow-hidden cursor-pointer hover:shadow-lg transition-shadow touch-manipulation"
                                   onClick={() => handlePhotoClick(photo)}
                                 >
                                   <div className="aspect-video bg-gray-200 relative">
@@ -1129,8 +1111,8 @@ export default function StoreManagerDashboardPage() {
                                       }}
                                     />
                                   </div>
-                                  <div className="p-3">
-                                    <div className="text-sm font-medium text-gray-900 mb-1">
+                                  <div className="p-2 md:p-3">
+                                    <div className="text-xs md:text-sm font-medium text-gray-900 mb-1 line-clamp-2">
                                       {photo.title}
                                     </div>
                                     <div className="text-xs text-gray-500">
@@ -1151,16 +1133,16 @@ export default function StoreManagerDashboardPage() {
           </div>
 
           {/* 매장 체크리스트 진행률 */}
-          <div className="bg-white rounded-lg shadow-md p-6">
-            <h2 className="text-xl font-semibold mb-4">매장 체크리스트 진행률</h2>
+          <div className="bg-white rounded-lg shadow-md p-4 md:p-6">
+            <h2 className="text-lg md:text-xl font-semibold mb-4">매장 체크리스트 진행률</h2>
             <div className="space-y-4">
               {storeStatuses
                 .filter((store) => store.is_work_day) // 당일 출근해야 하는 매장만 표시
                 .map((store) => (
                   <div key={store.store_id}>
-                    <div className="flex justify-between items-center mb-2">
+                    <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-2 mb-2">
                       <span className="text-sm font-medium text-gray-900">{store.store_name}</span>
-                      <span className="text-sm text-gray-600">
+                      <span className="text-xs md:text-sm text-gray-600">
                         {store.checklist_completed}/{store.checklist_total} 완료 · {store.checklist_completion_rate}%
                       </span>
                     </div>
@@ -1173,14 +1155,14 @@ export default function StoreManagerDashboardPage() {
                   </div>
                 ))}
               {storeStatuses.filter((store) => store.is_work_day).length === 0 && (
-                <p className="text-gray-500 text-center py-4">당일 출근해야 하는 매장이 없습니다.</p>
+                <p className="text-gray-500 text-center py-4 text-sm">당일 출근해야 하는 매장이 없습니다.</p>
               )}
             </div>
           </div>
 
           {/* 출근 상태 */}
-          <div className="bg-white rounded-lg shadow-md p-6">
-            <h2 className="text-xl font-semibold mb-4">출근 상태</h2>
+          <div className="bg-white rounded-lg shadow-md p-4 md:p-6">
+            <h2 className="text-lg md:text-xl font-semibold mb-4">출근 상태</h2>
             <div className="space-y-3">
               {[...storeStatuses]
                 .sort((a, b) => {
@@ -1235,18 +1217,18 @@ export default function StoreManagerDashboardPage() {
                   const status = getManagementStatus()
 
                   return (
-                    <div key={store.store_id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                      <div className="flex items-center gap-3">
-                        <div className={`w-3 h-3 ${status.dotColor} rounded-full`}></div>
+                    <div key={store.store_id} className="flex flex-col md:flex-row md:items-center md:justify-between p-3 bg-gray-50 rounded-lg gap-2 md:gap-0">
+                      <div className="flex items-center gap-2 md:gap-3 flex-1">
+                        <div className={`w-3 h-3 ${status.dotColor} rounded-full flex-shrink-0`}></div>
                         <span className="text-sm font-medium text-gray-900">{store.store_name}</span>
                         <Link
                           href={`/store-manager/stores/${store.store_id}/detail`}
-                          className="text-xs text-blue-600 hover:text-blue-800"
+                          className="text-xs text-blue-600 hover:text-blue-800 ml-auto md:ml-0"
                         >
                           상세보기 →
                         </Link>
                       </div>
-                      <div className="flex items-center gap-3">
+                      <div className="flex items-center gap-2 md:gap-3 flex-wrap">
                         {store.clock_in_time && (
                           <span className="text-sm text-gray-600">{formatTime(store.clock_in_time)}</span>
                         )}
@@ -1263,9 +1245,175 @@ export default function StoreManagerDashboardPage() {
       )}
 
       {activeTab === 'photos' && (
-        <div className="bg-white rounded-lg shadow-md p-6">
-          <h2 className="text-xl font-semibold mb-4">사진 보고</h2>
-          <p className="text-gray-500">사진 보고 내용이 여기에 표시됩니다.</p>
+        <div className="space-y-6">
+          {/* 매장 상태 확인 (사진 카테고리별 표시) */}
+          <div className="bg-white rounded-lg shadow-md p-4 md:p-6">
+            <h2 className="text-lg md:text-xl font-semibold mb-4">사진 보고</h2>
+            <div className="bg-white rounded-lg shadow-md p-4 md:p-6">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg md:text-xl font-semibold">매장별 사진 확인</h3>
+              <span className="text-xs md:text-sm text-gray-500">전체 사진</span>
+            </div>
+            
+            {/* 사진 카테고리 탭 */}
+            <div className="mb-4 border-b border-gray-200 overflow-x-auto">
+              <nav className="flex space-x-3 md:space-x-4 min-w-max">
+                {[
+                  { id: 'before_after', label: '관리 전후' },
+                  { id: 'problem', label: '매장 문제' },
+                  { id: 'product', label: '제품 입고' },
+                  { id: 'storage', label: '보관 제품' },
+                ].map((tab) => {
+                  // 사진 보고 탭에서는 날짜 필터링 없이 카운트
+                  const categoryPhotos = photoData.filter(p => {
+                    if (tab.id === 'storage') {
+                      return p.category === 'product' && p.photo_type === 'storage'
+                    } else if (tab.id === 'product') {
+                      return p.category === 'product' && (p.photo_type === 'receipt' || p.photo_type === 'order_sheet')
+                    }
+                    return p.category === tab.id
+                  })
+                  return (
+                    <button
+                      key={tab.id}
+                      onClick={() => setPhotoCategoryTab(tab.id as any)}
+                      className={`py-2 px-2 md:px-1 border-b-2 font-medium text-xs md:text-sm whitespace-nowrap ${
+                        photoCategoryTab === tab.id
+                          ? 'border-blue-500 text-blue-600'
+                          : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                      }`}
+                    >
+                      {tab.label} ({categoryPhotos.length})
+                    </button>
+                  )
+                })}
+              </nav>
+            </div>
+
+            {/* 사진 그리드 - 매장별로 그룹화 */}
+            {(() => {
+              if (loadingPhotoData) {
+                return (
+                  <div className="text-center py-8">
+                    <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mb-2"></div>
+                    <p className="text-gray-500">데이터를 불러오고 있습니다...</p>
+                  </div>
+                )
+              }
+
+              // 사진 보고 탭에서는 날짜 필터링을 하지 않고 모든 사진을 표시 (오늘 기준이 아닌 전체)
+              const filteredPhotos = photoData.filter(p => {
+                if (photoCategoryTab === 'storage') {
+                  return p.category === 'product' && p.photo_type === 'storage'
+                } else if (photoCategoryTab === 'product') {
+                  return p.category === 'product' && (p.photo_type === 'receipt' || p.photo_type === 'order_sheet')
+                }
+                return p.category === photoCategoryTab
+              })
+
+              if (filteredPhotos.length === 0) {
+                return <p className="text-gray-500 text-center py-8">표시할 사진이 없습니다.</p>
+              }
+
+              const photosByStore = filteredPhotos.reduce((acc, photo) => {
+                if (!acc[photo.store_name]) {
+                  acc[photo.store_name] = []
+                }
+                acc[photo.store_name].push(photo)
+                return acc
+              }, {} as Record<string, PhotoData[]>)
+
+              const allPhotos = filteredPhotos
+
+              const toggleStore = (storeName: string) => {
+                setExpandedStores(prev => {
+                  const newSet = new Set(prev)
+                  if (newSet.has(storeName)) {
+                    newSet.delete(storeName)
+                  } else {
+                    newSet.add(storeName)
+                  }
+                  return newSet
+                })
+              }
+
+              const handlePhotoClick = (photo: PhotoData) => {
+                const index = allPhotos.findIndex(p => p.id === photo.id)
+                setCurrentPhotoIndex(index >= 0 ? index : 0)
+                setCurrentPhotoList(allPhotos)
+                setSelectedPhoto(photo)
+              }
+
+              return (
+                <div className="space-y-4">
+                  {Object.entries(photosByStore).map(([storeName, photos]) => {
+                    const isExpanded = expandedStores.has(storeName)
+                    return (
+                      <div key={storeName} className="border rounded-lg overflow-hidden">
+                        <button
+                          onClick={() => toggleStore(storeName)}
+                          className="w-full flex items-center justify-between p-4 bg-gray-50 hover:bg-gray-100 transition-colors"
+                        >
+                          <h4 className="text-base md:text-lg font-semibold text-gray-900">{storeName}</h4>
+                          <div className="flex items-center gap-2">
+                            <Link
+                              href={`/store-manager/stores/${storeStatuses.find(s => s.store_name === storeName)?.store_id}/detail`}
+                              onClick={(e) => e.stopPropagation()}
+                              className="px-3 py-1 bg-blue-600 text-white text-xs md:text-sm rounded-md hover:bg-blue-700 transition-colors"
+                            >
+                              상세보기
+                            </Link>
+                            <span className="text-xs md:text-sm text-gray-500">({photos.length}장)</span>
+                            <svg
+                              className={`w-5 h-5 text-gray-600 transition-transform ${isExpanded ? 'rotate-180' : ''}`}
+                              fill="none"
+                              stroke="currentColor"
+                              viewBox="0 0 24 24"
+                            >
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                            </svg>
+                          </div>
+                        </button>
+                        {isExpanded && (
+                          <div className="p-3 md:p-4">
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-2 md:gap-4">
+                              {photos.map((photo) => (
+                                <div
+                                  key={photo.id}
+                                  className="border rounded-lg overflow-hidden cursor-pointer hover:shadow-lg transition-shadow touch-manipulation"
+                                  onClick={() => handlePhotoClick(photo)}
+                                >
+                                  <div className="aspect-video bg-gray-200 relative">
+                                    <img
+                                      src={photo.photo_url}
+                                      alt={photo.title}
+                                      className="w-full h-full object-cover"
+                                      onError={(e) => {
+                                        (e.target as HTMLImageElement).style.display = 'none'
+                                      }}
+                                    />
+                                  </div>
+                                  <div className="p-2 md:p-3">
+                                    <div className="text-xs md:text-sm font-medium text-gray-900 mb-1 line-clamp-2">
+                                      {photo.title}
+                                    </div>
+                                    <div className="text-xs text-gray-500">
+                                      {formatTimeAgo(photo.created_at)}
+                                    </div>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              )
+            })()}
+            </div>
+          </div>
         </div>
       )}
 
@@ -1412,9 +1560,9 @@ export default function StoreManagerDashboardPage() {
                   setCurrentPhotoIndex(prevIndex)
                   setSelectedPhoto(currentPhotoList[prevIndex])
                 }}
-                className="absolute left-4 top-1/2 -translate-y-1/2 z-10 bg-white rounded-full p-2 hover:bg-gray-100 transition-colors"
+                className="absolute left-2 md:left-4 top-1/2 -translate-y-1/2 z-10 bg-white bg-opacity-90 rounded-full p-2 md:p-2 hover:bg-opacity-100 transition-colors touch-manipulation"
               >
-                <svg className="w-6 h-6 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-6 h-6 md:w-6 md:h-6 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
                 </svg>
               </button>
@@ -1429,9 +1577,9 @@ export default function StoreManagerDashboardPage() {
                   setCurrentPhotoIndex(nextIndex)
                   setSelectedPhoto(currentPhotoList[nextIndex])
                 }}
-                className="absolute right-4 top-1/2 -translate-y-1/2 z-10 bg-white rounded-full p-2 hover:bg-gray-100 transition-colors"
+                className="absolute right-2 md:right-4 top-1/2 -translate-y-1/2 z-10 bg-white bg-opacity-90 rounded-full p-2 md:p-2 hover:bg-opacity-100 transition-colors touch-manipulation"
               >
-                <svg className="w-6 h-6 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-6 h-6 md:w-6 md:h-6 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                 </svg>
               </button>
@@ -1468,13 +1616,13 @@ export default function StoreManagerDashboardPage() {
       {/* 매장 선택 모달 */}
       {showStoreSelector && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg shadow-xl max-w-md w-full">
-            <div className="p-6">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full max-h-[90vh] overflow-y-auto">
+            <div className="p-4 md:p-6">
               <div className="flex justify-between items-center mb-4">
-                <h2 className="text-2xl font-semibold">매장 선택</h2>
+                <h2 className="text-lg md:text-2xl font-semibold">매장 선택</h2>
                 <button
                   onClick={() => setShowStoreSelector(false)}
-                  className="text-gray-500 hover:text-gray-700"
+                  className="text-gray-500 hover:text-gray-700 touch-manipulation p-2 -mr-2"
                 >
                   <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -1491,11 +1639,11 @@ export default function StoreManagerDashboardPage() {
                       setShowStoreSelector(false)
                       setShowRequestForm(true)
                     }}
-                    className="w-full px-4 py-3 text-left border border-gray-300 rounded-lg hover:bg-blue-50 hover:border-blue-500 transition-colors"
+                    className="w-full px-4 py-3 text-left border border-gray-300 rounded-lg hover:bg-blue-50 hover:border-blue-500 transition-colors touch-manipulation"
                   >
-                    <div className="font-medium text-gray-900">{store.store_name}</div>
+                    <div className="font-medium text-gray-900 text-sm md:text-base">{store.store_name}</div>
                     {store.store_address && (
-                      <div className="text-sm text-gray-500 mt-1">{store.store_address}</div>
+                      <div className="text-xs md:text-sm text-gray-500 mt-1">{store.store_address}</div>
                     )}
                   </button>
                 ))}
@@ -1523,13 +1671,13 @@ export default function StoreManagerDashboardPage() {
 
       {/* 요청란 상황 모달 */}
       {showRequestStatusModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50" onClick={() => setShowRequestStatusModal(false)}>
-          <div className="bg-white rounded-lg p-6 max-w-4xl w-full mx-4 max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-2 md:p-4" onClick={() => setShowRequestStatusModal(false)}>
+          <div className="bg-white rounded-lg p-4 md:p-6 max-w-4xl w-full max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <div className="flex justify-between items-center mb-4">
-              <h2 className="text-xl font-semibold">
+              <h2 className="text-lg md:text-xl font-semibold">
                 요청란 상황
               </h2>
-              <button onClick={() => setShowRequestStatusModal(false)} className="text-gray-500 hover:text-gray-700 text-2xl">
+              <button onClick={() => setShowRequestStatusModal(false)} className="text-gray-500 hover:text-gray-700 text-2xl touch-manipulation p-2 -mr-2">
                 ×
               </button>
             </div>

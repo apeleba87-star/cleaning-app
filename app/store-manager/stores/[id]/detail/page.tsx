@@ -426,10 +426,10 @@ export default function StoreDetailPage() {
   const groupedData = shouldGroupByDate ? groupDataByDate() : []
 
   return (
-    <div className="max-w-7xl mx-auto p-6">
-      <div className="flex justify-between items-center mb-6">
+    <div className="max-w-7xl mx-auto px-2 md:px-6 py-2 md:py-6">
+      <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-3 mb-4 md:mb-6">
         <div>
-          <h1 className="text-2xl font-bold">{storeName || '매장 상세'}</h1>
+          <h1 className="text-xl md:text-2xl font-bold">{storeName || '매장 상세'}</h1>
           <Link
             href="/store-manager/dashboard"
             className="text-blue-600 hover:text-blue-800 text-sm"
@@ -441,11 +441,11 @@ export default function StoreDetailPage() {
 
       {/* 기간별 탭 - 요청 상태 필터링 시 숨김 */}
       {!requestStatus && (
-        <div className="bg-white rounded-lg shadow-md p-4 mb-6">
-          <div className="flex gap-4 border-b">
+        <div className="bg-white rounded-lg shadow-md p-3 md:p-4 mb-4 md:mb-6">
+          <div className="flex gap-2 md:gap-4 border-b overflow-x-auto">
             <button
               onClick={() => setActiveTab('7days')}
-              className={`px-4 py-2 font-medium ${
+              className={`px-2 md:px-4 py-2 font-medium text-xs md:text-sm whitespace-nowrap ${
                 activeTab === '7days'
                   ? 'text-blue-600 border-b-2 border-blue-600'
                   : 'text-gray-600 hover:text-gray-900'
@@ -455,7 +455,7 @@ export default function StoreDetailPage() {
             </button>
             <button
               onClick={() => setActiveTab('30days')}
-              className={`px-4 py-2 font-medium ${
+              className={`px-2 md:px-4 py-2 font-medium text-xs md:text-sm whitespace-nowrap ${
                 activeTab === '30days'
                   ? 'text-blue-600 border-b-2 border-blue-600'
                   : 'text-gray-600 hover:text-gray-900'
@@ -465,7 +465,7 @@ export default function StoreDetailPage() {
             </button>
             <button
               onClick={() => setActiveTab('thisMonth')}
-              className={`px-4 py-2 font-medium ${
+              className={`px-2 md:px-4 py-2 font-medium text-xs md:text-sm whitespace-nowrap ${
                 activeTab === 'thisMonth'
                   ? 'text-blue-600 border-b-2 border-blue-600'
                   : 'text-gray-600 hover:text-gray-900'
@@ -475,7 +475,7 @@ export default function StoreDetailPage() {
             </button>
             <button
               onClick={() => setActiveTab('custom')}
-              className={`px-4 py-2 font-medium ${
+              className={`px-2 md:px-4 py-2 font-medium text-xs md:text-sm whitespace-nowrap ${
                 activeTab === 'custom'
                   ? 'text-blue-600 border-b-2 border-blue-600'
                   : 'text-gray-600 hover:text-gray-900'
@@ -485,7 +485,7 @@ export default function StoreDetailPage() {
             </button>
             <button
               onClick={() => setActiveTab('monthlyReport')}
-              className={`px-4 py-2 font-medium ${
+              className={`px-2 md:px-4 py-2 font-medium text-xs md:text-sm whitespace-nowrap ${
                 activeTab === 'monthlyReport'
                   ? 'text-blue-600 border-b-2 border-blue-600'
                   : 'text-gray-600 hover:text-gray-900'
@@ -561,9 +561,9 @@ export default function StoreDetailPage() {
         // 날짜별 그룹화된 뷰 (30일, 이번달)
         <div className="space-y-4">
           {groupedData.length === 0 ? (
-            <div className="bg-white rounded-lg shadow-md p-6 text-center text-gray-500">
-              데이터가 없습니다.
-            </div>
+                <div className="bg-white rounded-lg shadow-md p-4 md:p-6 text-center text-gray-500 text-sm">
+                  데이터가 없습니다.
+                </div>
           ) : (
             groupedData.map(([date, data]) => {
               const isExpanded = expandedDates.has(date)
@@ -919,8 +919,8 @@ export default function StoreDetailPage() {
         <div className="space-y-6">
           {/* 관리전후 사진 - 요청 상태 필터링 시 숨김 */}
           {!requestStatus && (
-            <div className="bg-white rounded-lg shadow-md p-6">
-            <h2 className="text-xl font-semibold mb-4">관리전후 사진</h2>
+            <div className="bg-white rounded-lg shadow-md p-4 md:p-6">
+            <h2 className="text-lg md:text-xl font-semibold mb-4">관리전후 사진</h2>
             {detailData.before_after_photos.length === 0 ? (
               <p className="text-gray-500">관리전후 사진이 없습니다.</p>
             ) : (
@@ -1008,8 +1008,8 @@ export default function StoreDetailPage() {
 
           {/* 제품입고 및 보관상태 - 요청 상태 필터링 시 숨김 */}
           {!requestStatus && (
-            <div className="bg-white rounded-lg shadow-md p-6">
-            <h2 className="text-xl font-semibold mb-4">제품입고 및 보관상태</h2>
+            <div className="bg-white rounded-lg shadow-md p-4 md:p-6">
+            <h2 className="text-lg md:text-xl font-semibold mb-4">제품입고 및 보관상태</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {/* 제품 입고 */}
               <div>
@@ -1064,8 +1064,8 @@ export default function StoreDetailPage() {
 
           {/* 매장상황 - 요청 상태 필터링 시 숨김 */}
           {!requestStatus && (
-            <div className="bg-white rounded-lg shadow-md p-6">
-            <h2 className="text-xl font-semibold mb-4">매장상황</h2>
+            <div className="bg-white rounded-lg shadow-md p-4 md:p-6">
+            <h2 className="text-lg md:text-xl font-semibold mb-4">매장상황</h2>
             <div className="space-y-4">
               {/* 매장 문제 보고 */}
               <div>
@@ -1160,8 +1160,8 @@ export default function StoreDetailPage() {
           )}
 
           {/* 요청란 */}
-          <div className="bg-white rounded-lg shadow-md p-6">
-            <h2 className="text-xl font-semibold mb-4">
+          <div className="bg-white rounded-lg shadow-md p-4 md:p-6">
+            <h2 className="text-lg md:text-xl font-semibold mb-4">
               요청란 ({detailData.requests.filter(r => !requestStatus || r.status === requestStatus).length}건)
               {requestStatus && (
                 <span className="ml-2 text-sm font-normal text-gray-600">

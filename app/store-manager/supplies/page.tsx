@@ -121,18 +121,19 @@ export default function StoreManagerSuppliesPage() {
   }
 
   return (
-    <div className="max-w-6xl mx-auto">
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-bold">물품 요청 관리</h1>
+    <div className="max-w-6xl mx-auto px-2 md:px-4">
+      <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-3 mb-4 md:mb-6">
+        <h1 className="text-xl md:text-2xl font-bold">물품 요청 관리</h1>
         <Link
           href="/store-manager/dashboard"
-          className="text-blue-600 hover:text-blue-800 text-sm"
+          className="text-blue-600 hover:text-blue-800 text-sm self-start md:self-auto"
         >
           ← 대시보드로
         </Link>
       </div>
 
-      <div className="bg-white shadow-md rounded-lg overflow-hidden">
+      {/* 데스크톱: 테이블 뷰 */}
+      <div className="hidden md:block bg-white shadow-md rounded-lg overflow-hidden">
         <table className="min-w-full divide-y divide-gray-200">
           <thead className="bg-gray-50">
             <tr>
@@ -235,6 +236,90 @@ export default function StoreManagerSuppliesPage() {
             )}
           </tbody>
         </table>
+      </div>
+
+      {/* 모바일: 카드 뷰 */}
+      <div className="md:hidden space-y-4">
+        {supplyRequests.length === 0 ? (
+          <div className="bg-white shadow-md rounded-lg p-6 text-center text-sm text-gray-500">
+            처리할 물품 요청이 없습니다.
+          </div>
+        ) : (
+          supplyRequests.map((request) => (
+            <div
+              key={request.id}
+              className={`bg-white shadow-md rounded-lg p-4 ${request.status === 'completed' ? 'opacity-60' : ''}`}
+            >
+              <div className="flex items-start justify-between mb-3">
+                <div className="flex-1">
+                  <h3 className={`text-base font-semibold mb-1 ${request.status === 'completed' ? 'text-gray-500' : 'text-gray-900'}`}>
+                    {request.title}
+                  </h3>
+                  {request.description && (
+                    <p className="text-sm text-gray-600 mb-2 line-clamp-2">
+                      {request.description}
+                    </p>
+                  )}
+                </div>
+                <span
+                  className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full flex-shrink-0 ${getStatusColor(request.status)}`}
+                >
+                  {getStatusLabel(request.status)}
+                </span>
+              </div>
+              
+              <div className="space-y-2 mb-3">
+                <div className="flex items-center gap-2 text-sm">
+                  <span className="text-gray-500">카테고리:</span>
+                  <span className={request.status === 'completed' ? 'text-gray-400' : 'text-gray-700'}>
+                    {request.category || '-'}
+                  </span>
+                </div>
+                <div className="flex items-center gap-2 text-sm">
+                  <span className="text-gray-500">요청자:</span>
+                  <span className={request.status === 'completed' ? 'text-gray-400' : 'text-gray-700'}>
+                    {request.users?.name || '-'}
+                  </span>
+                </div>
+                <div className="flex items-center gap-2 text-sm">
+                  <span className="text-gray-500">요청일:</span>
+                  <span className={request.status === 'completed' ? 'text-gray-400' : 'text-gray-700'}>
+                    {new Date(request.created_at).toLocaleDateString('ko-KR')}
+                  </span>
+                </div>
+              </div>
+
+              {request.status === 'manager_in_progress' && (
+                <button
+                  onClick={() => setCompletingRequestId(request.id)}
+                  className="w-full px-4 py-2 bg-blue-600 text-white rounded-md text-sm font-medium hover:bg-blue-700 transition-colors touch-manipulation"
+                >
+                  처리 완료
+                </button>
+              )}
+              
+              {request.status === 'completed' && (
+                <div className="space-y-2">
+                  <div className="text-sm text-green-600 font-medium">완료됨</div>
+                  {request.completion_photo_url && (
+                    <div>
+                      <img
+                        src={request.completion_photo_url}
+                        alt="처리 완료 사진"
+                        className="w-full max-w-xs h-auto object-cover rounded border"
+                      />
+                    </div>
+                  )}
+                  {request.completion_description && (
+                    <p className="text-xs text-gray-500">
+                      {request.completion_description}
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
+          ))
+        )}
       </div>
 
       {/* 처리 완료 모달 */}

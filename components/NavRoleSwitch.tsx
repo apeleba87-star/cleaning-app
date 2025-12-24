@@ -134,8 +134,7 @@ export function NavRoleSwitch({ userRole, userName }: NavRoleSwitchProps) {
         const storeManagerNav = [
           { href: '/store-manager/dashboard', label: '대시보드' },
           { href: '/store-manager/stores', label: '매장 관리' },
-          { href: '/store-manager/reports', label: '리포트' },
-          { href: '/store-manager/issues', label: '요청/미흡' },
+          { href: '/store-manager/supplies', label: '물품 요청' },
         ]
 
   const platformAdminNav = [
