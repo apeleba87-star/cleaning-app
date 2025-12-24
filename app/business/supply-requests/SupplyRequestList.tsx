@@ -69,24 +69,41 @@ export default function SupplyRequestList({ initialSupplyRequests, storeMap }: S
     return category
   }
 
-  const handleStatusUpdate = async (requestId: string, newStatus: SupplyRequestStatus, action: 'confirm' | 'forward' | 'complete') => {
+  const handleConfirm = async (requestId: string) => {
     try {
-      const response = await fetch(`/api/business/supply-requests/${requestId}/${action}`, {
+      const response = await fetch(`/api/business/supply-requests/${requestId}/confirm`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: newStatus }),
       })
 
       if (response.ok) {
-        // 목록 새로고침
         window.location.reload()
       } else {
         const data = await response.json()
-        alert(data.error || '상태 업데이트에 실패했습니다.')
+        alert(data.error || '요청 확인에 실패했습니다.')
       }
     } catch (error) {
-      console.error('Error updating supply request status:', error)
-      alert('상태 업데이트 중 오류가 발생했습니다.')
+      console.error('Error confirming supply request:', error)
+      alert('요청 확인 중 오류가 발생했습니다.')
+    }
+  }
+
+  const handleForward = async (requestId: string) => {
+    try {
+      const response = await fetch(`/api/business/supply-requests/${requestId}/forward`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      })
+
+      if (response.ok) {
+        window.location.reload()
+      } else {
+        const data = await response.json()
+        alert(data.error || '점주 전달에 실패했습니다.')
+      }
+    } catch (error) {
+      console.error('Error forwarding supply request:', error)
+      alert('점주 전달 중 오류가 발생했습니다.')
     }
   }
 
