@@ -553,11 +553,48 @@ export default function ChecklistClient() {
       try {
         await saveChecklistProgress(selectedChecklist.id, validItems, note)
 
+        // 체크리스트 목록 다시 로드
+        await loadAssignedChecklists()
+        
+        // 완료된 체크리스트 목록 다시 로드
+        const supabase = createClient()
+        const {
+          data: { session },
+        } = await supabase.auth.getSession()
+        
+        if (session) {
+          const today = getTodayDateKST()
+          const { data: allData } = await supabase
+            .from('checklist')
+            .select(`
+              *,
+              stores:store_id (
+                id,
+                name
+              )
+            `)
+            .eq('assigned_user_id', session.user.id)
+            .order('work_date', { ascending: false })
+          
+          if (allData) {
+            const completed = allData.filter((cl: Checklist) => {
+              const progress = calculateChecklistProgress(cl)
+              return progress.percentage === 100
+            })
+            setCompletedChecklists(completed)
+          }
+        }
+
         // 제출 완료 알림
         alert('체크리스트가 제출되었습니다.')
         
-        // 모바일 대시보드로 이동
-        router.push('/mobile-dashboard')
+        // 완료된 체크리스트 보기 모드로 전환
+        if (selectedChecklist.work_date) {
+          const workDate = new Date(selectedChecklist.work_date).toISOString().split('T')[0]
+          setSelectedDate(workDate)
+          setViewMode('completed')
+          setSelectedChecklist(null) // 체크리스트 선택 해제하여 완료 목록 표시
+        }
       } catch (err: any) {
         setError(err.message)
       } finally {
@@ -1006,113 +1043,236 @@ export default function ChecklistClient() {
 
                       {/* 완료된 항목 목록 (읽기 전용) */}
                       <div className="space-y-3 mt-4">
-                        <h3 className="font-semibold text-gray-700">완료된 항목</h3>
-                        {sortedChecklistItems.map((item: any, index: number) => (
-                          <div
-                            key={index}
-                            className="border border-gray-200 rounded-lg p-4 bg-gray-50"
-                          >
-                            <div className="flex items-start gap-3">
-                              <div className="flex-shrink-0">
-                                {item.type !== 'check' ? (
-                                  <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center">
-                                    <span className="text-blue-600 text-lg">📷</span>
+                        <h3 className="font-semibold text-gray-700 mb-3">완료된 항목</h3>
+                        
+                        {/* 타입별로 그룹화하여 표시 */}
+                        {(() => {
+                          // 타입별로 항목 분류
+                          const beforePhotoItems = sortedChecklistItems.filter((item: any) => item.type === 'before_photo')
+                          const beforeAfterPhotoItems = sortedChecklistItems.filter((item: any) => item.type === 'before_after_photo')
+                          const afterPhotoItems = sortedChecklistItems.filter((item: any) => item.type === 'after_photo')
+                          const checkItems = sortedChecklistItems.filter((item: any) => item.type === 'check')
+                          
+                          return (
+                            <div className="space-y-4">
+                              {/* 관리전 사진 항목 */}
+                              {beforePhotoItems.length > 0 && (
+                                <div>
+                                  <h4 className="text-sm font-semibold text-blue-600 mb-2 flex items-center gap-2">
+                                    <span>📷</span>
+                                    관리전 사진 ({beforePhotoItems.length}개)
+                                  </h4>
+                                  <div className="space-y-2">
+                                    {beforePhotoItems.map((item: any, idx: number) => {
+                                      const originalIndex = checklistItems.findIndex((i: any) => i.area === item.area && i.type === item.type)
+                                      return (
+                                        <div key={`before-${idx}`} className="border border-blue-200 rounded-lg p-3 bg-blue-50">
+                                          <div className="flex items-start gap-3">
+                                            <div className="flex-shrink-0">
+                                              <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center">
+                                                <span className="text-blue-600 text-lg">📷</span>
+                                              </div>
+                                            </div>
+                                            <div className="flex-1 min-w-0">
+                                              <div className="font-medium text-gray-800 mb-2">{item.area}</div>
+                                              {item.before_photo_url && (
+                                                <div>
+                                                  <p className="text-xs text-gray-500 mb-1">관리 전</p>
+                                                  <button
+                                                    onClick={() => {
+                                                      setViewingPhotoIndex(originalIndex >= 0 ? originalIndex : idx)
+                                                      setViewingPhotoMode('before')
+                                                    }}
+                                                    className="relative group w-full"
+                                                  >
+                                                    <img
+                                                      src={item.before_photo_url}
+                                                      alt="관리 전"
+                                                      className="w-full h-32 object-cover rounded border-2 border-blue-300 hover:border-blue-500 transition-colors cursor-pointer"
+                                                    />
+                                                  </button>
+                                                </div>
+                                              )}
+                                              {item.comment && (
+                                                <p className="text-xs text-gray-600 mt-2 p-2 bg-white rounded">
+                                                  코멘트: {item.comment}
+                                                </p>
+                                              )}
+                                            </div>
+                                          </div>
+                                        </div>
+                                      )
+                                    })}
                                   </div>
-                                ) : (
-                                  <div className="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center">
-                                    <span className="text-green-600 text-lg">✓</span>
-                                  </div>
-                                )}
-                              </div>
-                              <div className="flex-1 min-w-0">
-                                <div className="font-medium text-gray-800 mb-2">
-                                  {item.area || `항목 ${index + 1}`}
                                 </div>
-                                
-                                {/* 사진 항목 - 타입별 사진 표시 */}
-                                {item.type !== 'check' && (
-                                  <div className={`mt-2 ${(item.type === 'before_after_photo' && item.before_photo_url && item.after_photo_url) ? 'grid grid-cols-2 gap-3' : ''}`}>
-                                    {(item.type === 'before_photo' || item.type === 'before_after_photo') && item.before_photo_url && (
-                                      <div>
-                                        <p className="text-xs text-gray-500 mb-1">관리 전</p>
-                                        <button
-                                          onClick={() => {
-                                            setViewingPhotoIndex(index)
-                                            setViewingPhotoMode('before')
-                                          }}
-                                          className="relative group w-full"
-                                        >
-                                          <img
-                                            src={item.before_photo_url}
-                                            alt="관리 전"
-                                            className="w-full h-32 object-cover rounded border-2 border-blue-300 hover:border-blue-500 transition-colors cursor-pointer"
-                                            onError={() => {
-                                              console.error('Image load error:', item.before_photo_url)
-                                            }}
-                                          />
-                                        </button>
-                                      </div>
-                                    )}
-                                    {(item.type === 'after_photo' || item.type === 'before_after_photo') && item.after_photo_url && (
-                                      <div>
-                                        <p className="text-xs text-gray-500 mb-1">관리 후</p>
-                                        <button
-                                          onClick={() => {
-                                            setViewingPhotoIndex(index)
-                                            setViewingPhotoMode('after')
-                                          }}
-                                          className="relative group w-full"
-                                        >
-                                          <img
-                                            src={item.after_photo_url}
-                                            alt="관리 후"
-                                            className="w-full h-32 object-cover rounded border-2 border-green-300 hover:border-green-500 transition-colors cursor-pointer"
-                                            onError={() => {
-                                              console.error('Image load error:', item.after_photo_url)
-                                            }}
-                                          />
-                                        </button>
-                                      </div>
-                                    )}
+                              )}
+                              
+                              {/* 관리전후 사진 항목 */}
+                              {beforeAfterPhotoItems.length > 0 && (
+                                <div>
+                                  <h4 className="text-sm font-semibold text-purple-600 mb-2 flex items-center gap-2">
+                                    <span>📷</span>
+                                    관리전후 사진 ({beforeAfterPhotoItems.length}개)
+                                  </h4>
+                                  <div className="space-y-2">
+                                    {beforeAfterPhotoItems.map((item: any, idx: number) => {
+                                      const originalIndex = checklistItems.findIndex((i: any) => i.area === item.area && i.type === item.type)
+                                      return (
+                                        <div key={`beforeafter-${idx}`} className="border border-purple-200 rounded-lg p-3 bg-purple-50">
+                                          <div className="flex items-start gap-3">
+                                            <div className="flex-shrink-0">
+                                              <div className="w-10 h-10 rounded-full bg-purple-100 flex items-center justify-center">
+                                                <span className="text-purple-600 text-lg">📷</span>
+                                              </div>
+                                            </div>
+                                            <div className="flex-1 min-w-0">
+                                              <div className="font-medium text-gray-800 mb-2">{item.area}</div>
+                                              <div className="grid grid-cols-2 gap-3">
+                                                {item.before_photo_url && (
+                                                  <div>
+                                                    <p className="text-xs text-gray-500 mb-1">관리 전</p>
+                                                    <button
+                                                      onClick={() => {
+                                                        setViewingPhotoIndex(originalIndex >= 0 ? originalIndex : idx)
+                                                        setViewingPhotoMode('before')
+                                                      }}
+                                                      className="relative group w-full"
+                                                    >
+                                                      <img
+                                                        src={item.before_photo_url}
+                                                        alt="관리 전"
+                                                        className="w-full h-32 object-cover rounded border-2 border-blue-300 hover:border-blue-500 transition-colors cursor-pointer"
+                                                      />
+                                                    </button>
+                                                  </div>
+                                                )}
+                                                {item.after_photo_url && (
+                                                  <div>
+                                                    <p className="text-xs text-gray-500 mb-1">관리 후</p>
+                                                    <button
+                                                      onClick={() => {
+                                                        setViewingPhotoIndex(originalIndex >= 0 ? originalIndex : idx)
+                                                        setViewingPhotoMode('after')
+                                                      }}
+                                                      className="relative group w-full"
+                                                    >
+                                                      <img
+                                                        src={item.after_photo_url}
+                                                        alt="관리 후"
+                                                        className="w-full h-32 object-cover rounded border-2 border-green-300 hover:border-green-500 transition-colors cursor-pointer"
+                                                      />
+                                                    </button>
+                                                  </div>
+                                                )}
+                                              </div>
+                                              {item.comment && (
+                                                <p className="text-xs text-gray-600 mt-2 p-2 bg-white rounded">
+                                                  코멘트: {item.comment}
+                                                </p>
+                                              )}
+                                            </div>
+                                          </div>
+                                        </div>
+                                      )
+                                    })}
                                   </div>
-                                )}
-                                
-                                {/* 체크 항목 - 상태 및 코멘트 */}
-                                {item.type === 'check' && (
-                                  <div className="mt-2">
-                                    {item.status && (
-                                      <div className="flex items-center gap-2 mb-2">
-                                        {item.status === 'good' ? (
-                                          <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                                            양호
-                                          </span>
-                                        ) : item.status === 'bad' ? (
-                                          <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800">
-                                            불량
-                                          </span>
-                                        ) : null}
-                                      </div>
-                                    )}
-                                    {item.comment && (
-                                      <div className="text-gray-600 text-sm p-2 bg-gray-50 rounded">
-                                        {item.comment}
-                                      </div>
-                                    )}
+                                </div>
+                              )}
+                              
+                              {/* 관리후 사진 항목 */}
+                              {afterPhotoItems.length > 0 && (
+                                <div>
+                                  <h4 className="text-sm font-semibold text-green-600 mb-2 flex items-center gap-2">
+                                    <span>📷</span>
+                                    관리후 사진 ({afterPhotoItems.length}개)
+                                  </h4>
+                                  <div className="space-y-2">
+                                    {afterPhotoItems.map((item: any, idx: number) => {
+                                      const originalIndex = checklistItems.findIndex((i: any) => i.area === item.area && i.type === item.type)
+                                      return (
+                                        <div key={`after-${idx}`} className="border border-green-200 rounded-lg p-3 bg-green-50">
+                                          <div className="flex items-start gap-3">
+                                            <div className="flex-shrink-0">
+                                              <div className="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center">
+                                                <span className="text-green-600 text-lg">📷</span>
+                                              </div>
+                                            </div>
+                                            <div className="flex-1 min-w-0">
+                                              <div className="font-medium text-gray-800 mb-2">{item.area}</div>
+                                              {item.after_photo_url && (
+                                                <div>
+                                                  <p className="text-xs text-gray-500 mb-1">관리 후</p>
+                                                  <button
+                                                    onClick={() => {
+                                                      setViewingPhotoIndex(originalIndex >= 0 ? originalIndex : idx)
+                                                      setViewingPhotoMode('after')
+                                                    }}
+                                                    className="relative group w-full"
+                                                  >
+                                                    <img
+                                                      src={item.after_photo_url}
+                                                      alt="관리 후"
+                                                      className="w-full h-32 object-cover rounded border-2 border-green-300 hover:border-green-500 transition-colors cursor-pointer"
+                                                    />
+                                                  </button>
+                                                </div>
+                                              )}
+                                              {item.comment && (
+                                                <p className="text-xs text-gray-600 mt-2 p-2 bg-white rounded">
+                                                  코멘트: {item.comment}
+                                                </p>
+                                              )}
+                                            </div>
+                                          </div>
+                                        </div>
+                                      )
+                                    })}
                                   </div>
-                                )}
-                                
-                                {/* 사진 항목 - 코멘트 */}
-                                {item.type !== 'check' && item.comment && (
-                                  <div className="mt-2">
-                                    <div className="text-gray-600 text-sm p-2 bg-gray-50 rounded">
-                                      {item.comment}
-                                    </div>
+                                </div>
+                              )}
+                              
+                              {/* 체크 항목 */}
+                              {checkItems.length > 0 && (
+                                <div>
+                                  <h4 className="text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2">
+                                    <span>✓</span>
+                                    체크 항목 ({checkItems.length}개)
+                                  </h4>
+                                  <div className="space-y-2">
+                                    {checkItems.map((item: any, idx: number) => (
+                                      <div key={`check-${idx}`} className="border border-gray-200 rounded-lg p-3 bg-gray-50">
+                                        <div className="flex items-start gap-3">
+                                          <div className="flex-shrink-0">
+                                            <div className="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center">
+                                              <span className="text-green-600 text-lg">✓</span>
+                                            </div>
+                                          </div>
+                                          <div className="flex-1 min-w-0">
+                                            <div className="font-medium text-gray-800 mb-1">{item.area}</div>
+                                            {item.status && (
+                                              <span className={`inline-block px-2 py-1 rounded text-xs font-medium ${
+                                                item.status === 'good' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                                              }`}>
+                                                {item.status === 'good' ? '양호' : '불량'}
+                                              </span>
+                                            )}
+                                            {item.comment && (
+                                              <p className="text-sm text-gray-600 mt-2">{item.comment}</p>
+                                            )}
+                                          </div>
+                                        </div>
+                                      </div>
+                                    ))}
                                   </div>
-                                )}
-                              </div>
+                                </div>
+                              )}
                             </div>
-                          </div>
-                        ))}
+                          )
+                        })()}
+                        
+                        {sortedChecklistItems.length === 0 && (
+                          <p className="text-gray-500 text-sm">완료된 항목이 없습니다.</p>
+                        )}
                       </div>
                     </div>
                   )
@@ -1287,5 +1447,6 @@ export default function ChecklistClient() {
     </div>
   )
 }
+
 
 
