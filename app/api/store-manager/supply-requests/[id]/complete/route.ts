@@ -51,9 +51,22 @@ export async function POST(
           { status: 403 }
         )
       }
-    } else if (user.store_id) {
-      // store_owner의 경우 직접 store_id 사용
-      storeIds = [user.store_id]
+    } else if (user.role === 'store_owner') {
+      // store_owner의 경우 users 테이블에서 store_id 조회
+      const { data: userData, error: userError } = await supabase
+        .from('users')
+        .select('store_id')
+        .eq('id', user.id)
+        .single()
+
+      if (userError || !userData || !userData.store_id) {
+        return NextResponse.json(
+          { error: '매장 정보를 불러올 수 없습니다.' },
+          { status: 403 }
+        )
+      }
+
+      storeIds = [userData.store_id]
     } else {
       throw new ForbiddenError('Store ID is required')
     }
