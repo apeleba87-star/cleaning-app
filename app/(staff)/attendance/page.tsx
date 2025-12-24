@@ -489,9 +489,16 @@ export default function AttendancePage() {
           <button
             onClick={handleClockIn}
             disabled={!location || !selectedStoreId || submitting || hasActiveAttendance || (attendanceType === 'rescheduled' && !scheduledDate)}
-            className="w-full mt-4 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors font-medium"
+            className="w-full mt-4 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors font-medium flex items-center justify-center gap-2"
           >
-            {submitting ? '처리 중...' : '출근하기'}
+            {submitting ? (
+              <>
+                <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                <span>처리 중...</span>
+              </>
+            ) : (
+              '출근하기'
+            )}
           </button>
           </div>
         </div>
@@ -564,9 +571,16 @@ export default function AttendancePage() {
                     <button
                       onClick={() => handleClockOut(attendance.store_id)}
                       disabled={!location || submitting}
-                      className="ml-4 px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors font-medium text-sm whitespace-nowrap"
+                      className="ml-4 px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors font-medium text-sm whitespace-nowrap flex items-center justify-center gap-2"
                     >
-                      {submitting ? '처리 중...' : '퇴근'}
+                      {submitting ? (
+                        <>
+                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                          <span>처리 중...</span>
+                        </>
+                      ) : (
+                        '퇴근'
+                      )}
                     </button>
                   )}
                 </div>

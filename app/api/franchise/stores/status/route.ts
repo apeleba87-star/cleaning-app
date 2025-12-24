@@ -395,16 +395,32 @@ export async function GET(request: NextRequest) {
             todayChecklists.forEach((checklist: any) => {
               const items = checklist.items || []
               items.forEach((item: any, index: number) => {
-                if (item.type === 'photo' && (item.before_photo_url || item.after_photo_url)) {
-                  const area = item.area || `구역${index}`
-                  // 같은 area가 이미 있으면 업데이트 (더 최신 체크리스트의 사진 사용)
-                  if (!beforeAfterPhotosMap.has(area) || 
-                      (item.before_photo_url && !beforeAfterPhotosMap.get(area)?.before_photo_url) ||
-                      (item.after_photo_url && !beforeAfterPhotosMap.get(area)?.after_photo_url)) {
+                // 타입 정규화 (하위 호환성)
+                let itemType: string = item.type || 'check'
+                if (itemType === 'photo') {
+                  itemType = 'before_after_photo' // 구버전 호환
+                }
+
+                // area가 없는 항목은 제외
+                if (!item.area || !item.area.trim()) {
+                  return
+                }
+
+                const area = item.area.trim()
+                
+                // 사진 타입 항목만 처리
+                if (itemType === 'before_photo' || itemType === 'after_photo' || itemType === 'before_after_photo') {
+                  // before_photo_url 또는 after_photo_url이 있는 경우만 추가
+                  const hasBeforePhoto = item.before_photo_url && itemType !== 'after_photo'
+                  const hasAfterPhoto = item.after_photo_url && itemType !== 'before_photo'
+                  
+                  if (hasBeforePhoto || hasAfterPhoto) {
+                    // 같은 area가 이미 있으면 업데이트 (더 최신 체크리스트의 사진 사용)
+                    const existing = beforeAfterPhotosMap.get(area)
                     beforeAfterPhotosMap.set(area, {
                       id: `checklist-${checklist.id}-photo-${index}`,
-                      before_photo_url: item.before_photo_url || beforeAfterPhotosMap.get(area)?.before_photo_url || null,
-                      after_photo_url: item.after_photo_url || beforeAfterPhotosMap.get(area)?.after_photo_url || null,
+                      before_photo_url: hasBeforePhoto ? item.before_photo_url : (existing?.before_photo_url || null),
+                      after_photo_url: hasAfterPhoto ? item.after_photo_url : (existing?.after_photo_url || null),
                       area: area,
                     })
                   }
@@ -414,27 +430,19 @@ export async function GET(request: NextRequest) {
           }
           const beforeAfterPhotos = Array.from(beforeAfterPhotosMap.values())
 
+          // 체크리스트 진행률 계산 (calculateChecklistProgress 함수 사용)
           let checklistCompletionRate = 0
           let checklistCompleted = 0
           let checklistTotal = 0
 
           if (todayChecklists && todayChecklists.length > 0) {
             todayChecklists.forEach((checklist: any) => {
-              const items = checklist.items || []
-              items.forEach((item: any) => {
-                if (item.type === 'check') {
-                  checklistTotal++
-                  if (item.checked && (item.status === 'good' || (item.status === 'bad' && item.comment))) {
-                    checklistCompleted++
-                  }
-                } else if (item.type === 'photo') {
-                  checklistTotal++
-                  if (item.before_photo_url && item.after_photo_url) {
-                    checklistCompleted++
-                  }
-                }
-              })
+              // calculateChecklistProgress 함수를 사용하여 정확한 진행률 계산
+              const progress = calculateChecklistProgress(checklist)
+              checklistTotal += progress.totalItems
+              checklistCompleted += progress.completedItems
             })
+
             checklistCompletionRate = checklistTotal > 0 ? Math.round((checklistCompleted / checklistTotal) * 100) : 0
           }
 

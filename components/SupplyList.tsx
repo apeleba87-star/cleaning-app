@@ -9,17 +9,17 @@ interface SupplyListProps {
 }
 
 const statusLabel: Record<SupplyRequestStatus, string> = {
-  requested: '요청',
-  received: '입고',
-  completed: '완료',
-  rejected: '거부',
+  received: '접수',
+  in_progress: '처리중',
+  manager_in_progress: '점주 처리중',
+  completed: '처리 완료',
 }
 
 const statusColor: Record<SupplyRequestStatus, string> = {
-  requested: 'bg-yellow-100 text-yellow-800',
   received: 'bg-blue-100 text-blue-800',
+  in_progress: 'bg-yellow-100 text-yellow-800',
+  manager_in_progress: 'bg-orange-100 text-orange-800',
   completed: 'bg-green-100 text-green-800',
-  rejected: 'bg-red-100 text-red-800',
 }
 
 export function SupplyList({ supplies, onStatusChange, userRole = 'staff' }: SupplyListProps) {
@@ -63,7 +63,13 @@ export function SupplyList({ supplies, onStatusChange, userRole = 'staff' }: Sup
         <div key={supply.id} className="border rounded-lg p-4 shadow-sm">
           <div className="flex items-start justify-between gap-2">
             <div>
-              <div className="text-base font-semibold">{supply.item_name}</div>
+              <div className="text-base font-semibold">{supply.title || supply.item_name || '물품 요청'}</div>
+              {supply.category && (
+                <div className="text-sm text-gray-600 mt-1">카테고리: {supply.category}</div>
+              )}
+              {supply.description && (
+                <div className="text-sm text-gray-600 mt-1">{supply.description}</div>
+              )}
               {supply.quantity !== null && (
                 <div className="text-sm text-gray-600 mt-1">수량: {supply.quantity}</div>
               )}
@@ -82,7 +88,7 @@ export function SupplyList({ supplies, onStatusChange, userRole = 'staff' }: Sup
             <div className="mt-3">
               <img
                 src={supply.photo_url}
-                alt={supply.item_name}
+                alt={supply.title || supply.item_name || '물품 요청 사진'}
                 className="max-w-full h-auto rounded-md max-h-64 object-contain"
                 onError={(e) => {
                   e.currentTarget.style.display = 'none'

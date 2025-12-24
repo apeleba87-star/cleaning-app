@@ -15,6 +15,7 @@ export function ChecklistCamera({ items, mode, storeId, onComplete, onCancel }: 
   const [currentIndex, setCurrentIndex] = useState(0)
   const [tempPhotos, setTempPhotos] = useState<Record<number, string>>({})
   const [stream, setStream] = useState<MediaStream | null>(null)
+  const [saving, setSaving] = useState(false)
   const videoRef = useRef<HTMLVideoElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
 
@@ -164,61 +165,67 @@ export function ChecklistCamera({ items, mode, storeId, onComplete, onCancel }: 
       return
     }
 
-    // 업로드 및 업데이트
-    const uploadPhotoFile = async (index: number, dataURL: string): Promise<string | null> => {
-      try {
-        // base64를 Blob로 변환
-        const response = await fetch(dataURL)
-        const blob = await response.blob()
-        const file = new File([blob], `photo-${Date.now()}-${index}.jpg`, { type: 'image/jpeg' })
+    setSaving(true)
 
-        // Supabase Storage에 업로드
-        const { uploadPhoto } = await import('@/lib/supabase/upload')
-        const url = await uploadPhoto(
-          file,
-          storeId,
-          mode === 'before' ? 'checklist_before' : 'checklist_after'
-        )
-        return url
-      } catch (error) {
-        console.error('사진 업로드 실패:', error)
-        alert(`사진 업로드 실패: ${error instanceof Error ? error.message : '알 수 없는 오류'}`)
-        return null
+    try {
+      // 업로드 및 업데이트
+      const uploadPhotoFile = async (index: number, dataURL: string): Promise<string | null> => {
+        try {
+          // base64를 Blob로 변환
+          const response = await fetch(dataURL)
+          const blob = await response.blob()
+          const file = new File([blob], `photo-${Date.now()}-${index}.jpg`, { type: 'image/jpeg' })
+
+          // Supabase Storage에 업로드
+          const { uploadPhoto } = await import('@/lib/supabase/upload')
+          const url = await uploadPhoto(
+            file,
+            storeId,
+            mode === 'before' ? 'checklist_before' : 'checklist_after'
+          )
+          return url
+        } catch (error) {
+          console.error('사진 업로드 실패:', error)
+          alert(`사진 업로드 실패: ${error instanceof Error ? error.message : '알 수 없는 오류'}`)
+          return null
+        }
       }
-    }
 
-    // 모든 사진 업로드 (순차적으로)
-    const updatedItems = [...items]
-    for (let i = 0; i < photoItems.length; i++) {
-      if (tempPhotos[i]) {
-        const url = await uploadPhotoFile(i, tempPhotos[i])
-        if (url) {
-          // area로 매칭하여 해당 아이템 찾기 (photoItems는 이미 필터링된 사진 아이템들)
-          const itemToUpdate = updatedItems.find(item => item.area === photoItems[i].area && (item.type === 'before_photo' || item.type === 'after_photo' || item.type === 'before_after_photo'))
-          if (itemToUpdate) {
-            const itemIndex = updatedItems.indexOf(itemToUpdate)
-            if (mode === 'before') {
-              updatedItems[itemIndex] = {
-                ...updatedItems[itemIndex],
-                before_photo_url: url
-              }
-            } else {
-              updatedItems[itemIndex] = {
-                ...updatedItems[itemIndex],
-                after_photo_url: url
+      // 모든 사진 업로드 (순차적으로)
+      const updatedItems = [...items]
+      for (let i = 0; i < photoItems.length; i++) {
+        if (tempPhotos[i]) {
+          const url = await uploadPhotoFile(i, tempPhotos[i])
+          if (url) {
+            // area로 매칭하여 해당 아이템 찾기 (photoItems는 이미 필터링된 사진 아이템들)
+            const itemToUpdate = updatedItems.find(item => item.area === photoItems[i].area && (item.type === 'before_photo' || item.type === 'after_photo' || item.type === 'before_after_photo'))
+            if (itemToUpdate) {
+              const itemIndex = updatedItems.indexOf(itemToUpdate)
+              if (mode === 'before') {
+                updatedItems[itemIndex] = {
+                  ...updatedItems[itemIndex],
+                  before_photo_url: url
+                }
+              } else {
+                updatedItems[itemIndex] = {
+                  ...updatedItems[itemIndex],
+                  after_photo_url: url
+                }
               }
             }
           }
         }
       }
-    }
 
-    // 스트림 정리
-    if (stream) {
-      stream.getTracks().forEach((track) => track.stop())
-    }
+      // 스트림 정리
+      if (stream) {
+        stream.getTracks().forEach((track) => track.stop())
+      }
 
-    onComplete(updatedItems)
+      onComplete(updatedItems)
+    } finally {
+      setSaving(false)
+    }
   }
 
   const currentItem = photoItems[currentIndex]
@@ -227,6 +234,17 @@ export function ChecklistCamera({ items, mode, storeId, onComplete, onCancel }: 
 
   return (
     <div className="fixed inset-0 bg-black z-50 flex flex-col">
+      {/* 저장 중 오버레이 */}
+      {saving && (
+        <div className="absolute inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 flex flex-col items-center gap-4">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+            <p className="text-lg font-semibold text-gray-900">저장 중...</p>
+            <p className="text-sm text-gray-600">사진을 업로드하고 있습니다. 잠시만 기다려주세요.</p>
+          </div>
+        </div>
+      )}
+      
       {/* 상단: 현재 촬영 중인 항목 표시 */}
       <div className="absolute top-0 left-0 right-0 bg-black bg-opacity-70 text-white p-4 z-10">
         <div className="text-center">
@@ -349,9 +367,17 @@ export function ChecklistCamera({ items, mode, storeId, onComplete, onCancel }: 
           {allCaptured && (
             <button
               onClick={handleSave}
-              className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium shadow-lg"
+              disabled={saving}
+              className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium shadow-lg disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center justify-center gap-2"
             >
-              저장하기
+              {saving ? (
+                <>
+                  <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                  <span>저장 중...</span>
+                </>
+              ) : (
+                '저장하기'
+              )}
             </button>
           )}
         </div>

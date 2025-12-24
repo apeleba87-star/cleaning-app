@@ -16,6 +16,8 @@ interface StoreStatusData {
   unconfirmed_completed_request_count: number
   unconfirmed_rejected_request_count: number
   received_request_count: number
+  received_supply_request_count: number
+  in_progress_supply_request_count: number
 }
 
 interface StoreStatusSummary {
@@ -25,6 +27,8 @@ interface StoreStatusSummary {
   warning: number
   urgent: number
   received: number
+  receivedSupply: number
+  inProgressSupply: number
   stores: StoreStatusData[]
 }
 
@@ -59,6 +63,8 @@ export default function StoreStatusSection() {
           unconfirmed_completed_request_count: store.unconfirmed_completed_request_count || 0,
           unconfirmed_rejected_request_count: store.unconfirmed_rejected_request_count || 0,
           received_request_count: store.received_request_count || 0,
+          received_supply_request_count: store.received_supply_request_count || 0,
+          in_progress_supply_request_count: store.in_progress_supply_request_count || 0,
         }))
 
         // 오늘 출근한 매장 수 계산
@@ -77,6 +83,8 @@ export default function StoreStatusSection() {
         
         // 접수 요청 총합 계산
         const received = stores.reduce((sum, store) => sum + store.received_request_count, 0)
+        const receivedSupply = stores.reduce((sum, store) => sum + store.received_supply_request_count, 0)
+        const inProgressSupply = stores.reduce((sum, store) => sum + store.in_progress_supply_request_count, 0)
 
         stores.forEach((store) => {
           const totalUnresolved =
@@ -93,7 +101,7 @@ export default function StoreStatusSection() {
           }
         })
 
-        setStatusSummary({ todayAttended, todayShouldAttend, totalStores, warning, urgent, received, stores })
+        setStatusSummary({ todayAttended, todayShouldAttend, totalStores, warning, urgent, received, receivedSupply, inProgressSupply, stores })
       }
     } catch (error: any) {
       console.error('Error loading store status:', error)
@@ -148,18 +156,33 @@ export default function StoreStatusSection() {
         </Link>
 
         {/* 접수 */}
-        <Link
-          href="/business/stores/status"
-          className="bg-purple-50 rounded-lg p-4 border-2 border-purple-200 hover:bg-purple-100 transition-all cursor-pointer"
-        >
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-600 mb-1">접수</p>
-              <p className="text-3xl font-bold text-purple-600">{statusSummary.received}개</p>
-            </div>
-            <div className="text-3xl">📋</div>
+        <div className="bg-purple-50 rounded-lg p-4 border-2 border-purple-200">
+          <div className="flex items-center justify-between mb-3">
+            <p className="text-sm text-gray-600">접수</p>
+            <Link
+              href="/business/supply-requests"
+              className="text-xs bg-purple-500 text-white px-3 py-1.5 rounded-md hover:bg-purple-600 transition-colors"
+              onClick={(e) => e.stopPropagation()}
+            >
+              전부보기
+            </Link>
           </div>
-        </Link>
+          <div className="space-y-2">
+            <p className="text-lg font-semibold text-gray-800">
+              요청 접수 건 <span className="text-2xl font-bold text-blue-600">{statusSummary.received}건</span>
+            </p>
+            <div>
+              <p className="text-lg font-semibold text-gray-800">
+                물품요청 접수 건 <span className="text-2xl font-bold text-purple-600">{statusSummary.receivedSupply}건</span>
+              </p>
+              {statusSummary.inProgressSupply > 0 && (
+                <p className="text-sm text-gray-600 mt-1 ml-4">
+                  처리중 <span className="font-semibold text-purple-500">{statusSummary.inProgressSupply}건</span>
+                </p>
+              )}
+            </div>
+          </div>
+        </div>
 
         {/* 문제 발생 */}
         <Link

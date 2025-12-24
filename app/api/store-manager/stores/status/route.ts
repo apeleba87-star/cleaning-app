@@ -313,6 +313,20 @@ export async function GET(request: NextRequest) {
           const completedRequestCount = recentRequests?.filter((r: any) => r.status === 'completed').length || 0
           const rejectedRequestCount = recentRequests?.filter((r: any) => r.status === 'rejected').length || 0
 
+          // 물품 요청: 점주 처리중 상태만 카운트
+          let managerInProgressSupplyRequestCount = 0
+          try {
+            const { data: supplyRequests } = await supabase
+              .from('supply_requests')
+              .select('id, status')
+              .eq('store_id', store.id)
+              .eq('status', 'manager_in_progress')
+            
+            managerInProgressSupplyRequestCount = supplyRequests?.length || 0
+          } catch (error) {
+            console.error(`Error fetching supply requests for store ${store.id}:`, error)
+          }
+
           // 오늘 체크리스트 (오늘 날짜로 복사된 체크리스트)
           const { data: todayChecklistsKST } = await supabase
             .from('checklist')
@@ -354,29 +368,77 @@ export async function GET(request: NextRequest) {
           const beforePhotos = todayCleaningPhotos?.filter((p: any) => p.kind === 'before') || []
           const afterPhotos = todayCleaningPhotos?.filter((p: any) => p.kind === 'after') || []
 
-          // 체크리스트 진행률 계산
+          // 체크리스트에서 관리전후 사진 추출 (중복 제거: area 기준)
+          const beforeAfterPhotosMap = new Map<string, { id: string; before_photo_url: string | null; after_photo_url: string | null; area: string }>()
+          if (checklistsToUse && checklistsToUse.length > 0) {
+            checklistsToUse.forEach((checklist: any) => {
+              const items = checklist.items || []
+              items.forEach((item: any, index: number) => {
+                // 타입 정규화 (하위 호환성)
+                let itemType: string = item.type || 'check'
+                if (itemType === 'photo') {
+                  itemType = 'before_after_photo' // 구버전 호환
+                }
+
+                // area가 없는 항목은 제외
+                if (!item.area || !item.area.trim()) {
+                  return
+                }
+
+                const area = item.area.trim()
+                
+                // 사진 타입 항목만 처리
+                if (itemType === 'before_photo' || itemType === 'after_photo' || itemType === 'before_after_photo') {
+                  // before_photo_url 또는 after_photo_url이 있는 경우만 추가
+                  const hasBeforePhoto = item.before_photo_url && itemType !== 'after_photo'
+                  const hasAfterPhoto = item.after_photo_url && itemType !== 'before_photo'
+                  
+                  if (hasBeforePhoto || hasAfterPhoto) {
+                    // 같은 area가 이미 있으면 업데이트 (더 최신 체크리스트의 사진 사용)
+                    const existing = beforeAfterPhotosMap.get(area)
+                    beforeAfterPhotosMap.set(area, {
+                      id: `checklist-${checklist.id}-photo-${index}`,
+                      before_photo_url: hasBeforePhoto ? item.before_photo_url : (existing?.before_photo_url || null),
+                      after_photo_url: hasAfterPhoto ? item.after_photo_url : (existing?.after_photo_url || null),
+                      area: area,
+                    })
+                  }
+                }
+              })
+            })
+          }
+          const beforeAfterPhotos = Array.from(beforeAfterPhotosMap.values())
+
+          // 체크리스트 진행률 계산 (calculateChecklistProgress 함수 사용)
           let checklistCompletionRate = 0
           let checklistCompleted = 0
           let checklistTotal = 0
 
           if (checklistsToUse && checklistsToUse.length > 0) {
             checklistsToUse.forEach((checklist: any) => {
-              const items = checklist.items || []
-              items.forEach((item: any) => {
-                if (item.type === 'check') {
-                  checklistTotal++
-                  // 템플릿 체크리스트는 아직 시작하지 않았으므로 완료되지 않은 것으로 간주
-                  if (hasTodayChecklists && item.checked && (item.status === 'good' || (item.status === 'bad' && item.comment))) {
-                    checklistCompleted++
+              // 템플릿 체크리스트는 진행률이 0%로 계산되므로, 오늘 날짜 체크리스트가 있을 때만 진행률 계산
+              if (hasTodayChecklists) {
+                // calculateChecklistProgress 함수를 사용하여 정확한 진행률 계산
+                const progress = calculateChecklistProgress(checklist)
+                checklistTotal += progress.totalItems
+                checklistCompleted += progress.completedItems
+              } else {
+                // 템플릿 체크리스트만 있는 경우: 전체 항목 수만 계산 (완료 항목은 0)
+                const items = checklist.items || []
+                items.forEach((item: any) => {
+                  // area가 있는 항목만 카운트
+                  if (item.area && item.area.trim()) {
+                    const itemType = item.type || 'check'
+                    if (itemType === 'check') {
+                      checklistTotal++
+                    } else if (itemType === 'before_photo' || itemType === 'after_photo') {
+                      checklistTotal++
+                    } else if (itemType === 'before_after_photo' || itemType === 'photo') {
+                      checklistTotal += 2 // 관리전과 관리후 각각 1개씩
+                    }
                   }
-                } else if (item.type === 'photo') {
-                  checklistTotal++
-                  // 템플릿 체크리스트는 아직 시작하지 않았으므로 완료되지 않은 것으로 간주
-                  if (hasTodayChecklists && item.before_photo_url && item.after_photo_url) {
-                    checklistCompleted++
-                  }
-                }
-              })
+                })
+              }
             })
 
             checklistCompletionRate = checklistTotal > 0 ? Math.round((checklistCompleted / checklistTotal) * 100) : 0
@@ -454,10 +516,12 @@ export async function GET(request: NextRequest) {
             in_progress_request_count: inProgressRequestCount,
             completed_request_count: completedRequestCount,
             rejected_request_count: rejectedRequestCount,
+            manager_in_progress_supply_request_count: managerInProgressSupplyRequestCount,
             unconfirmed_completed_request_count: 0,
             unconfirmed_rejected_request_count: 0,
             before_photo_count: beforePhotos.length,
             after_photo_count: afterPhotos.length,
+            before_after_photos: beforeAfterPhotos, // 체크리스트의 관리전후 사진 데이터
             checklist_completion_rate: checklistCompletionRate,
             checklist_completed: checklistCompleted,
             checklist_total: checklistTotal,
@@ -493,10 +557,12 @@ export async function GET(request: NextRequest) {
             in_progress_request_count: 0,
             completed_request_count: 0,
             rejected_request_count: 0,
+            manager_in_progress_supply_request_count: 0,
             unconfirmed_completed_request_count: 0,
             unconfirmed_rejected_request_count: 0,
             before_photo_count: 0,
             after_photo_count: 0,
+            before_after_photos: [], // 체크리스트의 관리전후 사진 데이터
             checklist_completion_rate: 0,
             checklist_completed: 0,
             checklist_total: 0,

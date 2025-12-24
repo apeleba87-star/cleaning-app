@@ -3,7 +3,8 @@ export type UserRole = 'staff' | 'manager' | 'business_owner' | 'platform_admin'
 export type CleaningPhotoKind = 'before' | 'after'
 export type ReviewStatus = 'pending' | 'approved' | 'reshoot_requested'
 export type IssueStatus = 'submitted' | 'in_progress' | 'completed' | 'rejected'
-export type SupplyRequestStatus = 'requested' | 'received' | 'completed' | 'rejected'
+export type SupplyRequestStatus = 'received' | 'in_progress' | 'manager_in_progress' | 'completed'
+export type SupplyRequestCategory = '걸레' | '쓰레기봉투' | '약품' | '직접입력'
 export type RequestCategoryType = 'issue' | 'supply'
 
 export type ApprovalStatus = 'pending' | 'approved' | 'rejected'
@@ -205,11 +206,18 @@ export interface SupplyRequest {
   store_id: string
   user_id: string
   category_id: string | null
-  item_name: string
+  item_name: string | null // 하위 호환성을 위해 nullable 유지
   quantity: number | null
   status: SupplyRequestStatus
-  photo_url: string | null
+  photo_url: string | null // 요청 시 첨부 사진
   manager_comment: string | null
+  // 새로운 필드
+  title: string // 제목
+  description: string | null // 설명
+  category: SupplyRequestCategory | null // 카테고리 (걸레, 쓰레기봉투, 약품, 직접입력)
+  completion_photo_url: string | null // 처리 완료 사진
+  completion_description: string | null // 처리 완료 설명
+  completed_at: string | null // 처리 완료 시간
   created_at: string
   updated_at: string
 }

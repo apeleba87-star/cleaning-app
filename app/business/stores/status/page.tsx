@@ -29,6 +29,8 @@ interface StoreStatus {
   has_storage_photos: boolean
   storage_photos?: Array<{ id: string; photo_url: string }>
   received_request_count: number
+  received_supply_request_count: number
+  in_progress_supply_request_count: number
   in_progress_request_count: number
   completed_request_count: number
   rejected_request_count: number
@@ -234,6 +236,8 @@ export default function BusinessStoresStatusPage() {
   const [receivedRequests, setReceivedRequests] = useState<Request[]>([])
   const [selectedReceivedRequest, setSelectedReceivedRequest] = useState<Request | null>(null)
   const [editingReceivedRequest, setEditingReceivedRequest] = useState<string | null>(null)
+  const [showReceivedSupplyRequestsModal, setShowReceivedSupplyRequestsModal] = useState(false)
+  const [receivedSupplyRequests, setReceivedSupplyRequests] = useState<any[]>([])
   const [receivedRequestFormData, setReceivedRequestFormData] = useState({
     category: '',
     description: '',
@@ -534,6 +538,25 @@ export default function BusinessStoresStatusPage() {
       setReceivedRequests(allReceivedRequests)
     } catch (error) {
       console.error('Error loading all received requests:', error)
+    }
+  }
+
+  const loadAllReceivedSupplyRequests = async () => {
+    setShowReceivedSupplyRequestsModal(true)
+    setReceivedSupplyRequests([])
+
+    try {
+      const response = await fetch('/api/business/supply-requests/received')
+      const data = await response.json()
+
+      if (response.ok && data.success) {
+        setReceivedSupplyRequests(data.data || [])
+      } else {
+        alert('물품 요청 목록을 불러오는 중 오류가 발생했습니다.')
+      }
+    } catch (error) {
+      console.error('Error loading all received supply requests:', error)
+      alert('물품 요청 목록을 불러오는 중 오류가 발생했습니다.')
     }
   }
 
@@ -1182,6 +1205,8 @@ export default function BusinessStoresStatusPage() {
     }, 0)
 
     const receivedCount = storeStatuses.reduce((sum, s) => sum + s.received_request_count, 0)
+    const receivedSupplyCount = storeStatuses.reduce((sum, s) => sum + (s.received_supply_request_count || 0), 0)
+    const inProgressSupplyCount = storeStatuses.reduce((sum, s) => sum + (s.in_progress_supply_request_count || 0), 0)
     return {
       total: storeStatuses.length,
       operating: storeStatuses.filter((s) => s.is_work_day).length,
@@ -1189,6 +1214,8 @@ export default function BusinessStoresStatusPage() {
       problem: problemCount,
       notifications: notificationCount,
       received: receivedCount,
+      receivedSupply: receivedSupplyCount,
+      inProgressSupply: inProgressSupplyCount,
     }
   }, [storeStatuses])
 
@@ -1457,8 +1484,35 @@ export default function BusinessStoresStatusPage() {
           <div className="text-2xl font-bold text-gray-900">{stats.completed} / {stats.operating} 곳</div>
         </div>
         <div className="bg-white rounded-lg shadow-md p-4 border-l-4 border-purple-500">
-          <div className="flex items-center justify-between">
-            <div className="text-sm text-gray-600 mb-1">접수</div>
+          <div className="flex items-center justify-between mb-2">
+            <div className="text-sm text-gray-600">접수</div>
+            <Link
+              href="/business/supply-requests"
+              className="text-xs bg-purple-500 text-white px-3 py-1.5 rounded hover:bg-purple-600 transition-colors"
+            >
+              전부보기
+            </Link>
+          </div>
+          <div className="space-y-2 mb-3">
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-medium text-gray-700">요청 접수 건</span>
+              <span className="text-xl font-bold text-blue-600">{stats.received}건</span>
+            </div>
+            <div>
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-medium text-gray-700">물품요청 접수 건</span>
+                <span className="text-xl font-bold text-purple-600">{stats.receivedSupply}건</span>
+              </div>
+              {stats.inProgressSupply > 0 && (
+                <div className="flex items-center justify-end mt-1">
+                  <span className="text-xs text-gray-500">
+                    처리중 <span className="font-semibold text-purple-500">{stats.inProgressSupply}건</span>
+                  </span>
+                </div>
+              )}
+            </div>
+          </div>
+          <div className="flex gap-2">
             {stats.received > 0 && (
               <button
                 onClick={() => {
@@ -1467,13 +1521,20 @@ export default function BusinessStoresStatusPage() {
                   // 모든 매장의 접수 요청을 로드
                   loadAllReceivedRequests()
                 }}
-                className="px-3 py-1 bg-purple-600 text-white text-xs rounded hover:bg-purple-700 transition-colors"
+                className="flex-1 px-3 py-1.5 bg-purple-600 text-white text-xs rounded hover:bg-purple-700 transition-colors"
               >
                 접수확인
               </button>
             )}
+            {stats.receivedSupply > 0 && (
+              <button
+                onClick={() => loadAllReceivedSupplyRequests()}
+                className="flex-1 px-3 py-1.5 bg-purple-500 text-white text-xs rounded hover:bg-purple-600 transition-colors"
+              >
+                물품요청란 접수확인
+              </button>
+            )}
           </div>
-          <div className="text-2xl font-bold text-gray-900">{stats.received} 개</div>
         </div>
         <div className="bg-white rounded-lg shadow-md p-4 border-l-4 border-red-500">
           <div className="flex items-center justify-between">
@@ -1557,7 +1618,7 @@ export default function BusinessStoresStatusPage() {
               .filter((status) => expandedStores.has(status.store_id))
               .map((status) => {
                 const totalProblems = status.store_problem_count + status.vending_problem_count + status.lost_item_count
-                const hasRequests = status.received_request_count > 0 || status.in_progress_request_count > 0 || status.completed_request_count > 0 || status.rejected_request_count > 0
+                const hasRequests = status.received_request_count > 0 || (status.received_supply_request_count || 0) > 0 || status.in_progress_request_count > 0 || status.completed_request_count > 0 || status.rejected_request_count > 0
                 const notificationCount = getTotalNotificationCount(status)
                 const isExpanded = true
                 
@@ -1835,18 +1896,36 @@ export default function BusinessStoresStatusPage() {
                     </div>
                     <div className="space-y-3">
                       {/* 접수 */}
-                      {status.received_request_count > 0 && (
-                        <div className="flex items-center justify-between">
-                          <span className="text-sm text-gray-600">접수 {status.received_request_count}개</span>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              handleViewReceivedRequests(status.store_id)
-                            }}
-                            className="px-3 py-1 bg-blue-600 text-white text-xs rounded hover:bg-blue-700 transition-colors"
-                          >
-                            접수확인
-                          </button>
+                      {(status.received_request_count > 0 || (status.received_supply_request_count || 0) > 0) && (
+                        <div className="space-y-2 p-3 bg-gray-50 rounded-lg">
+                          {status.received_request_count > 0 && (
+                            <div className="flex items-center justify-between">
+                              <span className="text-sm text-gray-600">요청 접수 건 {status.received_request_count}개</span>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  handleViewReceivedRequests(status.store_id)
+                                }}
+                                className="px-3 py-1 bg-blue-600 text-white text-xs rounded hover:bg-blue-700 transition-colors"
+                              >
+                                접수확인
+                              </button>
+                            </div>
+                          )}
+                          {(status.received_supply_request_count || 0) > 0 && (
+                            <div className="flex items-center justify-between">
+                              <span className="text-sm text-gray-600">물품요청 접수 건 {status.received_supply_request_count}개</span>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  loadAllReceivedSupplyRequests()
+                                }}
+                                className="px-3 py-1 bg-purple-600 text-white text-xs rounded hover:bg-purple-700 transition-colors"
+                              >
+                                물품요청란 접수확인
+                              </button>
+                            </div>
+                          )}
                         </div>
                       )}
                       
@@ -4586,6 +4665,113 @@ export default function BusinessStoresStatusPage() {
                 )}
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* 물품요청 접수 확인 모달 */}
+      {showReceivedSupplyRequestsModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50" onClick={() => setShowReceivedSupplyRequestsModal(false)}>
+          <div className="bg-white rounded-lg p-6 max-w-4xl w-full mx-4 max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-xl font-semibold">물품요청 접수 확인</h2>
+              <button onClick={() => setShowReceivedSupplyRequestsModal(false)} className="text-gray-500 hover:text-gray-700 text-2xl">
+                ×
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              {receivedSupplyRequests.length === 0 ? (
+                <div className="text-center py-8 text-gray-500">
+                  접수된 물품 요청이 없습니다.
+                </div>
+              ) : (
+                receivedSupplyRequests.map((request: any) => (
+                  <div key={request.id} className="border rounded-lg p-4">
+                    <div className="flex items-start justify-between mb-2">
+                      <div className="flex-1">
+                        {request.stores?.name && (
+                          <div className="text-xs text-gray-500 mb-1">
+                            매장: {request.stores.name}
+                          </div>
+                        )}
+                        <div className="flex items-center gap-2 mb-1">
+                          <h4 className="font-medium">{request.title}</h4>
+                          <span className="px-2 py-0.5 text-xs font-medium bg-gray-100 text-gray-800 rounded">
+                            {request.category || '-'}
+                          </span>
+                        </div>
+                        {request.description && (
+                          <p className="text-sm text-gray-600 mt-1 whitespace-pre-wrap">{request.description}</p>
+                        )}
+                        {request.photo_url && (
+                          <div className="mt-2">
+                            <img
+                              src={request.photo_url}
+                              alt="요청 사진"
+                              className="w-32 h-32 object-cover rounded border border-gray-300"
+                            />
+                          </div>
+                        )}
+                        <p className="text-xs text-gray-500 mt-2">
+                          요청자: {request.users?.name || '-'} | {new Date(request.created_at).toLocaleString('ko-KR')}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex gap-2 mt-4">
+                      <button
+                        onClick={async () => {
+                          try {
+                            const response = await fetch(`/api/business/supply-requests/${request.id}/confirm`, {
+                              method: 'POST',
+                            })
+                            
+                            if (response.ok) {
+                              alert('요청 확인되었습니다. 처리중으로 변경되었습니다.')
+                              await loadAllReceivedSupplyRequests()
+                              loadStoreStatuses()
+                            } else {
+                              const errorData = await response.json()
+                              alert(errorData.error || '요청 확인 중 오류가 발생했습니다.')
+                            }
+                          } catch (error) {
+                            console.error('Error confirming supply request:', error)
+                            alert('요청 확인 중 오류가 발생했습니다.')
+                          }
+                        }}
+                        className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+                      >
+                        요청 확인
+                      </button>
+                      <button
+                        onClick={async () => {
+                          try {
+                            const response = await fetch(`/api/business/supply-requests/${request.id}/forward`, {
+                              method: 'POST',
+                            })
+                            
+                            if (response.ok) {
+                              alert('점주에게 전달되었습니다.')
+                              await loadAllReceivedSupplyRequests()
+                              loadStoreStatuses()
+                            } else {
+                              const errorData = await response.json()
+                              alert(errorData.error || '점주 전달 중 오류가 발생했습니다.')
+                            }
+                          } catch (error) {
+                            console.error('Error forwarding supply request:', error)
+                            alert('점주 전달 중 오류가 발생했습니다.')
+                          }
+                        }}
+                        className="px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700"
+                      >
+                        점주 전달
+                      </button>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
           </div>
         </div>
       )}

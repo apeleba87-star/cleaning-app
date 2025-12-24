@@ -1,8 +1,9 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useParams } from 'next/navigation'
+import { useParams, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
+// import MonthlyReport from './MonthlyReport' // 프렌차이즈 관리자 앱에서는 월간 리포트 기능 비활성화
 
 interface BeforeAfterPhoto {
   id: string
@@ -73,11 +74,6 @@ interface Request {
     id: string
     name: string
   } | null
-  created_by_user?: {
-    id: string
-    name: string
-    role: string
-  } | null
 }
 
 interface StoreDetailData {
@@ -91,7 +87,9 @@ interface StoreDetailData {
 
 export default function StoreDetailPage() {
   const params = useParams()
+  const searchParams = useSearchParams()
   const storeId = params.id as string
+  const requestStatus = searchParams.get('requestStatus') as 'received' | 'in_progress' | 'completed' | null
 
   const [storeName, setStoreName] = useState('')
   const [loading, setLoading] = useState(true)
@@ -116,6 +114,22 @@ export default function StoreDetailPage() {
     currentIndex: number
   } | null>(null)
   const [expandedDates, setExpandedDates] = useState<Set<string>>(new Set())
+  const [confirmedRequestIds, setConfirmedRequestIds] = useState<Set<string>>(new Set())
+
+  // 확인된 요청 ID 로드 (localStorage에서)
+  useEffect(() => {
+    const today = new Date().toISOString().split('T')[0]
+    const storageKey = `confirmed_requests_${storeId}_${today}`
+    const stored = localStorage.getItem(storageKey)
+    if (stored) {
+      try {
+        const ids = JSON.parse(stored)
+        setConfirmedRequestIds(new Set(ids))
+      } catch (e) {
+        console.error('Error loading confirmed requests:', e)
+      }
+    }
+  }, [storeId])
 
   useEffect(() => {
     loadStoreInfo()
@@ -415,59 +429,60 @@ export default function StoreDetailPage() {
         <div>
           <h1 className="text-2xl font-bold">{storeName || '매장 상세'}</h1>
           <Link
-            href="/franchise/stores"
+            href="/franchise/stores/status"
             className="text-blue-600 hover:text-blue-800 text-sm"
           >
-            ← 매장 목록으로
+            ← 매장 상태로
           </Link>
         </div>
       </div>
 
-      {/* 기간별 탭 */}
-      <div className="bg-white rounded-lg shadow-md p-4 mb-6">
-        <div className="flex gap-4 border-b">
-          <button
-            onClick={() => setActiveTab('7days')}
-            className={`px-4 py-2 font-medium ${
-              activeTab === '7days'
-                ? 'text-blue-600 border-b-2 border-blue-600'
-                : 'text-gray-600 hover:text-gray-900'
-            }`}
-          >
-            최근 7일
-          </button>
-          <button
-            onClick={() => setActiveTab('30days')}
-            className={`px-4 py-2 font-medium ${
-              activeTab === '30days'
-                ? 'text-blue-600 border-b-2 border-blue-600'
-                : 'text-gray-600 hover:text-gray-900'
-            }`}
-          >
-            최근 30일
-          </button>
-          <button
-            onClick={() => setActiveTab('thisMonth')}
-            className={`px-4 py-2 font-medium ${
-              activeTab === 'thisMonth'
-                ? 'text-blue-600 border-b-2 border-blue-600'
-                : 'text-gray-600 hover:text-gray-900'
-            }`}
-          >
-            이번달
-          </button>
-          <button
-            onClick={() => setActiveTab('custom')}
-            className={`px-4 py-2 font-medium ${
-              activeTab === 'custom'
-                ? 'text-blue-600 border-b-2 border-blue-600'
-                : 'text-gray-600 hover:text-gray-900'
-            }`}
-          >
-            기간 선택
-          </button>
-        </div>
-        {activeTab === 'custom' && (
+      {/* 기간별 탭 - 요청 상태 필터링 시 숨김 */}
+      {!requestStatus && (
+        <div className="bg-white rounded-lg shadow-md p-4 mb-6">
+          <div className="flex gap-4 border-b">
+            <button
+              onClick={() => setActiveTab('7days')}
+              className={`px-4 py-2 font-medium ${
+                activeTab === '7days'
+                  ? 'text-blue-600 border-b-2 border-blue-600'
+                  : 'text-gray-600 hover:text-gray-900'
+              }`}
+            >
+              최근 7일
+            </button>
+            <button
+              onClick={() => setActiveTab('30days')}
+              className={`px-4 py-2 font-medium ${
+                activeTab === '30days'
+                  ? 'text-blue-600 border-b-2 border-blue-600'
+                  : 'text-gray-600 hover:text-gray-900'
+              }`}
+            >
+              최근 30일
+            </button>
+            <button
+              onClick={() => setActiveTab('thisMonth')}
+              className={`px-4 py-2 font-medium ${
+                activeTab === 'thisMonth'
+                  ? 'text-blue-600 border-b-2 border-blue-600'
+                  : 'text-gray-600 hover:text-gray-900'
+              }`}
+            >
+              이번달
+            </button>
+            <button
+              onClick={() => setActiveTab('custom')}
+              className={`px-4 py-2 font-medium ${
+                activeTab === 'custom'
+                  ? 'text-blue-600 border-b-2 border-blue-600'
+                  : 'text-gray-600 hover:text-gray-900'
+              }`}
+            >
+              기간 선택
+            </button>
+          </div>
+          {activeTab === 'custom' && (
           <div className="flex flex-col md:flex-row gap-4 items-end pt-4">
             <div>
               <label className="block text-sm text-gray-600 mb-1">시작일</label>
@@ -514,8 +529,9 @@ export default function StoreDetailPage() {
               최대 3개월(90일)까지 선택 가능
             </div>
           </div>
-        )}
-      </div>
+          )}
+        </div>
+      )}
 
       {error && (
         <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
@@ -537,13 +553,18 @@ export default function StoreDetailPage() {
           ) : (
             groupedData.map(([date, data]) => {
               const isExpanded = expandedDates.has(date)
-              const hasData = 
-                data.before_after_photos.length > 0 ||
-                data.product_inflow_photos.length > 0 ||
-                data.storage_photos.length > 0 ||
-                data.problem_reports.length > 0 ||
-                data.lost_items.length > 0 ||
-                data.requests.length > 0
+              // 요청 상태 필터링 시 요청란만 확인
+              const filteredRequests = requestStatus 
+                ? data.requests.filter(r => r.status === requestStatus)
+                : data.requests
+              const hasData = requestStatus
+                ? filteredRequests.length > 0
+                : (data.before_after_photos.length > 0 ||
+                   data.product_inflow_photos.length > 0 ||
+                   data.storage_photos.length > 0 ||
+                   data.problem_reports.length > 0 ||
+                   data.lost_items.length > 0 ||
+                   data.requests.length > 0)
 
               if (!hasData) return null
 
@@ -569,8 +590,8 @@ export default function StoreDetailPage() {
 
                   {isExpanded && (
                     <div className="px-6 py-4 border-t space-y-6">
-                      {/* 관리전후 사진 */}
-                      {data.before_after_photos.length > 0 && (
+                      {/* 관리전후 사진 - 요청 상태 필터링 시 숨김 */}
+                      {!requestStatus && data.before_after_photos.length > 0 && (
                         <div>
                           <h3 className="text-lg font-semibold mb-3">관리전후 사진</h3>
                           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -653,8 +674,8 @@ export default function StoreDetailPage() {
                         </div>
                       )}
 
-                      {/* 제품입고 및 보관상태 */}
-                      {(data.product_inflow_photos.length > 0 || data.storage_photos.length > 0) && (
+                      {/* 제품입고 및 보관상태 - 요청 상태 필터링 시 숨김 */}
+                      {!requestStatus && (data.product_inflow_photos.length > 0 || data.storage_photos.length > 0) && (
                         <div>
                           <h3 className="text-lg font-semibold mb-3">제품입고 및 보관상태</h3>
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -702,8 +723,8 @@ export default function StoreDetailPage() {
                         </div>
                       )}
 
-                      {/* 매장상황 */}
-                      {(data.problem_reports.length > 0 || data.lost_items.length > 0) && (
+                      {/* 매장상황 - 요청 상태 필터링 시 숨김 */}
+                      {!requestStatus && (data.problem_reports.length > 0 || data.lost_items.length > 0) && (
                         <div>
                           <h3 className="text-lg font-semibold mb-3">매장상황</h3>
                           <div className="space-y-4">
@@ -793,24 +814,24 @@ export default function StoreDetailPage() {
                       )}
 
                       {/* 요청란 */}
-                      {data.requests.length > 0 && (
+                      {filteredRequests.length > 0 && (
                         <div>
-                          <h3 className="text-lg font-semibold mb-3">요청란 ({data.requests.length}건)</h3>
+                          <h3 className="text-lg font-semibold mb-3">
+                            요청란 ({filteredRequests.length}건)
+                            {requestStatus && (
+                              <span className="ml-2 text-sm font-normal text-gray-600">
+                                ({requestStatus === 'received' ? '접수' : requestStatus === 'in_progress' ? '처리중' : '처리완료'})
+                              </span>
+                            )}
+                          </h3>
                           <div className="space-y-3">
-                            {data.requests.map((request) => {
+                            {filteredRequests.map((request) => {
                               const photos = getPhotoUrls(request.photo_url)
                               return (
                                 <div key={request.id} className="border rounded-lg p-4">
                                   <div className="flex items-start justify-between mb-2">
                                     <div className="flex-1">
-                                      <div className="flex items-center gap-2 mb-1">
-                                        <h5 className="font-semibold text-gray-900">{request.title}</h5>
-                                        {request.created_by_user?.role === 'store_manager' && (
-                                          <span className="px-2 py-0.5 text-xs font-medium bg-blue-100 text-blue-800 rounded">
-                                            (점주 직접 요청)
-                                          </span>
-                                        )}
-                                      </div>
+                                      <h5 className="font-semibold text-gray-900">{request.title}</h5>
                                       {request.description && (
                                         <p className="text-sm text-gray-700 mt-1 whitespace-pre-wrap">{request.description}</p>
                                       )}
@@ -880,10 +901,11 @@ export default function StoreDetailPage() {
           )}
         </div>
       ) : (
-        // 기존 뷰 (최근 7일)
+        // 기존 뷰 (최근 7일) - business 앱과 동일한 구조
         <div className="space-y-6">
-          {/* 관리전후 사진 */}
-          <div className="bg-white rounded-lg shadow-md p-6">
+          {/* 관리전후 사진 - 요청 상태 필터링 시 숨김 */}
+          {!requestStatus && (
+            <div className="bg-white rounded-lg shadow-md p-6">
             <h2 className="text-xl font-semibold mb-4">관리전후 사진</h2>
             {detailData.before_after_photos.length === 0 ? (
               <p className="text-gray-500">관리전후 사진이 없습니다.</p>
@@ -967,10 +989,12 @@ export default function StoreDetailPage() {
                 ))}
               </div>
             )}
-          </div>
+            </div>
+          )}
 
-          {/* 제품입고 및 보관상태 */}
-          <div className="bg-white rounded-lg shadow-md p-6">
+          {/* 제품입고 및 보관상태 - 요청 상태 필터링 시 숨김 */}
+          {!requestStatus && (
+            <div className="bg-white rounded-lg shadow-md p-6">
             <h2 className="text-xl font-semibold mb-4">제품입고 및 보관상태</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {/* 제품 입고 */}
@@ -1021,10 +1045,12 @@ export default function StoreDetailPage() {
                 )}
               </div>
             </div>
-          </div>
+            </div>
+          )}
 
-          {/* 매장상황 */}
-          <div className="bg-white rounded-lg shadow-md p-6">
+          {/* 매장상황 - 요청 상태 필터링 시 숨김 */}
+          {!requestStatus && (
+            <div className="bg-white rounded-lg shadow-md p-6">
             <h2 className="text-xl font-semibold mb-4">매장상황</h2>
             <div className="space-y-4">
               {/* 매장 문제 보고 */}
@@ -1116,29 +1142,48 @@ export default function StoreDetailPage() {
                 )}
               </div>
             </div>
-          </div>
+            </div>
+          )}
 
           {/* 요청란 */}
           <div className="bg-white rounded-lg shadow-md p-6">
-            <h2 className="text-xl font-semibold mb-4">요청란 ({detailData.requests.length}건)</h2>
-            {detailData.requests.length === 0 ? (
+            <h2 className="text-xl font-semibold mb-4">
+              요청란 ({detailData.requests.filter(r => !requestStatus || r.status === requestStatus).length}건)
+              {requestStatus && (
+                <span className="ml-2 text-sm font-normal text-gray-600">
+                  ({requestStatus === 'received' ? '접수' : requestStatus === 'in_progress' ? '처리중' : '처리완료'})
+                </span>
+              )}
+            </h2>
+            {detailData.requests.filter(r => !requestStatus || r.status === requestStatus).length === 0 ? (
               <p className="text-gray-500">요청 내역이 없습니다.</p>
             ) : (
               <div className="space-y-3">
-                {detailData.requests.map((request) => {
+                {detailData.requests
+                  .filter((request) => {
+                    // 요청 상태 필터링
+                    if (requestStatus && request.status !== requestStatus) {
+                      return false
+                    }
+                    // 확인된 요청은 당일에만 보이고 다음날 사라짐
+                    if (confirmedRequestIds.has(request.id)) {
+                      const today = new Date().toISOString().split('T')[0]
+                      const requestDate = new Date(request.created_at).toISOString().split('T')[0]
+                      return requestDate === today
+                    }
+                    return true
+                  })
+                  .map((request) => {
                   const photos = getPhotoUrls(request.photo_url)
+                  const isConfirmed = confirmedRequestIds.has(request.id)
                   return (
-                    <div key={request.id} className="border rounded-lg p-4">
+                    <div 
+                      key={request.id} 
+                      className={`border rounded-lg p-4 ${isConfirmed ? 'opacity-50' : ''}`}
+                    >
                       <div className="flex items-start justify-between mb-2">
                         <div className="flex-1">
-                          <div className="flex items-center gap-2 mb-1">
-                            <h4 className="font-semibold text-gray-900">{request.title}</h4>
-                            {request.created_by_user?.role === 'store_manager' && (
-                              <span className="px-2 py-0.5 text-xs font-medium bg-blue-100 text-blue-800 rounded">
-                                (점주 직접 요청)
-                              </span>
-                            )}
-                          </div>
+                          <h4 className="font-semibold text-gray-900">{request.title}</h4>
                           {request.description && (
                             <p className="text-sm text-gray-700 mt-1 whitespace-pre-wrap">{request.description}</p>
                           )}
@@ -1179,6 +1224,35 @@ export default function StoreDetailPage() {
                             <p className="text-xs text-green-600 mt-1">
                               처리자: {request.completed_by_user.name}
                             </p>
+                          )}
+                          {!confirmedRequestIds.has(request.id) && (
+                            <button
+                              onClick={async () => {
+                                try {
+                                  const response = await fetch(`/api/franchise/requests/${request.id}/confirm`, {
+                                    method: 'PATCH',
+                                  })
+                                  if (response.ok) {
+                                    const today = new Date().toISOString().split('T')[0]
+                                    const storageKey = `confirmed_requests_${storeId}_${today}`
+                                    const newConfirmedIds = new Set(confirmedRequestIds)
+                                    newConfirmedIds.add(request.id)
+                                    setConfirmedRequestIds(newConfirmedIds)
+                                    localStorage.setItem(storageKey, JSON.stringify(Array.from(newConfirmedIds)))
+                                    // 데이터 새로고침
+                                    loadDetailData()
+                                  } else {
+                                    alert('확인 처리에 실패했습니다.')
+                                  }
+                                } catch (error) {
+                                  console.error('Error confirming request:', error)
+                                  alert('확인 처리 중 오류가 발생했습니다.')
+                                }
+                              }}
+                              className="mt-2 px-3 py-1 bg-blue-600 text-white text-sm rounded hover:bg-blue-700 transition-colors"
+                            >
+                              확인
+                            </button>
                           )}
                         </div>
                       )}
@@ -1298,6 +1372,3 @@ export default function StoreDetailPage() {
     </div>
   )
 }
-
-
-

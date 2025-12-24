@@ -23,8 +23,10 @@ interface StoreStatus {
   in_progress_request_count: number
   completed_request_count: number
   rejected_request_count?: number
+  manager_in_progress_supply_request_count?: number
   before_photo_count: number
   after_photo_count: number
+  before_after_photos?: Array<{ id: string; before_photo_url: string | null; after_photo_url: string | null; area: string }>
   checklist_completion_rate: number
   checklist_completed: number
   checklist_total: number
@@ -48,7 +50,6 @@ export default function StoreManagerDashboardPage() {
   const [activeTab, setActiveTab] = useState<'overview' | 'photos' | 'checklist' | 'attendance'>('overview')
   const [photoData, setPhotoData] = useState<PhotoData[]>([])
   const [photoCategoryTab, setPhotoCategoryTab] = useState<'before_after' | 'problem' | 'product' | 'storage'>('before_after')
-  const [showIncompleteTasksModal, setShowIncompleteTasksModal] = useState(false)
   const [selectedPhoto, setSelectedPhoto] = useState<PhotoData | null>(null)
   const [expandedStores, setExpandedStores] = useState<Set<string>>(new Set())
   const [currentPhotoIndex, setCurrentPhotoIndex] = useState(0)
@@ -243,199 +244,186 @@ export default function StoreManagerDashboardPage() {
       const photoIdSet = new Set<string>() // 중복 방지를 위한 Set
       const todayDateKST = getTodayDateKST()
       
-      // 각 매장의 사진 데이터 수집 (당일 기준)
-      for (const store of storeStatuses) {
-        try {
-          // 1. 체크리스트의 관리 전후 사진
-          const checklistResponse = await fetch(`/api/store-manager/stores/${store.store_id}/checklists`)
-          if (checklistResponse.ok) {
-            const checklistData = await checklistResponse.json()
-            if (checklistData.data && Array.isArray(checklistData.data)) {
-              checklistData.data.forEach((checklist: any) => {
-                const items = checklist.items || []
-                const checklistDate = new Date(checklist.updated_at || checklist.created_at).toISOString().split('T')[0]
-                
-                items.forEach((item: any) => {
-                  if (item.type === 'photo') {
-                    // 관리 전 사진
-                    if (item.before_photo_url && checklistDate === todayDateKST) {
-                      const photoUrls = typeof item.before_photo_url === 'string' 
-                        ? (item.before_photo_url.startsWith('[') ? JSON.parse(item.before_photo_url) : [item.before_photo_url])
-                        : [item.before_photo_url]
-                      photoUrls.forEach((url: string) => {
-                        const photoId = `checklist-${checklist.id}-before-${url}`
-                        // 중복 체크
-                        if (!photoIdSet.has(photoId)) {
-                          photoIdSet.add(photoId)
-                          photos.push({
-                            id: photoId,
-                            title: `${item.area || '체크리스트'} - 관리 전`,
-                            photo_url: url,
-                            store_name: store.store_name,
-                            created_at: checklist.updated_at || checklist.created_at,
-                            status: 'completed',
-                            category: 'before_after',
-                            photo_type: 'before',
-                          })
-                        }
-                      })
-                    }
-                    // 관리 후 사진
-                    if (item.after_photo_url && checklistDate === todayDateKST) {
-                      const photoUrls = typeof item.after_photo_url === 'string' 
-                        ? (item.after_photo_url.startsWith('[') ? JSON.parse(item.after_photo_url) : [item.after_photo_url])
-                        : [item.after_photo_url]
-                      photoUrls.forEach((url: string) => {
-                        const photoId = `checklist-${checklist.id}-after-${url}`
-                        // 중복 체크
-                        if (!photoIdSet.has(photoId)) {
-                          photoIdSet.add(photoId)
-                          photos.push({
-                            id: photoId,
-                            title: `${item.area || '체크리스트'} - 관리 후`,
-                            photo_url: url,
-                            store_name: store.store_name,
-                            created_at: checklist.updated_at || checklist.created_at,
-                            status: 'completed',
-                            category: 'before_after',
-                            photo_type: 'after',
-                          })
-                        }
-                      })
-                    }
-                  }
-                })
-              })
-            }
-          }
-
-          // 2. 매장 문제 보고 및 분실물 사진
-          const [problemResponse, lostResponse] = await Promise.all([
-            fetch(`/api/store-manager/stores/${store.store_id}/problem-reports`),
-            fetch(`/api/store-manager/stores/${store.store_id}/lost-items`),
-          ])
-
-          if (problemResponse.ok) {
-            const problemData = await problemResponse.json()
-            if (problemData.data) {
-              // 매장 문제 보고
-              problemData.data.store_problems?.forEach((p: any) => {
-                const createdDate = new Date(p.created_at).toISOString().split('T')[0]
-                if (p.photo_url && createdDate === todayDateKST) {
-                  const photoUrls = typeof p.photo_url === 'string' 
-                    ? (p.photo_url.startsWith('[') ? JSON.parse(p.photo_url) : [p.photo_url])
-                    : []
-                  photoUrls.forEach((url: string) => {
-                    photos.push({
-                      id: `problem-${p.id}-${url}`,
-                      title: p.title || '매장 문제 보고',
-                      photo_url: url,
-                      store_name: store.store_name,
-                      created_at: p.created_at,
-                      status: p.status,
-                      category: 'problem',
-                      photo_type: 'store_problem',
-                    })
-                  })
-                }
-              })
-            }
-          }
-
-          if (lostResponse.ok) {
-            const lostData = await lostResponse.json()
-            if (lostData.data) {
-              lostData.data.forEach((item: any) => {
-                const createdDate = new Date(item.created_at).toISOString().split('T')[0]
-                if (item.photo_url && createdDate === todayDateKST) {
-                  const photoUrls = typeof item.photo_url === 'string' 
-                    ? (item.photo_url.startsWith('[') ? JSON.parse(item.photo_url) : [item.photo_url])
-                    : []
-                  photoUrls.forEach((url: string) => {
-                    const photoId = `lost-${item.id}-${url}`
+      // 배치 크기: 3개씩 묶어서 처리
+      const BATCH_SIZE = 3
+      
+      // 매장을 배치로 나누기
+      for (let i = 0; i < storeStatuses.length; i += BATCH_SIZE) {
+        const batch = storeStatuses.slice(i, i + BATCH_SIZE)
+        
+        // 배치 내 모든 매장의 사진 데이터를 병렬로 수집
+        await Promise.allSettled(
+          batch.map(async (store) => {
+            try {
+              // 1. 체크리스트의 관리 전후 사진 (storeStatuses의 before_after_photos 사용)
+              if (store.before_after_photos && store.before_after_photos.length > 0) {
+                store.before_after_photos.forEach((photo: any) => {
+                  // 관리 전 사진
+                  if (photo.before_photo_url) {
+                    const photoId = `checklist-${photo.id}-before`
                     if (!photoIdSet.has(photoId)) {
                       photoIdSet.add(photoId)
                       photos.push({
                         id: photoId,
-                        title: '분실물 습득 보고',
-                        photo_url: url,
+                        title: `${photo.area || '체크리스트'} - 관리 전`,
+                        photo_url: photo.before_photo_url,
                         store_name: store.store_name,
-                        created_at: item.created_at,
-                        status: item.status,
-                        category: 'problem',
-                        photo_type: 'lost_item',
+                        created_at: new Date().toISOString(), // 오늘 날짜 사진이므로 오늘 날짜 사용
+                        status: 'completed',
+                        category: 'before_after',
+                        photo_type: 'before',
+                      })
+                    }
+                  }
+                  // 관리 후 사진
+                  if (photo.after_photo_url) {
+                    const photoId = `checklist-${photo.id}-after`
+                    if (!photoIdSet.has(photoId)) {
+                      photoIdSet.add(photoId)
+                      photos.push({
+                        id: photoId,
+                        title: `${photo.area || '체크리스트'} - 관리 후`,
+                        photo_url: photo.after_photo_url,
+                        store_name: store.store_name,
+                        created_at: new Date().toISOString(), // 오늘 날짜 사진이므로 오늘 날짜 사용
+                        status: 'completed',
+                        category: 'before_after',
+                        photo_type: 'after',
+                      })
+                    }
+                  }
+                })
+              }
+
+              // 2. 매장 문제 보고 및 분실물 사진
+              const [problemResponse, lostResponse] = await Promise.all([
+                fetch(`/api/store-manager/stores/${store.store_id}/problem-reports`),
+                fetch(`/api/store-manager/stores/${store.store_id}/lost-items`),
+              ])
+
+              if (problemResponse.ok) {
+                const problemData = await problemResponse.json()
+                if (problemData.data) {
+                  // 매장 문제 보고
+                  problemData.data.store_problems?.forEach((p: any) => {
+                    const createdDate = new Date(p.created_at).toISOString().split('T')[0]
+                    if (p.photo_url && createdDate === todayDateKST) {
+                      const photoUrls = typeof p.photo_url === 'string' 
+                        ? (p.photo_url.startsWith('[') ? JSON.parse(p.photo_url) : [p.photo_url])
+                        : []
+                      photoUrls.forEach((url: string) => {
+                        photos.push({
+                          id: `problem-${p.id}-${url}`,
+                          title: p.title || '매장 문제 보고',
+                          photo_url: url,
+                          store_name: store.store_name,
+                          created_at: p.created_at,
+                          status: p.status,
+                          category: 'problem',
+                          photo_type: 'store_problem',
+                        })
                       })
                     }
                   })
                 }
-              })
-            }
-          }
+              }
 
-          // 3. 제품 입고 및 발주서 사진
-          const productPhotosResponse = await fetch(`/api/store-manager/stores/${store.store_id}/product-photos`)
-          if (productPhotosResponse.ok) {
-            const productData = await productPhotosResponse.json()
-            console.log(`[Photo Data] Product photos for ${store.store_name}:`, productData.data)
-            if (productData.data && Array.isArray(productData.data)) {
-              productData.data.forEach((photo: any) => {
-                const createdDate = new Date(photo.created_at).toISOString().split('T')[0]
-                if (createdDate === todayDateKST && photo.photo_url) {
-                  // photo_type에 따라 제목 결정
-                  // API에서 반환하는 photo_type: 'product', 'order_sheet', 'storage'
-                  let title = '제품 사진'
-                  let photoType: 'receipt' | 'order_sheet' | 'storage' = 'receipt'
-                  
-                  if (photo.type === 'receipt') {
-                    // type='receipt'인 경우 photo_type으로 구분
-                    if (photo.photo_type === 'product') {
-                      title = '제품입고 사진'
-                      photoType = 'receipt' // 필터링을 위해 'receipt'로 설정 (제품 입고 탭에 표시)
-                    } else if (photo.photo_type === 'order_sheet') {
-                      title = '발주서 사진'
-                      photoType = 'order_sheet' // 필터링을 위해 'order_sheet'로 설정 (제품 입고 탭에 표시)
-                    } else {
-                      // photo_type이 없으면 기본값으로 제품입고 사진
-                      title = '제품입고 사진'
-                      photoType = 'receipt'
+              if (lostResponse.ok) {
+                const lostData = await lostResponse.json()
+                if (lostData.data) {
+                  lostData.data.forEach((item: any) => {
+                    const createdDate = new Date(item.created_at).toISOString().split('T')[0]
+                    if (item.photo_url && createdDate === todayDateKST) {
+                      const photoUrls = typeof item.photo_url === 'string' 
+                        ? (item.photo_url.startsWith('[') ? JSON.parse(item.photo_url) : [item.photo_url])
+                        : []
+                      photoUrls.forEach((url: string) => {
+                        const photoId = `lost-${item.id}-${url}`
+                        if (!photoIdSet.has(photoId)) {
+                          photoIdSet.add(photoId)
+                          photos.push({
+                            id: photoId,
+                            title: '분실물 습득 보고',
+                            photo_url: url,
+                            store_name: store.store_name,
+                            created_at: item.created_at,
+                            status: item.status,
+                            category: 'problem',
+                            photo_type: 'lost_item',
+                          })
+                        }
+                      })
                     }
-                  } else if (photo.type === 'storage') {
-                    // type='storage'인 경우 보관 제품
-                    title = '보관 제품'
-                    photoType = 'storage'
-                  }
-                  
-                  console.log('[Product Photo]', {
-                    store: store.store_name,
-                    type: photo.type,
-                    photo_type: photo.photo_type,
-                    photoType,
-                    title,
-                    created_at: photo.created_at,
-                    photo_url: photo.photo_url,
                   })
-                  
-                  const photoId = `product-${photo.id}`
-                  if (!photoIdSet.has(photoId)) {
-                    photoIdSet.add(photoId)
-                    photos.push({
-                      id: photoId,
-                      title: title,
-                      photo_url: photo.photo_url,
-                      store_name: store.store_name,
-                      created_at: photo.created_at,
-                      status: 'completed',
-                      category: 'product', // 제품입고와 보관사진 모두 'product' 카테고리
-                      photo_type: photoType,
-                    })
-                  }
                 }
-              })
+              }
+
+              // 3. 제품 입고 및 발주서 사진
+              const productPhotosResponse = await fetch(`/api/store-manager/stores/${store.store_id}/product-photos`)
+              if (productPhotosResponse.ok) {
+                const productData = await productPhotosResponse.json()
+                console.log(`[Photo Data] Product photos for ${store.store_name}:`, productData.data)
+                if (productData.data && Array.isArray(productData.data)) {
+                  productData.data.forEach((photo: any) => {
+                    const createdDate = new Date(photo.created_at).toISOString().split('T')[0]
+                    if (createdDate === todayDateKST && photo.photo_url) {
+                      // photo_type에 따라 제목 결정
+                      // API에서 반환하는 photo_type: 'product', 'order_sheet', 'storage'
+                      let title = '제품 사진'
+                      let photoType: 'receipt' | 'order_sheet' | 'storage' = 'receipt'
+                      
+                      if (photo.type === 'receipt') {
+                        // type='receipt'인 경우 photo_type으로 구분
+                        if (photo.photo_type === 'product') {
+                          title = '제품입고 사진'
+                          photoType = 'receipt' // 필터링을 위해 'receipt'로 설정 (제품 입고 탭에 표시)
+                        } else if (photo.photo_type === 'order_sheet') {
+                          title = '발주서 사진'
+                          photoType = 'order_sheet' // 필터링을 위해 'order_sheet'로 설정 (제품 입고 탭에 표시)
+                        } else {
+                          // photo_type이 없으면 기본값으로 제품입고 사진
+                          title = '제품입고 사진'
+                          photoType = 'receipt'
+                        }
+                      } else if (photo.type === 'storage') {
+                        // type='storage'인 경우 보관 제품
+                        title = '보관 제품'
+                        photoType = 'storage'
+                      }
+                      
+                      console.log('[Product Photo]', {
+                        store: store.store_name,
+                        type: photo.type,
+                        photo_type: photo.photo_type,
+                        photoType,
+                        title,
+                        created_at: photo.created_at,
+                        photo_url: photo.photo_url,
+                      })
+                      
+                      const photoId = `product-${photo.id}`
+                      if (!photoIdSet.has(photoId)) {
+                        photoIdSet.add(photoId)
+                        photos.push({
+                          id: photoId,
+                          title: title,
+                          photo_url: photo.photo_url,
+                          store_name: store.store_name,
+                          created_at: photo.created_at,
+                          status: 'completed',
+                          category: 'product', // 제품입고와 보관사진 모두 'product' 카테고리
+                          photo_type: photoType,
+                        })
+                      }
+                    }
+                  })
+                }
+              }
+            } catch (error) {
+              console.error(`Error loading photos for store ${store.store_id}:`, error)
             }
-          }
-        } catch (error) {
-          console.error(`Error loading photos for store ${store.store_id}:`, error)
-        }
+          })
+        )
       }
 
       // 최신순으로 정렬
@@ -457,11 +445,9 @@ export default function StoreManagerDashboardPage() {
       return photoDate === todayDateKST
     }).length
     
-    // 미완료 작업: 미처리된 매장 문제 + 미완료된 체크리스트 항목
-    const incompleteTasks = storeStatuses.reduce((sum, s) => {
-      const unprocessedProblems = s.unprocessed_store_problems || 0
-      const incompleteChecklistItems = Math.max(0, (s.checklist_total || 0) - (s.checklist_completed || 0))
-      return sum + unprocessedProblems + incompleteChecklistItems
+    // 물품 요청: 점주가 처리해야 할 물품 요청 건수 (점주 처리중 상태)
+    const supplyRequestCount = storeStatuses.reduce((sum, s) => {
+      return sum + (s.manager_in_progress_supply_request_count || 0)
     }, 0)
     
     // 체크리스트가 있는 매장만 계산에 포함 (checklist_total > 0인 매장만)
@@ -477,7 +463,7 @@ export default function StoreManagerDashboardPage() {
 
     return {
       todayPhotoCount,
-      incompleteTasks,
+      supplyRequestCount,
       completedToday,
       completionRate,
       completionRateForStores,
@@ -868,19 +854,19 @@ export default function StoreManagerDashboardPage() {
         <div className="bg-white rounded-lg shadow-md p-6 border-l-4 border-orange-500">
           <div className="flex justify-between items-start">
             <div className="flex-1">
-              <div className="text-sm text-gray-600 mb-1">미완료 작업</div>
-              <div className="text-3xl font-bold text-gray-900">{stats.incompleteTasks}건</div>
+              <div className="text-sm text-gray-600 mb-1">물품 요청</div>
+              <div className="text-3xl font-bold text-gray-900">{stats.supplyRequestCount}건</div>
               <div className="text-sm text-orange-600 mt-2">
-                미처리 문제 + 미완료 체크리스트
+                점주 처리 대기 중
               </div>
             </div>
-            {stats.incompleteTasks > 0 && (
-              <button
-                onClick={() => setShowIncompleteTasksModal(true)}
-                className="px-3 py-1.5 bg-orange-500 text-white rounded-md text-xs font-medium hover:bg-orange-600"
+            {stats.supplyRequestCount > 0 && (
+              <Link
+                href="/store-manager/supplies"
+                className="px-3 py-1.5 bg-orange-500 text-white rounded-md text-xs font-medium hover:bg-orange-600 inline-block"
               >
                 확인
-              </button>
+              </Link>
             )}
           </div>
         </div>
@@ -1533,62 +1519,6 @@ export default function StoreManagerDashboardPage() {
             setSelectedStoreId(null)
           }}
         />
-      )}
-
-      {/* 미완료 작업 모달 */}
-      {showIncompleteTasksModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[80vh] overflow-y-auto">
-            <div className="p-6">
-              <div className="flex justify-between items-center mb-4">
-                <h2 className="text-xl font-semibold">미완료 작업 전체</h2>
-                <button
-                  onClick={() => setShowIncompleteTasksModal(false)}
-                  className="text-gray-500 hover:text-gray-700"
-                >
-                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
-              </div>
-              
-              <div className="space-y-4">
-                {storeStatuses.map((store) => {
-                  const unprocessedProblems = store.unprocessed_store_problems || 0
-                  const incompleteChecklistItems = Math.max(0, (store.checklist_total || 0) - (store.checklist_completed || 0))
-                  const totalIncomplete = unprocessedProblems + incompleteChecklistItems
-                  
-                  if (totalIncomplete === 0) return null
-                  
-                  return (
-                    <div key={store.store_id} className="border rounded-lg p-4">
-                      <div className="font-medium text-gray-900 mb-2">{store.store_name}</div>
-                      <div className="space-y-2 text-sm">
-                        {unprocessedProblems > 0 && (
-                          <div className="text-orange-600">
-                            미처리 문제: {unprocessedProblems}건
-                          </div>
-                        )}
-                        {incompleteChecklistItems > 0 && (
-                          <div className="text-orange-600">
-                            미완료 체크리스트: {incompleteChecklistItems}건
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  )
-                })}
-                {storeStatuses.every(store => {
-                  const unprocessedProblems = store.unprocessed_store_problems || 0
-                  const incompleteChecklistItems = Math.max(0, (store.checklist_total || 0) - (store.checklist_completed || 0))
-                  return unprocessedProblems === 0 && incompleteChecklistItems === 0
-                }) && (
-                  <p className="text-gray-500 text-center py-8">미완료 작업이 없습니다.</p>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
       )}
 
       {/* 요청란 상황 모달 */}

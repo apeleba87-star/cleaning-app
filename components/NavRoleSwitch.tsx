@@ -116,6 +116,7 @@ export function NavRoleSwitch({ userRole, userName }: NavRoleSwitchProps) {
             items: [
               { href: '/business/checklists', label: '체크리스트' },
               { href: '/business/reports', label: '리포트' },
+              { href: '/business/supply-requests', label: '물품 요청' },
             ],
           },
           {
@@ -127,13 +128,7 @@ export function NavRoleSwitch({ userRole, userName }: NavRoleSwitchProps) {
         ]
 
         const franchiseManagerNav = [
-          { href: '/franchise/dashboard', label: '대시보드' },
-          { href: '/franchise/company', label: '회사 관리' },
-          { href: '/franchise/stores', label: '매장 관리' },
-          { href: '/franchise/users', label: '사용자 관리' },
-          { href: '/franchise/checklists', label: '체크리스트' },
-          { href: '/franchise/reports', label: '리포트' },
-          { href: '/franchise/issues', label: '요청/미흡' },
+          { href: '/franchise/stores/status', label: '매장 관리 현황' },
         ]
 
         const storeManagerNav = [

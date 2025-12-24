@@ -1986,7 +1986,6 @@ export default function FranchiseStoresStatusPage() {
                     )}
                     </div>
                   </div>
-
                     {/* 매장 상세 링크 */}
                     <div className="mt-4 pt-4 border-t border-gray-200">
                       <Link

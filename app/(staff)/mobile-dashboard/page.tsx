@@ -64,6 +64,8 @@ export default function MobileDashboardPage() {
   const [weeklyWorkStats, setWeeklyWorkStats] = useState<WeeklyWorkStats[]>([])
   // 최근업무기록 아코디언 상태 (매장별로 접었다 폈다)
   const [expandedStores, setExpandedStores] = useState<Set<string>>(new Set())
+  // 최근 업무 기록 전체 접기/펼치기 상태
+  const [isWorkHistoryExpanded, setIsWorkHistoryExpanded] = useState(true)
   // 체크리스트 진행율 (매장별)
   const [checklistProgress, setChecklistProgress] = useState<Record<string, { completed: number; total: number; percentage: number }>>({})
   // 요청란 미완료 건수 (매장별)
@@ -86,6 +88,17 @@ export default function MobileDashboardPage() {
     read_at: string | null
   }>>([])
   const [showAnnouncementModal, setShowAnnouncementModal] = useState<string | null>(null)
+  // 물품 요청 상태
+  const [supplyRequests, setSupplyRequests] = useState<Array<{
+    id: string
+    store_id: string
+    store_name: string
+    title: string
+    category: string | null
+    status: string
+    created_at: string
+    completed_at: string | null
+  }>>([])
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -206,14 +219,32 @@ export default function MobileDashboardPage() {
       }
       const data = await response.json()
       if (data.success) {
-        // 공지사항 목록 업데이트
-        setAnnouncements((prev) =>
-          prev.map((ann) =>
-            ann.id === announcementId
-              ? { ...ann, is_read: true, read_at: new Date().toISOString() }
-              : ann
-          )
+        // 공지사항 목록 업데이트 및 7일 필터링 적용
+        const updatedAnnouncements = announcements.map((ann) =>
+          ann.id === announcementId
+            ? { ...ann, is_read: true, read_at: new Date().toISOString() }
+            : ann
         )
+        
+        // 읽은 공지사항은 7일 이내만 표시
+        const sevenDaysAgo = new Date()
+        sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7)
+        
+        const filteredAnnouncements = updatedAnnouncements.filter((ann) => {
+          // 읽지 않은 공지사항은 모두 표시
+          if (!ann.is_read) return true
+          
+          // 읽은 공지사항은 read_at이 7일 이내인 것만 표시
+          if (ann.read_at) {
+            const readDate = new Date(ann.read_at)
+            return readDate >= sevenDaysAgo
+          }
+          
+          // read_at이 없으면 표시하지 않음
+          return false
+        })
+        
+        setAnnouncements(filteredAnnouncements)
         setShowAnnouncementModal(null)
       }
     } catch (error) {
@@ -421,6 +452,83 @@ export default function MobileDashboardPage() {
 
         // 공지사항 로드
         loadPromises.push(loadAnnouncements())
+
+        // 물품 요청 상태 로드 (1주일 이내의 completed 포함)
+        loadPromises.push(
+          (async () => {
+            try {
+              const oneWeekAgo = new Date()
+              oneWeekAgo.setDate(oneWeekAgo.getDate() - 7)
+              const oneWeekAgoISO = oneWeekAgo.toISOString().split('T')[0]
+
+              // 처리 완료가 아닌 요청 조회
+              const { data: nonCompletedData, error: nonCompletedError } = await supabase
+                .from('supply_requests')
+                .select(`
+                  id,
+                  store_id,
+                  title,
+                  category,
+                  status,
+                  created_at,
+                  completed_at,
+                  stores:store_id (
+                    id,
+                    name
+                  )
+                `)
+                .eq('user_id', session.user.id)
+                .neq('status', 'completed')
+
+              // 처리 완료된 요청 중 1주일 이내만 조회
+              const { data: completedData, error: completedError } = await supabase
+                .from('supply_requests')
+                .select(`
+                  id,
+                  store_id,
+                  title,
+                  category,
+                  status,
+                  created_at,
+                  completed_at,
+                  stores:store_id (
+                    id,
+                    name
+                  )
+                `)
+                .eq('user_id', session.user.id)
+                .eq('status', 'completed')
+                .gte('completed_at', oneWeekAgoISO)
+
+              // 두 결과 합치기
+              let allData = [...(nonCompletedData || [])]
+              if (!completedError && completedData) {
+                allData = [...allData, ...completedData]
+              }
+
+              // 정렬 (completed는 맨 아래)
+              allData.sort((a: any, b: any) => {
+                if (a.status === 'completed' && b.status !== 'completed') return 1
+                if (a.status !== 'completed' && b.status === 'completed') return -1
+                return new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+              })
+
+              const supplyRequestsList = allData.map((req: any) => ({
+                id: req.id,
+                store_id: req.store_id,
+                store_name: req.stores?.name || '',
+                title: req.title,
+                category: req.category,
+                status: req.status,
+                created_at: req.created_at,
+                completed_at: req.completed_at,
+              }))
+              setSupplyRequests(supplyRequestsList)
+            } catch (error) {
+              console.error('Error loading supply requests:', error)
+            }
+          })()
+        )
 
         // 체크리스트 진행율 및 미완료 건수 로드
         if (storeIds.length > 0) {
@@ -949,11 +1057,16 @@ export default function MobileDashboardPage() {
               <h2 className="text-base sm:text-lg font-semibold">공지사항</h2>
             </div>
             <div className="space-y-2">
-              {announcements.map((announcement) => (
+              {announcements.map((announcement) => {
+                // 읽은 공지사항은 7일 이내만 표시 (이미 loadAnnouncements에서 필터링됨)
+                // 여기서는 읽은 공지사항만 연하게 표시
+                const isRead = announcement.is_read
+                
+                return (
                 <div
                   key={announcement.id}
                   className={`p-3 rounded-lg border-2 cursor-pointer transition-all ${
-                    announcement.is_read
+                    isRead
                       ? 'bg-gray-50 border-gray-200 opacity-60'
                       : 'bg-yellow-50 border-yellow-300 hover:shadow-md'
                   }`}
@@ -986,7 +1099,8 @@ export default function MobileDashboardPage() {
                     </div>
                   </div>
                 </div>
-              ))}
+                )
+              })}
             </div>
           </div>
         )}
@@ -1335,12 +1449,121 @@ export default function MobileDashboardPage() {
           </div>
         </Link>
 
+        {/* 물품 요청 상태 */}
+        <Link href="/supplies" className="block">
+          <div className="rounded-lg p-3 sm:p-4 bg-white border border-gray-200 hover:shadow-md transition-all">
+            <div className="flex items-center gap-2 mb-3">
+              <span className="text-lg sm:text-xl">📦</span>
+              <h2 className="text-base sm:text-lg font-semibold text-gray-800">
+                물품 요청 상태
+              </h2>
+              {supplyRequests.length > 0 && (
+                <span className="ml-auto px-2 py-1 bg-blue-100 text-blue-800 text-xs font-semibold rounded">
+                  {supplyRequests.length}건
+                </span>
+              )}
+            </div>
+            {supplyRequests.length > 0 ? (
+              <div className="space-y-2">
+                {supplyRequests.slice(0, 3).map((request) => {
+                  const getStatusLabel = (status: string) => {
+                    switch (status) {
+                      case 'received':
+                        return '접수'
+                      case 'in_progress':
+                        return '처리중'
+                      case 'manager_in_progress':
+                        return '점주 처리중'
+                      case 'completed':
+                        return '처리 완료'
+                      default:
+                        return status
+                    }
+                  }
+
+                  const getStatusColor = (status: string) => {
+                    switch (status) {
+                      case 'received':
+                        return 'bg-gray-100 text-gray-800'
+                      case 'in_progress':
+                        return 'bg-blue-100 text-blue-800'
+                      case 'manager_in_progress':
+                        return 'bg-purple-100 text-purple-800'
+                      case 'completed':
+                        return 'bg-green-100 text-green-800'
+                      default:
+                        return 'bg-gray-100 text-gray-800'
+                    }
+                  }
+
+                  const isCompleted = request.status === 'completed'
+                  
+                  return (
+                    <div 
+                      key={request.id} 
+                      className={`flex items-start gap-2 ${isCompleted ? 'opacity-60' : ''}`}
+                    >
+                      <div className={`w-2 h-2 rounded-full mt-2 flex-shrink-0 ${
+                        isCompleted ? 'bg-green-400' : 'bg-blue-500'
+                      }`}></div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-1">
+                          <div className={`text-xs sm:text-sm font-medium truncate ${
+                            isCompleted ? 'text-gray-500' : 'text-gray-900'
+                          }`}>
+                            {request.store_name}
+                          </div>
+                          <span className={`inline-flex px-1.5 py-0.5 text-xs font-semibold rounded-full flex-shrink-0 ${getStatusColor(request.status)}`}>
+                            {getStatusLabel(request.status)}
+                          </span>
+                        </div>
+                        <div className={`text-xs sm:text-sm truncate ${
+                          isCompleted ? 'text-gray-400' : 'text-gray-700'
+                        }`}>
+                          {request.title}
+                        </div>
+                        {request.category && (
+                          <div className={`text-xs truncate mt-0.5 ${
+                            isCompleted ? 'text-gray-400' : 'text-gray-500'
+                          }`}>
+                            {request.category}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )
+                })}
+                {supplyRequests.length > 3 && (
+                  <div className="text-xs text-blue-700 text-center pt-2">
+                    +{supplyRequests.length - 3}건 더 보기
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="text-center py-2 text-xs sm:text-sm text-gray-600">
+                물품 요청이 없습니다.
+              </div>
+            )}
+          </div>
+        </Link>
+
         {/* 최근 업무 기록 - 탭 구조 */}
         <div className="bg-white rounded-lg shadow-md p-3 sm:p-4">
-          <div className="flex items-center gap-2 mb-4">
-            <span className="text-lg sm:text-xl">🕐</span>
-            <h2 className="text-base sm:text-lg font-semibold">최근 업무 기록</h2>
-          </div>
+          <button
+            onClick={() => setIsWorkHistoryExpanded(!isWorkHistoryExpanded)}
+            className="w-full flex items-center justify-between gap-2 mb-4"
+          >
+            <div className="flex items-center gap-2">
+              <span className="text-lg sm:text-xl">🕐</span>
+              <h2 className="text-base sm:text-lg font-semibold">최근 업무 기록</h2>
+            </div>
+            <span className={`text-gray-400 transition-transform ${isWorkHistoryExpanded ? 'rotate-180' : ''}`}>
+              ▼
+            </span>
+          </button>
+          
+          {isWorkHistoryExpanded && (
+            <>
           
           {/* 탭 버튼 */}
           <div className="flex gap-2 mb-4 border-b border-gray-200">
@@ -1650,6 +1873,8 @@ export default function MobileDashboardPage() {
               </div>
             )
           })()}
+            </>
+          )}
         </div>
 
         {/* 메뉴 버튼들 - 반응형 */}

@@ -33,6 +33,7 @@ export default function ChecklistClient() {
   const [activeTab, setActiveTab] = useState<'incomplete' | 'completed'>('incomplete')
   const [viewingPhotoIndex, setViewingPhotoIndex] = useState<number | null>(null)
   const [viewingPhotoMode, setViewingPhotoMode] = useState<'before' | 'after' | null>(null)
+  const [viewingPhotoArea, setViewingPhotoArea] = useState<string | null>(null) // 클릭한 사진의 area 저장
   const [checklistStage, setChecklistStage] = useState<'before' | 'after'>('before') // 관리전/관리후 단계
 
   const loadAssignedChecklists = async () => {
@@ -1150,6 +1151,7 @@ export default function ChecklistClient() {
                                                     onClick={() => {
                                                       setViewingPhotoIndex(originalIndex >= 0 ? originalIndex : idx)
                                                       setViewingPhotoMode('before')
+                                                      setViewingPhotoArea(item.area) // area 저장
                                                     }}
                                                     className="relative group w-full"
                                                   >
@@ -1203,6 +1205,7 @@ export default function ChecklistClient() {
                                                       onClick={() => {
                                                         setViewingPhotoIndex(originalIndex >= 0 ? originalIndex : idx)
                                                         setViewingPhotoMode('before')
+                                                        setViewingPhotoArea(item.area) // area 저장
                                                       }}
                                                       className="relative group w-full"
                                                     >
@@ -1221,6 +1224,7 @@ export default function ChecklistClient() {
                                                       onClick={() => {
                                                         setViewingPhotoIndex(originalIndex >= 0 ? originalIndex : idx)
                                                         setViewingPhotoMode('after')
+                                                        setViewingPhotoArea(item.area) // area 저장
                                                       }}
                                                       className="relative group w-full"
                                                     >
@@ -1275,6 +1279,7 @@ export default function ChecklistClient() {
                                                     onClick={() => {
                                                       setViewingPhotoIndex(originalIndex >= 0 ? originalIndex : idx)
                                                       setViewingPhotoMode('after')
+                                                      setViewingPhotoArea(item.area) // area 저장
                                                     }}
                                                     className="relative group w-full"
                                                   >
@@ -1352,15 +1357,17 @@ export default function ChecklistClient() {
         </div>
 
         {/* 사진 확인 모달 */}
-        {viewingPhotoIndex !== null && viewingPhotoMode && completedForDate.length > 0 && (() => {
-          // 모든 완료된 체크리스트에서 해당 인덱스의 항목 찾기
+        {viewingPhotoIndex !== null && viewingPhotoMode && viewingPhotoArea && completedForDate.length > 0 && (() => {
+          // area를 기준으로 정확한 항목 찾기
           let foundItem: any = null
           let foundChecklist: Checklist | null = null
           
           for (const checklist of completedForDate) {
             const items = Array.isArray(checklist.items) ? checklist.items : []
-            if (items[viewingPhotoIndex]) {
-              foundItem = items[viewingPhotoIndex]
+            // area로 정확한 항목 찾기
+            const item = items.find((i: any) => i.area === viewingPhotoArea)
+            if (item) {
+              foundItem = item
               foundChecklist = checklist
               break
             }
@@ -1384,6 +1391,7 @@ export default function ChecklistClient() {
                   onClick={() => {
                     setViewingPhotoIndex(null)
                     setViewingPhotoMode(null)
+                    setViewingPhotoArea(null)
                   }}
                   className="absolute top-4 right-4 z-10 bg-white bg-opacity-90 hover:bg-opacity-100 text-gray-700 rounded-full w-10 h-10 flex items-center justify-center text-2xl font-bold shadow-lg"
                 >
