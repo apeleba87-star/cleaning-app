@@ -55,9 +55,9 @@ export default function BottomNavigation() {
               if (checklists && checklists.length > 0) {
                 const checklist = checklists[0]
                 const { calculateChecklistProgress } = await import('@/lib/utils/checklist')
-                const progress = calculateChecklistProgress(checklist as any, 'all')
+                const progress = calculateChecklistProgress(checklist as any)
                 if (progress.percentage < 100) {
-                  incompleteCount += (progress.total - progress.completed)
+                  incompleteCount += (progress.totalItems - progress.completedItems)
                 }
               }
             } catch (err) {
