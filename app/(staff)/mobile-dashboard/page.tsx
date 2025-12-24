@@ -459,16 +459,9 @@ export default function MobileDashboardPage() {
                     incompleteCount++
                     return
                   }
-                  const allCompleted = validItems.every((item: any) => {
-                    if (item.type === 'check') {
-                      if (!item.checked) return false
-                      if (item.status === 'bad' && !item.comment?.trim()) return false
-                      return true
-                    } else if (item.type === 'photo') {
-                      return !!(item.before_photo_url && item.after_photo_url)
-        }
-                    return false
-                  })
+                  // calculateChecklistProgress 함수를 사용하여 완료 여부 확인
+                  const progress = calculateChecklistProgress(checklist)
+                  const allCompleted = progress.percentage === 100
                   if (!allCompleted) {
                     incompleteCount++
                   }

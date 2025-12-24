@@ -303,51 +303,24 @@ export async function clockOutAction(
       // 체크리스트가 없으면 퇴근 가능
       console.log('No checklists found, allowing clock-out')
     } else {
-      // 모든 체크리스트가 완료되었는지 확인
+      // calculateChecklistProgress 함수를 사용하여 완료 여부 확인
+      const { calculateChecklistProgress } = await import('@/lib/utils/checklist')
+      
       const incompleteChecklists = checklists.filter((checklist) => {
-        const items = checklist.items as any[]
-        if (!Array.isArray(items) || items.length === 0) {
-          return true // 항목이 없으면 미완료로 간주
-        }
-
-        const validItems = items.filter((item: any) => item.area?.trim())
-        if (validItems.length === 0) {
-          return true // 유효한 항목이 없으면 미완료로 간주
-        }
-
-        // 모든 항목이 완료되었는지 확인
-        return !validItems.every((item: any) => {
-          if (item.type === 'check') {
-            if (!item.checked) return false
-            if (item.status === 'bad' && !item.comment?.trim()) return false
-            return true
-          } else if (item.type === 'photo') {
-            return !!(item.before_photo_url && item.after_photo_url)
-          }
-          return false
-        })
+        const progress = calculateChecklistProgress(checklist)
+        return progress.percentage !== 100
       })
 
       if (incompleteChecklists.length > 0) {
-        const totalItems = checklists.reduce((sum, cl) => {
-          const items = cl.items as any[]
-          return sum + (items?.filter((item: any) => item.area?.trim()).length || 0)
-        }, 0)
-
-        const completedItems = checklists.reduce((sum, cl) => {
-          const items = cl.items as any[]
-          const validItems = items?.filter((item: any) => item.area?.trim()) || []
-          return sum + validItems.filter((item: any) => {
-            if (item.type === 'check') {
-              if (!item.checked) return false
-              if (item.status === 'bad' && !item.comment?.trim()) return false
-              return true
-            } else if (item.type === 'photo') {
-              return !!(item.before_photo_url && item.after_photo_url)
-            }
-            return false
-          }).length
-        }, 0)
+        // 모든 체크리스트의 진행률 계산
+        let totalItems = 0
+        let completedItems = 0
+        
+        checklists.forEach((checklist) => {
+          const progress = calculateChecklistProgress(checklist)
+          totalItems += progress.totalItems
+          completedItems += progress.completedItems
+        })
 
         const percentage = totalItems > 0 ? Math.round((completedItems / totalItems) * 100) : 0
 

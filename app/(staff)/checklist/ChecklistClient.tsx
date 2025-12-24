@@ -413,9 +413,16 @@ export default function ChecklistClient() {
               comment: item.comment?.trim() || undefined,
             }
           } else {
+            // 사진 타입 항목: 실제 타입(before_photo, after_photo, before_after_photo)을 그대로 저장
+            // 타입 정규화: 구버전 'photo' 타입을 before_after_photo로 변환
+            let photoType: string = item.type as any
+            if (photoType === 'photo') {
+              photoType = 'before_after_photo'
+            }
+            
             return {
               area: item.area.trim(),
-              type: 'photo',
+              type: photoType, // 실제 타입 저장
               before_photo_url: item.before_photo_url,
               after_photo_url: item.after_photo_url,
               comment: item.comment?.trim() || undefined,
@@ -1135,7 +1142,8 @@ export default function ChecklistClient() {
                                             </div>
                                             <div className="flex-1 min-w-0">
                                               <div className="font-medium text-gray-800 mb-2">{item.area}</div>
-                                              {item.before_photo_url && (
+                                              {/* before_photo 타입은 before_photo_url만 표시 */}
+                                              {item.type === 'before_photo' && item.before_photo_url && (
                                                 <div>
                                                   <p className="text-xs text-gray-500 mb-1">관리 전</p>
                                                   <button
@@ -1259,7 +1267,8 @@ export default function ChecklistClient() {
                                             </div>
                                             <div className="flex-1 min-w-0">
                                               <div className="font-medium text-gray-800 mb-2">{item.area}</div>
-                                              {item.after_photo_url && (
+                                              {/* after_photo 타입은 after_photo_url만 표시 */}
+                                              {item.type === 'after_photo' && item.after_photo_url && (
                                                 <div>
                                                   <p className="text-xs text-gray-500 mb-1">관리 후</p>
                                                   <button
