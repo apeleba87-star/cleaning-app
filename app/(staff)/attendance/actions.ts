@@ -307,7 +307,8 @@ export async function clockOutAction(
       const { calculateChecklistProgress } = await import('@/lib/utils/checklist')
       
       const incompleteChecklists = checklists.filter((checklist) => {
-        const progress = calculateChecklistProgress(checklist)
+        // Checklist 타입으로 타입 단언 (calculateChecklistProgress는 items만 사용)
+        const progress = calculateChecklistProgress(checklist as any)
         return progress.percentage !== 100
       })
 
@@ -317,7 +318,8 @@ export async function clockOutAction(
         let completedItems = 0
         
         checklists.forEach((checklist) => {
-          const progress = calculateChecklistProgress(checklist)
+          // Checklist 타입으로 타입 단언 (calculateChecklistProgress는 items만 사용)
+          const progress = calculateChecklistProgress(checklist as any)
           totalItems += progress.totalItems
           completedItems += progress.completedItems
         })
