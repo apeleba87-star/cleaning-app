@@ -129,7 +129,14 @@ export default function ChecklistClient() {
               store_id: template.store_id,
               user_id: template.user_id, // 원본 생성자 (업체 관리자)
               assigned_user_id: session.user.id, // 현재 사용자에게 배정
-              items: template.items,
+              // items 초기화: 체크 상태와 사진 URL을 초기값으로 설정
+              items: Array.isArray(template.items) ? template.items.map((item: any) => ({
+                ...item,
+                checked: false, // 체크 항목은 미완료 상태로 초기화
+                before_photo_url: null, // 관리전 사진 URL 초기화
+                after_photo_url: null, // 관리후 사진 URL 초기화
+                comment: item.comment || null, // 코멘트는 템플릿 값을 유지 (업체 관리자가 설정한 코멘트)
+              })) : [],
               note: template.note,
               requires_photos: template.requires_photos || false,
               review_status: 'pending' as const,
@@ -759,12 +766,21 @@ export default function ChecklistClient() {
               {(selectedChecklist as any).stores?.name || '매장'} - 체크리스트
             </h2>
             {(() => {
-              // 현재 상태의 items로 진행률 계산 (단계별로 다르게 계산)
+              // 현재 상태의 items로 진행률 계산 (모든 항목 포함)
               const checklistWithCurrentItems = {
                 ...selectedChecklist,
                 items: items
               }
-              const progress = calculateChecklistProgress(checklistWithCurrentItems, checklistStage)
+              // stage 파라미터 없이 호출하여 모든 항목(체크, 관리전사진, 관리후사진, 관리전후사진) 포함
+              const progress = calculateChecklistProgress(checklistWithCurrentItems)
+              
+              // 디버깅: 진행률 계산 결과 확인
+              console.log('Checklist progress calculation:', {
+                checklistId: selectedChecklist.id,
+                itemsCount: items.length,
+                itemsTypes: items.map(item => ({ area: item.area, type: item.type })),
+                progress
+              })
               
               // 진행률에 따른 색상 결정
               let progressColor = 'bg-red-500' // 0-30%
@@ -988,13 +1004,39 @@ export default function ChecklistClient() {
               <div className="space-y-4">
                 {completedForDate.map((checklist) => {
                   const checklistItems = Array.isArray(checklist.items) ? checklist.items : []
-                  // 사진 타입 항목을 먼저, 체크 타입 항목을 나중에 정렬
-                  const sortedChecklistItems = [...checklistItems].sort((a: any, b: any) => {
-                    let aType = a.type || 'check'
-                    let bType = b.type || 'check'
+                  
+                  // 타입 정규화 (로딩 시와 동일한 로직 적용)
+                  const normalizedItems = checklistItems.map((item: any) => {
+                    let itemType = item.type || 'check'
                     // 기존 'photo' 타입을 'before_after_photo'로 변환
-                    if (aType === 'photo') aType = 'before_after_photo'
-                    if (bType === 'photo') bType = 'before_after_photo'
+                    if (itemType === 'photo') {
+                      itemType = 'before_after_photo'
+                    }
+                    // 유효한 타입인지 확인
+                    const validTypes = ['check', 'before_photo', 'after_photo', 'before_after_photo']
+                    if (!validTypes.includes(itemType)) {
+                      console.warn('Invalid item type in completed checklist:', itemType, 'for item:', item.area)
+                      // 타입 추론 시도
+                      if (item.before_photo_url && !item.after_photo_url) {
+                        itemType = 'before_photo'
+                      } else if (!item.before_photo_url && item.after_photo_url) {
+                        itemType = 'after_photo'
+                      } else if (item.before_photo_url && item.after_photo_url) {
+                        itemType = 'before_after_photo'
+                      } else {
+                        itemType = 'check'
+                      }
+                    }
+                    return {
+                      ...item,
+                      type: itemType
+                    }
+                  })
+                  
+                  // 사진 타입 항목을 먼저, 체크 타입 항목을 나중에 정렬
+                  const sortedChecklistItems = [...normalizedItems].sort((a: any, b: any) => {
+                    const aType = a.type || 'check'
+                    const bType = b.type || 'check'
                     // 사진 타입이 체크 타입보다 먼저 오도록 정렬
                     const aIsPhoto = aType !== 'check'
                     const bIsPhoto = bType !== 'check'
@@ -1008,6 +1050,14 @@ export default function ChecklistClient() {
                     return 0
                   })
                   
+                  // 디버깅: 정규화된 항목 타입 확인
+                  console.log('Completed checklist normalized items:', {
+                    checklistId: checklist.id,
+                    originalCount: checklistItems.length,
+                    normalizedCount: normalizedItems.length,
+                    types: normalizedItems.map((item: any) => ({ area: item.area, type: item.type }))
+                  })
+                  
                   return (
                     <div
                       key={checklist.id}
@@ -1017,23 +1067,33 @@ export default function ChecklistClient() {
                         <h2 className="text-lg font-semibold mb-2">
                           {(checklist as any).stores?.name || '매장'}
                         </h2>
-                        <p className="text-sm text-gray-600">
-                          항목 수: {checklistItems.length}개
-                        </p>
-                        <div className="mt-2">
-                          <div className="flex items-center justify-between text-sm mb-1">
-                            <span className="text-gray-600">체크리스트 진행률</span>
-                            <span className="font-semibold text-blue-600">
-                              100%
-                            </span>
-                          </div>
-                          <div className="w-full bg-gray-200 rounded-full h-2">
-                            <div
-                              className="bg-blue-600 h-2 rounded-full"
-                              style={{ width: '100%' }}
-                            ></div>
-                          </div>
-                        </div>
+                        {(() => {
+                          const progress = calculateChecklistProgress(checklist)
+                          return (
+                            <>
+                              <p className="text-sm text-gray-600">
+                                항목 수: {progress.totalItems}개 (진행률 계산 기준)
+                              </p>
+                              <div className="mt-2">
+                                <div className="flex items-center justify-between text-sm mb-1">
+                                  <span className="text-gray-600">체크리스트 진행률</span>
+                                  <span className="font-semibold text-blue-600">
+                                    100%
+                                  </span>
+                                </div>
+                                <div className="w-full bg-gray-200 rounded-full h-2">
+                                  <div
+                                    className="bg-blue-600 h-2 rounded-full"
+                                    style={{ width: '100%' }}
+                                  ></div>
+                                </div>
+                                <p className="text-xs text-gray-500 mt-1">
+                                  {progress.completedItems} / {progress.totalItems} 완료
+                                </p>
+                              </div>
+                            </>
+                          )
+                        })()}
                         {checklist.note && (
                           <p className="text-sm text-gray-600 mt-2 p-2 bg-gray-50 rounded">
                             비고: {checklist.note}
@@ -1368,9 +1428,6 @@ export default function ChecklistClient() {
                       <h2 className="text-lg font-semibold mb-2">
                         {(checklist as any).stores?.name || '매장'}
                       </h2>
-                      <p className="text-sm text-gray-600">
-                        항목 수: {Array.isArray(checklist.items) ? checklist.items.length : 0}개
-                      </p>
                       {(() => {
                         const progress = calculateChecklistProgress(checklist)
                         const isCompleted = progress.percentage === 100
@@ -1387,23 +1444,28 @@ export default function ChecklistClient() {
                         }
                         
                         return (
-                          <div className="mt-2">
-                            <div className="flex items-center justify-between text-sm mb-1">
-                              <span className="text-gray-600">체크리스트 진행률</span>
-                              <span className={`font-semibold ${textColor}`}>
-                                {progress.percentage}%
-                              </span>
-                            </div>
-                            <div className="w-full bg-gray-200 rounded-full h-2">
-                              <div
-                                className={`${progressColor} h-2 rounded-full transition-all`}
-                                style={{ width: `${progress.percentage}%` }}
-                              ></div>
-                            </div>
-                            <p className="text-xs text-gray-500 mt-1">
-                              {progress.completedItems} / {progress.totalItems} 완료
+                          <>
+                            <p className="text-sm text-gray-600">
+                              항목 수: {progress.totalItems}개 (진행률 계산 기준)
                             </p>
-                          </div>
+                            <div className="mt-2">
+                              <div className="flex items-center justify-between text-sm mb-1">
+                                <span className="text-gray-600">체크리스트 진행률</span>
+                                <span className={`font-semibold ${textColor}`}>
+                                  {progress.percentage}%
+                                </span>
+                              </div>
+                              <div className="w-full bg-gray-200 rounded-full h-2">
+                                <div
+                                  className={`${progressColor} h-2 rounded-full transition-all`}
+                                  style={{ width: `${progress.percentage}%` }}
+                                ></div>
+                              </div>
+                              <p className="text-xs text-gray-500 mt-1">
+                                {progress.completedItems} / {progress.totalItems} 완료
+                              </p>
+                            </div>
+                          </>
                         )
                       })()}
                       {checklist.requires_photos && (

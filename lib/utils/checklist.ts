@@ -14,33 +14,52 @@ export function calculateChecklistProgress(checklist: Checklist, stage?: 'before
     return { totalItems: 0, completedItems: 0, percentage: 0 }
   }
 
-  checklist.items.forEach((item: ChecklistItem) => {
-    if (item.type === 'check') {
+  checklist.items.forEach((item: ChecklistItem, index: number) => {
+    // area가 없는 항목은 제외
+    if (!item.area || !item.area.trim()) {
+      return
+    }
+    
+    // 타입 정규화 (하위 호환성)
+    let itemType = item.type || 'check'
+    if (itemType === 'photo') {
+      itemType = 'before_after_photo'
+    }
+
+    if (itemType === 'check') {
       // 체크 항목: 체크만 되면 완료
       totalItems++
       if (item.checked) {
         completedItems++
       }
-    } else if (item.type === 'before_photo') {
+    } else if (itemType === 'before_photo') {
       // 관리 전 사진: before_photo_url만 확인
+      // stage가 지정된 경우에는 해당 단계에서만 계산, 아니면 항상 계산
       if (!stage || stage === 'before') {
         totalItems++
         if (item.before_photo_url) {
           completedItems++
         }
       }
-    } else if (item.type === 'after_photo') {
+    } else if (itemType === 'after_photo') {
       // 관리 후 사진: after_photo_url만 확인
-      if (!stage || stage === 'after') {
+      // stage가 없으면 항상 계산, stage가 있으면 해당 단계에서만 계산
+      if (!stage) {
+        totalItems++
+        if (item.after_photo_url) {
+          completedItems++
+        }
+      } else if (stage === 'after') {
         totalItems++
         if (item.after_photo_url) {
           completedItems++
         }
       }
-    } else if (item.type === 'before_after_photo') {
+      // stage === 'before'일 때는 관리후 사진은 카운트하지 않음
+    } else if (itemType === 'before_after_photo') {
       // 관리 전/후 사진: 단계별로 다르게 계산
       if (!stage) {
-        // 단계가 지정되지 않으면 둘 다 계산
+        // stage가 지정되지 않으면 모든 항목(관리전 + 관리후) 계산
         totalItems += 2
         if (item.before_photo_url) {
           completedItems++

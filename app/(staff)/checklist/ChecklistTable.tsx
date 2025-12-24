@@ -79,9 +79,18 @@ export function ChecklistTable({ items, storeId, onItemsChange, onCameraModeRequ
         }
         return shouldShow
       }
-      // 체크 항목
+      // 체크 항목: 관리전 사진이 모두 완료된 후에만 표시
       if (item.type === 'check') {
-        return true // 체크 항목은 항상 표시
+        // 관리전 사진 항목들 확인
+        const beforePhotoItems = items.filter(i => 
+          (i.type === 'before_photo' || i.type === 'before_after_photo') && i.area?.trim()
+        )
+        // 관리전 사진이 모두 완료되었을 때만 체크 항목 표시
+        const hasAllBeforePhotos = beforePhotoItems.length === 0 || beforePhotoItems.every(i => i.before_photo_url)
+        if (!hasAllBeforePhotos) {
+          console.log('⚠️ Hiding check item until all before photos are completed:', item.area)
+        }
+        return hasAllBeforePhotos
       }
       // 알 수 없는 타입
       console.warn('⚠️ Unknown item type:', item.type, 'for item:', item.area)

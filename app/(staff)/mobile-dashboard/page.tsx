@@ -144,25 +144,14 @@ export default function MobileDashboardPage() {
       return
     }
 
+    // calculateChecklistProgress 함수 사용 (모든 항목 타입 올바르게 처리)
     let totalCompleted = 0
     let totalItems = 0
 
     checklists.forEach((checklist: any) => {
-      const validItems = (checklist.items as any[]).filter((item: any) => item.area?.trim())
-      const total = validItems.length
-      const completed = validItems.filter((item: any) => {
-        if (item.type === 'check') {
-          if (!item.checked) return false
-          if (item.status === 'bad' && !item.comment?.trim()) return false
-          return true
-        } else if (item.type === 'photo') {
-          return !!(item.before_photo_url && item.after_photo_url)
-        }
-        return false
-      }).length
-
-      totalCompleted += completed
-      totalItems += total
+      const progress = calculateChecklistProgress(checklist)
+      totalCompleted += progress.completedItems
+      totalItems += progress.totalItems
     })
 
     const percentage = totalItems > 0 ? Math.round((totalCompleted / totalItems) * 100) : 0
@@ -643,25 +632,14 @@ export default function MobileDashboardPage() {
           return { storeId: store.id, progress: null }
         }
 
+        // calculateChecklistProgress 함수 사용 (모든 항목 타입 올바르게 처리)
         let totalCompleted = 0
         let totalItems = 0
 
         checklists.forEach((checklist: any) => {
-          const validItems = (checklist.items as any[]).filter((item: any) => item.area?.trim())
-          const total = validItems.length
-          const completed = validItems.filter((item: any) => {
-            if (item.type === 'check') {
-              if (!item.checked) return false
-              if (item.status === 'bad' && !item.comment?.trim()) return false
-              return true
-            } else if (item.type === 'photo') {
-              return !!(item.before_photo_url && item.after_photo_url)
-            }
-            return false
-          }).length
-
-          totalCompleted += completed
-          totalItems += total
+          const progress = calculateChecklistProgress(checklist)
+          totalCompleted += progress.completedItems
+          totalItems += progress.totalItems
         })
 
         const percentage = totalItems > 0 ? Math.round((totalCompleted / totalItems) * 100) : 0
