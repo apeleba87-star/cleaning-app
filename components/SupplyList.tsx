@@ -31,7 +31,6 @@ export function SupplyList({ supplies, onStatusChange, userRole = 'staff' }: Sup
     const actions: Array<{ label: string; status: SupplyRequestStatus }> = [
       { label: '입고', status: 'received' },
       { label: '완료', status: 'completed' },
-      { label: '거부', status: 'rejected' },
     ]
 
     return (
