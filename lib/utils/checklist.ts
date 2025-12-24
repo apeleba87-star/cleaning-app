@@ -21,7 +21,8 @@ export function calculateChecklistProgress(checklist: Checklist, stage?: 'before
     }
     
     // 타입 정규화 (하위 호환성)
-    let itemType = item.type || 'check'
+    // 구버전 'photo' 타입을 처리하기 위해 any로 캐스팅
+    let itemType: string = (item.type as any) || 'check'
     if (itemType === 'photo') {
       itemType = 'before_after_photo'
     }
