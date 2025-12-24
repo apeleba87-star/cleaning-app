@@ -126,7 +126,7 @@ export async function GET(request: NextRequest) {
         })
 
         // user_id 목록 수집
-        const userIds = [...new Set(requestsWithUsers.filter(r => !r.users && r.user_id).map(r => r.user_id))]
+        const userIds = Array.from(new Set(requestsWithUsers.filter(r => !r.users && r.user_id).map(r => r.user_id)))
         
         if (userIds.length > 0) {
           // service role key로 users 정보 조회
