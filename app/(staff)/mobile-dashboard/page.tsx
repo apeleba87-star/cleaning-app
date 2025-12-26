@@ -1958,6 +1958,22 @@ export default function MobileDashboardPage() {
               <div className="text-gray-400 text-xl">›</div>
             </div>
           </Link>
+
+          <Link
+            href="/product-search"
+            className="block bg-white rounded-lg shadow-md p-3 sm:p-4 hover:shadow-lg transition-shadow"
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 sm:w-12 sm:h-12 bg-purple-500 rounded-lg flex items-center justify-center text-xl sm:text-2xl flex-shrink-0">
+                🔍
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="font-semibold text-sm sm:text-base">바코드 제품 찾기</div>
+                <div className="text-xs sm:text-sm text-gray-600">바코드 스캔 또는 제품명 검색</div>
+              </div>
+              <div className="text-gray-400 text-xl">›</div>
+            </div>
+          </Link>
         </div>
       </div>
 
