@@ -24,6 +24,7 @@ export default function ProductList({ initialProducts }: ProductListProps) {
   const [searchTerm, setSearchTerm] = useState('')
   const [showForm, setShowForm] = useState(false)
   const [editingProduct, setEditingProduct] = useState<Product | null>(null)
+  const [selectedProducts, setSelectedProducts] = useState<Set<string>>(new Set())
 
   const loadProducts = async () => {
     setLoading(true)
@@ -76,11 +77,78 @@ export default function ProductList({ initialProducts }: ProductListProps) {
       }
 
       setProducts(products.filter(p => p.id !== productId))
+      setSelectedProducts(prev => {
+        const next = new Set(prev)
+        next.delete(productId)
+        return next
+      })
     } catch (err: any) {
       setError(err.message)
     } finally {
       setLoading(false)
     }
+  }
+
+  const handleBulkDelete = async () => {
+    if (selectedProducts.size === 0) {
+      setError('삭제할 제품을 선택해주세요.')
+      return
+    }
+
+    const count = selectedProducts.size
+    if (!confirm(`정말 선택한 ${count}개의 제품을 삭제하시겠습니까?`)) {
+      return
+    }
+
+    setLoading(true)
+    setError(null)
+
+    try {
+      const deletePromises = Array.from(selectedProducts).map(productId =>
+        fetch(`/api/business/products/${productId}`, {
+          method: 'DELETE'
+        })
+      )
+
+      const responses = await Promise.all(deletePromises)
+      const results = await Promise.all(responses.map(async r => {
+        const data = await r.json()
+        return { ok: r.ok, data }
+      }))
+
+      const failed = results.filter(r => !r.ok)
+      if (failed.length > 0) {
+        const errorMessages = failed.map(r => r.data?.error || '알 수 없는 오류').join(', ')
+        throw new Error(`${failed.length}개의 제품 삭제에 실패했습니다: ${errorMessages}`)
+      }
+
+      setProducts(products.filter(p => !selectedProducts.has(p.id)))
+      setSelectedProducts(new Set())
+    } catch (err: any) {
+      setError(err.message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleSelectAll = (checked: boolean) => {
+    if (checked) {
+      setSelectedProducts(new Set(products.map(p => p.id)))
+    } else {
+      setSelectedProducts(new Set())
+    }
+  }
+
+  const handleSelectProduct = (productId: string, checked: boolean) => {
+    setSelectedProducts(prev => {
+      const next = new Set(prev)
+      if (checked) {
+        next.add(productId)
+      } else {
+        next.delete(productId)
+      }
+      return next
+    })
   }
 
   const handleFormSuccess = () => {
@@ -94,9 +162,35 @@ export default function ProductList({ initialProducts }: ProductListProps) {
     setEditingProduct(null)
   }
 
+  const handleDownloadTemplate = () => {
+    // CSV 템플릿 생성
+    const headers = ['제품명', '바코드', '1차카테고리', '2차카테고리', '이미지URL']
+    const sampleRows = [
+      ['콜라 아이스', '1234567890123', '일회용', '음료', ''],
+      ['펄스 피치 아이스', '2345678901234', '일회용', '음료', '']
+    ]
+    
+    const csvContent = [
+      headers.join(','),
+      ...sampleRows.map(row => row.map(cell => `"${cell}"`).join(','))
+    ].join('\n')
+    
+    // BOM 추가 (한글 깨짐 방지)
+    const BOM = '\uFEFF'
+    const blob = new Blob([BOM + csvContent], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = '제품_마스터_등록_템플릿.csv'
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    URL.revokeObjectURL(url)
+  }
+
   return (
     <div className="space-y-4">
-      <div className="flex justify-between items-center">
+      <div className="flex justify-between items-center gap-4">
         <div className="flex-1 max-w-md">
           <input
             type="text"
@@ -106,15 +200,32 @@ export default function ProductList({ initialProducts }: ProductListProps) {
             className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
         </div>
-        <button
-          onClick={() => {
-            setEditingProduct(null)
-            setShowForm(true)
-          }}
-          className="ml-4 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
-        >
-          + 새 제품 추가
-        </button>
+        <div className="flex gap-2">
+          {selectedProducts.size > 0 && (
+            <button
+              onClick={handleBulkDelete}
+              disabled={loading}
+              className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 disabled:bg-gray-400 transition-colors"
+            >
+              선택 삭제 ({selectedProducts.size})
+            </button>
+          )}
+          <button
+            onClick={handleDownloadTemplate}
+            className="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 transition-colors"
+          >
+            📥 형식 다운로드
+          </button>
+          <button
+            onClick={() => {
+              setEditingProduct(null)
+              setShowForm(true)
+            }}
+            className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+          >
+            + 새 제품 추가
+          </button>
+        </div>
       </div>
 
       {error && (
@@ -140,6 +251,14 @@ export default function ProductList({ initialProducts }: ProductListProps) {
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
               <tr>
+                <th className="px-6 py-3 text-left">
+                  <input
+                    type="checkbox"
+                    checked={products.length > 0 && selectedProducts.size === products.length}
+                    onChange={(e) => handleSelectAll(e.target.checked)}
+                    className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                  />
+                </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   제품명
                 </th>
@@ -160,13 +279,21 @@ export default function ProductList({ initialProducts }: ProductListProps) {
             <tbody className="bg-white divide-y divide-gray-200">
               {products.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="px-6 py-8 text-center text-gray-500">
+                  <td colSpan={6} className="px-6 py-8 text-center text-gray-500">
                     등록된 제품이 없습니다.
                   </td>
                 </tr>
               ) : (
                 products.map((product) => (
                   <tr key={product.id} className="hover:bg-gray-50">
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <input
+                        type="checkbox"
+                        checked={selectedProducts.has(product.id)}
+                        onChange={(e) => handleSelectProduct(product.id, e.target.checked)}
+                        className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                      />
+                    </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="text-sm font-medium text-gray-900">{product.name}</div>
                     </td>

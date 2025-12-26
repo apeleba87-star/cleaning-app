@@ -31,16 +31,13 @@ export default function ProductSearchPage() {
   const [user, setUser] = useState<any>(null)
   const [stores, setStores] = useState<Store[]>([])
   const [selectedStoreId, setSelectedStoreId] = useState<string>('')
-  const [searchType, setSearchType] = useState<'barcode' | 'name'>('barcode')
   const [searchValue, setSearchValue] = useState('')
   const [products, setProducts] = useState<Product[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [scanning, setScanning] = useState(false)
-  const videoRef = useRef<HTMLVideoElement>(null)
-  const streamRef = useRef<MediaStream | null>(null)
-  const scanIntervalRef = useRef<NodeJS.Timeout | null>(null)
   const html5QrCodeRef = useRef<Html5Qrcode | null>(null)
+  const searchInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     loadUserAndStores()
@@ -118,16 +115,10 @@ export default function ProductSearchPage() {
         store_id: selectedStoreId,
       })
 
-      // 바코드 모드인데 숫자가 아닌 텍스트를 입력한 경우 자동으로 제품명 검색으로 전환
+      // 스마트 전환: 숫자만 입력하면 바코드, 텍스트면 제품명
       const isNumeric = /^\d+$/.test(searchValue.trim())
-      let actualSearchType = searchType
       
-      if (searchType === 'barcode' && !isNumeric) {
-        // 바코드는 보통 숫자이므로, 텍스트면 제품명 검색으로 자동 전환
-        actualSearchType = 'name'
-      }
-
-      if (actualSearchType === 'barcode') {
+      if (isNumeric) {
         params.append('barcode', searchValue.trim())
       } else {
         params.append('name', searchValue.trim())
@@ -162,7 +153,6 @@ export default function ProductSearchPage() {
       // 카메라 권한 확인
       try {
         const stream = await navigator.mediaDevices.getUserMedia({ video: true })
-        // 권한이 있으면 스트림 즉시 종료 (테스트용)
         stream.getTracks().forEach(track => track.stop())
       } catch (permissionError: any) {
         console.error('Camera permission error:', permissionError)
@@ -178,33 +168,29 @@ export default function ProductSearchPage() {
       // 바코드 스캔 시작
       await html5QrCode.start(
         {
-          facingMode: 'environment' // 후면 카메라 사용
+          facingMode: 'environment'
         },
         {
-          fps: 10, // 초당 프레임
-          qrbox: { width: 250, height: 250 }, // 스캔 영역
+          fps: 10,
+          qrbox: { width: 250, height: 250 },
           aspectRatio: 1.0
         },
         (decodedText, decodedResult) => {
-          // 바코드 인식 성공
           console.log('Barcode detected:', decodedText)
           setSearchValue(decodedText)
           stopBarcodeScan()
           
-          // 자동으로 검색 실행
           setTimeout(() => {
             handleSearch()
           }, 500)
         },
         (errorMessage) => {
           // 에러는 무시 (계속 스캔 시도)
-          // console.log('Scan error:', errorMessage)
         }
       )
     } catch (error: any) {
       console.error('Barcode scan error:', error)
       
-      // 에러 메시지 개선
       let errorMessage = '카메라를 시작할 수 없습니다.'
       if (error.name === 'NotAllowedError' || error.name === 'PermissionDeniedError') {
         errorMessage = '카메라 접근 권한이 거부되었습니다. 브라우저 설정에서 카메라 권한을 허용해주세요.'
@@ -229,18 +215,16 @@ export default function ProductSearchPage() {
       }
       html5QrCodeRef.current = null
     }
-    if (scanIntervalRef.current) {
-      clearInterval(scanIntervalRef.current)
-      scanIntervalRef.current = null
-    }
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach(track => track.stop())
-      streamRef.current = null
-    }
-    if (videoRef.current) {
-      videoRef.current.srcObject = null
-    }
     setScanning(false)
+  }
+
+  const resetSearch = () => {
+    setSearchValue('')
+    setProducts([])
+    setError(null)
+    if (searchInputRef.current) {
+      searchInputRef.current.focus()
+    }
   }
 
   useEffect(() => {
@@ -252,131 +236,87 @@ export default function ProductSearchPage() {
   return (
     <div className="min-h-screen bg-gray-50 pb-20">
       {/* 헤더 */}
-      <div className="bg-white border-b border-gray-200 px-4 py-4">
+      <div className="bg-white border-b border-gray-200 px-4 py-4 sticky top-0 z-10">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <Link href="/mobile-dashboard" className="text-gray-600">
+            <Link href="/mobile-dashboard" className="text-gray-600 text-xl">
               ←
             </Link>
-            <h1 className="text-lg font-semibold">바코드 제품 찾기</h1>
+            <h1 className="text-lg font-semibold">제품 위치 찾기</h1>
           </div>
         </div>
       </div>
 
-      <div className="px-4 py-6 space-y-4">
-        {/* 매장 선택 */}
-        <div className="bg-white rounded-lg shadow-md p-4">
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            매장 선택
-          </label>
-          <select
-            value={selectedStoreId}
-            onChange={(e) => setSelectedStoreId(e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-          >
-            <option value="">매장을 선택하세요</option>
-            {stores.map((store) => (
-              <option key={store.id} value={store.id}>
-                {store.name}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        {/* 검색 타입 선택 */}
-        <div className="bg-white rounded-lg shadow-md p-4">
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            검색 방법
-          </label>
-          <div className="flex gap-2">
-            <button
-              onClick={() => {
-                setSearchType('barcode')
-                setSearchValue('')
-                setProducts([])
-              }}
-              className={`flex-1 px-4 py-2 rounded-md font-medium transition-colors ${
-                searchType === 'barcode'
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-gray-200 text-gray-700'
-              }`}
+      <div className="px-4 py-4 space-y-4">
+        {/* 매장 선택 - 간소화 */}
+        {stores.length > 1 && (
+          <div className="bg-white rounded-lg shadow-md p-3">
+            <select
+              value={selectedStoreId}
+              onChange={(e) => setSelectedStoreId(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
             >
-              바코드
-            </button>
-            <button
-              onClick={() => {
-                setSearchType('name')
-                setSearchValue('')
-                setProducts([])
-              }}
-              className={`flex-1 px-4 py-2 rounded-md font-medium transition-colors ${
-                searchType === 'name'
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-gray-200 text-gray-700'
-              }`}
-            >
-              제품명
-            </button>
+              {stores.map((store) => (
+                <option key={store.id} value={store.id}>
+                  {store.name}
+                </option>
+              ))}
+            </select>
           </div>
-        </div>
+        )}
 
-        {/* 검색 입력 */}
-        <div className="bg-white rounded-lg shadow-md p-4">
-          {searchType === 'barcode' ? (
-            <div className="space-y-3">
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  value={searchValue}
-                  onChange={(e) => setSearchValue(e.target.value)}
-                  onKeyPress={(e) => {
-                    if (e.key === 'Enter') {
-                      handleSearch()
-                    }
-                  }}
-                  placeholder="바코드를 입력하거나 스캔하세요"
-                  className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-                <button
-                  onClick={scanning ? stopBarcodeScan : startBarcodeScan}
-                  className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors"
-                >
-                  {scanning ? '스캔 중지' : '📷 스캔'}
-                </button>
-              </div>
-              {scanning && (
-                <div className="relative">
-                  <div id="barcode-scanner" className="w-full rounded-md min-h-[300px]"></div>
-                  <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                    <div className="border-2 border-blue-500 w-64 h-64 rounded-lg"></div>
-                    <p className="mt-4 text-white bg-black bg-opacity-50 px-4 py-2 rounded text-sm">
-                      바코드를 카메라에 비춰주세요
-                    </p>
-                  </div>
-                </div>
-              )}
+        {/* 통합 검색 영역 - 상단 고정 */}
+        <div className="bg-white rounded-lg shadow-md p-4 sticky top-[73px] z-10">
+          <div className="flex gap-2">
+            {/* 바코드 스캔 버튼 */}
+            <button
+              onClick={scanning ? stopBarcodeScan : startBarcodeScan}
+              className={`px-4 py-3 rounded-lg font-medium transition-colors flex-shrink-0 ${
+                scanning
+                  ? 'bg-red-600 text-white'
+                  : 'bg-green-600 text-white hover:bg-green-700'
+              }`}
+            >
+              {scanning ? '⏹ 중지' : '📷 스캔'}
+            </button>
+            
+            {/* 통합 검색 입력창 */}
+            <div className="flex-1 flex gap-2">
+              <input
+                ref={searchInputRef}
+                type="text"
+                value={searchValue}
+                onChange={(e) => setSearchValue(e.target.value)}
+                onKeyPress={(e) => {
+                  if (e.key === 'Enter') {
+                    handleSearch()
+                  }
+                }}
+                placeholder="바코드 또는 제품명 입력"
+                className="flex-1 px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-base"
+              />
+              <button
+                onClick={handleSearch}
+                disabled={loading || !selectedStoreId || !searchValue.trim()}
+                className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors font-medium"
+              >
+                {loading ? '...' : '검색'}
+              </button>
             </div>
-          ) : (
-            <input
-              type="text"
-              value={searchValue}
-              onChange={(e) => setSearchValue(e.target.value)}
-              onKeyPress={(e) => {
-                if (e.key === 'Enter') {
-                  handleSearch()
-                }
-              }}
-              placeholder="제품명을 입력하세요"
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
+          </div>
+
+          {/* 스캔 중일 때 카메라 화면 */}
+          {scanning && (
+            <div className="mt-4 relative">
+              <div id="barcode-scanner" className="w-full rounded-lg min-h-[300px] bg-black"></div>
+              <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                <div className="border-2 border-blue-500 w-64 h-64 rounded-lg"></div>
+                <p className="mt-4 text-white bg-black bg-opacity-70 px-4 py-2 rounded text-sm">
+                  바코드를 카메라에 비춰주세요
+                </p>
+              </div>
+            </div>
           )}
-          <button
-            onClick={handleSearch}
-            disabled={loading || !selectedStoreId || !searchValue.trim()}
-            className="w-full mt-3 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
-          >
-            {loading ? '검색 중...' : '검색'}
-          </button>
         </div>
 
         {/* 에러 메시지 */}
@@ -386,69 +326,67 @@ export default function ProductSearchPage() {
           </div>
         )}
 
-        {/* 검색 결과 */}
+        {/* 검색 결과 - 위치 정보 중심 */}
         {products.length > 0 && (
           <div className="space-y-4">
             {products.map((product) => (
               <div
                 key={product.id}
-                className="bg-white rounded-lg shadow-md p-4"
+                className="bg-white rounded-lg shadow-md p-5"
               >
-                {/* 제품 정보 */}
-                <div className="flex gap-4 mb-4">
+                {/* 제품 기본 정보 - 간소화 */}
+                <div className="flex gap-3 mb-4">
                   {product.image_url ? (
                     <img
                       src={product.image_url}
                       alt={product.name}
-                      className="w-24 h-24 object-cover rounded-lg"
+                      className="w-16 h-16 object-cover rounded-lg flex-shrink-0"
                     />
                   ) : (
-                    <div className="w-24 h-24 bg-gray-200 rounded-lg flex items-center justify-center">
-                      <span className="text-4xl">📦</span>
+                    <div className="w-16 h-16 bg-gray-200 rounded-lg flex items-center justify-center flex-shrink-0">
+                      <span className="text-2xl">📦</span>
                     </div>
                   )}
-                  <div className="flex-1">
-                    <h3 className="text-lg font-semibold mb-1">{product.name}</h3>
+                  <div className="flex-1 min-w-0">
+                    <h3 className="text-base font-semibold mb-1 truncate">{product.name}</h3>
                     {product.barcode && (
-                      <p className="text-sm text-gray-600 mb-1">
-                        바코드: {product.barcode}
-                      </p>
-                    )}
-                    {(product.category_1 || product.category_2) && (
                       <p className="text-xs text-gray-500">
-                        {product.category_1} {product.category_2 && `> ${product.category_2}`}
+                        바코드: {product.barcode}
                       </p>
                     )}
                   </div>
                 </div>
 
-                {/* 위치 정보 */}
+                {/* 위치 정보 - 가장 크고 명확하게 */}
                 {product.locations.length > 0 ? (
                   <div className="border-t pt-4">
-                    <h4 className="text-sm font-medium text-gray-700 mb-2">📍 위치 정보</h4>
-                    <div className="space-y-2">
+                    <div className="space-y-3">
                       {product.locations.map((location, idx) => (
                         <div
                           key={idx}
-                          className={`p-3 rounded-lg ${
+                          className={`p-4 rounded-xl ${
                             location.is_available
-                              ? 'bg-blue-50 border border-blue-200'
-                              : 'bg-gray-50 border border-gray-200 opacity-60'
+                              ? 'bg-blue-50 border-2 border-blue-500'
+                              : 'bg-gray-50 border-2 border-gray-300 opacity-60'
                           }`}
                         >
-                          <div className="flex items-center justify-between">
-                            <div>
-                              <p className="font-semibold text-blue-600">
-                                {location.vending_machine_number}번 자판기 / {location.position_number}번
-                              </p>
-                              <p className="text-xs text-gray-600 mt-1">
-                                재고: {location.stock_quantity}개
-                              </p>
+                          <div className="text-center">
+                            {/* 위치 정보 - 가장 크게 표시 */}
+                            <div className="text-3xl font-bold text-blue-600 mb-2">
+                              {location.vending_machine_number}번 자판기
+                            </div>
+                            <div className="text-2xl font-bold text-blue-700 mb-2">
+                              {location.position_number}번
+                            </div>
+                            <div className="text-sm text-gray-600">
+                              재고: {location.stock_quantity}개
                             </div>
                             {!location.is_available && (
-                              <span className="px-2 py-1 bg-red-100 text-red-700 text-xs rounded">
-                                품절
-                              </span>
+                              <div className="mt-2">
+                                <span className="px-3 py-1 bg-red-100 text-red-700 text-sm rounded-full font-medium">
+                                  품절
+                                </span>
+                              </div>
                             )}
                           </div>
                         </div>
@@ -456,12 +394,22 @@ export default function ProductSearchPage() {
                     </div>
                   </div>
                 ) : (
-                  <div className="border-t pt-4">
-                    <p className="text-sm text-gray-500 text-center py-2">
+                  <div className="border-t pt-4 text-center">
+                    <p className="text-gray-500 text-sm py-2">
                       위치 정보가 없습니다.
                     </p>
                   </div>
                 )}
+
+                {/* 다시 검색 버튼 */}
+                <div className="mt-4 pt-4 border-t">
+                  <button
+                    onClick={resetSearch}
+                    className="w-full px-4 py-3 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors font-medium"
+                  >
+                    다시 검색
+                  </button>
+                </div>
               </div>
             ))}
           </div>
@@ -470,4 +418,3 @@ export default function ProductSearchPage() {
     </div>
   )
 }
-

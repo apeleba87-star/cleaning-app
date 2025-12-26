@@ -69,8 +69,10 @@ export async function POST(request: NextRequest) {
 
     // 헤더 확인
     const header = lines[0]
-    const expectedColumns = ['회사명', '지점명', '하드웨어명', '1차카테고리', '2차카테고리', '상품명', '재고', '위치']
     const headerColumns = header.split(',').map(col => col.replace(/"/g, '').trim())
+    
+    // 바코드 컬럼 존재 여부 확인
+    const hasBarcodeColumn = headerColumns.includes('바코드') || headerColumns.includes('barcode')
     
     // CSV 파싱
     const rows: Array<{
@@ -80,6 +82,7 @@ export async function POST(request: NextRequest) {
       '1차카테고리': string
       '2차카테고리': string
       상품명: string
+      바코드?: string
       재고: number
       위치: string
     }> = []
@@ -104,17 +107,36 @@ export async function POST(request: NextRequest) {
       }
       values.push(current.trim()) // 마지막 값
       
-      if (values.length >= 8) {
-        rows.push({
-          회사명: values[0].replace(/"/g, ''),
-          지점명: values[1].replace(/"/g, ''),
-          하드웨어명: values[2].replace(/"/g, ''),
-          '1차카테고리': values[3].replace(/"/g, ''),
-          '2차카테고리': values[4].replace(/"/g, ''),
-          상품명: values[5].replace(/"/g, ''),
-          재고: parseInt(values[6]) || 0,
-          위치: values[7].replace(/"/g, '')
-        })
+      // 바코드 컬럼이 있는 경우와 없는 경우를 구분하여 파싱
+      if (hasBarcodeColumn) {
+        // 바코드 컬럼이 있는 경우: 회사명, 지점명, 하드웨어명, 1차카테고리, 2차카테고리, 상품명, 바코드, 재고, 위치
+        if (values.length >= 9) {
+          rows.push({
+            회사명: values[0].replace(/"/g, ''),
+            지점명: values[1].replace(/"/g, ''),
+            하드웨어명: values[2].replace(/"/g, ''),
+            '1차카테고리': values[3].replace(/"/g, ''),
+            '2차카테고리': values[4].replace(/"/g, ''),
+            상품명: values[5].replace(/"/g, ''),
+            바코드: values[6].replace(/"/g, '').trim() || undefined,
+            재고: parseInt(values[7]) || 0,
+            위치: values[8].replace(/"/g, '')
+          })
+        }
+      } else {
+        // 바코드 컬럼이 없는 경우: 기존 형식
+        if (values.length >= 8) {
+          rows.push({
+            회사명: values[0].replace(/"/g, ''),
+            지점명: values[1].replace(/"/g, ''),
+            하드웨어명: values[2].replace(/"/g, ''),
+            '1차카테고리': values[3].replace(/"/g, ''),
+            '2차카테고리': values[4].replace(/"/g, ''),
+            상품명: values[5].replace(/"/g, ''),
+            재고: parseInt(values[6]) || 0,
+            위치: values[7].replace(/"/g, '')
+          })
+        }
       }
     }
 
@@ -301,23 +323,68 @@ export async function POST(request: NextRequest) {
           // 상품명으로 제품 찾기
           const { data: existingProduct, error: productSearchError } = await supabase
             .from('products')
-            .select('id')
+            .select('id, barcode, category_1, category_2')
             .eq('name', row.상품명)
             .is('deleted_at', null)
             .single()
 
           if (existingProduct) {
             productId = existingProduct.id
-            productsUpdated++
+            
+            // 기존 제품 정보 업데이트 (누락된 정보만 보완)
+            const updateData: {
+              barcode?: string | null
+              category_1?: string | null
+              category_2?: string | null
+              updated_at?: string
+            } = {}
+            
+            let needsUpdate = false
+            
+            // 바코드가 없고 새 파일에 바코드가 있으면 추가
+            if (!existingProduct.barcode && row.바코드 && row.바코드.trim()) {
+              updateData.barcode = row.바코드.trim()
+              needsUpdate = true
+            }
+            
+            // 카테고리 정보 보완
+            if (!existingProduct.category_1 && row['1차카테고리'] && row['1차카테고리'].trim()) {
+              updateData.category_1 = row['1차카테고리'].trim()
+              needsUpdate = true
+            }
+            
+            if (!existingProduct.category_2 && row['2차카테고리'] && row['2차카테고리'].trim()) {
+              updateData.category_2 = row['2차카테고리'].trim()
+              needsUpdate = true
+            }
+            
+            // 업데이트가 필요한 경우에만 실행
+            if (needsUpdate) {
+              updateData.updated_at = new Date().toISOString()
+              
+              const { error: updateError } = await supabase
+                .from('products')
+                .update(updateData)
+                .eq('id', existingProduct.id)
+              
+              if (updateError) {
+                console.error(`제품 정보 업데이트 실패: ${row.상품명} - ${updateError.message}`)
+                // 업데이트 실패해도 위치 정보는 저장 가능하므로 계속 진행
+              } else {
+                productsUpdated++
+              }
+            } else {
+              productsUpdated++
+            }
           } else {
             // 제품 생성
             const { data: newProduct, error: productCreateError } = await supabase
               .from('products')
               .insert({
                 name: row.상품명,
-                barcode: null, // 바코드는 나중에 등록
-                category_1: row['1차카테고리'],
-                category_2: row['2차카테고리'],
+                barcode: (row.바코드 && row.바코드.trim()) ? row.바코드.trim() : null,
+                category_1: (row['1차카테고리'] && row['1차카테고리'].trim()) ? row['1차카테고리'].trim() : null,
+                category_2: (row['2차카테고리'] && row['2차카테고리'].trim()) ? row['2차카테고리'].trim() : null,
                 image_url: null
               })
               .select('id')

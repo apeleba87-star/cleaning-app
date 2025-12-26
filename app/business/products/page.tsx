@@ -2,7 +2,9 @@ import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { getServerUser } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import ProductUploadClient from './ProductUploadClient'
-import ProductList from './ProductList'
+import ProductMasterSection from './ProductMasterSection'
+import ProductLocationSection from './ProductLocationSection'
+import StoreProductSection from './StoreProductSection'
 
 export default async function ProductsPage() {
   const user = await getServerUser()
@@ -30,10 +32,28 @@ export default async function ProductsPage() {
     .is('deleted_at', null)
     .order('created_at', { ascending: false })
 
-  // 매장별 제품 위치 통계
+  // 매장별 제품 위치 정보 조회
   const { data: locations, error: locationsError } = await supabase
     .from('store_product_locations')
-    .select('store_id, product_id')
+    .select(`
+      id,
+      store_id,
+      product_id,
+      vending_machine_number,
+      position_number,
+      stock_quantity,
+      is_available,
+      last_updated_at,
+      stores:store_id (
+        id,
+        name
+      ),
+      products:product_id (
+        id,
+        name
+      )
+    `)
+    .order('last_updated_at', { ascending: false })
 
   const stats = {
     totalProducts: products?.length || 0,
@@ -70,10 +90,16 @@ export default async function ProductsPage() {
       </div>
 
       {/* 제품 목록 및 관리 */}
-      <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-        <h2 className="text-lg font-semibold mb-4">제품 마스터 관리</h2>
-        <ProductList initialProducts={products || []} />
-      </div>
+      <ProductMasterSection products={products || []} />
+
+      {/* 제품 위치 정보 관리 */}
+      <ProductLocationSection 
+        initialLocations={locations || []} 
+        stores={stores || []} 
+      />
+
+      {/* 제품 등록 매장 관리 */}
+      <StoreProductSection stores={stores || []} />
 
       {/* CSV 파일 업로드 */}
       <div className="bg-white rounded-lg shadow-md p-6">
