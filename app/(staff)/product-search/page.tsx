@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
+import { Html5Qrcode } from 'html5-qrcode'
 
 interface Product {
   id: string
@@ -39,6 +40,7 @@ export default function ProductSearchPage() {
   const videoRef = useRef<HTMLVideoElement>(null)
   const streamRef = useRef<MediaStream | null>(null)
   const scanIntervalRef = useRef<NodeJS.Timeout | null>(null)
+  const html5QrCodeRef = useRef<Html5Qrcode | null>(null)
 
   useEffect(() => {
     loadUserAndStores()
@@ -157,27 +159,53 @@ export default function ProductSearchPage() {
       setScanning(true)
       setError(null)
 
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: 'environment' }
-      })
+      const scannerElementId = 'barcode-scanner'
+      const html5QrCode = new Html5Qrcode(scannerElementId)
+      html5QrCodeRef.current = html5QrCode
 
-      streamRef.current = stream
-
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream
-        await videoRef.current.play()
-
-        // 바코드 스캔 시도 (간단한 방법: 사용자가 Enter 키를 누르면 현재 입력값으로 검색)
-        // 실제 바코드 스캔 라이브러리 통합은 나중에 추가 가능
-        // 현재는 카메라 화면을 보여주고, 바코드를 수동으로 입력하도록 안내
-      }
+      // 바코드 스캔 시작
+      await html5QrCode.start(
+        {
+          facingMode: 'environment' // 후면 카메라 사용
+        },
+        {
+          fps: 10, // 초당 프레임
+          qrbox: { width: 250, height: 250 }, // 스캔 영역
+          aspectRatio: 1.0
+        },
+        (decodedText, decodedResult) => {
+          // 바코드 인식 성공
+          console.log('Barcode detected:', decodedText)
+          setSearchValue(decodedText)
+          stopBarcodeScan()
+          
+          // 자동으로 검색 실행
+          setTimeout(() => {
+            handleSearch()
+          }, 500)
+        },
+        (errorMessage) => {
+          // 에러는 무시 (계속 스캔 시도)
+          // console.log('Scan error:', errorMessage)
+        }
+      )
     } catch (error: any) {
-      setError('카메라 접근 권한이 필요합니다.')
+      console.error('Barcode scan error:', error)
+      setError('카메라 접근 권한이 필요합니다. 브라우저 설정에서 카메라 권한을 허용해주세요.')
       setScanning(false)
     }
   }
 
-  const stopBarcodeScan = () => {
+  const stopBarcodeScan = async () => {
+    if (html5QrCodeRef.current) {
+      try {
+        await html5QrCodeRef.current.stop()
+        await html5QrCodeRef.current.clear()
+      } catch (error) {
+        console.error('Error stopping scanner:', error)
+      }
+      html5QrCodeRef.current = null
+    }
     if (scanIntervalRef.current) {
       clearInterval(scanIntervalRef.current)
       scanIntervalRef.current = null
@@ -295,19 +323,11 @@ export default function ProductSearchPage() {
               </div>
               {scanning && (
                 <div className="relative">
-                  <video
-                    ref={videoRef}
-                    className="w-full rounded-md"
-                    autoPlay
-                    playsInline
-                  />
+                  <div id="barcode-scanner" className="w-full rounded-md min-h-[300px]"></div>
                   <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
                     <div className="border-2 border-blue-500 w-64 h-64 rounded-lg"></div>
                     <p className="mt-4 text-white bg-black bg-opacity-50 px-4 py-2 rounded text-sm">
                       바코드를 카메라에 비춰주세요
-                    </p>
-                    <p className="mt-2 text-white bg-black bg-opacity-50 px-4 py-2 rounded text-xs">
-                      (현재는 수동 입력을 사용해주세요)
                     </p>
                   </div>
                 </div>
