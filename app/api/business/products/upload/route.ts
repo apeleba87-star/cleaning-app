@@ -260,7 +260,7 @@ export async function POST(request: NextRequest) {
     })
 
     // 각 매장별로 처리
-    for (const [storeName, storeRows] of storeGroups) {
+    for (const [storeName, storeRows] of Array.from(storeGroups.entries())) {
       // 매장 ID 찾기
       let storeId: string | null = null
       

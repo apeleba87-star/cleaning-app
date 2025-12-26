@@ -16,7 +16,7 @@ try {
 - 업로드 완료 후 자동 새로고침 기능 추가
 - RLS 정책 추가 (store_name_mappings 테이블)
 - 에러 처리 및 로깅 개선
-- TypeScript 빌드 에러 수정 (Array.from 사용)`;
+- TypeScript 빌드 에러 수정 (Set/Map 순회 시 Array.from 사용)`;
   
   execSync(`git commit -m "${commitMessage}"`, { cwd: projectPath, stdio: 'inherit', encoding: 'utf8' });
   
