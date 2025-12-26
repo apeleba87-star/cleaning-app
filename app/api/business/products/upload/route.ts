@@ -223,7 +223,7 @@ export async function POST(request: NextRequest) {
         const hardwareNames = rows
           .filter(r => r.지점명 === storeName)
           .map(r => r.하드웨어명)
-        const uniqueHardware = [...new Set(hardwareNames)][0] || ''
+        const uniqueHardware = Array.from(new Set(hardwareNames))[0] || ''
         unmatchedStores.push({ 지점명: storeName, 하드웨어명: uniqueHardware })
       }
     })
