@@ -159,6 +159,18 @@ export default function ProductSearchPage() {
       setScanning(true)
       setError(null)
 
+      // 카메라 권한 확인
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: true })
+        // 권한이 있으면 스트림 즉시 종료 (테스트용)
+        stream.getTracks().forEach(track => track.stop())
+      } catch (permissionError: any) {
+        console.error('Camera permission error:', permissionError)
+        setError('카메라 접근 권한이 필요합니다. 브라우저에서 카메라 권한을 허용해주세요.')
+        setScanning(false)
+        return
+      }
+
       const scannerElementId = 'barcode-scanner'
       const html5QrCode = new Html5Qrcode(scannerElementId)
       html5QrCodeRef.current = html5QrCode
@@ -191,7 +203,18 @@ export default function ProductSearchPage() {
       )
     } catch (error: any) {
       console.error('Barcode scan error:', error)
-      setError('카메라 접근 권한이 필요합니다. 브라우저 설정에서 카메라 권한을 허용해주세요.')
+      
+      // 에러 메시지 개선
+      let errorMessage = '카메라를 시작할 수 없습니다.'
+      if (error.name === 'NotAllowedError' || error.name === 'PermissionDeniedError') {
+        errorMessage = '카메라 접근 권한이 거부되었습니다. 브라우저 설정에서 카메라 권한을 허용해주세요.'
+      } else if (error.name === 'NotFoundError' || error.name === 'DevicesNotFoundError') {
+        errorMessage = '카메라를 찾을 수 없습니다. 카메라가 연결되어 있는지 확인해주세요.'
+      } else if (error.name === 'NotReadableError' || error.name === 'TrackStartError') {
+        errorMessage = '카메라에 접근할 수 없습니다. 다른 앱에서 카메라를 사용 중일 수 있습니다.'
+      }
+      
+      setError(errorMessage)
       setScanning(false)
     }
   }
