@@ -34,7 +34,25 @@ export default function LoginPage() {
 
       if (error) {
         console.error('Login error:', error)
-        setError(error.message || '로그인에 실패했습니다.')
+        
+        // 에러 메시지를 한국어로 번역
+        let errorMessage = '로그인에 실패했습니다.'
+        if (error.message) {
+          const errorMsg = error.message.toLowerCase()
+          if (errorMsg.includes('invalid login credentials') || errorMsg.includes('invalid credentials')) {
+            errorMessage = '이메일 또는 비밀번호가 올바르지 않습니다.'
+          } else if (errorMsg.includes('email not confirmed')) {
+            errorMessage = '이메일 인증이 완료되지 않았습니다.'
+          } else if (errorMsg.includes('too many requests')) {
+            errorMessage = '너무 많은 로그인 시도가 있었습니다. 잠시 후 다시 시도해주세요.'
+          } else if (errorMsg.includes('user not found')) {
+            errorMessage = '등록되지 않은 이메일입니다.'
+          } else {
+            errorMessage = error.message
+          }
+        }
+        
+        setError(errorMessage)
         setLoading(false)
       } else if (data.session) {
         // 승인 상태 확인
@@ -81,7 +99,21 @@ export default function LoginPage() {
       }
     } catch (err: any) {
       console.error('Login exception:', err)
-      setError(err.message || '로그인 중 오류가 발생했습니다.')
+      
+      // 예외 에러 메시지를 한국어로 번역
+      let errorMessage = '로그인 중 오류가 발생했습니다.'
+      if (err.message) {
+        const errorMsg = err.message.toLowerCase()
+        if (errorMsg.includes('invalid login credentials') || errorMsg.includes('invalid credentials')) {
+          errorMessage = '이메일 또는 비밀번호가 올바르지 않습니다.'
+        } else if (errorMsg.includes('network') || errorMsg.includes('fetch')) {
+          errorMessage = '네트워크 오류가 발생했습니다. 인터넷 연결을 확인해주세요.'
+        } else {
+          errorMessage = err.message
+        }
+      }
+      
+      setError(errorMessage)
       setLoading(false)
     }
   }

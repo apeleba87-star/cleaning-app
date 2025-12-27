@@ -22,7 +22,7 @@ export async function GET(request: NextRequest) {
 
     const { data: stores, error } = await supabase
       .from('stores')
-      .select('id, name, service_amount, payment_method')
+      .select('id, name, service_amount, payment_method, payment_day')
       .eq('company_id', user.company_id)
       .is('deleted_at', null)
       .order('name')
@@ -63,6 +63,7 @@ export async function POST(request: NextRequest) {
       name,
       address,
       management_days,
+      schedule_data,
       service_amount,
       category,
       contract_start_date,
@@ -100,33 +101,41 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // insert 데이터 준비
+    const insertData: any = {
+      company_id: user.company_id,
+      franchise_id: franchise_id || null,
+      head_office_name: '개인', // 기본값으로 설정
+      parent_store_name: parent_store_name?.trim() || null,
+      name: name.trim(),
+      address: address?.trim() || null,
+      management_days: management_days?.trim() || null,
+      service_amount: service_amount ? parseFloat(service_amount) : null,
+      category: category?.trim() || null,
+      contract_start_date: contract_start_date || null,
+      contract_end_date: contract_end_date || null,
+      service_active: service_active !== undefined ? service_active : true,
+      payment_method: payment_method || null,
+      settlement_cycle: settlement_cycle || null,
+      payment_day: payment_day ? parseInt(payment_day) : null,
+      tax_invoice_required: tax_invoice_required !== undefined ? tax_invoice_required : false,
+      unpaid_tracking_enabled: unpaid_tracking_enabled !== undefined ? unpaid_tracking_enabled : false,
+      billing_memo: billing_memo?.trim() || null,
+      special_notes: special_notes?.trim() || null,
+      access_info: access_info?.trim() || null,
+      is_night_shift: is_night_shift !== undefined ? is_night_shift : false,
+      work_start_hour: work_start_hour !== undefined && work_start_hour !== null ? parseInt(work_start_hour) : 0,
+      work_end_hour: work_end_hour !== undefined && work_end_hour !== null ? parseInt(work_end_hour) : 0,
+    }
+
+    // schedule_data 컬럼이 있으면 추가 (컬럼이 없어도 에러가 나지 않도록)
+    if (schedule_data) {
+      insertData.schedule_data = schedule_data
+    }
+
     const { data: store, error } = await supabase
       .from('stores')
-      .insert({
-        company_id: user.company_id,
-        franchise_id: franchise_id || null,
-        head_office_name: '개인', // 기본값으로 설정
-        parent_store_name: parent_store_name?.trim() || null,
-        name: name.trim(),
-        address: address?.trim() || null,
-        management_days: management_days?.trim() || null,
-        service_amount: service_amount ? parseFloat(service_amount) : null,
-        category: category?.trim() || null,
-        contract_start_date: contract_start_date || null,
-        contract_end_date: contract_end_date || null,
-        service_active: service_active !== undefined ? service_active : true,
-        payment_method: payment_method || null,
-        settlement_cycle: settlement_cycle || null,
-        payment_day: payment_day ? parseInt(payment_day) : null,
-        tax_invoice_required: tax_invoice_required !== undefined ? tax_invoice_required : false,
-        unpaid_tracking_enabled: unpaid_tracking_enabled !== undefined ? unpaid_tracking_enabled : false,
-        billing_memo: billing_memo?.trim() || null,
-        special_notes: special_notes?.trim() || null,
-        access_info: access_info?.trim() || null,
-        is_night_shift: is_night_shift !== undefined ? is_night_shift : false,
-        work_start_hour: work_start_hour !== undefined && work_start_hour !== null ? parseInt(work_start_hour) : 0,
-        work_end_hour: work_end_hour !== undefined && work_end_hour !== null ? parseInt(work_end_hour) : 0,
-      })
+      .insert(insertData)
       .select()
       .single()
 

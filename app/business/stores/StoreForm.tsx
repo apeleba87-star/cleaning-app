@@ -3,6 +3,7 @@
 import { useState, FormEvent, useEffect } from 'react'
 import { Store, Franchise, CategoryTemplate, StoreContact, StoreFile } from '@/types/db'
 import { DocumentUploader } from '@/components/DocumentUploader'
+import MonthlyScheduleModal from '@/components/MonthlyScheduleModal'
 
 // StoreForm에서 사용하는 최소 필드 타입
 type StoreFormFranchise = Pick<Franchise, 'id' | 'name'>
@@ -28,9 +29,51 @@ export default function StoreForm({ store, franchises, categoryTemplates, compan
     if (!daysStr) return []
     return daysStr.split(',').map(d => d.trim()).filter(d => d.length > 0)
   }
-  const [selectedDays, setSelectedDays] = useState<string[]>(
-    parseManagementDays(store?.management_days || '')
+  
+  // 스케줄 타입 및 데이터 파싱
+  const parseScheduleData = (scheduleDataStr: string | null): any => {
+    if (!scheduleDataStr) return null
+    try {
+      return JSON.parse(scheduleDataStr)
+    } catch {
+      return null
+    }
+  }
+  
+  const initialScheduleData = parseScheduleData((store as any)?.schedule_data)
+  const [scheduleType, setScheduleType] = useState<'weekly' | 'biweekly' | 'monthly' | 'custom'>(
+    initialScheduleData?.type || (store?.management_days ? 'weekly' : 'weekly')
   )
+  const [selectedDays, setSelectedDays] = useState<string[]>(
+    initialScheduleData?.type === 'weekly' || !initialScheduleData
+      ? parseManagementDays(store?.management_days || '')
+      : []
+  )
+  // 격주 설정
+  const [biweeklyDay, setBiweeklyDay] = useState<string>(
+    initialScheduleData?.type === 'biweekly' ? initialScheduleData.dayOfWeek || '월' : '월'
+  )
+  const [biweeklyStartDate, setBiweeklyStartDate] = useState<string>(
+    initialScheduleData?.type === 'biweekly' ? initialScheduleData.startDate || '' : ''
+  )
+  // 매월 패턴 설정
+  const [monthlyPattern, setMonthlyPattern] = useState<string>(
+    initialScheduleData?.type === 'monthly' ? initialScheduleData.pattern || '' : ''
+  )
+  const [monthlyWeek, setMonthlyWeek] = useState<string>(
+    initialScheduleData?.type === 'monthly' ? initialScheduleData.week || 'first' : 'first'
+  )
+  const [monthlyDayOfWeek, setMonthlyDayOfWeek] = useState<string>(
+    initialScheduleData?.type === 'monthly' ? initialScheduleData.dayOfWeek || '월' : '월'
+  )
+  const [monthlyAdditionalDays, setMonthlyAdditionalDays] = useState<number[]>(
+    initialScheduleData?.type === 'monthly' ? initialScheduleData.additionalDays || [] : []
+  )
+  // 사용자 지정 (월별 날짜)
+  const [customSchedule, setCustomSchedule] = useState<Record<string, number[]>>(
+    initialScheduleData?.type === 'custom' ? initialScheduleData.schedule || {} : {}
+  )
+  const [showMonthlyModal, setShowMonthlyModal] = useState(false)
   const [serviceAmount, setServiceAmount] = useState(store?.service_amount?.toString() || '')
   const [category, setCategory] = useState(store?.category || '')
   // 카테고리 템플릿 선택 상태
@@ -169,7 +212,32 @@ export default function StoreForm({ store, franchises, categoryTemplates, compan
           parent_store_name: parentStoreName.trim() || null,
           name: name.trim(),
           address: address.trim() || null,
-          management_days: selectedDays.length > 0 ? selectedDays.join(',') : null,
+          management_days: scheduleType === 'weekly' && selectedDays.length > 0 ? selectedDays.join(',') : null,
+          schedule_data: (() => {
+            if (scheduleType === 'weekly') {
+              return selectedDays.length > 0 ? JSON.stringify({ type: 'weekly', days: selectedDays }) : null
+            } else if (scheduleType === 'biweekly') {
+              return biweeklyStartDate ? JSON.stringify({
+                type: 'biweekly',
+                dayOfWeek: biweeklyDay,
+                startDate: biweeklyStartDate
+              }) : null
+            } else if (scheduleType === 'monthly') {
+              return monthlyPattern ? JSON.stringify({
+                type: 'monthly',
+                pattern: monthlyPattern,
+                week: monthlyWeek,
+                dayOfWeek: monthlyDayOfWeek,
+                additionalDays: monthlyAdditionalDays
+              }) : null
+            } else if (scheduleType === 'custom') {
+              return Object.keys(customSchedule).length > 0 ? JSON.stringify({
+                type: 'custom',
+                schedule: customSchedule
+              }) : null
+            }
+            return null
+          })(),
           service_amount: serviceAmount ? parseFloat(serviceAmount) : null,
           category: category.trim() || null,
           contract_start_date: contractStartDate || null,
@@ -523,34 +591,223 @@ export default function StoreForm({ store, franchises, categoryTemplates, compan
 
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">
-            관리 요일
+            관리 주기
           </label>
-          <div className="flex flex-wrap gap-2">
-            {['월', '화', '수', '목', '금', '토', '일'].map((day) => (
+          <select
+            value={scheduleType}
+            onChange={(e) => {
+              setScheduleType(e.target.value as any)
+              // 타입 변경 시 관련 데이터 초기화
+              if (e.target.value !== 'weekly') {
+                setSelectedDays([])
+              }
+              if (e.target.value !== 'biweekly') {
+                setBiweeklyStartDate('')
+              }
+              if (e.target.value !== 'monthly') {
+                setMonthlyPattern('')
+                setMonthlyAdditionalDays([])
+              }
+              if (e.target.value !== 'custom') {
+                setCustomSchedule({})
+              }
+            }}
+            className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 mb-3"
+          >
+            <option value="weekly">매주</option>
+            <option value="biweekly">격주 (2주에 한번)</option>
+            <option value="monthly">매월 (패턴 기반)</option>
+            <option value="custom">사용자 지정 (월별 날짜)</option>
+          </select>
+
+          {/* 매주 선택 시 */}
+          {scheduleType === 'weekly' && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                관리 요일 선택
+              </label>
+              <div className="flex flex-wrap gap-2">
+                {['월', '화', '수', '목', '금', '토', '일'].map((day) => (
+                  <button
+                    key={day}
+                    type="button"
+                    onClick={() => {
+                      setSelectedDays((prev) =>
+                        prev.includes(day)
+                          ? prev.filter((d) => d !== day)
+                          : [...prev, day]
+                      )
+                    }}
+                    className={`px-4 py-2 rounded-md border transition-colors ${
+                      selectedDays.includes(day)
+                        ? 'bg-blue-600 text-white border-blue-600'
+                        : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                    }`}
+                  >
+                    {day}
+                  </button>
+                ))}
+              </div>
+              {selectedDays.length > 0 && (
+                <p className="mt-2 text-sm text-gray-500">
+                  선택된 요일: {selectedDays.join(', ')}
+                </p>
+              )}
+            </div>
+          )}
+
+          {/* 격주 선택 시 */}
+          {scheduleType === 'biweekly' && (
+            <div className="space-y-3">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  요일 선택
+                </label>
+                <select
+                  value={biweeklyDay}
+                  onChange={(e) => setBiweeklyDay(e.target.value)}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  {['월', '화', '수', '목', '금', '토', '일'].map((day) => (
+                    <option key={day} value={day}>{day}요일</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  시작일 (첫 관리일)
+                </label>
+                <input
+                  type="date"
+                  value={biweeklyStartDate}
+                  onChange={(e) => setBiweeklyStartDate(e.target.value)}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+                <p className="mt-1 text-xs text-gray-500">
+                  첫 관리일을 선택하면 그 날짜부터 격주로 계산됩니다.
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* 매월 패턴 선택 시 */}
+          {scheduleType === 'monthly' && (
+            <div className="space-y-3">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  패턴 선택
+                </label>
+                <select
+                  value={monthlyPattern}
+                  onChange={(e) => setMonthlyPattern(e.target.value)}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="">패턴 선택</option>
+                  <option value="weekday">매월 특정 주차의 요일</option>
+                  <option value="specific_days">매월 특정 날짜</option>
+                </select>
+              </div>
+
+              {monthlyPattern === 'weekday' && (
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      주차
+                    </label>
+                    <select
+                      value={monthlyWeek}
+                      onChange={(e) => setMonthlyWeek(e.target.value)}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    >
+                      <option value="first">첫째</option>
+                      <option value="second">둘째</option>
+                      <option value="third">셋째</option>
+                      <option value="fourth">넷째</option>
+                      <option value="last">마지막</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      요일
+                    </label>
+                    <select
+                      value={monthlyDayOfWeek}
+                      onChange={(e) => setMonthlyDayOfWeek(e.target.value)}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    >
+                      {['월', '화', '수', '목', '금', '토', '일'].map((day) => (
+                        <option key={day} value={day}>{day}요일</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              )}
+
+              {monthlyPattern === 'specific_days' && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    매월 관리일 (쉼표로 구분, 예: 1, 15)
+                  </label>
+                  <input
+                    type="text"
+                    value={monthlyAdditionalDays.join(', ')}
+                    onChange={(e) => {
+                      const days = e.target.value
+                        .split(',')
+                        .map(d => parseInt(d.trim()))
+                        .filter(d => !isNaN(d) && d >= 1 && d <= 31)
+                      setMonthlyAdditionalDays(days)
+                    }}
+                    placeholder="예: 1, 15"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                  <p className="mt-1 text-xs text-gray-500">
+                    매월 관리할 날짜를 입력하세요 (1-31)
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* 사용자 지정 (월별 날짜) 선택 시 */}
+          {scheduleType === 'custom' && (
+            <div>
               <button
-                key={day}
                 type="button"
-                onClick={() => {
-                  setSelectedDays((prev) =>
-                    prev.includes(day)
-                      ? prev.filter((d) => d !== day)
-                      : [...prev, day]
-                  )
-                }}
-                className={`px-4 py-2 rounded-md border transition-colors ${
-                  selectedDays.includes(day)
-                    ? 'bg-blue-600 text-white border-blue-600'
-                    : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
-                }`}
+                onClick={() => setShowMonthlyModal(true)}
+                className="w-full px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 mb-2"
               >
-                {day}
+                월별 관리일 설정
               </button>
-            ))}
-          </div>
-          {selectedDays.length > 0 && (
-            <p className="mt-2 text-sm text-gray-500">
-              선택된 요일: {selectedDays.join(', ')}
-            </p>
+              {Object.keys(customSchedule).length > 0 && (
+                <div className="p-3 bg-gray-50 rounded-md">
+                  <p className="text-sm font-medium text-gray-700 mb-1">설정된 관리일:</p>
+                  <div className="text-xs text-gray-600 space-y-1 max-h-32 overflow-y-auto">
+                    {Object.keys(customSchedule)
+                      .sort()
+                      .map(monthKey => {
+                        const [y, m] = monthKey.split('-')
+                        const days = customSchedule[monthKey]
+                        if (days.length === 0) return null
+                        return (
+                          <div key={monthKey}>
+                            {y}년 {parseInt(m)}월: {days.join('일, ')}일
+                          </div>
+                        )
+                      })}
+                  </div>
+                </div>
+              )}
+              <MonthlyScheduleModal
+                isOpen={showMonthlyModal}
+                onClose={() => setShowMonthlyModal(false)}
+                onSave={(schedule) => {
+                  setCustomSchedule(schedule)
+                  setShowMonthlyModal(false)
+                }}
+                initialSchedule={customSchedule}
+              />
+            </div>
           )}
         </div>
 

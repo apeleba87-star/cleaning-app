@@ -28,6 +28,7 @@ interface Store {
   name: string
   service_amount: number | null
   payment_method: string | null
+  payment_day: number | null
 }
 
 export default function ReceivablesPage() {
@@ -52,6 +53,14 @@ export default function ReceivablesPage() {
   const [revenueAmount, setRevenueAmount] = useState('')
   const [revenueDueDate, setRevenueDueDate] = useState('')
   const [revenueBillingMemo, setRevenueBillingMemo] = useState('')
+  const [batchMode, setBatchMode] = useState(false)
+  const [batchStores, setBatchStores] = useState<Array<{
+    storeId: string
+    storeName: string
+    amount: string
+    dueDate: string
+    checked: boolean
+  }>>([])
 
   // 수금 폼 상태
   const [receiptRevenueId, setReceiptRevenueId] = useState('')
@@ -305,6 +314,130 @@ export default function ReceivablesPage() {
     }
   }
 
+  // 납기일 자동 계산 함수
+  const calculateDueDate = (servicePeriod: string, paymentDay: number | null): string => {
+    if (!servicePeriod || !paymentDay) {
+      return ''
+    }
+
+    try {
+      // 서비스 기간 파싱 (YYYY-MM)
+      const [year, month] = servicePeriod.split('-').map(Number)
+      
+      // 다음 달 계산
+      let nextMonth = month + 1
+      let nextYear = year
+      
+      if (nextMonth > 12) {
+        nextMonth = 1
+        nextYear = year + 1
+      }
+
+      // payment_day가 해당 월에 유효한지 확인
+      const daysInMonth = new Date(nextYear, nextMonth, 0).getDate()
+      const finalDay = paymentDay > daysInMonth ? daysInMonth : paymentDay
+
+      // YYYY-MM-DD 형식으로 반환
+      return `${nextYear}-${String(nextMonth).padStart(2, '0')}-${String(finalDay).padStart(2, '0')}`
+    } catch (error) {
+      console.error('Error calculating due date:', error)
+      return ''
+    }
+  }
+
+  // 신규 매장 자동 추가 함수
+  const handleAutoAddStores = async () => {
+    if (!selectedPeriod) {
+      alert('기간을 먼저 선택해주세요.')
+      return
+    }
+
+    try {
+      // 해당 기간에 이미 청구가 등록된 매장 ID 목록
+      const registeredStoreIds = new Set(
+        revenues
+          .filter(r => r.service_period === selectedPeriod)
+          .map(r => r.store_id)
+      )
+
+      // 청구가 없는 매장들 필터링
+      const unregisteredStores = stores.filter(
+        store => !registeredStoreIds.has(store.id)
+      )
+
+      if (unregisteredStores.length === 0) {
+        alert('자동 추가할 매장이 없습니다. 모든 매장에 이미 청구가 등록되어 있습니다.')
+        return
+      }
+
+      // 배치 모드로 전환하고 매장 목록 준비
+      const batchStoresData = unregisteredStores.map(store => ({
+        storeId: store.id,
+        storeName: store.name,
+        amount: store.service_amount?.toString() || '0',
+        dueDate: calculateDueDate(selectedPeriod, store.payment_day),
+        checked: true,
+      }))
+
+      setBatchStores(batchStoresData)
+      setBatchMode(true)
+      setShowRevenueForm(true)
+    } catch (err: any) {
+      setError(err.message || '매장 자동 추가 중 오류가 발생했습니다.')
+    }
+  }
+
+  // 배치 등록 처리
+  const handleBatchSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setError(null)
+
+    const checkedStores = batchStores.filter(s => s.checked)
+    
+    if (checkedStores.length === 0) {
+      setError('등록할 매장을 최소 1개 이상 선택해주세요.')
+      return
+    }
+
+    try {
+      // 각 매장에 대해 청구 등록
+      const promises = checkedStores.map(store => 
+        fetch('/api/business/revenues', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            store_id: store.storeId,
+            service_period: revenueServicePeriod || selectedPeriod,
+            amount: parseFloat(store.amount) || 0,
+            due_date: store.dueDate || calculateDueDate(revenueServicePeriod || selectedPeriod, stores.find(s => s.id === store.storeId)?.payment_day || null),
+            billing_memo: revenueBillingMemo.trim() || null,
+          }),
+        })
+      )
+
+      const results = await Promise.allSettled(promises)
+      const failed = results.filter(r => r.status === 'rejected' || (r.status === 'fulfilled' && !r.value.ok))
+      
+      if (failed.length > 0) {
+        throw new Error(`${failed.length}개 매장의 등록에 실패했습니다.`)
+      }
+
+      // 성공 시 폼 초기화 및 목록 새로고침
+      setBatchMode(false)
+      setBatchStores([])
+      setShowRevenueForm(false)
+      resetRevenueForm()
+      await loadData()
+      await loadRevenues()
+      await loadReceipts()
+      updateAvailableStores()
+      
+      alert(`${checkedStores.length}개 매장의 매출이 등록되었습니다.`)
+    } catch (err: any) {
+      setError(err.message)
+    }
+  }
+
   const resetRevenueForm = () => {
     setRevenueStoreId('')
     setRevenueServicePeriod(selectedPeriod)
@@ -312,6 +445,8 @@ export default function ReceivablesPage() {
     setRevenueDueDate('')
     setRevenueBillingMemo('')
     setEditingRevenue(null)
+    setBatchMode(false)
+    setBatchStores([])
   }
 
   const handleEditRevenue = (revenue: Revenue) => {
@@ -485,13 +620,17 @@ export default function ReceivablesPage() {
     }).format(amount)
   }
 
-  const getStatusBadge = (status: 'unpaid' | 'partial' | 'paid') => {
+  const getStatusBadge = (status: 'unregistered' | 'unpaid' | 'partial' | 'paid' | 'no_revenue') => {
     const styles = {
+      no_revenue: 'bg-red-100 text-red-800',
+      unregistered: 'bg-orange-100 text-orange-800',
       unpaid: 'bg-red-100 text-red-800',
       partial: 'bg-yellow-100 text-yellow-800',
       paid: 'bg-green-100 text-green-800',
     }
     const labels = {
+      no_revenue: '청구 없음',
+      unregistered: '수금 미등록',
       unpaid: '미수금',
       partial: '부분수금',
       paid: '완납',
@@ -524,12 +663,11 @@ export default function ReceivablesPage() {
       </div>
 
       {error && (
-        <div className="mb-4 bg-red-50 border border-red-200 rounded-lg p-3">
-          <p className="text-red-800 text-sm">{error}</p>
+        <div className="mb-4 p-4 bg-red-100 border border-red-400 text-red-700 rounded">
+          {error}
         </div>
       )}
 
-      {/* 기간 선택 및 추가 버튼 */}
       <div className="bg-white rounded-lg shadow-md p-6 mb-6">
         <div className="flex justify-between items-center mb-4">
           <div className="flex items-center space-x-4">
@@ -540,19 +678,24 @@ export default function ReceivablesPage() {
               type="month"
               value={selectedPeriod}
               onChange={(e) => setSelectedPeriod(e.target.value)}
-              className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
           <div className="flex space-x-2">
             <button
               onClick={() => {
-                setRevenueServicePeriod(selectedPeriod)
-                updateAvailableStores()
                 setShowRevenueForm(true)
+                resetRevenueForm()
               }}
               className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
             >
               + 매출(청구) 등록
+            </button>
+            <button
+              onClick={handleAutoAddStores}
+              className="px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700"
+            >
+              + 신규 매장 자동 추가
             </button>
             <button
               onClick={() => {
@@ -570,7 +713,9 @@ export default function ReceivablesPage() {
       {showRevenueForm && (
         <div className="bg-white rounded-lg shadow-md p-6 mb-6">
           <div className="flex justify-between items-center mb-4">
-            <h2 className="text-lg font-semibold">매출(청구) 등록</h2>
+            <h2 className="text-lg font-semibold">
+              {batchMode ? '매출(청구) 일괄 등록' : editingRevenue ? '매출(청구) 수정' : '매출(청구) 등록'}
+            </h2>
             <button
               onClick={() => {
                 setShowRevenueForm(false)
@@ -581,119 +726,292 @@ export default function ReceivablesPage() {
               ✕
             </button>
           </div>
-          <form onSubmit={editingRevenue ? handleUpdateRevenue : handleRevenueSubmit} className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                매장 <span className="text-red-500">*</span>
-              </label>
-              <select
-                value={revenueStoreId}
-                onChange={(e) => {
-                  const selectedStoreId = e.target.value
-                  setRevenueStoreId(selectedStoreId)
-                  
-                  // 매장 선택 시 서비스 금액 자동 입력 (수정 모드가 아닐 때만)
-                  if (selectedStoreId && !editingRevenue) {
-                    const selectedStore = stores.find(s => s.id === selectedStoreId)
-                    if (selectedStore && selectedStore.service_amount) {
-                      setRevenueAmount(selectedStore.service_amount.toString())
-                    } else {
+          
+          {batchMode ? (
+            <form onSubmit={handleBatchSubmit} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  서비스 기간 <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="month"
+                  value={revenueServicePeriod || selectedPeriod}
+                  onChange={(e) => {
+                    setRevenueServicePeriod(e.target.value)
+                    // 기간 변경 시 모든 매장의 납기일 재계산
+                    setBatchStores(prev => prev.map(store => {
+                      const storeData = stores.find(s => s.id === store.storeId)
+                      return {
+                        ...store,
+                        dueDate: calculateDueDate(e.target.value, storeData?.payment_day || null)
+                      }
+                    }))
+                  }}
+                  required
+                  className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  청구 메모 (공통)
+                </label>
+                <textarea
+                  value={revenueBillingMemo}
+                  onChange={(e) => setRevenueBillingMemo(e.target.value)}
+                  rows={3}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="청구 관련 메모 (선택사항, 모든 매장에 공통 적용)"
+                />
+              </div>
+
+              <div className="border border-gray-300 rounded-md p-4 max-h-96 overflow-y-auto">
+                <div className="mb-2 flex items-center justify-between">
+                  <label className="text-sm font-medium text-gray-700">
+                    등록할 매장 목록 ({batchStores.filter(s => s.checked).length}/{batchStores.length})
+                  </label>
+                  <div className="flex space-x-2">
+                    <button
+                      type="button"
+                      onClick={() => setBatchStores(prev => prev.map(s => ({ ...s, checked: true })))}
+                      className="text-xs px-2 py-1 bg-gray-100 text-gray-700 rounded hover:bg-gray-200"
+                    >
+                      전체 선택
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setBatchStores(prev => prev.map(s => ({ ...s, checked: false })))}
+                      className="text-xs px-2 py-1 bg-gray-100 text-gray-700 rounded hover:bg-gray-200"
+                    >
+                      전체 해제
+                    </button>
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  {batchStores.map((store, index) => (
+                    <div key={store.storeId} className="border border-gray-200 rounded-md p-3">
+                      <div className="flex items-start space-x-3">
+                        <input
+                          type="checkbox"
+                          checked={store.checked}
+                          onChange={(e) => {
+                            setBatchStores(prev => prev.map((s, i) => 
+                              i === index ? { ...s, checked: e.target.checked } : s
+                            ))
+                          }}
+                          className="mt-1 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                        />
+                        <div className="flex-1 grid grid-cols-3 gap-3">
+                          <div>
+                            <label className="block text-xs font-medium text-gray-700 mb-1">
+                              매장명
+                            </label>
+                            <div className="text-sm text-gray-900">{store.storeName}</div>
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium text-gray-700 mb-1">
+                              청구 금액 <span className="text-red-500">*</span>
+                            </label>
+                            <input
+                              type="number"
+                              value={store.amount}
+                              onChange={(e) => {
+                                setBatchStores(prev => prev.map((s, i) => 
+                                  i === index ? { ...s, amount: e.target.value } : s
+                                ))
+                              }}
+                              required
+                              min="0"
+                              step="0.01"
+                              className="w-full px-2 py-1 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium text-gray-700 mb-1">
+                              납기일 <span className="text-red-500">*</span>
+                            </label>
+                            <input
+                              type="date"
+                              value={store.dueDate}
+                              onChange={(e) => {
+                                setBatchStores(prev => prev.map((s, i) => 
+                                  i === index ? { ...s, dueDate: e.target.value } : s
+                                ))
+                              }}
+                              required
+                              className="w-full px-2 py-1 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="flex space-x-2">
+                <button
+                  type="submit"
+                  className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+                >
+                  일괄 등록 ({batchStores.filter(s => s.checked).length}개)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowRevenueForm(false)
+                    resetRevenueForm()
+                  }}
+                  className="px-4 py-2 bg-gray-300 text-gray-700 rounded-md hover:bg-gray-400"
+                >
+                  취소
+                </button>
+              </div>
+            </form>
+          ) : (
+            <form onSubmit={editingRevenue ? handleUpdateRevenue : handleRevenueSubmit} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  매장 <span className="text-red-500">*</span>
+                </label>
+                <select
+                  value={revenueStoreId}
+                  onChange={(e) => {
+                    const selectedStoreId = e.target.value
+                    setRevenueStoreId(selectedStoreId)
+                    
+                    // 매장 선택 시 서비스 금액 및 납기일 자동 입력 (수정 모드가 아닐 때만)
+                    if (selectedStoreId && !editingRevenue) {
+                      const selectedStore = stores.find(s => s.id === selectedStoreId)
+                      if (selectedStore) {
+                        // 서비스 금액 자동 입력
+                        if (selectedStore.service_amount) {
+                          setRevenueAmount(selectedStore.service_amount.toString())
+                        } else {
+                          setRevenueAmount('')
+                        }
+                        
+                        // 납기일 자동 계산
+                        if (revenueServicePeriod && selectedStore.payment_day) {
+                          const calculatedDueDate = calculateDueDate(revenueServicePeriod, selectedStore.payment_day)
+                          if (calculatedDueDate) {
+                            setRevenueDueDate(calculatedDueDate)
+                          }
+                        }
+                      }
+                    } else if (!selectedStoreId) {
                       setRevenueAmount('')
+                      setRevenueDueDate('')
                     }
-                  } else if (!selectedStoreId) {
-                    setRevenueAmount('')
-                  }
-                }}
-                required
-                disabled={!!editingRevenue}
-                className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100"
-              >
-                <option value="">매장 선택</option>
-                {availableStores.map((store) => (
-                  <option key={store.id} value={store.id}>
-                    {store.name}
-                  </option>
-                ))}
-                {availableStores.length === 0 && stores.length > 0 && (
-                  <option value="" disabled>
-                    {selectedPeriod ? `${selectedPeriod} 기간에 등록 가능한 매장이 없습니다.` : '등록 가능한 매장이 없습니다.'}
-                  </option>
+                  }}
+                  required
+                  disabled={!!editingRevenue}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100"
+                >
+                  <option value="">매장 선택</option>
+                  {availableStores.map((store) => (
+                    <option key={store.id} value={store.id}>
+                      {store.name}
+                    </option>
+                  ))}
+                  {availableStores.length === 0 && stores.length > 0 && (
+                    <option value="" disabled>
+                      {selectedPeriod ? `${selectedPeriod} 기간에 등록 가능한 매장이 없습니다.` : '등록 가능한 매장이 없습니다.'}
+                    </option>
+                  )}
+                </select>
+                {editingRevenue && (
+                  <p className="mt-1 text-xs text-gray-500">수정 시 매장은 변경할 수 없습니다.</p>
                 )}
-              </select>
-              {editingRevenue && (
-                <p className="mt-1 text-xs text-gray-500">수정 시 매장은 변경할 수 없습니다.</p>
-              )}
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                서비스 기간 <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="month"
-                value={revenueServicePeriod}
-                onChange={(e) => setRevenueServicePeriod(e.target.value)}
-                required
-                className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                청구 금액 <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="number"
-                value={revenueAmount}
-                onChange={(e) => setRevenueAmount(e.target.value)}
-                required
-                min="0"
-                step="0.01"
-                className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="0"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                납기일 <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="date"
-                value={revenueDueDate}
-                onChange={(e) => setRevenueDueDate(e.target.value)}
-                required
-                className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                청구 메모
-              </label>
-              <textarea
-                value={revenueBillingMemo}
-                onChange={(e) => setRevenueBillingMemo(e.target.value)}
-                rows={3}
-                className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="청구 관련 메모 (선택사항)"
-              />
-            </div>
-            <div className="flex space-x-2">
-              <button
-                type="submit"
-                className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
-              >
-                {editingRevenue ? '수정' : '등록'}
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setShowRevenueForm(false)
-                  resetRevenueForm()
-                }}
-                className="px-4 py-2 bg-gray-300 text-gray-700 rounded-md hover:bg-gray-400"
-              >
-                취소
-              </button>
-            </div>
-          </form>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  서비스 기간 <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="month"
+                  value={revenueServicePeriod}
+                  onChange={(e) => {
+                    setRevenueServicePeriod(e.target.value)
+                    // 서비스 기간 변경 시 납기일 자동 재계산
+                    if (revenueStoreId && e.target.value) {
+                      const selectedStore = stores.find(s => s.id === revenueStoreId)
+                      if (selectedStore && selectedStore.payment_day) {
+                        const calculatedDueDate = calculateDueDate(e.target.value, selectedStore.payment_day)
+                        if (calculatedDueDate) {
+                          setRevenueDueDate(calculatedDueDate)
+                        }
+                      }
+                    }
+                  }}
+                  required
+                  className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  청구 금액 <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="number"
+                  value={revenueAmount}
+                  onChange={(e) => setRevenueAmount(e.target.value)}
+                  required
+                  min="0"
+                  step="0.01"
+                  className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="0"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  납기일 <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="date"
+                  value={revenueDueDate}
+                  onChange={(e) => setRevenueDueDate(e.target.value)}
+                  required
+                  className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+                {revenueStoreId && stores.find(s => s.id === revenueStoreId)?.payment_day && (
+                  <p className="mt-1 text-xs text-gray-500">
+                    매장의 결제일({stores.find(s => s.id === revenueStoreId)?.payment_day}일) 기준으로 자동 계산됩니다.
+                  </p>
+                )}
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  청구 메모
+                </label>
+                <textarea
+                  value={revenueBillingMemo}
+                  onChange={(e) => setRevenueBillingMemo(e.target.value)}
+                  rows={3}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="청구 관련 메모 (선택사항)"
+                />
+              </div>
+              <div className="flex space-x-2">
+                <button
+                  type="submit"
+                  className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+                >
+                  {editingRevenue ? '수정' : '등록'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowRevenueForm(false)
+                    resetRevenueForm()
+                  }}
+                  className="px-4 py-2 bg-gray-300 text-gray-700 rounded-md hover:bg-gray-400"
+                >
+                  취소
+                </button>
+              </div>
+            </form>
+          )}
         </div>
       )}
 
@@ -731,8 +1049,7 @@ export default function ReceivablesPage() {
                   }
                 }}
                 required
-                disabled={!!editingReceipt}
-                className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100"
+                className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
                 <option value="">매출 선택</option>
                 {receivables.flatMap((r) =>
@@ -746,7 +1063,7 @@ export default function ReceivablesPage() {
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                수금일
+                수금 일시
               </label>
               <input
                 type="datetime-local"
@@ -754,7 +1071,6 @@ export default function ReceivablesPage() {
                 onChange={(e) => setReceiptReceivedAt(e.target.value)}
                 className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
-              <p className="mt-1 text-xs text-gray-500">미입력 시 현재 시간으로 저장됩니다.</p>
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -773,7 +1089,7 @@ export default function ReceivablesPage() {
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                수금 메모
+                메모
               </label>
               <textarea
                 value={receiptMemo}
@@ -807,228 +1123,279 @@ export default function ReceivablesPage() {
 
       {/* 매장별 수금/미수금 현황 테이블 */}
       <div className="bg-white rounded-lg shadow-md overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
+        <table className="min-w-full divide-y divide-gray-200">
+          <thead className="bg-gray-50">
+            <tr>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                매장명
+              </th>
+              <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                청구 건수
+              </th>
+              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                총 청구액
+              </th>
+              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                총 수금액
+              </th>
+              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                미수금
+              </th>
+              <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                상태
+              </th>
+            </tr>
+          </thead>
+          <tbody className="bg-white divide-y divide-gray-200">
+            {receivables.length === 0 ? (
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  매장명
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  청구 건수
-                </th>
-                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  총 청구액
-                </th>
-                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  총 수금액
-                </th>
-                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  미수금
-                </th>
-                <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  상태
-                </th>
+                <td colSpan={6} className="px-6 py-4 text-center text-gray-500">
+                  {selectedPeriod ? `${selectedPeriod} 기간의 데이터가 없습니다.` : '데이터가 없습니다.'}
+                </td>
               </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
-              {receivables.length === 0 ? (
-                <tr>
-                  <td colSpan={6} className="px-6 py-4 text-center text-gray-500">
-                    {selectedPeriod ? `${selectedPeriod} 기간의 데이터가 없습니다.` : '데이터가 없습니다.'}
-                  </td>
-                </tr>
-              ) : (
-                receivables.map((receivable) => {
-                  const isExpanded = expandedStores.has(receivable.store_id)
-                  return (
-                    <>
-                      <tr key={receivable.store_id} className="hover:bg-gray-50">
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="flex items-center space-x-2">
-                            <button
-                              onClick={() => {
-                                const newExpanded = new Set(expandedStores)
-                                if (isExpanded) {
-                                  newExpanded.delete(receivable.store_id)
-                                } else {
-                                  newExpanded.add(receivable.store_id)
-                                }
-                                setExpandedStores(newExpanded)
-                              }}
-                              className="text-gray-500 hover:text-gray-700"
-                            >
-                              {isExpanded ? '▼' : '▶'}
-                            </button>
-                            <div>
-                              <div className="text-sm font-medium text-gray-900">
-                                {receivable.store_name}
-                              </div>
-                              {!receivable.unpaid_tracking_enabled && (
-                                <div className="text-xs text-gray-500">(미수금 추적 비활성화)</div>
-                              )}
+            ) : (
+              receivables.map((receivable) => {
+                const isExpanded = expandedStores.has(receivable.store_id)
+                
+                // 상태 계산 로직
+                let status: 'unregistered' | 'unpaid' | 'partial' | 'paid' | 'no_revenue'
+                let rowBgColor = ''
+                
+                if (receivable.total_revenue === 0) {
+                  status = 'no_revenue'
+                  rowBgColor = ''
+                } else if (receivable.total_received === 0) {
+                  status = 'unregistered'
+                  rowBgColor = 'bg-orange-50'
+                } else if (receivable.unpaid_amount === 0) {
+                  status = 'paid'
+                  rowBgColor = ''
+                } else {
+                  status = 'partial'
+                  rowBgColor = 'bg-yellow-50'
+                }
+                
+                return (
+                  <>
+                    <tr key={receivable.store_id} className={`hover:bg-gray-50 ${rowBgColor}`}>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="flex items-center space-x-2">
+                          <button
+                            onClick={() => {
+                              const newExpanded = new Set(expandedStores)
+                              if (isExpanded) {
+                                newExpanded.delete(receivable.store_id)
+                              } else {
+                                newExpanded.add(receivable.store_id)
+                              }
+                              setExpandedStores(newExpanded)
+                            }}
+                            className="text-gray-500 hover:text-gray-700"
+                          >
+                            {isExpanded ? '▼' : '▶'}
+                          </button>
+                          <div>
+                            <div className="text-sm font-medium text-gray-900">
+                              {receivable.store_name}
+                            </div>
+                            {!receivable.unpaid_tracking_enabled && (
+                              <div className="text-xs text-gray-500">(미수금 추적 비활성화)</div>
+                            )}
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        {receivable.revenue_count}건
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 text-right">
+                        {formatCurrency(receivable.total_revenue)}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 text-right">
+                        {formatCurrency(receivable.total_received)}
+                      </td>
+                      <td className={`px-6 py-4 whitespace-nowrap text-sm font-medium text-right ${
+                        receivable.unpaid_amount > 0 ? 'text-red-600' : 'text-green-600'
+                      }`}>
+                        {formatCurrency(receivable.unpaid_amount)}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-center">
+                        {getStatusBadge(status)}
+                      </td>
+                    </tr>
+                    {isExpanded && receivable.revenues.length > 0 && (
+                      <tr>
+                        <td colSpan={6} className="px-6 py-4 bg-gray-50">
+                          <div className="space-y-2">
+                            <h4 className="text-sm font-semibold text-gray-700 mb-2">
+                              {receivable.store_name} - 매출 상세
+                            </h4>
+                            <div className="overflow-x-auto">
+                              <table className="min-w-full divide-y divide-gray-200 bg-white rounded-lg">
+                                <thead className="bg-gray-100">
+                                  <tr>
+                                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-600">
+                                      서비스 기간
+                                    </th>
+                                    <th className="px-4 py-2 text-right text-xs font-medium text-gray-600">
+                                      청구 금액
+                                    </th>
+                                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-600">
+                                      납기일
+                                    </th>
+                                    <th className="px-4 py-2 text-right text-xs font-medium text-gray-600">
+                                      수금액
+                                    </th>
+                                    <th className="px-4 py-2 text-right text-xs font-medium text-gray-600">
+                                      미수금
+                                    </th>
+                                    <th className="px-4 py-2 text-center text-xs font-medium text-gray-600">
+                                      상태
+                                    </th>
+                                    <th className="px-4 py-2 text-center text-xs font-medium text-gray-600">
+                                      작업
+                                    </th>
+                                  </tr>
+                                </thead>
+                                <tbody className="divide-y divide-gray-200">
+                                  {receivable.revenues.map((revenue) => {
+                                    const fullRevenue = revenues.find(r => r.id === revenue.id)
+                                    
+                                    // Revenue 상태 계산 로직
+                                    let revenueStatus: 'unregistered' | 'unpaid' | 'partial' | 'paid' | 'no_revenue'
+                                    let revenueRowBgColor = ''
+                                    
+                                    if (revenue.amount === 0) {
+                                      revenueStatus = 'no_revenue'
+                                      revenueRowBgColor = ''
+                                    } else if (revenue.received === 0) {
+                                      revenueStatus = 'unregistered'
+                                      revenueRowBgColor = 'bg-orange-50'
+                                    } else if (revenue.unpaid === 0) {
+                                      revenueStatus = 'paid'
+                                      revenueRowBgColor = ''
+                                    } else {
+                                      revenueStatus = 'partial'
+                                      revenueRowBgColor = 'bg-yellow-50'
+                                    }
+                                    
+                                    return (
+                                      <tr key={revenue.id} className={`hover:bg-gray-50 ${revenueRowBgColor}`}>
+                                        <td className="px-4 py-2 text-sm text-gray-900">
+                                          {revenue.service_period}
+                                        </td>
+                                        <td className="px-4 py-2 text-sm text-gray-900 text-right">
+                                          {formatCurrency(revenue.amount)}
+                                        </td>
+                                        <td className="px-4 py-2 text-sm text-gray-500">
+                                          {revenue.due_date ? revenue.due_date.split('T')[0] : (fullRevenue ? fullRevenue.due_date.split('T')[0] : '-')}
+                                        </td>
+                                        <td className="px-4 py-2 text-sm text-gray-900 text-right">
+                                          {formatCurrency(revenue.received)}
+                                        </td>
+                                        <td className={`px-4 py-2 text-sm font-medium text-right ${
+                                          revenue.unpaid > 0 ? 'text-red-600' : 'text-green-600'
+                                        }`}>
+                                          {formatCurrency(revenue.unpaid)}
+                                        </td>
+                                        <td className="px-4 py-2 text-center">
+                                          {getStatusBadge(revenueStatus)}
+                                        </td>
+                                        <td className="px-4 py-2 text-center">
+                                          {fullRevenue && (
+                                            <div className="flex justify-center space-x-1">
+                                              <button
+                                                onClick={() => handleEditRevenue(fullRevenue)}
+                                                className="px-2 py-1 bg-blue-500 text-white text-xs rounded hover:bg-blue-600"
+                                              >
+                                                수정
+                                              </button>
+                                              <button
+                                                onClick={() => handleDeleteRevenue(fullRevenue.id)}
+                                                className="px-2 py-1 bg-red-500 text-white text-xs rounded hover:bg-red-600"
+                                              >
+                                                삭제
+                                              </button>
+                                            </div>
+                                          )}
+                                        </td>
+                                      </tr>
+                                    )
+                                  })}
+                                </tbody>
+                              </table>
                             </div>
                           </div>
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                          {receivable.revenue_count}건
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 text-right">
-                          {formatCurrency(receivable.total_revenue)}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 text-right">
-                          {formatCurrency(receivable.total_received)}
-                        </td>
-                        <td className={`px-6 py-4 whitespace-nowrap text-sm font-medium text-right ${
-                          receivable.unpaid_amount > 0 ? 'text-red-600' : 'text-green-600'
-                        }`}>
-                          {formatCurrency(receivable.unpaid_amount)}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-center">
-                          {receivable.unpaid_amount === 0 ? (
-                            getStatusBadge('paid')
-                          ) : receivable.total_received > 0 ? (
-                            getStatusBadge('partial')
-                          ) : (
-                            getStatusBadge('unpaid')
-                          )}
-                        </td>
                       </tr>
-                      {isExpanded && receivable.revenues.length > 0 && (
-                        <tr>
-                          <td colSpan={6} className="px-6 py-4 bg-gray-50">
-                            <div className="space-y-2">
-                              <h4 className="text-sm font-semibold text-gray-700 mb-2">
-                                {receivable.store_name} - 매출 상세
-                              </h4>
-                              <div className="overflow-x-auto">
-                                <table className="min-w-full divide-y divide-gray-200 bg-white rounded-lg">
-                                  <thead className="bg-gray-100">
-                                    <tr>
-                                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-600">
-                                        서비스 기간
-                                      </th>
-                                      <th className="px-4 py-2 text-right text-xs font-medium text-gray-600">
-                                        청구 금액
-                                      </th>
-                                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-600">
-                                        납기일
-                                      </th>
-                                      <th className="px-4 py-2 text-right text-xs font-medium text-gray-600">
-                                        수금액
-                                      </th>
-                                      <th className="px-4 py-2 text-right text-xs font-medium text-gray-600">
-                                        미수금
-                                      </th>
-                                      <th className="px-4 py-2 text-center text-xs font-medium text-gray-600">
-                                        상태
-                                      </th>
-                                      <th className="px-4 py-2 text-center text-xs font-medium text-gray-600">
-                                        작업
-                                      </th>
-                                    </tr>
-                                  </thead>
-                                  <tbody className="divide-y divide-gray-200">
-                                    {receivable.revenues.map((revenue) => {
-                                      const fullRevenue = revenues.find(r => r.id === revenue.id)
-                                      return (
-                                        <tr key={revenue.id} className="hover:bg-gray-50">
-                                          <td className="px-4 py-2 text-sm text-gray-900">
-                                            {revenue.service_period}
-                                          </td>
-                                          <td className="px-4 py-2 text-sm text-gray-900 text-right">
-                                            {formatCurrency(revenue.amount)}
-                                          </td>
-                                          <td className="px-4 py-2 text-sm text-gray-500">
-                                            {revenue.due_date ? revenue.due_date.split('T')[0] : (fullRevenue ? fullRevenue.due_date.split('T')[0] : '-')}
-                                          </td>
-                                          <td className="px-4 py-2 text-sm text-gray-900 text-right">
-                                            {formatCurrency(revenue.received)}
-                                          </td>
-                                          <td className={`px-4 py-2 text-sm font-medium text-right ${
-                                            revenue.unpaid > 0 ? 'text-red-600' : 'text-green-600'
-                                          }`}>
-                                            {formatCurrency(revenue.unpaid)}
-                                          </td>
-                                          <td className="px-4 py-2 text-center">
-                                            {getStatusBadge(revenue.status)}
-                                          </td>
-                                          <td className="px-4 py-2 text-center">
-                                            {fullRevenue && (
-                                              <div className="flex justify-center space-x-1">
-                                                <button
-                                                  onClick={() => handleEditRevenue(fullRevenue)}
-                                                  className="px-2 py-1 bg-blue-500 text-white text-xs rounded hover:bg-blue-600"
-                                                >
-                                                  수정
-                                                </button>
-                                                <button
-                                                  onClick={() => handleDeleteRevenue(fullRevenue.id)}
-                                                  className="px-2 py-1 bg-red-500 text-white text-xs rounded hover:bg-red-600"
-                                                >
-                                                  삭제
-                                                </button>
-                                              </div>
-                                            )}
-                                          </td>
-                                        </tr>
-                                      )
-                                    })}
-                                  </tbody>
-                                </table>
-                              </div>
-                            </div>
-                          </td>
-                        </tr>
-                      )}
-                    </>
-                  )
-                })
-              )}
-            </tbody>
-          </table>
-        </div>
+                    )}
+                  </>
+                )
+              })
+            )}
+          </tbody>
+        </table>
       </div>
 
-      {/* 매출(청구) 목록 */}
+      {/* 매출 목록 테이블 */}
       <div className="bg-white rounded-lg shadow-md overflow-hidden mt-6">
-        <div className="px-6 py-4 border-b border-gray-200">
-          <h2 className="text-lg font-semibold">매출(청구) 목록</h2>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
+        <h2 className="text-lg font-semibold p-6 border-b border-gray-200">매출 목록</h2>
+        <table className="min-w-full divide-y divide-gray-200">
+          <thead className="bg-gray-50">
+            <tr>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                매장명
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                서비스 기간
+              </th>
+              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                청구 금액
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                납기일
+              </th>
+              <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                상태
+              </th>
+              <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                작업
+              </th>
+            </tr>
+          </thead>
+          <tbody className="bg-white divide-y divide-gray-200">
+            {revenues.length === 0 ? (
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  매장명
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  서비스 기간
-                </th>
-                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  청구 금액
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  납기일
-                </th>
-                <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  상태
-                </th>
-                <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  작업
-                </th>
+                <td colSpan={6} className="px-6 py-4 text-center text-gray-500">
+                  {selectedPeriod ? `${selectedPeriod} 기간의 매출 데이터가 없습니다.` : '매출 데이터가 없습니다.'}
+                </td>
               </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
-              {revenues.length === 0 ? (
-                <tr>
-                  <td colSpan={6} className="px-6 py-4 text-center text-gray-500">
-                    {selectedPeriod ? `${selectedPeriod} 기간의 매출 데이터가 없습니다.` : '매출 데이터가 없습니다.'}
-                  </td>
-                </tr>
-              ) : (
-                revenues.map((revenue) => (
-                  <tr key={revenue.id} className="hover:bg-gray-50">
+            ) : (
+              revenues.map((revenue) => {
+                // Revenue별 receipts 계산
+                const revenueReceipts = receipts.filter(r => r.revenue_id === revenue.id)
+                const totalReceived = revenueReceipts.reduce((sum, r) => sum + r.amount, 0)
+                const unpaid = revenue.amount - totalReceived
+                
+                // Revenue 상태 계산 로직
+                let revenueStatus: 'unregistered' | 'unpaid' | 'partial' | 'paid' | 'no_revenue'
+                let revenueRowBgColor = ''
+                
+                if (revenue.amount === 0) {
+                  revenueStatus = 'no_revenue'
+                  revenueRowBgColor = ''
+                } else if (totalReceived === 0) {
+                  revenueStatus = 'unregistered'
+                  revenueRowBgColor = 'bg-orange-50'
+                } else if (unpaid === 0) {
+                  revenueStatus = 'paid'
+                  revenueRowBgColor = ''
+                } else {
+                  revenueStatus = 'partial'
+                  revenueRowBgColor = 'bg-yellow-50'
+                }
+                
+                return (
+                  <tr key={revenue.id} className={`hover:bg-gray-50 ${revenueRowBgColor}`}>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                       {(revenue as any).stores?.name || '-'}
                     </td>
@@ -1042,7 +1409,7 @@ export default function ReceivablesPage() {
                       {revenue.due_date.split('T')[0]}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-center">
-                      {getStatusBadge(revenue.status)}
+                      {getStatusBadge(revenueStatus)}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-center">
                       <div className="flex justify-center space-x-2">
@@ -1061,91 +1428,12 @@ export default function ReceivablesPage() {
                       </div>
                     </td>
                   </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      {/* 수금 목록 */}
-      <div className="bg-white rounded-lg shadow-md overflow-hidden mt-6">
-        <div className="px-6 py-4 border-b border-gray-200">
-          <h2 className="text-lg font-semibold">수금 목록</h2>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  매장명
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  서비스 기간
-                </th>
-                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  수금액
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  수금일
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  메모
-                </th>
-                <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  작업
-                </th>
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
-              {receipts.length === 0 ? (
-                <tr>
-                  <td colSpan={6} className="px-6 py-4 text-center text-gray-500">
-                    {selectedPeriod ? `${selectedPeriod} 기간의 수금 데이터가 없습니다.` : '수금 데이터가 없습니다.'}
-                  </td>
-                </tr>
-              ) : (
-                receipts.map((receipt) => (
-                  <tr key={receipt.id} className="hover:bg-gray-50">
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {(receipt as any).revenues?.stores?.name || '-'}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {(receipt as any).revenues?.service_period || '-'}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 text-right">
-                      {formatCurrency(receipt.amount)}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {receipt.received_at ? receipt.received_at.split('T')[0] : '-'}
-                    </td>
-                    <td className="px-6 py-4 text-sm text-gray-500">
-                      {receipt.memo || '-'}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-center">
-                      <div className="flex justify-center space-x-2">
-                        <button
-                          onClick={() => handleEditReceipt(receipt)}
-                          className="px-3 py-1 bg-blue-500 text-white text-xs rounded-md hover:bg-blue-600"
-                        >
-                          수정
-                        </button>
-                        <button
-                          onClick={() => handleDeleteReceipt(receipt.id)}
-                          className="px-3 py-1 bg-red-500 text-white text-xs rounded-md hover:bg-red-600"
-                        >
-                          삭제
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
+                )
+              })
+            )}
+          </tbody>
+        </table>
       </div>
     </div>
   )
 }
-
