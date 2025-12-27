@@ -14,3 +14,5 @@ FROM pg_policies
 WHERE tablename = 'products'
 ORDER BY policyname;
 
+
+

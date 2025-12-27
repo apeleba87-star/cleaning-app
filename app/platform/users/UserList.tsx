@@ -7,6 +7,7 @@ import UserForm from './UserForm'
 
 interface UserWithCompany extends User {
   companies: { id: string; name: string } | null
+  email?: string | null
 }
 
 interface Company {
@@ -164,6 +165,9 @@ export default function UserList({ initialUsers, stores, companies, userStoreMap
                 이름
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                이메일
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 역할
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -189,7 +193,7 @@ export default function UserList({ initialUsers, stores, companies, userStoreMap
           <tbody className="bg-white divide-y divide-gray-200">
             {filteredUsers.length === 0 ? (
               <tr>
-                <td colSpan={8} className="px-6 py-4 text-center text-gray-500">
+                <td colSpan={9} className="px-6 py-4 text-center text-gray-500">
                   사용자가 없습니다.
                 </td>
               </tr>
@@ -199,6 +203,11 @@ export default function UserList({ initialUsers, stores, companies, userStoreMap
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="text-sm font-medium text-gray-900">
                       {user.name}
+                    </div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="text-sm text-gray-500">
+                      {user.email || '-'}
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">

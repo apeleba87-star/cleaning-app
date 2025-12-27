@@ -31,3 +31,5 @@ ALTER TABLE products DROP COLUMN IF EXISTS stock_quantity;
 ALTER TABLE products DROP COLUMN IF EXISTS is_available;
 ALTER TABLE products DROP COLUMN IF EXISTS last_updated_at;
 
+
+

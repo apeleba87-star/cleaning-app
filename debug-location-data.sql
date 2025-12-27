@@ -32,3 +32,5 @@ SELECT id, name, barcode FROM products WHERE deleted_at IS NULL ORDER BY created
 -- 4. 매장 테이블 확인
 SELECT id, name FROM stores WHERE deleted_at IS NULL ORDER BY name LIMIT 10;
 
+
+

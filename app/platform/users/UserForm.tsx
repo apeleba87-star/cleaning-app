@@ -76,6 +76,13 @@ export default function UserForm({ user, stores, companies, initialStoreIds = []
         }),
       })
 
+      // 응답이 JSON인지 확인
+      const contentType = response.headers.get('content-type')
+      if (!contentType || !contentType.includes('application/json')) {
+        const text = await response.text()
+        throw new Error(`서버 오류가 발생했습니다: ${response.status} ${response.statusText}`)
+      }
+
       const data = await response.json()
 
       if (!response.ok) {
@@ -84,7 +91,8 @@ export default function UserForm({ user, stores, companies, initialStoreIds = []
 
       onSuccess(data.user)
     } catch (err: any) {
-      setError(err.message)
+      console.error('Error updating user:', err)
+      setError(err.message || '사용자 정보 수정에 실패했습니다.')
     } finally {
       setLoading(false)
     }

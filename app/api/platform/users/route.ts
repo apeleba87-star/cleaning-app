@@ -155,17 +155,45 @@ export async function POST(request: NextRequest) {
       },
     })
 
+    // 0. 이메일 중복 체크
+    const trimmedEmail = email.trim().toLowerCase()
+    const { data: existingUsers } = await adminSupabase.auth.admin.listUsers()
+    const emailExists = existingUsers?.users?.some(
+      (u: any) => u.email?.toLowerCase() === trimmedEmail
+    )
+
+    if (emailExists) {
+      return NextResponse.json(
+        { error: '이미 등록된 이메일 주소입니다.' },
+        { status: 400 }
+      )
+    }
+
     // 1. Supabase Auth에 사용자 생성
     const { data: authData, error: authError } = await adminSupabase.auth.admin.createUser({
-      email: email.trim(),
+      email: trimmedEmail,
       password: password.trim(),
       email_confirm: true,
     })
 
     if (authError) {
       console.error('Error creating auth user:', authError)
+      
+      // 에러 메시지를 한국어로 번역
+      let errorMessage = '사용자 생성에 실패했습니다.'
+      if (authError.message) {
+        const errorMsg = authError.message.toLowerCase()
+        if (errorMsg.includes('email') && (errorMsg.includes('already') || errorMsg.includes('registered') || errorMsg.includes('exists'))) {
+          errorMessage = '이미 등록된 이메일 주소입니다.'
+        } else if (errorMsg.includes('password')) {
+          errorMessage = '비밀번호가 유효하지 않습니다.'
+        } else if (errorMsg.includes('invalid')) {
+          errorMessage = '입력한 정보가 유효하지 않습니다.'
+        }
+      }
+      
       return NextResponse.json(
-        { error: authError.message || '사용자 생성에 실패했습니다.' },
+        { error: errorMessage },
         { status: 400 }
       )
     }

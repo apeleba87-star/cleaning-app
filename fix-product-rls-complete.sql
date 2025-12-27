@@ -50,3 +50,5 @@ CREATE POLICY "관리자는 제품 수정 가능" ON products
 -- 5. 관리자는 제품 삭제 가능 (소프트 삭제를 위해 UPDATE 사용)
 -- 실제로는 deleted_at을 업데이트하므로 UPDATE 정책으로 충분
 
+
+

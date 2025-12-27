@@ -1,6 +1,7 @@
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { getServerUser } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
+import { createClient } from '@supabase/supabase-js'
 import UserList from './UserList'
 
 export default async function PlatformUsersPage() {
@@ -66,6 +67,40 @@ export default async function PlatformUsersPage() {
     userStoreMap.get(assign.user_id)?.push(assign.store_id)
   })
 
+  // auth.users에서 이메일 가져오기 (Service Role Key 사용)
+  let usersWithEmail = users || []
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+  
+  if (serviceRoleKey && supabaseUrl) {
+    try {
+      const adminSupabase = createClient(supabaseUrl, serviceRoleKey, {
+        auth: {
+          autoRefreshToken: false,
+          persistSession: false,
+        },
+      })
+
+      const { data: authUsersData, error: authError } = await adminSupabase.auth.admin.listUsers()
+      
+      if (!authError && authUsersData?.users) {
+        const emailMap = new Map<string, string>()
+        authUsersData.users.forEach((authUser: any) => {
+          if (authUser.email) {
+            emailMap.set(authUser.id, authUser.email)
+          }
+        })
+
+        usersWithEmail = (users || []).map((u: any) => ({
+          ...u,
+          email: emailMap.get(u.id) || null,
+        }))
+      }
+    } catch (authErr) {
+      console.error('Error fetching auth users:', authErr)
+    }
+  }
+
   return (
     <div className="max-w-6xl mx-auto">
       <div className="flex justify-between items-center mb-6">
@@ -79,7 +114,7 @@ export default async function PlatformUsersPage() {
       </div>
       
       <UserList 
-        initialUsers={users || []} 
+        initialUsers={usersWithEmail} 
         stores={stores || []}
         companies={companies || []}
         userStoreMap={userStoreMap}

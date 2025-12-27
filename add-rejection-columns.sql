@@ -22,3 +22,5 @@ COMMENT ON COLUMN requests.rejected_by IS '반려 처리한 사용자 ID';
 
 
 
+
+
