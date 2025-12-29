@@ -8,6 +8,8 @@ import { useEffect, useState, useRef } from 'react'
 interface NavRoleSwitchProps {
   userRole: 'staff' | 'manager' | 'admin' | 'business_owner' | 'platform_admin' | 'franchise_manager' | 'store_manager'
   userName?: string
+  onRefresh?: () => void
+  isRefreshing?: boolean
 }
 
 interface NavItem {
@@ -24,16 +26,33 @@ interface NavGroup {
   icon?: string
 }
 
-export function NavRoleSwitch({ userRole, userName }: NavRoleSwitchProps) {
+export function NavRoleSwitch({ userRole, userName, onRefresh, isRefreshing }: NavRoleSwitchProps) {
   const pathname = usePathname()
   const [isClient, setIsClient] = useState(false)
   const [openDropdown, setOpenDropdown] = useState<string | null>(null)
   const dropdownRef = useRef<{ [key: string]: HTMLDivElement | null }>({})
   const [pendingUserCount, setPendingUserCount] = useState<number>(0)
+  const [isRefreshingStore, setIsRefreshingStore] = useState(false)
 
   useEffect(() => {
     setIsClient(true)
   }, [])
+
+  // 점주앱의 경우 로딩 상태를 실시간으로 확인
+  useEffect(() => {
+    if (userRole === 'store_manager' && isClient) {
+      const checkRefreshStatus = () => {
+        if (typeof window !== 'undefined' && (window as any).isRefreshingStoreStatuses !== undefined) {
+          setIsRefreshingStore((window as any).isRefreshingStoreStatuses)
+        }
+      }
+      
+      checkRefreshStatus()
+      const interval = setInterval(checkRefreshStatus, 100) // 100ms마다 확인
+      
+      return () => clearInterval(interval)
+    }
+  }, [userRole, isClient])
 
   // 승인 대기 사용자 수 가져오기 (business_owner인 경우만)
   useEffect(() => {
@@ -133,7 +152,6 @@ export function NavRoleSwitch({ userRole, userName }: NavRoleSwitchProps) {
 
         const storeManagerNav = [
           { href: '/store-manager/dashboard', label: '대시보드' },
-          { href: '/store-manager/stores', label: '매장 관리' },
           { href: '/store-manager/supplies', label: '물품 요청' },
         ]
 
@@ -199,8 +217,9 @@ export function NavRoleSwitch({ userRole, userName }: NavRoleSwitchProps) {
       <nav className="bg-blue-600 text-white shadow-lg">
         <div className="container mx-auto px-4">
           <div className="flex items-center justify-between h-14 md:h-16">
-            <Link href="/mobile-dashboard" className="text-lg md:text-xl font-bold">
-              청소 관리
+            <Link href="/mobile-dashboard" className="flex flex-col lg:flex-row lg:items-center gap-0 lg:gap-2">
+              <span className="text-lg md:text-xl font-bold">무플 (MUPL)</span>
+              <span className="text-xs lg:text-sm text-blue-200">무인·현장 운영 관리 플랫폼</span>
             </Link>
             <div className="flex items-center space-x-2 md:space-x-4">
               {userName && (
@@ -300,10 +319,62 @@ export function NavRoleSwitch({ userRole, userName }: NavRoleSwitchProps) {
     <nav className="bg-blue-600 text-white shadow-lg">
       <div className="container mx-auto px-4">
         <div className="flex items-center justify-between h-16">
-          <div className="flex items-center space-x-8">
-            <Link href="/" className="text-xl font-bold">
-              청소 관리
-            </Link>
+          <div className="flex items-center space-x-4 lg:space-x-8">
+            <div className="flex items-center gap-2 lg:gap-4">
+              {userRole === 'business_owner' ? (
+                <Link href="/business/dashboard" className="flex flex-col lg:flex-row lg:items-center gap-0 lg:gap-2">
+                  <span className="text-xl font-bold">무플 (MUPL)</span>
+                  <span className="text-sm text-blue-200 hidden lg:inline">|</span>
+                  <span className="text-xs lg:text-sm text-blue-200">무인·현장 운영 관리 플랫폼</span>
+                </Link>
+              ) : userRole === 'franchise_manager' ? (
+                <Link href="/franchise/stores/status" className="flex flex-col lg:flex-row lg:items-center gap-0 lg:gap-2">
+                  <span className="text-xl font-bold">무플 (MUPL)</span>
+                  <span className="text-sm text-blue-200 hidden lg:inline">|</span>
+                  <span className="text-xs lg:text-sm text-blue-200">무인·현장 운영 관리 플랫폼</span>
+                </Link>
+              ) : userRole === 'store_manager' ? (
+                <Link href="/store-manager/dashboard" className="flex flex-col lg:flex-row lg:items-center gap-0 lg:gap-2">
+                  <span className="text-xl font-bold">무플 (MUPL)</span>
+                  <span className="text-sm text-blue-200 hidden lg:inline">|</span>
+                  <span className="text-xs lg:text-sm text-blue-200">무인·현장 운영 관리 플랫폼</span>
+                </Link>
+              ) : (
+                <Link href="/" className="text-xl font-bold">
+                  청소 관리
+                </Link>
+              )}
+              {/* 점주앱 새로고침 버튼 */}
+              {userRole === 'store_manager' && (
+                <button
+                  onClick={() => {
+                    if (typeof window !== 'undefined' && (window as any).refreshStoreStatuses) {
+                      ;(window as any).refreshStoreStatuses()
+                    }
+                  }}
+                  disabled={isRefreshingStore}
+                  className="px-3 py-1.5 bg-blue-700 hover:bg-blue-800 disabled:bg-gray-500 text-white rounded-md text-sm font-medium transition-colors flex items-center gap-2"
+                  title="새로고침"
+                >
+                  <svg
+                    className={`w-4 h-4 ${isRefreshingStore ? 'animate-spin' : ''}`}
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                    />
+                  </svg>
+                  {isRefreshingStore && (
+                    <span className="hidden lg:inline">새로고침 중...</span>
+                  )}
+                </button>
+              )}
+            </div>
             <div className="hidden md:flex space-x-4">
               {navItems.map((item, index) => renderNavItem(item, index))}
             </div>

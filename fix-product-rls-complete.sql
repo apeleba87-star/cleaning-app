@@ -52,3 +52,4 @@ CREATE POLICY "관리자는 제품 수정 가능" ON products
 
 
 
+

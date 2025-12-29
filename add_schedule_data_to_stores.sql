@@ -22,3 +22,4 @@ ADD COLUMN IF NOT EXISTS schedule_data TEXT;
 
 COMMENT ON COLUMN stores.schedule_data IS '관리 스케줄 정보 (JSON 형태). weekly, biweekly, monthly, custom 타입 지원';
 
+

@@ -33,3 +33,4 @@ ALTER TABLE products DROP COLUMN IF EXISTS last_updated_at;
 
 
 
+

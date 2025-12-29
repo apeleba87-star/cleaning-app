@@ -20,31 +20,75 @@ export default function BottomNavigation() {
     setMounted(true)
   }, [])
 
+  // 물품 요청 배지 수 계산 함수
+  const calculateBadgeCount = (storeStatuses: any[]) => {
+    if (!storeStatuses || !Array.isArray(storeStatuses)) return 0
+    return storeStatuses.reduce((sum: number, store: any) => {
+      return sum + (store.manager_in_progress_supply_request_count || 0)
+    }, 0)
+  }
+
   // 물품 요청 배지 수 로드
   useEffect(() => {
     if (!mounted) return
     
-    const loadBadgeCount = async () => {
-      try {
-        const response = await fetch('/api/store-manager/stores/status')
-        if (response.ok) {
-          const data = await response.json()
-          if (data.data && Array.isArray(data.data)) {
-            const count = data.data.reduce((sum: number, store: any) => {
-              return sum + (store.manager_in_progress_supply_request_count || 0)
-            }, 0)
-            setSupplyRequestBadge(count)
-          }
+    const updateBadge = () => {
+      // 전역 함수를 통해 대시보드의 데이터를 사용
+      if (typeof window !== 'undefined' && (window as any).getStoreStatuses) {
+        const storeStatuses = (window as any).getStoreStatuses()
+        if (storeStatuses && Array.isArray(storeStatuses) && storeStatuses.length > 0) {
+          const count = calculateBadgeCount(storeStatuses)
+          setSupplyRequestBadge(count)
+          return
         }
-      } catch (error) {
-        console.error('Error loading supply request badge:', error)
+      }
+
+      // 전역 데이터가 없으면 초기 로드만 (한 번만)
+      const loadBadgeCount = async () => {
+        try {
+          const lastLoadKey = 'bottomNav_lastLoad'
+          const lastLoadTime = localStorage.getItem(lastLoadKey)
+          const now = Date.now()
+          const MIN_INTERVAL = 60000 // 1분
+
+          if (lastLoadTime && now - parseInt(lastLoadTime, 10) < MIN_INTERVAL) {
+            // 최소 간격 미달, 스킵
+            return
+          }
+
+          const response = await fetch('/api/store-manager/stores/status')
+          if (response.ok) {
+            const data = await response.json()
+            if (data.data && Array.isArray(data.data)) {
+              const count = calculateBadgeCount(data.data)
+              setSupplyRequestBadge(count)
+              localStorage.setItem(lastLoadKey, now.toString())
+            }
+          }
+        } catch (error) {
+          console.error('Error loading supply request badge:', error)
+        }
+      }
+
+      loadBadgeCount()
+    }
+
+    // 초기 로드
+    updateBadge()
+
+    // 대시보드에서 데이터 업데이트 시 이벤트 리스너
+    const handleStoreStatusesUpdated = (event: any) => {
+      if (event.detail && Array.isArray(event.detail)) {
+        const count = calculateBadgeCount(event.detail)
+        setSupplyRequestBadge(count)
       }
     }
 
-    loadBadgeCount()
-    // 30초마다 배지 업데이트
-    const interval = setInterval(loadBadgeCount, 30000)
-    return () => clearInterval(interval)
+    window.addEventListener('storeStatusesUpdated', handleStoreStatusesUpdated as EventListener)
+    
+    return () => {
+      window.removeEventListener('storeStatusesUpdated', handleStoreStatusesUpdated as EventListener)
+    }
   }, [mounted])
 
   if (!mounted) {

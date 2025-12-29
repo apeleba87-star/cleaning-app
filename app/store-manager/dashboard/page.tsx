@@ -1,9 +1,10 @@
 'use client'
 
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import Link from 'next/link'
 import { getTodayDateKST } from '@/lib/utils/date'
 import RequestForm from './RequestForm'
+import { AttendanceCalendar } from '@/components/AttendanceCalendar'
 
 interface StoreStatus {
   store_id: string
@@ -74,6 +75,120 @@ export default function StoreManagerDashboardPage() {
   })
   const [loadingRequestStatusModal, setLoadingRequestStatusModal] = useState(false)
   const [selectedImage, setSelectedImage] = useState<string | null>(null)
+  const [attendanceData, setAttendanceData] = useState<Array<{ date: string; store_id: string; store_name: string; attendance_count: number }>>([])
+  const [loadingAttendance, setLoadingAttendance] = useState(false)
+
+  // 무한 루프 방지를 위한 ref
+  const isInitialLoadRef = useRef(true)
+  const previousStoreIdsRef = useRef<string>('')
+  const hasLoadedDataRef = useRef(false)
+  const previousStoreDataRef = useRef<string>('')
+  const lastLoadTimeRef = useRef<number>(0)
+  const isLoadingRef = useRef(false)
+
+  // loadStoreStatuses 함수를 먼저 정의 (useEffect에서 사용하기 전에)
+  const loadStoreStatuses = useCallback(async (forceRefresh = false) => {
+    // 중복 호출 방지
+    if (isLoadingRef.current) {
+      console.log('[Dashboard] 이미 로딩 중이므로 스킵')
+      return
+    }
+
+    // 최소 간격 체크 (5초) - 강제 새로고침이 아닌 경우에만
+    const now = Date.now()
+    const MIN_INTERVAL = 5000 // 5초
+    if (!forceRefresh && now - lastLoadTimeRef.current < MIN_INTERVAL) {
+      console.log('[Dashboard] 최소 간격 미달, 호출 스킵', {
+        elapsed: now - lastLoadTimeRef.current,
+        minInterval: MIN_INTERVAL
+      })
+      return
+    }
+
+    isLoadingRef.current = true
+    lastLoadTimeRef.current = now
+
+    try {
+      setLoading(true)
+      console.log('[Dashboard] loadStoreStatuses 호출 시작', { forceRefresh, timestamp: new Date().toISOString() })
+      
+      const response = await fetch('/api/store-manager/stores/status')
+      const data = await response.json()
+
+      console.log('[Dashboard] API Response:', { ok: response.ok, status: response.status, data })
+
+      if (response.ok) {
+        if (data.data && Array.isArray(data.data)) {
+          console.log(`[Dashboard] Loaded ${data.data.length} stores`)
+          
+          // 각 매장의 출근 상태 디버깅
+          data.data.forEach((store: StoreStatus) => {
+            console.log(`[Dashboard] Store: ${store.store_name}`, {
+              attendance_status: store.attendance_status,
+              clock_in_time: store.clock_in_time,
+              clock_out_time: store.clock_out_time,
+            })
+          })
+          
+          // 실제 데이터 변경 여부 확인 (JSON 문자열 비교)
+          const newDataString = JSON.stringify(data.data.map((s: StoreStatus) => ({
+            store_id: s.store_id,
+            store_name: s.store_name,
+            attendance_status: s.attendance_status,
+            clock_in_time: s.clock_in_time,
+            clock_out_time: s.clock_out_time,
+            has_problem: s.has_problem,
+            store_problem_count: s.store_problem_count,
+            received_request_count: s.received_request_count,
+            in_progress_request_count: s.in_progress_request_count,
+            completed_request_count: s.completed_request_count,
+            rejected_request_count: s.rejected_request_count,
+            before_photo_count: s.before_photo_count,
+            after_photo_count: s.after_photo_count,
+            checklist_completion_rate: s.checklist_completion_rate,
+          })))
+          
+          // 실제 데이터가 변경된 경우에만 상태 업데이트
+          if (newDataString !== previousStoreDataRef.current) {
+            console.log('[Dashboard] 데이터 변경 감지, 상태 업데이트')
+            previousStoreDataRef.current = newDataString
+            setStoreStatuses(data.data)
+            // BottomNavigation에 알림 (이벤트 발생)
+            if (typeof window !== 'undefined') {
+              window.dispatchEvent(new CustomEvent('storeStatusesUpdated', { detail: data.data }))
+            }
+          } else {
+            console.log('[Dashboard] 데이터 변경 없음, 상태 업데이트 스킵')
+          }
+        } else {
+          console.warn('[Dashboard] No data array in response:', data)
+          if (forceRefresh || storeStatuses.length === 0) {
+            setStoreStatuses([])
+          }
+        }
+      } else {
+        console.error('[Dashboard] API Error:', data.error || data.message)
+        if (forceRefresh) {
+          alert(data.error || data.message || '매장 정보를 불러오는데 실패했습니다.')
+        }
+        if (forceRefresh || storeStatuses.length === 0) {
+          setStoreStatuses([])
+        }
+      }
+    } catch (error) {
+      console.error('Error loading store statuses:', error)
+      if (forceRefresh) {
+        alert('매장 정보를 불러오는 중 오류가 발생했습니다.')
+      }
+      if (forceRefresh || storeStatuses.length === 0) {
+        setStoreStatuses([])
+      }
+    } finally {
+      setLoading(false)
+      isLoadingRef.current = false
+      console.log('[Dashboard] loadStoreStatuses 완료')
+    }
+  }, []) // 의존성 배열을 비워서 함수가 재생성되지 않도록
 
   // 확인된 요청 ID 로드 (localStorage에서)
   useEffect(() => {
@@ -98,14 +213,44 @@ export default function StoreManagerDashboardPage() {
   }, [storeStatuses])
 
   useEffect(() => {
-    loadStoreStatuses()
+    // 초기 로드만 실행
+    if (isInitialLoadRef.current) {
+      loadStoreStatuses(false)
+      isInitialLoadRef.current = false
+    }
 
     const timer = setInterval(() => {
       setNow(new Date().toLocaleString('ko-KR', { dateStyle: 'long' }))
     }, 60 * 1000)
 
-    return () => clearInterval(timer)
-  }, [])
+    // 전역 함수로 노출 (NavRoleSwitch에서 사용) - 강제 새로고침
+    ;(window as any).refreshStoreStatuses = () => {
+      console.log('[Dashboard] 수동 새로고침 요청')
+      hasLoadedDataRef.current = false
+      previousStoreIdsRef.current = ''
+      lastLoadTimeRef.current = 0 // 강제 새로고침이므로 간격 체크 무시
+      loadStoreStatuses(true) // forceRefresh = true
+    }
+
+    // 전역 함수로 storeStatuses 노출 (BottomNavigation에서 사용)
+    ;(window as any).getStoreStatuses = () => {
+      return storeStatuses
+    }
+
+    return () => {
+      clearInterval(timer)
+      delete (window as any).refreshStoreStatuses
+      delete (window as any).getStoreStatuses
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []) // 의존성 배열을 비워서 마운트 시 한 번만 실행
+
+  // 로딩 상태를 전역으로 업데이트
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      ;(window as any).isRefreshingStoreStatuses = loading
+    }
+  }, [loading])
 
   useEffect(() => {
     // 매장이 1개인 경우 자동 선택
@@ -114,13 +259,24 @@ export default function StoreManagerDashboardPage() {
     }
   }, [storeStatuses])
 
+  // storeStatuses의 store_id만 추출하여 비교 (실제 데이터 변경 여부 확인)
+  const storeIdsString = useMemo(() => {
+    return storeStatuses.map(s => s.store_id).sort().join(',')
+  }, [storeStatuses])
+
   useEffect(() => {
-    if (storeStatuses.length > 0) {
+    // 초기 로드이거나 storeIds가 실제로 변경된 경우에만 실행
+    if (storeStatuses.length > 0 && (previousStoreIdsRef.current !== storeIdsString || !hasLoadedDataRef.current)) {
+      previousStoreIdsRef.current = storeIdsString
+      hasLoadedDataRef.current = true
+      
       loadPhotoData()
       // 초기 로드 시 모든 매장의 요청을 미리 로드하여 카운트 계산에 사용
       loadAllRequestsForCount()
+      // 출근 현황 데이터 로드
+      loadAttendanceData()
     }
-  }, [storeStatuses])
+  }, [storeIdsString, storeStatuses.length])
 
   // 모든 매장의 요청을 미리 로드 (카운트 계산용)
   const loadAllRequestsForCount = async () => {
@@ -197,45 +353,42 @@ export default function StoreManagerDashboardPage() {
     }
   }
 
-  const loadStoreStatuses = async () => {
+  const loadAttendanceData = async () => {
+    if (storeStatuses.length === 0) return
+    
     try {
-      setLoading(true)
-      const response = await fetch('/api/store-manager/stores/status')
-      const data = await response.json()
-
-      console.log('[Dashboard] API Response:', { ok: response.ok, status: response.status, data })
-
+      setLoadingAttendance(true)
+      const storeIds = storeStatuses.map(s => s.store_id)
+      
+      // 현재 월의 시작일과 종료일 계산
+      const now = new Date()
+      const koreaTime = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Seoul' }))
+      const currentYear = koreaTime.getFullYear()
+      const currentMonth = koreaTime.getMonth()
+      const monthStart = new Date(currentYear, currentMonth, 1)
+      const monthEnd = new Date(currentYear, currentMonth + 1, 0, 23, 59, 59, 999)
+      
+      const startDate = monthStart.toISOString().split('T')[0]
+      const endDate = monthEnd.toISOString().split('T')[0]
+      
+      // 출근 데이터 조회
+      const response = await fetch(`/api/store-manager/attendance/monthly?start_date=${startDate}&end_date=${endDate}&store_ids=${storeIds.join(',')}`)
+      
       if (response.ok) {
-        if (data.data && Array.isArray(data.data)) {
-          console.log(`[Dashboard] Loaded ${data.data.length} stores`)
-          
-          // 각 매장의 출근 상태 디버깅
-          data.data.forEach((store: StoreStatus) => {
-            console.log(`[Dashboard] Store: ${store.store_name}`, {
-              attendance_status: store.attendance_status,
-              clock_in_time: store.clock_in_time,
-              clock_out_time: store.clock_out_time,
-            })
-          })
-          
-          setStoreStatuses(data.data)
-        } else {
-          console.warn('[Dashboard] No data array in response:', data)
-          setStoreStatuses([])
+        const data = await response.json()
+        if (data.success && data.data) {
+          setAttendanceData(data.data)
         }
       } else {
-        console.error('[Dashboard] API Error:', data.error || data.message)
-        alert(data.error || data.message || '매장 정보를 불러오는데 실패했습니다.')
-        setStoreStatuses([])
+        console.error('Error loading attendance data:', response.statusText)
       }
     } catch (error) {
-      console.error('Error loading store statuses:', error)
-      alert('매장 정보를 불러오는 중 오류가 발생했습니다.')
-      setStoreStatuses([])
+      console.error('Error loading attendance data:', error)
     } finally {
-      setLoading(false)
+      setLoadingAttendance(false)
     }
   }
+
 
   const loadPhotoData = async () => {
     try {
@@ -753,7 +906,7 @@ export default function StoreManagerDashboardPage() {
         }
 
         // 매장 상태 새로고침 (카운트 업데이트를 위해)
-        await loadStoreStatuses()
+        await loadStoreStatuses(true) // forceRefresh = true
         
         // 데이터 새로고침
         await handleRequestStatusClick(selectedRequestStatus || 'rejected')
@@ -781,7 +934,7 @@ export default function StoreManagerDashboardPage() {
       {/* 헤더 */}
       <div className="mb-4 md:mb-6">
         <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-3 mb-2">
-          <h1 className="text-xl md:text-3xl font-bold text-gray-900">전체 매장 현황</h1>
+          <h1 className="text-xl md:text-3xl font-bold text-gray-900">매장 선택 (상세보기)</h1>
           <div className="flex flex-col md:flex-row md:items-center gap-2 md:gap-4">
             {storeStatuses.length > 0 && (
               <>
@@ -803,7 +956,7 @@ export default function StoreManagerDashboardPage() {
                 )}
                 <Link
                   href={selectedStoreId ? `/store-manager/stores/${selectedStoreId}/detail` : (storeStatuses.length === 1 ? `/store-manager/stores/${storeStatuses[0]?.store_id}/detail` : '#')}
-                  className={`px-3 md:px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors font-medium text-sm md:text-base text-center ${
+                  className={`px-2 md:px-3 py-1 md:py-1.5 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors font-medium text-xs md:text-sm text-center ${
                     !selectedStoreId && storeStatuses.length > 1 ? 'opacity-50 cursor-not-allowed' : ''
                   }`}
                   onClick={(e) => {
@@ -824,6 +977,21 @@ export default function StoreManagerDashboardPage() {
           </div>
         </div>
 
+      </div>
+
+      {/* 1달간 관리 현황 */}
+      <div className="mb-4 md:mb-6">
+        <h2 className="text-lg md:text-xl font-semibold mb-3">1달간 관리 현황</h2>
+        {loadingAttendance ? (
+          <div className="bg-white rounded-lg shadow-md p-4 min-h-[300px] flex items-center justify-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+          </div>
+        ) : (
+          <AttendanceCalendar
+            attendanceData={attendanceData}
+            storeStatuses={storeStatuses.map(s => ({ store_id: s.store_id, store_name: s.store_name }))}
+          />
+        )}
       </div>
 
       {/* KPI 카드 */}
@@ -1660,7 +1828,7 @@ export default function StoreManagerDashboardPage() {
           onSuccess={() => {
             setShowRequestForm(false)
             setSelectedStoreId(null)
-            loadStoreStatuses() // 상태 새로고침
+            loadStoreStatuses(true) // 상태 새로고침, forceRefresh = true
           }}
           onCancel={() => {
             setShowRequestForm(false)

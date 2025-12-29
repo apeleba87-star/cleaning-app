@@ -43,3 +43,4 @@ CREATE POLICY "관리자는 제품 관리 가능" ON products
 
 
 
+

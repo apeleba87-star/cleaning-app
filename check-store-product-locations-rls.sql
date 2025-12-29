@@ -12,3 +12,4 @@ WHERE tablename = 'store_product_locations';
 
 
 
+

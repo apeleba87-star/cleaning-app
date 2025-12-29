@@ -34,3 +34,4 @@ SELECT id, name FROM stores WHERE deleted_at IS NULL ORDER BY name LIMIT 10;
 
 
 
+

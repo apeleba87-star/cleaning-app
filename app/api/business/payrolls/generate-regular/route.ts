@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server'
 import { createServerSupabaseClient, getServerUser } from '@/lib/supabase/server'
 import { handleApiError, UnauthorizedError, ForbiddenError } from '@/lib/errors'
 import { createClient } from '@supabase/supabase-js'
+import { adjustPaymentDayToLastDay } from '@/lib/utils/date'
 
 // 정규 직원 인건비 자동 생성
 export async function POST(request: NextRequest) {
@@ -99,11 +100,11 @@ export async function POST(request: NextRequest) {
     const [year, month] = pay_period.split('-')
     const payrollsToInsert = staffToCreate.map(staff => {
       // 급여일이 있으면 해당 기간의 지급일 계산 (예: salary_date=10, pay_period=2025-12 → 2025-12-10)
+      // 말일 조정 적용
       let paidAt: string | null = null
       if (staff.salary_date && staff.salary_date >= 1 && staff.salary_date <= 31) {
-        // 해당 월의 마지막 날짜 확인
-        const lastDay = new Date(parseInt(year), parseInt(month), 0).getDate()
-        const payDay = Math.min(staff.salary_date, lastDay)
+        // 말일로 조정된 급여일 계산
+        const payDay = adjustPaymentDayToLastDay(parseInt(year), parseInt(month), staff.salary_date)
         paidAt = `${year}-${month.padStart(2, '0')}-${String(payDay).padStart(2, '0')}`
       }
       

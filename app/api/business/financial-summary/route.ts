@@ -1,7 +1,7 @@
 import { NextRequest } from 'next/server'
 import { createServerSupabaseClient, getServerUser } from '@/lib/supabase/server'
 import { handleApiError, UnauthorizedError, ForbiddenError } from '@/lib/errors'
-import { getTodayDateKST } from '@/lib/utils/date'
+import { getTodayDateKST, adjustPaymentDayToLastDay, isTodayPaymentDay } from '@/lib/utils/date'
 
 // 재무 요약 조회
 export async function GET(request: NextRequest) {
@@ -256,16 +256,16 @@ export async function GET(request: NextRequest) {
         
         console.log(`[Financial Summary] User ${userRecord.name}: salary_date=${salaryDate}, salaryDateNum=${salaryDateNum}, todayDay=${todayDay}`)
         
-        // 급여일이 오늘인 경우 또는 이미 지났지만 이번 달인 경우 포함
-        // 이번 달에 급여일이 지났거나 오늘인 경우 포함 (아직 다음 달 급여일이 아님)
-        const isMatch = salaryDateNum <= todayDay
+        // 급여일이 오늘인지 확인 (말일 조정 포함)
+        // 오늘 날짜 기준으로 조정된 급여일이 오늘인지 확인
+        const isMatch = isTodayPaymentDay(salaryDateNum)
         
         if (!isMatch) {
-          console.log(`[Financial Summary] User ${userRecord.name} excluded: salary_date (${salaryDateNum}) is after today (${todayDay})`)
+          console.log(`[Financial Summary] User ${userRecord.name} excluded: salary_date (${salaryDateNum}) is not today (adjusted)`)
           return null
         }
         
-        console.log(`[Financial Summary] User ${userRecord.name} matched! salary_date=${salaryDateNum} <= todayDay=${todayDay}`)
+        console.log(`[Financial Summary] User ${userRecord.name} matched! salary_date=${salaryDateNum} is today (adjusted)`)
 
         const isSubcontract = userRecord.role === 'subcontract_individual' || userRecord.role === 'subcontract_company'
 
@@ -406,14 +406,23 @@ export async function GET(request: NextRequest) {
     const todaySalaryUsers = todaySalaryUsersWithStatus.filter((user): user is NonNullable<typeof user> => user !== null)
 
     // 오늘 수금일인 매장 조회 및 결제 상태 확인
-    const { data: todayPaymentStoresRaw, error: todayPaymentError } = await supabase
+    // 모든 매장을 가져온 후 말일 조정하여 필터링
+    const { data: allStores, error: allStoresError } = await supabase
       .from('stores')
       .select('id, name, payment_day, service_amount, payment_method')
       .eq('company_id', user.company_id)
-      .eq('payment_day', todayDay)
       .eq('unpaid_tracking_enabled', true)
       .is('deleted_at', null)
       .order('name')
+
+    if (allStoresError) {
+      console.error('Error fetching stores:', allStoresError)
+    }
+
+    // 말일 조정하여 오늘 수금일인 매장만 필터링
+    const todayPaymentStoresRaw = (allStores || []).filter((store) => {
+      return isTodayPaymentDay(store.payment_day)
+    })
 
     if (todayPaymentError) {
       console.error('Error fetching today payment stores:', todayPaymentError)

@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { Revenue, Receipt } from '@/types/db'
+import { adjustPaymentDayToLastDay } from '@/lib/utils/date'
 
 interface StoreReceivable {
   store_id: string
@@ -333,9 +334,8 @@ export default function ReceivablesPage() {
         nextYear = year + 1
       }
 
-      // payment_day가 해당 월에 유효한지 확인
-      const daysInMonth = new Date(nextYear, nextMonth, 0).getDate()
-      const finalDay = paymentDay > daysInMonth ? daysInMonth : paymentDay
+      // payment_day가 해당 월에 유효한지 확인 (말일 조정)
+      const finalDay = adjustPaymentDayToLastDay(nextYear, nextMonth, paymentDay)
 
       // YYYY-MM-DD 형식으로 반환
       return `${nextYear}-${String(nextMonth).padStart(2, '0')}-${String(finalDay).padStart(2, '0')}`
