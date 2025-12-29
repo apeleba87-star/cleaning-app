@@ -151,7 +151,7 @@ export async function GET(request: NextRequest) {
     const scheduledPayrollCount = scheduledPayrolls.length
 
     // 미수금 상위 매장 리스트
-    const { data: allStores } = await supabase
+    const { data: unpaidTrackingStores } = await supabase
       .from('stores')
       .select('id, name, payment_day')
       .eq('company_id', user.company_id)
@@ -159,7 +159,7 @@ export async function GET(request: NextRequest) {
       .is('deleted_at', null)
 
     const unpaidByStore = await Promise.all(
-      (allStores || []).map(async (store) => {
+      (unpaidTrackingStores || []).map(async (store) => {
         const { data: storeRevenues } = await supabase
           .from('revenues')
           .select('id, amount')
@@ -423,10 +423,6 @@ export async function GET(request: NextRequest) {
     const todayPaymentStoresRaw = (allStores || []).filter((store) => {
       return isTodayPaymentDay(store.payment_day)
     })
-
-    if (todayPaymentError) {
-      console.error('Error fetching today payment stores:', todayPaymentError)
-    }
 
     // 각 매장의 결제 완료 여부 확인
     const todayPaymentStores = await Promise.all(
