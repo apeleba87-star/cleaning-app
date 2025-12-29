@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
+import { createClient } from '@/lib/supabase/client'
 
 interface MobileHeaderProps {
   userName: string
@@ -22,6 +23,12 @@ export default function MobileHeader({ userName }: MobileHeaderProps) {
     
     return () => clearInterval(interval)
   }, [])
+
+  const handleLogout = async () => {
+    const supabase = createClient()
+    await supabase.auth.signOut()
+    window.location.href = '/login'
+  }
 
   return (
     <div className="md:hidden bg-blue-600 text-white border-b border-blue-700 sticky top-0 z-40">
@@ -59,14 +66,12 @@ export default function MobileHeader({ userName }: MobileHeaderProps) {
         </div>
         <div className="flex items-center gap-2">
           <span className="text-xs text-blue-200 hidden sm:inline">{userName}</span>
-          <form action="/api/auth/logout" method="post">
-            <button
-              type="submit"
-              className="px-2 py-1 bg-red-500 hover:bg-red-600 rounded-md text-xs font-medium text-white transition-colors"
-            >
-              로그아웃
-            </button>
-          </form>
+          <button
+            onClick={handleLogout}
+            className="px-2 py-1 bg-red-500 hover:bg-red-600 rounded-md text-xs font-medium text-white transition-colors"
+          >
+            로그아웃
+          </button>
         </div>
       </div>
     </div>

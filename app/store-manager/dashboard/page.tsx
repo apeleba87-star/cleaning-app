@@ -934,7 +934,9 @@ export default function StoreManagerDashboardPage() {
       {/* 헤더 */}
       <div className="mb-4 md:mb-6">
         <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-3 mb-2">
-          <h1 className="text-xl md:text-3xl font-bold text-gray-900">매장 선택 (상세보기)</h1>
+          <h1 className="text-xl md:text-3xl font-bold text-gray-900">
+            매장 선택 <span className="text-sm md:text-lg font-normal text-gray-600">(상세보기)</span>
+          </h1>
           <div className="flex flex-col md:flex-row md:items-center gap-2 md:gap-4">
             {storeStatuses.length > 0 && (
               <>
@@ -956,7 +958,7 @@ export default function StoreManagerDashboardPage() {
                 )}
                 <Link
                   href={selectedStoreId ? `/store-manager/stores/${selectedStoreId}/detail` : (storeStatuses.length === 1 ? `/store-manager/stores/${storeStatuses[0]?.store_id}/detail` : '#')}
-                  className={`px-2 md:px-3 py-1 md:py-1.5 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors font-medium text-xs md:text-sm text-center ${
+                  className={`px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors font-medium text-sm md:text-base text-center ${
                     !selectedStoreId && storeStatuses.length > 1 ? 'opacity-50 cursor-not-allowed' : ''
                   }`}
                   onClick={(e) => {
