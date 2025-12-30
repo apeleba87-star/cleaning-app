@@ -313,7 +313,7 @@ export function ChecklistCamera({ items, mode, storeId, onComplete, onCancel }: 
         )}
 
         {/* 셔터 왼쪽 하단: 모든 항목의 썸네일 목록 */}
-        <div className="absolute bottom-24 left-4 flex flex-col gap-2 z-20 max-h-[calc(100vh-200px)] overflow-y-auto">
+        <div className="absolute bottom-32 left-4 flex flex-col gap-2 z-20 max-h-[calc(100vh-250px)] overflow-y-auto">
           {photoItems.map((item, idx) => (
             <div key={idx} className="flex items-center gap-2">
               <div className="relative">
@@ -347,7 +347,7 @@ export function ChecklistCamera({ items, mode, storeId, onComplete, onCancel }: 
       </div>
 
       {/* 하단: 촬영 버튼 및 저장 버튼 */}
-      <div className="absolute bottom-0 left-0 right-0 bg-black bg-opacity-90 p-4 z-20">
+      <div className="absolute bottom-16 left-0 right-0 bg-black bg-opacity-90 p-4 z-20 md:bottom-0">
         <div className="flex items-center justify-center gap-4">
           <button
             onClick={onCancel}
