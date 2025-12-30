@@ -16,6 +16,12 @@ export async function GET(request: NextRequest) {
 
     const { searchParams } = new URL(request.url)
     const storeId = searchParams.get('store_id')
+    const page = parseInt(searchParams.get('page') || '1', 10)
+    const limit = parseInt(searchParams.get('limit') || '500', 10)
+    
+    // limit 최대값 제한 (500개)
+    const safeLimit = Math.min(limit, 500)
+    const offset = (page - 1) * safeLimit
 
     const supabase = await createServerSupabaseClient()
 
@@ -74,36 +80,42 @@ export async function GET(request: NextRequest) {
       .order('vending_machine_number', { ascending: true })
       .order('position_number', { ascending: true })
 
-    // Supabase 기본 limit 1000개 제한을 해결하기 위해 range 사용 (페이지네이션)
-    let offset = 0
-    const limit = 1000 // Supabase 최대 반환 개수
-    const allLocations: any[] = []
-    let hasMore = true
+    // 전체 개수 조회 (페이지네이션을 위한 총 개수) - 별도 쿼리 사용
+    let countQuery = supabase
+      .from('store_product_locations')
+      .select('*', { count: 'exact', head: true })
     
-    while (hasMore) {
-      const currentQuery = query.range(offset, offset + limit - 1)
-      const { data: batchLocations, error: batchError } = await currentQuery
-      
-      if (batchError) {
-        console.error('Error fetching locations:', batchError)
-        return NextResponse.json(
-          { error: '위치 정보 조회에 실패했습니다.' },
-          { status: 500 }
-        )
-      }
-      
-      if (batchLocations && batchLocations.length > 0) {
-        allLocations.push(...batchLocations)
-        offset += limit
-        
-        // 가져온 개수가 limit보다 적으면 더 이상 없음
-        if (batchLocations.length < limit) {
-          hasMore = false
-        }
-      } else {
-        hasMore = false
-      }
+    if (companyStoreIds && companyStoreIds.length > 0) {
+      countQuery = countQuery.in('store_id', companyStoreIds)
     }
+    
+    if (storeId) {
+      countQuery = countQuery.eq('store_id', storeId)
+    }
+    
+    const { count, error: countError } = await countQuery
+    
+    if (countError) {
+      console.error('Error counting locations:', countError)
+      return NextResponse.json(
+        { error: '위치 정보 개수 조회에 실패했습니다.' },
+        { status: 500 }
+      )
+    }
+
+    // 페이지네이션된 데이터 조회
+    const { data: locations, error: locationsError } = await query
+      .range(offset, offset + safeLimit - 1)
+    
+    if (locationsError) {
+      console.error('Error fetching locations:', locationsError)
+      return NextResponse.json(
+        { error: '위치 정보 조회에 실패했습니다.' },
+        { status: 500 }
+      )
+    }
+    
+    const allLocations = locations || []
 
     // 데이터 변환
     const formattedLocations = allLocations.map((loc: any) => ({
@@ -119,9 +131,19 @@ export async function GET(request: NextRequest) {
       last_updated_at: loc.last_updated_at
     }))
 
+    const totalPages = Math.ceil((count || 0) / safeLimit)
+
     return NextResponse.json({
       success: true,
-      data: formattedLocations
+      data: formattedLocations,
+      pagination: {
+        page,
+        limit: safeLimit,
+        total: count || 0,
+        totalPages,
+        hasNextPage: page < totalPages,
+        hasPrevPage: page > 1
+      }
     })
   } catch (error: any) {
     console.error('Error in GET /api/business/products/locations:', error)

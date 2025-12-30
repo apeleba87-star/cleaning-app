@@ -310,6 +310,9 @@ export async function POST(request: NextRequest) {
     // 제품 조회 캐싱 (제품명 -> 제품 정보)
     const productCache = new Map<string, { id: string; barcode: string | null; category_1: string | null; category_2: string | null }>()
     
+    // UPSERT 전 제품 수 (업데이트/생성 구분용)
+    const productsBeforeUpsert = new Set<string>()
+    
     // 매장 소유권 검증 캐싱 (매장 ID -> 검증 완료 여부)
     const verifiedStoreIds = new Set<string>()
 
@@ -323,11 +326,11 @@ export async function POST(request: NextRequest) {
       storeGroups.get(storeName)!.push(row)
     })
 
-    // 모든 고유 제품명 수집 (배치 조회를 위해)
+    // 모든 고유 제품명 수집 (배치 조회를 위해) - 앞뒤 공백 제거하여 정규화
     const uniqueProductNames = new Set<string>()
     rows.forEach(row => {
-      if (row.상품명) {
-        uniqueProductNames.add(row.상품명)
+      if (row.상품명 && row.상품명.trim()) {
+        uniqueProductNames.add(row.상품명.trim())
       }
     })
 
@@ -351,7 +354,9 @@ export async function POST(request: NextRequest) {
         console.error(`제품 배치 조회 오류 (배치 ${batchNumber}/${productBatchCount}):`, batchError)
       } else if (batchProducts) {
         batchProducts.forEach(product => {
-          productCache.set(product.name, {
+          // DB에서 조회한 제품명도 정규화하여 캐시 키로 사용 (일관성 확보)
+          const normalizedName = product.name?.trim() || product.name
+          productCache.set(normalizedName, {
             id: product.id,
             barcode: product.barcode,
             category_1: product.category_1,
@@ -363,6 +368,11 @@ export async function POST(request: NextRequest) {
     }
 
     console.log(`제품 배치 조회 완료: ${productCache.size}개 제품 캐시됨`)
+    
+    // UPSERT 전 제품명 저장 (업데이트/생성 구분용)
+    productCache.forEach((_, productName) => {
+      productsBeforeUpsert.add(productName)
+    })
 
     // 위치 정보 조회 캐싱을 위한 데이터 구조 (store_id, vending_machine_number, position_number -> location info)
     const locationCache = new Map<string, { id: string; product_id: string | null }>()
@@ -449,10 +459,259 @@ export async function POST(request: NextRequest) {
 
     console.log(`위치 정보 배치 조회 완료: 총 ${locationCache.size}개 위치 캐시됨`)
 
+    // ============================================
+    // 제품 정보 배치 UPSERT (옵션 A)
+    // ============================================
+    console.log('제품 정보 배치 UPSERT 시작...')
+    
+    // 1. 모든 행에서 제품 정보 수집 (중복 제거, 마지막 값으로 덮어쓰기)
+    // 기존 캐시 데이터와 병합하여 누락된 정보만 보완
+    const productsToUpsertMap = new Map<string, {
+      name: string
+      barcode: string | null
+      category_1: string | null
+      category_2: string | null
+    }>()
+    
+    rows.forEach(row => {
+      const productName = row.상품명?.trim()
+      if (!productName) return
+      
+      // 기존 캐시에서 제품 정보 가져오기 (있는 경우)
+      const existingProduct = productCache.get(productName)
+      
+      // 새로운 데이터 (CSV에서)
+      const newBarcode = (row.바코드 && row.바코드.trim()) ? row.바코드.trim() : null
+      const newCategory1 = (row['1차카테고리'] && row['1차카테고리'].trim()) ? row['1차카테고리'].trim() : null
+      const newCategory2 = (row['2차카테고리'] && row['2차카테고리'].trim()) ? row['2차카테고리'].trim() : null
+      
+      // 기존 데이터와 병합: 기존 값이 있으면 유지, 없으면 새 값 사용 (COALESCE 로직)
+      productsToUpsertMap.set(productName, {
+        name: productName,
+        barcode: existingProduct?.barcode || newBarcode,
+        category_1: existingProduct?.category_1 || newCategory1,
+        category_2: existingProduct?.category_2 || newCategory2,
+      })
+    })
+    
+    const productsToUpsert = Array.from(productsToUpsertMap.values())
+    console.log(`제품 정보 수집 완료: 총 ${productsToUpsert.length}개 고유 제품명`)
+    
+    // 2. 제품 정보 배치 처리 (INSERT와 UPDATE 분리 - 부분 인덱스 때문에 ON CONFLICT 사용 불가)
+    if (productsToUpsert.length > 0) {
+      const PRODUCT_BATCH_SIZE = 1000
+      
+      // 존재하는 제품과 새 제품 분리
+      const productsToUpdate: typeof productsToUpsert = []
+      const productsToInsert: typeof productsToUpsert = []
+      
+      productsToUpsert.forEach(product => {
+        const existingProduct = productCache.get(product.name)
+        if (existingProduct) {
+          // 기존 제품: 누락된 정보만 보완하여 업데이트
+          const updateData: typeof product = {
+            name: product.name,
+            barcode: existingProduct.barcode || product.barcode,
+            category_1: existingProduct.category_1 || product.category_1,
+            category_2: existingProduct.category_2 || product.category_2,
+          }
+          productsToUpdate.push(updateData)
+        } else {
+          // 새 제품: INSERT
+          productsToInsert.push(product)
+        }
+      })
+      
+      console.log(`제품 처리 분류: 업데이트 ${productsToUpdate.length}개, 생성 ${productsToInsert.length}개`)
+      
+      // 2-1. 기존 제품 배치 UPDATE
+      // 참고: Supabase는 배치 UPDATE를 지원하지 않으므로, UPDATE가 필요한 경우만 개별 처리
+      // 하지만 대부분의 제품은 이미 정보가 완전하므로 UPDATE가 필요한 경우가 많지 않음
+      if (productsToUpdate.length > 0) {
+        let updatedCount = 0
+        for (const product of productsToUpdate) {
+          const existingProduct = productCache.get(product.name)
+          if (!existingProduct) continue
+          
+          const updateData: {
+            barcode?: string | null
+            category_1?: string | null
+            category_2?: string | null
+            updated_at?: string
+          } = {}
+          let needsUpdate = false
+          
+          // 누락된 정보만 추가
+          if (!existingProduct.barcode && product.barcode) {
+            updateData.barcode = product.barcode
+            needsUpdate = true
+          }
+          if (!existingProduct.category_1 && product.category_1) {
+            updateData.category_1 = product.category_1
+            needsUpdate = true
+          }
+          if (!existingProduct.category_2 && product.category_2) {
+            updateData.category_2 = product.category_2
+            needsUpdate = true
+          }
+          
+          if (needsUpdate) {
+            updateData.updated_at = new Date().toISOString()
+            const { error: updateError } = await supabase
+              .from('products')
+              .update(updateData)
+              .eq('id', existingProduct.id)
+            
+            if (updateError) {
+              console.error(`제품 업데이트 실패: ${product.name} - ${updateError.message}`)
+            } else {
+              updatedCount++
+              // 캐시 업데이트
+              productCache.set(product.name, {
+                ...existingProduct,
+                ...updateData
+              })
+            }
+          }
+        }
+        console.log(`제품 업데이트 완료: ${updatedCount}개 (총 ${productsToUpdate.length}개 중)`)
+      }
+      
+      // 2-2. 새 제품 배치 INSERT
+      // INSERT 전에 한 번 더 존재 여부 확인 (UNIQUE 제약 위반 방지)
+      if (productsToInsert.length > 0) {
+        const insertBatches = Math.ceil(productsToInsert.length / PRODUCT_BATCH_SIZE)
+        
+        for (let i = 0; i < productsToInsert.length; i += PRODUCT_BATCH_SIZE) {
+          const batch = productsToInsert.slice(i, i + PRODUCT_BATCH_SIZE)
+          const batchNumber = Math.floor(i / PRODUCT_BATCH_SIZE) + 1
+          
+          // INSERT 전에 한 번 더 존재 여부 확인 (정규화된 제품명 사용)
+          const productNamesToInsert = batch.map(p => p.name.trim())
+          const { data: existingProductsCheck, error: checkError } = await supabase
+            .from('products')
+            .select('id, name, barcode, category_1, category_2')
+            .in('name', productNamesToInsert)
+            .is('deleted_at', null)
+          
+          // 이미 존재하는 제품들을 캐시에 추가
+          const existingNames = new Set<string>()
+          if (!checkError && existingProductsCheck) {
+            existingProductsCheck.forEach(product => {
+              const normalizedName = product.name?.trim() || product.name
+              existingNames.add(normalizedName)
+              productCache.set(normalizedName, {
+                id: product.id,
+                barcode: product.barcode,
+                category_1: product.category_1,
+                category_2: product.category_2
+              })
+            })
+          }
+          
+          // 존재하는 제품 제외 (정규화된 이름으로 비교)
+          const batchToInsert = batch.filter(p => {
+            const normalizedName = p.name.trim()
+            return !existingNames.has(normalizedName) && !productCache.has(normalizedName)
+          })
+          
+          if (batchToInsert.length > 0) {
+            const { data: insertedProducts, error: insertError } = await supabase
+              .from('products')
+              .insert(batchToInsert)
+              .select('id, name, barcode, category_1, category_2')
+            
+            if (insertError) {
+              console.error(`제품 배치 INSERT 오류 (배치 ${batchNumber}/${insertBatches}):`, insertError)
+              
+              // UNIQUE 제약 위반인 경우, 해당 제품들을 다시 조회하여 캐시에 추가
+              if (insertError.message.includes('unique constraint') || insertError.message.includes('duplicate key')) {
+                const failedProductNames = batchToInsert.map(p => p.name.trim())
+                const { data: existingProducts } = await supabase
+                  .from('products')
+                  .select('id, name, barcode, category_1, category_2')
+                  .in('name', failedProductNames)
+                  .is('deleted_at', null)
+                
+                if (existingProducts) {
+                  existingProducts.forEach(product => {
+                    const normalizedName = product.name?.trim() || product.name
+                    productCache.set(normalizedName, {
+                      id: product.id,
+                      barcode: product.barcode,
+                      category_1: product.category_1,
+                      category_2: product.category_2
+                    })
+                  })
+                  console.log(`제품 배치 ${batchNumber}/${insertBatches}: UNIQUE 제약 위반으로 인해 ${existingProducts.length}개 제품을 캐시에 추가`)
+                }
+              }
+              errors.push(`제품 배치 INSERT 실패 (배치 ${batchNumber}): ${insertError.message}`)
+            } else if (insertedProducts) {
+              // INSERT 후 반환된 제품 정보를 캐시에 저장
+              insertedProducts.forEach(product => {
+                const normalizedName = product.name?.trim() || product.name
+                productCache.set(normalizedName, {
+                  id: product.id,
+                  barcode: product.barcode,
+                  category_1: product.category_1,
+                  category_2: product.category_2
+                })
+              })
+              const existingCount = existingProductsCheck?.length || 0
+              console.log(`제품 배치 INSERT 완료 (배치 ${batchNumber}/${insertBatches}): ${insertedProducts.length}개 생성, ${existingCount}개는 이미 존재`)
+            }
+          } else {
+            console.log(`제품 배치 ${batchNumber}/${insertBatches}: 모든 제품이 이미 존재하여 INSERT 생략`)
+          }
+        }
+      }
+      
+      // 3. INSERT 후 모든 제품 ID 조회 (INSERT 결과에 포함되지 않은 제품들용)
+      // INSERT의 .select()가 모든 제품을 반환하지 않을 수 있으므로, 추가 조회
+      const allProductNames = Array.from(productsToUpsertMap.keys())
+      const missingProductNames = allProductNames.filter(name => !productCache.has(name))
+      
+      if (missingProductNames.length > 0) {
+        for (let i = 0; i < missingProductNames.length; i += PRODUCT_BATCH_SIZE) {
+          const batch = missingProductNames.slice(i, i + PRODUCT_BATCH_SIZE)
+          const { data: fetchedProducts, error: fetchError } = await supabase
+            .from('products')
+            .select('id, name, barcode, category_1, category_2')
+            .in('name', batch)
+            .is('deleted_at', null)
+          
+          if (!fetchError && fetchedProducts) {
+            fetchedProducts.forEach(product => {
+              const normalizedName = product.name?.trim() || product.name
+              productCache.set(normalizedName, {
+                id: product.id,
+                barcode: product.barcode,
+                category_1: product.category_1,
+                category_2: product.category_2
+              })
+            })
+          }
+        }
+      }
+    }
+    
+    console.log(`제품 정보 배치 UPSERT 완료: ${productCache.size}개 제품 캐시됨`)
+    
+    // UPSERT 통계 계산
+    // UPSERT 전에 캐시에 있던 제품 = 업데이트된 것 (대략)
+    // UPSERT 전에 캐시에 없던 제품 = 새로 생성된 것 (대략)
+    productsUpdated = productsBeforeUpsert.size
+    productsCreated = productCache.size - productsBeforeUpsert.size
+    
+    // ============================================
+    // 위치 정보 수집 및 배치 UPSERT
+    // ============================================
+    
     // 배치 처리를 위한 위치 정보 수집
     const locationsToUpsert: Array<{ store_id: string; product_id: string; vending_machine_number: number; position_number: number; stock_quantity: number; is_available: boolean; last_updated_at: string }> = []
 
-    // 각 매장별로 처리 (제품은 현재 방식 유지, 위치 정보만 배치 처리)
+    // 각 매장별로 처리 (제품은 이미 배치 UPSERT로 처리됨, 위치 정보만 수집)
     for (const [storeName, storeRows] of Array.from(storeGroups.entries())) {
       const storeId = storeIdMap.get(storeName)
 
@@ -473,99 +732,21 @@ export async function POST(request: NextRequest) {
           // 위치 번호 변환
           const positionNumber = convertLocationToPosition(row.위치)
 
-          // 제품 찾기 또는 생성 (캐시에서만 조회, 이미 배치 조회로 캐시됨)
-          let productId: string | null = null
-          let existingProduct: { id: string; barcode: string | null; category_1: string | null; category_2: string | null } | null = null
-
-          // 캐시에서만 확인 (배치 조회로 이미 캐시됨)
-          if (productCache.has(row.상품명)) {
-            existingProduct = productCache.get(row.상품명)!
-            productId = existingProduct.id
+          // 제품 ID 조회 (이미 배치 UPSERT로 처리됨, 캐시에서만 조회)
+          const productName = row.상품명?.trim() || ''
+          if (!productName) {
+            errors.push('제품명이 없는 행을 건너뜁니다.')
+            continue
           }
 
-          if (existingProduct) {
-            
-            // 기존 제품 정보 업데이트 (누락된 정보만 보완)
-            const updateData: {
-              barcode?: string | null
-              category_1?: string | null
-              category_2?: string | null
-              updated_at?: string
-            } = {}
-            
-            let needsUpdate = false
-            
-            // 바코드가 없고 새 파일에 바코드가 있으면 추가
-            if (!existingProduct.barcode && row.바코드 && row.바코드.trim()) {
-              updateData.barcode = row.바코드.trim()
-              needsUpdate = true
-            }
-            
-            // 카테고리 정보 보완
-            if (!existingProduct.category_1 && row['1차카테고리'] && row['1차카테고리'].trim()) {
-              updateData.category_1 = row['1차카테고리'].trim()
-              needsUpdate = true
-            }
-            
-            if (!existingProduct.category_2 && row['2차카테고리'] && row['2차카테고리'].trim()) {
-              updateData.category_2 = row['2차카테고리'].trim()
-              needsUpdate = true
-            }
-            
-            // 업데이트가 필요한 경우에만 실행
-            if (needsUpdate) {
-              updateData.updated_at = new Date().toISOString()
-              
-              const { error: updateError } = await supabase
-                .from('products')
-                .update(updateData)
-                .eq('id', existingProduct.id)
-              
-              if (updateError) {
-                console.error(`제품 정보 업데이트 실패: ${row.상품명} - ${updateError.message}`)
-                // 업데이트 실패해도 위치 정보는 저장 가능하므로 계속 진행
-              } else {
-                productsUpdated++
-                // 캐시 업데이트 (업데이트된 정보 반영)
-                productCache.set(row.상품명, {
-                  ...existingProduct,
-                  ...updateData
-                })
-              }
-            } else {
-              productsUpdated++
-            }
-          } else {
-            // 제품 생성
-            const { data: newProduct, error: productCreateError } = await supabase
-              .from('products')
-              .insert({
-                name: row.상품명,
-                barcode: (row.바코드 && row.바코드.trim()) ? row.바코드.trim() : null,
-                category_1: (row['1차카테고리'] && row['1차카테고리'].trim()) ? row['1차카테고리'].trim() : null,
-                category_2: (row['2차카테고리'] && row['2차카테고리'].trim()) ? row['2차카테고리'].trim() : null,
-                image_url: null
-              })
-              .select('id, barcode, category_1, category_2')
-              .single()
-
-            if (productCreateError || !newProduct) {
-              errors.push(`제품 생성 실패: ${row.상품명} - ${productCreateError?.message}`)
-              continue
-            }
-
-            // 새로 생성된 제품을 캐시에 저장
-            const newProductData = {
-              id: newProduct.id,
-              barcode: newProduct.barcode,
-              category_1: newProduct.category_1,
-              category_2: newProduct.category_2
-            }
-            productCache.set(row.상품명, newProductData)
-
-            productId = newProduct.id
-            productsCreated++
+          // 캐시에서 제품 ID 조회 (배치 UPSERT로 이미 처리됨)
+          const cachedProduct = productCache.get(productName)
+          if (!cachedProduct) {
+            errors.push(`제품을 찾을 수 없습니다: ${productName}`)
+            continue
           }
+
+          const productId = cachedProduct.id
 
           // 위치 정보를 배치 UPSERT 목록에 추가 (나중에 일괄 처리)
           if (productId) {
@@ -580,7 +761,8 @@ export async function POST(request: NextRequest) {
             })
           }
         } catch (error: any) {
-          errors.push(`처리 중 오류: ${row.상품명} - ${error.message}`)
+          const productName = row.상품명?.trim() || '알 수 없음'
+          errors.push(`처리 중 오류: ${productName} - ${error.message}`)
         }
       }
     }

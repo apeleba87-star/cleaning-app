@@ -303,8 +303,9 @@ export default async function ProductsPage() {
       <ProductMasterSection products={products || []} />
 
       {/* 제품 위치 정보 관리 */}
+      {/* 페이지네이션으로 인해 초기 데이터는 클라이언트에서 로드 (빈 배열 전달) */}
       <ProductLocationSection 
-        initialLocations={locations || []} 
+        initialLocations={[]} 
         stores={stores || []} 
       />
 

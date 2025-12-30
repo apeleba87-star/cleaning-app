@@ -24,6 +24,7 @@ export default function ProductMasterSection({ products }: ProductMasterSectionP
   const [uploadResult, setUploadResult] = useState<any>(null)
   const [uploadError, setUploadError] = useState<string | null>(null)
   const [uploadProgress, setUploadProgress] = useState<{ current: number; total: number } | null>(null)
+  const [uploadStage, setUploadStage] = useState<'upload' | 'process' | 'saving'>('upload')
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -37,6 +38,7 @@ export default function ProductMasterSection({ products }: ProductMasterSectionP
     setUploading(true)
     setUploadError(null)
     setUploadResult(null)
+    setUploadStage('upload')
     
     // 파일의 총 행 수 계산 (헤더 제외)
     let totalRows = 0
@@ -48,6 +50,9 @@ export default function ProductMasterSection({ products }: ProductMasterSectionP
     } catch (e) {
       console.error('Error reading file:', e)
     }
+    
+    // 파일 읽기 완료 후 처리 단계로 전환
+    setUploadStage('process')
 
     try {
       const formData = new FormData()
@@ -76,6 +81,8 @@ export default function ProductMasterSection({ products }: ProductMasterSectionP
       })
 
       clearInterval(progressInterval)
+      // API 응답이 오면 저장 단계로 전환
+      setUploadStage('saving')
       // API 응답이 오면 100% 완료로 표시
       setUploadProgress({ current: totalRows, total: totalRows })
 
@@ -104,6 +111,7 @@ export default function ProductMasterSection({ products }: ProductMasterSectionP
     } finally {
       setUploading(false)
       setUploadProgress(null)
+      setUploadStage('upload')
       if (fileInputRef.current) {
         fileInputRef.current.value = ''
       }
@@ -142,16 +150,27 @@ export default function ProductMasterSection({ products }: ProductMasterSectionP
                 >
                   {uploading ? (
                     uploadProgress ? (
-                      uploadProgress.current >= Math.floor(uploadProgress.total * 0.95) && uploadProgress.current < uploadProgress.total ? (
+                      uploadStage === 'upload' ? (
                         <span className="flex items-center justify-center gap-2">
                           <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                          저장 완료 대기 중...
+                          파일 업로드 중... (1/3)
+                        </span>
+                      ) : uploadStage === 'saving' || (uploadProgress.current >= Math.floor(uploadProgress.total * 0.95) && uploadProgress.current < uploadProgress.total) ? (
+                        <span className="flex items-center justify-center gap-2">
+                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                          저장 완료 대기 중... (3/3)
                         </span>
                       ) : (
-                        `${uploadProgress.current}/${uploadProgress.total}개 처리 중...`
+                        <span className="flex items-center justify-center gap-2">
+                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                          데이터 처리 중... (2/3) - {uploadProgress.current}/{uploadProgress.total}개
+                        </span>
                       )
                     ) : (
-                      '업로드 중...'
+                      <span className="flex items-center justify-center gap-2">
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                        파일 업로드 중... (1/3)
+                      </span>
                     )
                   ) : (
                     '📁 CSV 파일 업로드'
@@ -169,13 +188,21 @@ export default function ProductMasterSection({ products }: ProductMasterSectionP
                     />
                   </div>
                   <p className="text-xs text-gray-600 mt-1 text-center flex items-center justify-center gap-2">
-                    {uploadProgress.current >= Math.floor(uploadProgress.total * 0.95) && uploadProgress.current < uploadProgress.total ? (
+                    {uploadStage === 'upload' ? (
                       <>
                         <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-blue-600"></div>
-                        <span>저장 완료 대기 중...</span>
+                        <span>파일 업로드 중... (1/3)</span>
+                      </>
+                    ) : uploadStage === 'saving' || (uploadProgress.current >= Math.floor(uploadProgress.total * 0.95) && uploadProgress.current < uploadProgress.total) ? (
+                      <>
+                        <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-blue-600"></div>
+                        <span>저장 완료 대기 중... (3/3)</span>
                       </>
                     ) : (
-                      `${uploadProgress.current}/${uploadProgress.total}개 처리 중...`
+                      <>
+                        <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-blue-600"></div>
+                        <span>데이터 처리 중... (2/3) - {uploadProgress.current}/{uploadProgress.total}개</span>
+                      </>
                     )}
                   </p>
                 </div>

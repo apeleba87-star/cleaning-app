@@ -5,13 +5,23 @@ import './globals.css'
 const inter = Inter({ subsets: ['latin'] })
 
 export const metadata: Metadata = {
-  title: '청소 관리 앱',
-  description: '청소 관리 시스템',
+  title: '무플(MUPL) 무인 현장 운영 관리 플랫폼',
+  description: '무플(MUPL) 무인 현장 운영 관리 플랫폼',
   manifest: '/manifest.json',
   appleWebApp: {
     capable: true,
     statusBarStyle: 'default',
-    title: '청소 관리',
+    title: '무플(MUPL)',
+  },
+  openGraph: {
+    title: '무플(MUPL) 무인 현장 운영 관리 플랫폼',
+    description: '무플(MUPL) 무인 현장 운영 관리 플랫폼',
+    type: 'website',
+  },
+  twitter: {
+    card: 'summary',
+    title: '무플(MUPL) 무인 현장 운영 관리 플랫폼',
+    description: '무플(MUPL) 무인 현장 운영 관리 플랫폼',
   },
 }
 
@@ -36,7 +46,13 @@ export default function RootLayout({
         <meta name="theme-color" content="#2563eb" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-        <meta name="apple-mobile-web-app-title" content="청소 관리" />
+        <meta name="apple-mobile-web-app-title" content="무플(MUPL)" />
+        <meta property="og:title" content="무플(MUPL) 무인 현장 운영 관리 플랫폼" />
+        <meta property="og:description" content="무플(MUPL) 무인 현장 운영 관리 플랫폼" />
+        <meta property="og:type" content="website" />
+        <meta name="twitter:card" content="summary" />
+        <meta name="twitter:title" content="무플(MUPL) 무인 현장 운영 관리 플랫폼" />
+        <meta name="twitter:description" content="무플(MUPL) 무인 현장 운영 관리 플랫폼" />
       </head>
       <body className={inter.className}>{children}</body>
     </html>

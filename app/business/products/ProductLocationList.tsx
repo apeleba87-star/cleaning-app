@@ -27,8 +27,12 @@ export default function ProductLocationList({ initialLocations, stores }: Produc
   const [selectedStoreId, setSelectedStoreId] = useState<string>('')
   const [selectedProducts, setSelectedProducts] = useState<Set<string>>(new Set())
   const [editingLocation, setEditingLocation] = useState<ProductLocation | null>(null)
+  const [currentPage, setCurrentPage] = useState(1)
+  const [totalPages, setTotalPages] = useState(1)
+  const [totalCount, setTotalCount] = useState(0)
+  const PAGE_SIZE = 500
 
-  const loadLocations = async () => {
+  const loadLocations = async (page: number = 1) => {
     setLoading(true)
     setError(null)
 
@@ -37,6 +41,8 @@ export default function ProductLocationList({ initialLocations, stores }: Produc
       if (selectedStoreId) {
         params.append('store_id', selectedStoreId)
       }
+      params.append('page', page.toString())
+      params.append('limit', PAGE_SIZE.toString())
 
       const response = await fetch(`/api/business/products/locations?${params}`)
       const data = await response.json()
@@ -47,6 +53,14 @@ export default function ProductLocationList({ initialLocations, stores }: Produc
 
       if (data.success) {
         setLocations(data.data)
+        if (data.pagination) {
+          setTotalPages(data.pagination.totalPages)
+          setTotalCount(data.pagination.total)
+        }
+        // 선택된 항목 초기화 (페이지 변경 시)
+        if (page !== currentPage) {
+          setSelectedProducts(new Set())
+        }
       }
     } catch (err: any) {
       setError(err.message)
@@ -55,9 +69,27 @@ export default function ProductLocationList({ initialLocations, stores }: Produc
     }
   }
 
+  // 초기 로드
   useEffect(() => {
-    loadLocations()
+    loadLocations(1)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // 필터 변경 시 첫 페이지로 리셋
+  useEffect(() => {
+    if (selectedStoreId !== undefined) {
+      setCurrentPage(1)
+      loadLocations(1)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedStoreId])
+
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page)
+    loadLocations(page)
+    // 페이지 상단으로 스크롤
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
 
   const handleDelete = async (locationId: string) => {
     if (!confirm('정말 이 위치 정보를 삭제하시겠습니까?')) {
@@ -140,7 +172,7 @@ export default function ProductLocationList({ initialLocations, stores }: Produc
         // 성공적으로 삭제된 항목들은 목록에서 제거
         if (data.deletedCount > 0) {
           // 삭제된 개수만큼 목록에서 제거 (정확한 ID 매칭은 서버에서 처리되었으므로 전체 새로고침 권장)
-          loadLocations()
+          loadLocations(currentPage)
         }
       }
     } catch (err: any) {
@@ -150,9 +182,23 @@ export default function ProductLocationList({ initialLocations, stores }: Produc
     }
   }
 
+  const MAX_SELECTION = 500
+
+  // 서버에서 이미 필터링/정렬되어 오므로 locations를 그대로 사용
+  // (selectedStoreId는 서버에서 이미 필터링됨)
+  const displayLocations = locations
+
   const handleSelectAll = (checked: boolean) => {
     if (checked) {
-      setSelectedProducts(new Set(locations.map(l => l.id)))
+      // 최대 500개까지만 선택 (현재 페이지의 모든 항목 선택)
+      const allIds = displayLocations.map(l => l.id)
+      const limitedIds = allIds.slice(0, MAX_SELECTION)
+      setSelectedProducts(new Set(limitedIds))
+      
+      if (allIds.length > MAX_SELECTION) {
+        setError(`최대 ${MAX_SELECTION}개까지만 선택할 수 있습니다. 현재 ${MAX_SELECTION}개가 선택되었습니다.`)
+        setTimeout(() => setError(null), 5000)
+      }
     } else {
       setSelectedProducts(new Set())
     }
@@ -162,6 +208,12 @@ export default function ProductLocationList({ initialLocations, stores }: Produc
     setSelectedProducts(prev => {
       const next = new Set(prev)
       if (checked) {
+        // 이미 최대 개수에 도달했으면 선택 불가
+        if (next.size >= MAX_SELECTION) {
+          setError(`최대 ${MAX_SELECTION}개까지만 선택할 수 있습니다.`)
+          setTimeout(() => setError(null), 3000)
+          return prev
+        }
         next.add(locationId)
       } else {
         next.delete(locationId)
@@ -202,18 +254,6 @@ export default function ProductLocationList({ initialLocations, stores }: Produc
     }
   }
 
-  const filteredLocations = (selectedStoreId
-    ? locations.filter(l => l.store_id === selectedStoreId)
-    : locations
-  ).sort((a, b) => {
-    // 자판기 번호로 먼저 정렬
-    if (a.vending_machine_number !== b.vending_machine_number) {
-      return a.vending_machine_number - b.vending_machine_number
-    }
-    // 자판기 번호가 같으면 위치 번호로 정렬
-    return a.position_number - b.position_number
-  })
-
   return (
     <div className="space-y-4">
       <div className="flex justify-between items-center gap-4">
@@ -232,13 +272,18 @@ export default function ProductLocationList({ initialLocations, stores }: Produc
           </select>
         </div>
         {selectedProducts.size > 0 && (
-          <button
-            onClick={handleBulkDelete}
-            disabled={loading}
-            className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 disabled:bg-gray-400 transition-colors"
-          >
-            선택 삭제 ({selectedProducts.size})
-          </button>
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-gray-600">
+              {selectedProducts.size} / {MAX_SELECTION}개 선택
+            </span>
+            <button
+              onClick={handleBulkDelete}
+              disabled={loading}
+              className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 disabled:bg-gray-400 transition-colors"
+            >
+              선택 삭제 ({selectedProducts.size})
+            </button>
+          </div>
         )}
       </div>
 
@@ -252,6 +297,15 @@ export default function ProductLocationList({ initialLocations, stores }: Produc
         <div className="text-center py-8 text-gray-500">로딩 중...</div>
       )}
 
+      {/* 페이지네이션 정보 */}
+      {!loading && totalCount > 0 && (
+        <div className="flex justify-between items-center text-sm text-gray-600">
+          <span>
+            전체 {totalCount.toLocaleString()}개 중 {((currentPage - 1) * PAGE_SIZE + 1).toLocaleString()} - {Math.min(currentPage * PAGE_SIZE, totalCount).toLocaleString()}개 표시
+          </span>
+        </div>
+      )}
+
       {!loading && (
         <div className="bg-white rounded-lg shadow-md overflow-hidden">
           <table className="min-w-full divide-y divide-gray-200">
@@ -260,7 +314,7 @@ export default function ProductLocationList({ initialLocations, stores }: Produc
                 <th className="px-6 py-3 text-left">
                   <input
                     type="checkbox"
-                    checked={filteredLocations.length > 0 && selectedProducts.size === filteredLocations.length}
+                    checked={displayLocations.length > 0 && selectedProducts.size === displayLocations.length && selectedProducts.size <= MAX_SELECTION}
                     onChange={(e) => handleSelectAll(e.target.checked)}
                     className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
                   />
@@ -286,21 +340,22 @@ export default function ProductLocationList({ initialLocations, stores }: Produc
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {filteredLocations.length === 0 ? (
+              {displayLocations.length === 0 ? (
                 <tr>
                   <td colSpan={7} className="px-6 py-8 text-center text-gray-500">
                     등록된 위치 정보가 없습니다.
                   </td>
                 </tr>
               ) : (
-                filteredLocations.map((location) => (
+                displayLocations.map((location) => (
                   <tr key={location.id} className="hover:bg-gray-50">
                     <td className="px-6 py-4 whitespace-nowrap">
                       <input
                         type="checkbox"
                         checked={selectedProducts.has(location.id)}
                         onChange={(e) => handleSelectLocation(location.id, e.target.checked)}
-                        className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                        disabled={!selectedProducts.has(location.id) && selectedProducts.size >= MAX_SELECTION}
+                        className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
                       />
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
@@ -349,6 +404,56 @@ export default function ProductLocationList({ initialLocations, stores }: Produc
               )}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {/* 페이지네이션 컨트롤 */}
+      {!loading && totalPages > 1 && (
+        <div className="flex justify-center items-center gap-2 mt-4">
+          <button
+            onClick={() => handlePageChange(currentPage - 1)}
+            disabled={currentPage === 1}
+            className="px-4 py-2 border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            이전
+          </button>
+          
+          <div className="flex gap-1">
+            {Array.from({ length: Math.min(10, totalPages) }, (_, i) => {
+              let pageNum: number
+              if (totalPages <= 10) {
+                pageNum = i + 1
+              } else if (currentPage <= 5) {
+                pageNum = i + 1
+              } else if (currentPage >= totalPages - 4) {
+                pageNum = totalPages - 9 + i
+              } else {
+                pageNum = currentPage - 5 + i
+              }
+              
+              return (
+                <button
+                  key={pageNum}
+                  onClick={() => handlePageChange(pageNum)}
+                  className={`px-3 py-2 border rounded-md ${
+                    currentPage === pageNum
+                      ? 'bg-blue-600 text-white border-blue-600'
+                      : 'border-gray-300 hover:bg-gray-50'
+                  }`}
+                >
+                  {pageNum}
+                </button>
+              )
+            })}
+          </div>
+          
+          <button
+            onClick={() => handlePageChange(currentPage + 1)}
+            disabled={currentPage === totalPages}
+            className="px-4 py-2 border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            다음
+          </button>
         </div>
       )}
 

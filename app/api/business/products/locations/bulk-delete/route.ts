@@ -54,8 +54,8 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // 배치로 나누어 삭제 (한 번에 최대 1000개씩)
-    const BATCH_SIZE = 1000
+    // 배치로 나누어 삭제 (한 번에 최대 500개씩)
+    const BATCH_SIZE = 500
     let totalDeleted = 0
     const errors: string[] = []
 
@@ -93,6 +93,11 @@ export async function POST(request: NextRequest) {
       } else {
         totalDeleted += batch.length
         console.log(`배치 ${batchNumber} 삭제 완료: ${batch.length}개`)
+        
+        // 마지막 배치가 아니면 짧은 지연 추가 (서버 부하 방지)
+        if (i + BATCH_SIZE < locationIds.length) {
+          await new Promise(resolve => setTimeout(resolve, 100))
+        }
       }
     }
 

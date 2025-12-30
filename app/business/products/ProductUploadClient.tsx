@@ -21,6 +21,7 @@ export default function ProductUploadClient({ stores }: { stores: Store[] }) {
   const [result, setResult] = useState<any>(null)
   const [error, setError] = useState<string | null>(null)
   const [uploadProgress, setUploadProgress] = useState<{ current: number; total: number } | null>(null)
+  const [uploadStage, setUploadStage] = useState<'upload' | 'process' | 'saving'>('upload')
   const [unmatchedStores, setUnmatchedStores] = useState<UnmatchedStore[]>([])
   const [availableStores, setAvailableStores] = useState<Store[]>([])
   const [mappings, setMappings] = useState<Record<string, string>>({})
@@ -57,6 +58,8 @@ export default function ProductUploadClient({ stores }: { stores: Store[] }) {
       const lines = text.split('\n').filter(line => line.trim())
       totalRows = Math.max(0, lines.length - 1) // 헤더 제외
       setUploadProgress({ current: 0, total: totalRows })
+      // 파일 읽기 완료 후 처리 단계로 전환
+      setUploadStage('process')
     } catch (e) {
       console.error('Error reading file:', e)
     }
@@ -88,6 +91,8 @@ export default function ProductUploadClient({ stores }: { stores: Store[] }) {
       })
 
       clearInterval(progressInterval)
+      // API 응답이 오면 저장 단계로 전환
+      setUploadStage('saving')
       // API 응답이 오면 100% 완료로 표시
       setUploadProgress({ current: totalRows, total: totalRows })
 
@@ -137,6 +142,7 @@ export default function ProductUploadClient({ stores }: { stores: Store[] }) {
     } finally {
       setUploading(false)
       setUploadProgress(null)
+      setUploadStage('upload')
     }
   }
 
@@ -168,6 +174,8 @@ export default function ProductUploadClient({ stores }: { stores: Store[] }) {
         const lines = text.split('\n').filter(line => line.trim())
         totalRows = Math.max(0, lines.length - 1) // 헤더 제외
         setUploadProgress({ current: 0, total: totalRows })
+        // 파일 읽기 완료 후 처리 단계로 전환
+        setUploadStage('process')
         // 참고: file 상태가 있으면 file을 사용하므로 fileRef.current.text()를 호출하지 않음
         // fileRef.current.text()를 호출하면 FormData에 추가할 수 없을 수 있으므로,
         // file 상태를 우선 사용하고, 없을 때만 fileRef.current 사용
@@ -228,6 +236,8 @@ export default function ProductUploadClient({ stores }: { stores: Store[] }) {
       // 진행 상황 초기화 (이미 계산된 totalRows 사용)
       if (totalRows > 0) {
         setUploadProgress({ current: 0, total: totalRows })
+        // 파일 읽기 완료 후 처리 단계로 전환
+        setUploadStage('process')
       }
       
       // 매핑 저장 후 파일 다시 업로드 (저장된 매핑 정보 함께 전달)
@@ -265,6 +275,8 @@ export default function ProductUploadClient({ stores }: { stores: Store[] }) {
         })
         
         clearInterval(progressInterval)
+        // API 응답이 오면 저장 단계로 전환
+        setUploadStage('saving')
         // API 응답이 오면 100% 완료로 표시
         if (totalRows > 0) {
           setUploadProgress({ current: totalRows, total: totalRows })
@@ -335,6 +347,7 @@ export default function ProductUploadClient({ stores }: { stores: Store[] }) {
     } finally {
       setUploading(false)
       setUploadProgress(null)
+      setUploadStage('upload')
     }
   }
 
@@ -384,16 +397,27 @@ export default function ProductUploadClient({ stores }: { stores: Store[] }) {
           >
             {uploading ? (
               uploadProgress ? (
-                uploadProgress.current >= Math.floor(uploadProgress.total * 0.95) && uploadProgress.current < uploadProgress.total ? (
+                uploadStage === 'upload' ? (
                   <span className="flex items-center justify-center gap-2">
                     <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                    처리 완료 대기 중...
+                    파일 업로드 중... (1/3)
+                  </span>
+                ) : uploadStage === 'saving' || (uploadProgress.current >= Math.floor(uploadProgress.total * 0.95) && uploadProgress.current < uploadProgress.total) ? (
+                  <span className="flex items-center justify-center gap-2">
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                    저장 완료 대기 중... (3/3)
                   </span>
                 ) : (
-                  `${uploadProgress.current}/${uploadProgress.total}개 처리 중...`
+                  <span className="flex items-center justify-center gap-2">
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                    데이터 처리 중... (2/3) - {uploadProgress.current}/{uploadProgress.total}개
+                  </span>
                 )
               ) : (
-                '업로드 중...'
+                <span className="flex items-center justify-center gap-2">
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                  파일 업로드 중... (1/3)
+                </span>
               )
             ) : (
               '파일 업로드 및 처리'
@@ -410,13 +434,21 @@ export default function ProductUploadClient({ stores }: { stores: Store[] }) {
                 />
               </div>
               <p className="text-xs text-gray-600 mt-1 text-center flex items-center justify-center gap-2">
-                {uploadProgress.current >= Math.floor(uploadProgress.total * 0.95) && uploadProgress.current < uploadProgress.total ? (
+                {uploadStage === 'upload' ? (
                   <>
                     <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-blue-600"></div>
-                    <span>처리 완료 대기 중...</span>
+                    <span>파일 업로드 중... (1/3)</span>
+                  </>
+                ) : uploadStage === 'saving' || (uploadProgress.current >= Math.floor(uploadProgress.total * 0.95) && uploadProgress.current < uploadProgress.total) ? (
+                  <>
+                    <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-blue-600"></div>
+                    <span>저장 완료 대기 중... (3/3)</span>
                   </>
                 ) : (
-                  `${uploadProgress.current}/${uploadProgress.total}개 처리 중...`
+                  <>
+                    <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-blue-600"></div>
+                    <span>데이터 처리 중... (2/3) - {uploadProgress.current}/{uploadProgress.total}개</span>
+                  </>
                 )}
               </p>
             </div>
@@ -502,16 +534,27 @@ export default function ProductUploadClient({ stores }: { stores: Store[] }) {
               >
                 {uploading ? (
                   uploadProgress ? (
-                    uploadProgress.current >= Math.floor(uploadProgress.total * 0.95) && uploadProgress.current < uploadProgress.total ? (
+                    uploadStage === 'upload' ? (
                       <span className="flex items-center justify-center gap-2">
                         <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                        처리 완료 대기 중...
+                        파일 업로드 중... (1/3)
+                      </span>
+                    ) : uploadStage === 'saving' || (uploadProgress.current >= Math.floor(uploadProgress.total * 0.95) && uploadProgress.current < uploadProgress.total) ? (
+                      <span className="flex items-center justify-center gap-2">
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                        저장 완료 대기 중... (3/3)
                       </span>
                     ) : (
-                      `${uploadProgress.current}/${uploadProgress.total}개 처리 중...`
+                      <span className="flex items-center justify-center gap-2">
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                        데이터 처리 중... (2/3) - {uploadProgress.current}/{uploadProgress.total}개
+                      </span>
                     )
                   ) : (
-                    '처리 중...'
+                    <span className="flex items-center justify-center gap-2">
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                      파일 업로드 중... (1/3)
+                    </span>
                   )
                 ) : (
                   '매핑 저장 및 업로드 진행'
@@ -528,13 +571,21 @@ export default function ProductUploadClient({ stores }: { stores: Store[] }) {
                     />
                   </div>
                   <p className="text-xs text-gray-600 mt-1 text-center flex items-center justify-center gap-2">
-                    {uploadProgress.current >= Math.floor(uploadProgress.total * 0.95) && uploadProgress.current < uploadProgress.total ? (
+                    {uploadStage === 'upload' ? (
                       <>
                         <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-blue-600"></div>
-                        <span>처리 완료 대기 중...</span>
+                        <span>파일 업로드 중... (1/3)</span>
+                      </>
+                    ) : uploadStage === 'saving' || (uploadProgress.current >= Math.floor(uploadProgress.total * 0.95) && uploadProgress.current < uploadProgress.total) ? (
+                      <>
+                        <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-blue-600"></div>
+                        <span>저장 완료 대기 중... (3/3)</span>
                       </>
                     ) : (
-                      `${uploadProgress.current}/${uploadProgress.total}개 처리 중...`
+                      <>
+                        <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-blue-600"></div>
+                        <span>데이터 처리 중... (2/3) - {uploadProgress.current}/{uploadProgress.total}개</span>
+                      </>
                     )}
                   </p>
                 </div>

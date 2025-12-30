@@ -1,7 +1,7 @@
 {
-  "name": "청소 관리 앱",
-  "short_name": "청소관리",
-  "description": "청소 관리 시스템 - 직원용 앱",
+  "name": "무플(MUPL) 무인 현장 운영 관리 플랫폼",
+  "short_name": "무플(MUPL)",
+  "description": "무플(MUPL) 무인 현장 운영 관리 플랫폼",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#ffffff",
