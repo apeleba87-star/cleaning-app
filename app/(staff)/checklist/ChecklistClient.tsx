@@ -48,7 +48,7 @@ export default function ChecklistClient() {
   const [viewMode, setViewMode] = useState<'list' | 'completed'>('list') // list: 목록 보기, completed: 완료 내역 보기
   
   // 출근 정보 가져오기
-  const { storeId: attendanceStoreId, activeStoreIds = [], isClockedIn, loading: attendanceLoading } = useTodayAttendance()
+  const { storeId: attendanceStoreId, activeStoreIds = [], isClockedIn, loading: attendanceLoading, refresh: refreshAttendanceContext } = useTodayAttendance()
   
   // 체크리스트 수행 폼 상태
   const [items, setItems] = useState<ChecklistItem[]>([])
@@ -263,6 +263,11 @@ export default function ChecklistClient() {
     }
     setLoading(false)
   }
+
+  // 페이지 진입 시 출근 정보 새로고침 (사파리 호환성 개선)
+  useEffect(() => {
+    refreshAttendanceContext()
+  }, [refreshAttendanceContext])
 
   useEffect(() => {
     if (!attendanceLoading) {
