@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { useTodayAttendance } from '@/lib/hooks/useTodayAttendance'
+import { useTodayAttendance } from '@/contexts/AttendanceContext'
 import { getTodayDateKST } from '@/lib/utils/date'
 import { uploadPhoto } from '@/lib/supabase/upload'
 

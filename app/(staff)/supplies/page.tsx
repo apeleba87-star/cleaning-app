@@ -5,7 +5,7 @@ import { SupplyList } from '@/components/SupplyList'
 import { createClient } from '@/lib/supabase/client'
 import { SupplyRequest, SupplyRequestStatus, SupplyRequestCategory } from '@/types/db'
 import { PhotoUploader } from '@/components/PhotoUploader'
-import { useTodayAttendance } from '@/lib/hooks/useTodayAttendance'
+import { useTodayAttendance } from '@/contexts/AttendanceContext'
 import StoreSelector from '../attendance/StoreSelector'
 
 export default function SuppliesPage() {

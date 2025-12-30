@@ -9,6 +9,7 @@ import { createClient } from '@/lib/supabase/client'
 import { Attendance } from '@/types/db'
 import StoreSelector from './StoreSelector'
 import { getTodayDateKST, getYesterdayDateKST } from '@/lib/utils/date'
+import { useTodayAttendance } from '@/contexts/AttendanceContext'
 
 interface AttendanceWithStore extends Attendance {
   stores?: { name: string }
@@ -24,6 +25,9 @@ export default function AttendancePage() {
   const [error, setError] = useState<string | null>(null)
   const [selectedStoreId, setSelectedStoreId] = useState<string>('')
   const [checklistProgress, setChecklistProgress] = useState<Record<string, { completed: number; total: number; percentage: number }>>({})
+  
+  // Context의 refresh 함수 가져오기 (출근/퇴근 후 전역 상태 업데이트용)
+  const { refresh: refreshAttendanceContext } = useTodayAttendance()
   // 출근 유형 관련 상태
   const [attendanceType, setAttendanceType] = useState<'regular' | 'rescheduled' | 'emergency'>('regular')
   const [scheduledDate, setScheduledDate] = useState<string>('')
@@ -289,6 +293,8 @@ export default function AttendancePage() {
       
       // 출근 정보 다시 로드 (매장 정보 포함)
       await loadTodayAttendance()
+      // Context도 refresh하여 다른 페이지들이 최신 데이터를 받도록 함
+      refreshAttendanceContext()
       setSelectedStoreId('') // 매장 선택 초기화
       
       // 출근 완료 후 체크리스트 진행률 업데이트
@@ -336,6 +342,8 @@ export default function AttendancePage() {
       
       // 퇴근 정보 다시 로드 (최신 데이터로 동기화)
       await loadTodayAttendance()
+      // Context도 refresh하여 다른 페이지들이 최신 데이터를 받도록 함
+      refreshAttendanceContext()
       
       // 체크리스트 진행률 초기화
       setChecklistProgress({})

@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { useTodayAttendance } from '@/lib/hooks/useTodayAttendance'
+import { useTodayAttendance } from '@/contexts/AttendanceContext'
 import { uploadPhoto } from '@/lib/supabase/upload'
 
 type PhotoTab = 'receipt' | 'storage'

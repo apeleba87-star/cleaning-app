@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import { PhotoUploader } from '@/components/PhotoUploader'
 import { createClient } from '@/lib/supabase/client'
 import { CleaningPhoto } from '@/types/db'
-import { useTodayAttendance } from '@/lib/hooks/useTodayAttendance'
+import { useTodayAttendance } from '@/contexts/AttendanceContext'
 import StoreSelector from '../attendance/StoreSelector'
 
 export default function PhotosPage() {
