@@ -124,11 +124,6 @@ export default function BottomNavigation() {
       badge: checklistBadge,
     },
     {
-      href: '/photos',
-      label: '청소 사진',
-      icon: '📸',
-    },
-    {
       href: '/supplies',
       label: '물품 요청',
       icon: '📦',
