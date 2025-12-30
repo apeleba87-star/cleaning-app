@@ -313,7 +313,7 @@ export function ChecklistCamera({ items, mode, storeId, onComplete, onCancel }: 
         )}
 
         {/* 셔터 왼쪽 하단: 모든 항목의 썸네일 목록 */}
-        <div className="absolute bottom-32 left-4 flex flex-col gap-2 z-20 max-h-[calc(100vh-250px)] overflow-y-auto">
+        <div className="absolute top-20 bottom-44 left-4 flex flex-col gap-2 z-20 overflow-y-auto md:top-20 md:bottom-20">
           {photoItems.map((item, idx) => (
             <div key={idx} className="flex items-center gap-2">
               <div className="relative">
