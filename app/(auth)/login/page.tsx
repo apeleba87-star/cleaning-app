@@ -121,7 +121,9 @@ export default function LoginPage() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-100 p-4">
       <div className="bg-white p-8 rounded-lg shadow-md w-full max-w-md">
-        <h1 className="text-2xl font-bold mb-6 text-center">로그인</h1>
+        <h1 className="text-2xl font-bold mb-2 text-center text-blue-600">무플(MUPL)</h1>
+        <p className="text-sm text-gray-600 mb-6 text-center">무인 현장 운영 관리 플랫폼</p>
+        <h2 className="text-xl font-semibold mb-6 text-center">로그인</h2>
         {error && (
           <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-md text-red-800 text-sm">
             {error}

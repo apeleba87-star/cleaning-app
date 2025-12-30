@@ -133,6 +133,7 @@ export function NavRoleSwitch({ userRole, userName, onRefresh, isRefreshing }: N
           {
             label: '운영',
             items: [
+              { href: '/business/products', label: '바코드 제품 등록' },
               { href: '/business/checklists', label: '체크리스트' },
               { href: '/business/reports', label: '리포트' },
               { href: '/business/supply-requests', label: '물품 요청' },

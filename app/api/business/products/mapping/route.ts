@@ -39,6 +39,20 @@ export async function POST(request: NextRequest) {
 
       // 매핑 저장 요청인 경우
       if (saveMapping) {
+        // 업체관리자인 경우 매장 소유권 검증
+        if (user.role === 'business_owner' && user.company_id) {
+          const { data: storeCheck, error: storeCheckError } = await supabase
+            .from('stores')
+            .select('company_id')
+            .eq('id', systemStoreId)
+            .single()
+
+          if (storeCheckError || !storeCheck || storeCheck.company_id !== user.company_id) {
+            errors.push(`권한이 없는 매장입니다: ${originalStoreName}`)
+            continue
+          }
+        }
+
         console.log(`Attempting to save mapping: ${originalStoreName} -> ${systemStoreId}`)
         const { data: insertData, error: insertError } = await supabase
           .from('store_name_mappings')

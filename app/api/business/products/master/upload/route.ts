@@ -114,6 +114,45 @@ export async function POST(request: NextRequest) {
     let productsUpdated = 0
     const errors: string[] = []
 
+    // 제품 조회 캐싱 (제품명 -> 제품 정보)
+    const productCache = new Map<string, { id: string; barcode: string | null; category_1: string | null; category_2: string | null; image_url: string | null }>()
+
+    // 모든 고유 제품명 수집 (배치 조회를 위해)
+    const uniqueProductNames = new Set<string>()
+    rows.forEach(row => {
+      if (row.제품명 && row.제품명.trim()) {
+        uniqueProductNames.add(row.제품명.trim())
+      }
+    })
+
+    // 제품 배치 조회 (최대 1000개씩)
+    const productNamesArray = Array.from(uniqueProductNames)
+    const BATCH_SIZE = 1000
+    for (let i = 0; i < productNamesArray.length; i += BATCH_SIZE) {
+      const batch = productNamesArray.slice(i, i + BATCH_SIZE)
+      const { data: batchProducts, error: batchError } = await supabase
+        .from('products')
+        .select('id, name, barcode, category_1, category_2, image_url')
+        .in('name', batch)
+        .is('deleted_at', null)
+
+      if (batchError) {
+        console.error(`제품 배치 조회 오류 (배치 ${i / BATCH_SIZE + 1}):`, batchError)
+      } else if (batchProducts) {
+        batchProducts.forEach(product => {
+          productCache.set(product.name, {
+            id: product.id,
+            barcode: product.barcode,
+            category_1: product.category_1,
+            category_2: product.category_2,
+            image_url: product.image_url
+          })
+        })
+      }
+    }
+
+    console.log(`제품 배치 조회 완료: ${productCache.size}개 제품 캐시됨`)
+
     // 각 행 처리
     for (const row of rows) {
       try {
@@ -123,16 +162,15 @@ export async function POST(request: NextRequest) {
         }
 
         const productName = row.제품명.trim()
+        let existingProduct: { id: string; barcode: string | null; category_1: string | null; category_2: string | null; image_url: string | null } | null = null
 
-        // 기존 제품 찾기
-        const { data: existingProduct, error: productSearchError } = await supabase
-          .from('products')
-          .select('id, barcode, category_1, category_2, image_url')
-          .eq('name', productName)
-          .is('deleted_at', null)
-          .maybeSingle()
+        // 캐시에서 확인 (배치 조회로 이미 캐시됨)
+        if (productCache.has(productName)) {
+          existingProduct = productCache.get(productName)!
+        }
 
         if (existingProduct) {
+          // 캐시에서 찾은 기존 제품 업데이트
           // 기존 제품 업데이트 (누락된 정보만 보완)
           const updateData: {
             barcode?: string | null
@@ -193,6 +231,11 @@ export async function POST(request: NextRequest) {
               errors.push(`제품 "${productName}" 업데이트 실패: ${updateError.message}`)
             } else {
               productsUpdated++
+              // 캐시 업데이트 (업데이트된 정보 반영)
+              productCache.set(productName, {
+                ...existingProduct,
+                ...updateData
+              })
             }
           } else {
             productsUpdated++
@@ -214,6 +257,7 @@ export async function POST(request: NextRequest) {
             }
           }
 
+          // 캐시에 없는 경우 새 제품 생성 (캐시는 배치 조회로 모든 기존 제품을 포함하므로, 캐시에 없으면 정말 없는 제품)
           const { data: newProduct, error: productCreateError } = await supabase
             .from('products')
             .insert({
@@ -223,13 +267,22 @@ export async function POST(request: NextRequest) {
               category_2: (row['2차카테고리'] && row['2차카테고리'].trim()) ? row['2차카테고리'].trim() : null,
               image_url: (row.이미지URL && row.이미지URL.trim()) ? row.이미지URL.trim() : null
             })
-            .select('id')
+            .select('id, barcode, category_1, category_2, image_url')
             .single()
 
           if (productCreateError || !newProduct) {
             errors.push(`제품 "${productName}" 생성 실패: ${productCreateError?.message || '알 수 없는 오류'}`)
             continue
           }
+
+          // 새로 생성된 제품을 캐시에 저장
+          productCache.set(productName, {
+            id: newProduct.id,
+            barcode: newProduct.barcode,
+            category_1: newProduct.category_1,
+            category_2: newProduct.category_2,
+            image_url: newProduct.image_url
+          })
 
           productsCreated++
         }

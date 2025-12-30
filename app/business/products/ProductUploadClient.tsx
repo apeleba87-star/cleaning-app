@@ -20,6 +20,7 @@ export default function ProductUploadClient({ stores }: { stores: Store[] }) {
   const [uploading, setUploading] = useState(false)
   const [result, setResult] = useState<any>(null)
   const [error, setError] = useState<string | null>(null)
+  const [uploadProgress, setUploadProgress] = useState<{ current: number; total: number } | null>(null)
   const [unmatchedStores, setUnmatchedStores] = useState<UnmatchedStore[]>([])
   const [availableStores, setAvailableStores] = useState<Store[]>([])
   const [mappings, setMappings] = useState<Record<string, string>>({})
@@ -48,15 +49,47 @@ export default function ProductUploadClient({ stores }: { stores: Store[] }) {
     setUploading(true)
     setError(null)
     setResult(null)
+    
+    // 파일의 총 행 수 계산 (헤더 제외)
+    let totalRows = 0
+    try {
+      const text = await file.text()
+      const lines = text.split('\n').filter(line => line.trim())
+      totalRows = Math.max(0, lines.length - 1) // 헤더 제외
+      setUploadProgress({ current: 0, total: totalRows })
+    } catch (e) {
+      console.error('Error reading file:', e)
+    }
 
     try {
       const formData = new FormData()
       formData.append('file', file)
 
+      // 진행 상황을 시뮬레이션하기 위한 인터벌
+      // 95% 정도에서 멈추고 API 응답을 기다림
+      const targetProgress = Math.floor(totalRows * 0.95)
+      const progressInterval = setInterval(() => {
+        setUploadProgress(prev => {
+          if (prev && prev.current < targetProgress) {
+            // 실제 진행 상황을 정확히 알 수 없으므로, 점진적으로 증가
+            const increment = Math.max(1, Math.floor(totalRows / 100))
+            return {
+              current: Math.min(prev.current + increment, targetProgress),
+              total: prev.total
+            }
+          }
+          return prev
+        })
+      }, 100) // 100ms마다 업데이트
+
       const response = await fetch('/api/business/products/upload', {
         method: 'POST',
         body: formData
       })
+
+      clearInterval(progressInterval)
+      // API 응답이 오면 100% 완료로 표시
+      setUploadProgress({ current: totalRows, total: totalRows })
 
       const data = await response.json()
 
@@ -81,10 +114,14 @@ export default function ProductUploadClient({ stores }: { stores: Store[] }) {
           fileInputRef.current.value = ''
         }
         
-        // 업로드 완료 후 2초 뒤 페이지 새로고침하여 통계 업데이트
-        setTimeout(() => {
-          window.location.reload()
-        }, 2000)
+        // 에러가 없으면 3초 후 자동 새로고침, 에러가 있으면 수동 새로고침
+        const hasErrors = (data.summary?.errors > 0) || (data.errors && data.errors.length > 0)
+        if (!hasErrors) {
+          setTimeout(() => {
+            window.location.reload()
+          }, 3000)
+        }
+        // 에러가 있으면 자동 새로고침하지 않음 (사용자가 확인할 수 있도록)
       } else {
         console.error('Upload returned success=false:', data)
         setError(data.error || '업로드에 실패했습니다.')
@@ -99,6 +136,7 @@ export default function ProductUploadClient({ stores }: { stores: Store[] }) {
       setError(error.message || '업로드 중 오류가 발생했습니다.')
     } finally {
       setUploading(false)
+      setUploadProgress(null)
     }
   }
 
@@ -118,6 +156,25 @@ export default function ProductUploadClient({ stores }: { stores: Store[] }) {
     setUploading(true)
     setError(null)
     setResult(null)
+    
+    // 파일의 총 행 수 계산 (헤더 제외)
+    // file 상태가 있으면 그것을 사용하고, 없으면 fileRef.current 사용
+    let totalRows = 0
+    const fileToCheck = file || fileRef.current
+    if (fileToCheck) {
+      try {
+        // 파일을 읽어서 총 행 수 계산
+        const text = await fileToCheck.text()
+        const lines = text.split('\n').filter(line => line.trim())
+        totalRows = Math.max(0, lines.length - 1) // 헤더 제외
+        setUploadProgress({ current: 0, total: totalRows })
+        // 참고: file 상태가 있으면 file을 사용하므로 fileRef.current.text()를 호출하지 않음
+        // fileRef.current.text()를 호출하면 FormData에 추가할 수 없을 수 있으므로,
+        // file 상태를 우선 사용하고, 없을 때만 fileRef.current 사용
+      } catch (e) {
+        console.error('Error reading file:', e)
+      }
+    }
 
     try {
       const mappingArray = unmatchedStores.map(store => ({
@@ -168,6 +225,11 @@ export default function ProductUploadClient({ stores }: { stores: Store[] }) {
       setMappings({})
       setSaveMappings({})
       
+      // 진행 상황 초기화 (이미 계산된 totalRows 사용)
+      if (totalRows > 0) {
+        setUploadProgress({ current: 0, total: totalRows })
+      }
+      
       // 매핑 저장 후 파일 다시 업로드 (저장된 매핑 정보 함께 전달)
       const formData = new FormData()
       formData.append('file', fileToUpload)
@@ -177,6 +239,22 @@ export default function ProductUploadClient({ stores }: { stores: Store[] }) {
 
       console.log('Starting upload after mapping save...')
       
+      // 진행 상황을 시뮬레이션하기 위한 인터벌
+      // 95% 정도에서 멈추고 API 응답을 기다림
+      const targetProgress = Math.floor(totalRows * 0.95)
+      const progressInterval = setInterval(() => {
+        setUploadProgress(prev => {
+          if (prev && prev.current < targetProgress) {
+            const increment = Math.max(1, Math.floor(totalRows / 100))
+            return {
+              current: Math.min(prev.current + increment, targetProgress),
+              total: prev.total
+            }
+          }
+          return prev
+        })
+      }, 100)
+      
       let uploadResponse: Response
       let uploadData: any
       
@@ -185,6 +263,12 @@ export default function ProductUploadClient({ stores }: { stores: Store[] }) {
           method: 'POST',
           body: formData
         })
+        
+        clearInterval(progressInterval)
+        // API 응답이 오면 100% 완료로 표시
+        if (totalRows > 0) {
+          setUploadProgress({ current: totalRows, total: totalRows })
+        }
         
         console.log('Upload response status:', uploadResponse.status)
         console.log('Upload response ok:', uploadResponse.ok)
@@ -228,10 +312,14 @@ export default function ProductUploadClient({ stores }: { stores: Store[] }) {
         setUnmatchedStores([]) // 매핑 섹션 숨기기
         setError(null) // 에러 메시지 제거
         
-        // 업로드 완료 후 2초 뒤 페이지 새로고침하여 통계 업데이트
-        setTimeout(() => {
-          window.location.reload()
-        }, 2000)
+        // 에러가 없으면 3초 후 자동 새로고침, 에러가 있으면 수동 새로고침
+        const hasErrors = (uploadData.summary?.errors > 0) || (uploadData.errors && uploadData.errors.length > 0)
+        if (!hasErrors) {
+          setTimeout(() => {
+            window.location.reload()
+          }, 3000)
+        }
+        // 에러가 있으면 자동 새로고침하지 않음 (사용자가 확인할 수 있도록)
       } else {
         console.error('Upload returned success=false:', uploadData)
         setError(uploadData.error || '업로드에 실패했습니다.')
@@ -246,6 +334,7 @@ export default function ProductUploadClient({ stores }: { stores: Store[] }) {
       setError(error.message || '매핑 저장 및 업로드 중 오류가 발생했습니다.')
     } finally {
       setUploading(false)
+      setUploadProgress(null)
     }
   }
 
@@ -293,8 +382,45 @@ export default function ProductUploadClient({ stores }: { stores: Store[] }) {
             disabled={!file || uploading}
             className="w-full px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
           >
-            {uploading ? '업로드 중...' : '파일 업로드 및 처리'}
+            {uploading ? (
+              uploadProgress ? (
+                uploadProgress.current >= Math.floor(uploadProgress.total * 0.95) && uploadProgress.current < uploadProgress.total ? (
+                  <span className="flex items-center justify-center gap-2">
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                    처리 완료 대기 중...
+                  </span>
+                ) : (
+                  `${uploadProgress.current}/${uploadProgress.total}개 처리 중...`
+                )
+              ) : (
+                '업로드 중...'
+              )
+            ) : (
+              '파일 업로드 및 처리'
+            )}
           </button>
+          {uploading && uploadProgress && (
+            <div className="mt-2">
+              <div className="w-full bg-gray-200 rounded-full h-2">
+                <div
+                  className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                  style={{
+                    width: `${(uploadProgress.current / uploadProgress.total) * 100}%`
+                  }}
+                />
+              </div>
+              <p className="text-xs text-gray-600 mt-1 text-center flex items-center justify-center gap-2">
+                {uploadProgress.current >= Math.floor(uploadProgress.total * 0.95) && uploadProgress.current < uploadProgress.total ? (
+                  <>
+                    <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-blue-600"></div>
+                    <span>처리 완료 대기 중...</span>
+                  </>
+                ) : (
+                  `${uploadProgress.current}/${uploadProgress.total}개 처리 중...`
+                )}
+              </p>
+            </div>
+          )}
         </div>
       </div>
 
@@ -374,8 +500,45 @@ export default function ProductUploadClient({ stores }: { stores: Store[] }) {
                 disabled={unmatchedStores.some(s => !mappings[s.지점명]) || uploading}
                 className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
               >
-                {uploading ? '처리 중...' : '매핑 저장 및 업로드 진행'}
+                {uploading ? (
+                  uploadProgress ? (
+                    uploadProgress.current >= Math.floor(uploadProgress.total * 0.95) && uploadProgress.current < uploadProgress.total ? (
+                      <span className="flex items-center justify-center gap-2">
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                        처리 완료 대기 중...
+                      </span>
+                    ) : (
+                      `${uploadProgress.current}/${uploadProgress.total}개 처리 중...`
+                    )
+                  ) : (
+                    '처리 중...'
+                  )
+                ) : (
+                  '매핑 저장 및 업로드 진행'
+                )}
               </button>
+              {uploading && uploadProgress && (
+                <div className="mt-2">
+                  <div className="w-full bg-gray-200 rounded-full h-2">
+                    <div
+                      className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                      style={{
+                        width: `${(uploadProgress.current / uploadProgress.total) * 100}%`
+                      }}
+                    />
+                  </div>
+                  <p className="text-xs text-gray-600 mt-1 text-center flex items-center justify-center gap-2">
+                    {uploadProgress.current >= Math.floor(uploadProgress.total * 0.95) && uploadProgress.current < uploadProgress.total ? (
+                      <>
+                        <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-blue-600"></div>
+                        <span>처리 완료 대기 중...</span>
+                      </>
+                    ) : (
+                      `${uploadProgress.current}/${uploadProgress.total}개 처리 중...`
+                    )}
+                  </p>
+                </div>
+              )}
               <button
                 onClick={() => {
                   setUnmatchedStores([])
@@ -422,7 +585,7 @@ export default function ProductUploadClient({ stores }: { stores: Store[] }) {
               <span className="font-medium">총 처리 행:</span> {result.summary.totalRows}개
             </p>
             {result.summary.errors > 0 && (
-              <p className="text-red-600">
+              <p className="text-red-600 font-semibold">
                 <span className="font-medium">오류:</span> {result.summary.errors}개
               </p>
             )}
@@ -432,9 +595,9 @@ export default function ProductUploadClient({ stores }: { stores: Store[] }) {
           )}
 
           {result.errors && result.errors.length > 0 && (
-            <div className="mt-4">
-              <p className="text-sm font-medium text-red-800 mb-2">오류 상세:</p>
-              <ul className="list-disc list-inside text-xs text-red-700 space-y-1">
+            <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded">
+              <p className="text-sm font-semibold text-red-800 mb-2">오류 상세:</p>
+              <ul className="list-disc list-inside text-xs text-red-700 space-y-1 max-h-40 overflow-y-auto">
                 {result.errors.map((err: string, idx: number) => (
                   <li key={idx}>{err}</li>
                 ))}
@@ -442,15 +605,25 @@ export default function ProductUploadClient({ stores }: { stores: Store[] }) {
             </div>
           )}
 
-          <button
-            onClick={() => {
-              setResult(null)
-              router.refresh()
-            }}
-            className="mt-4 px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors"
-          >
-            확인
-          </button>
+          <div className="mt-4 flex gap-2">
+            <button
+              onClick={() => {
+                setResult(null)
+                router.refresh()
+              }}
+              className="flex-1 px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors"
+            >
+              확인
+            </button>
+            {((result.summary?.errors > 0) || (result.errors && result.errors.length > 0)) && (
+              <button
+                onClick={() => window.location.reload()}
+                className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+              >
+                새로고침
+              </button>
+            )}
+          </div>
         </div>
       )}
     </div>

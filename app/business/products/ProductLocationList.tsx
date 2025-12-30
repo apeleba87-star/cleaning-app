@@ -106,28 +106,45 @@ export default function ProductLocationList({ initialLocations, stores }: Produc
     setError(null)
 
     try {
-      const deletePromises = Array.from(selectedProducts).map(locationId =>
-        fetch(`/api/business/products/locations/${locationId}`, {
-          method: 'DELETE'
-        })
-      )
+      // 대량 삭제 API 사용 (배치 처리)
+      const locationIds = Array.from(selectedProducts)
+      
+      const response = await fetch('/api/business/products/locations/bulk-delete', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ locationIds })
+      })
 
-      const responses = await Promise.all(deletePromises)
-      const results = await Promise.all(responses.map(async r => {
-        const data = await r.json()
-        return { ok: r.ok, data }
-      }))
+      const data = await response.json()
 
-      const failed = results.filter(r => !r.ok)
-      if (failed.length > 0) {
-        const errorMessages = failed.map(r => r.data?.error || '알 수 없는 오류').join(', ')
-        throw new Error(`${failed.length}개의 위치 정보 삭제에 실패했습니다: ${errorMessages}`)
+      if (!response.ok) {
+        throw new Error(data.error || '위치 정보 삭제에 실패했습니다.')
       }
 
-      setLocations(locations.filter(l => !selectedProducts.has(l.id)))
-      setSelectedProducts(new Set())
+      if (data.success) {
+        // 성공적으로 삭제된 항목들을 목록에서 제거
+        setLocations(locations.filter(l => !selectedProducts.has(l.id)))
+        setSelectedProducts(new Set())
+        
+        // 성공 메시지 표시 (선택 사항)
+        if (data.message) {
+          console.log(data.message)
+        }
+      } else {
+        // 일부 실패한 경우
+        const errorMsg = data.message || `${data.deletedCount}개 삭제 완료, 일부 실패`
+        setError(errorMsg)
+        
+        // 성공적으로 삭제된 항목들은 목록에서 제거
+        if (data.deletedCount > 0) {
+          // 삭제된 개수만큼 목록에서 제거 (정확한 ID 매칭은 서버에서 처리되었으므로 전체 새로고침 권장)
+          loadLocations()
+        }
+      }
     } catch (err: any) {
-      setError(err.message)
+      setError(err.message || '위치 정보 삭제 중 오류가 발생했습니다.')
     } finally {
       setLoading(false)
     }
@@ -185,9 +202,17 @@ export default function ProductLocationList({ initialLocations, stores }: Produc
     }
   }
 
-  const filteredLocations = selectedStoreId
+  const filteredLocations = (selectedStoreId
     ? locations.filter(l => l.store_id === selectedStoreId)
     : locations
+  ).sort((a, b) => {
+    // 자판기 번호로 먼저 정렬
+    if (a.vending_machine_number !== b.vending_machine_number) {
+      return a.vending_machine_number - b.vending_machine_number
+    }
+    // 자판기 번호가 같으면 위치 번호로 정렬
+    return a.position_number - b.position_number
+  })
 
   return (
     <div className="space-y-4">
