@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
+import Image from 'next/image'
 import { createClient } from '@/lib/supabase/client'
 import { useTodayAttendance } from '@/contexts/AttendanceContext'
 import { uploadPhoto } from '@/lib/supabase/upload'
@@ -562,11 +563,14 @@ export default function ProductPhotosPage() {
                   {receiptProductPhotos.length > 0 && (
                     <div className="flex gap-2 mt-3 mb-4 overflow-x-auto pb-2">
                       {receiptProductPhotos.map((photo, index) => (
-                        <div key={index} className="relative flex-shrink-0 w-20 h-20">
-                          <img
+                        <div key={index} className="relative flex-shrink-0 w-20 h-20 rounded-lg overflow-hidden border-2 border-blue-300">
+                          <Image
                             src={photo.url}
                             alt={`제품 사진 ${index + 1}`}
-                            className="w-full h-full object-cover rounded-lg border-2 border-blue-300"
+                            fill
+                            className="object-cover"
+                            sizes="80px"
+                            loading="lazy"
                           />
                           <button
                             onClick={() => removePhoto(index, 'product')}
@@ -612,11 +616,14 @@ export default function ProductPhotosPage() {
                   {receiptOrderSheetPhotos.length > 0 && (
                     <div className="flex gap-2 mt-3 mb-4 overflow-x-auto pb-2">
                       {receiptOrderSheetPhotos.map((photo, index) => (
-                        <div key={index} className="relative flex-shrink-0 w-20 h-20">
-                          <img
+                        <div key={index} className="relative flex-shrink-0 w-20 h-20 rounded-lg overflow-hidden border-2 border-green-300">
+                          <Image
                             src={photo.url}
                             alt={`발주서 사진 ${index + 1}`}
-                            className="w-full h-full object-cover rounded-lg border-2 border-green-300"
+                            fill
+                            className="object-cover"
+                            sizes="80px"
+                            loading="lazy"
                           />
                           <button
                             onClick={() => removePhoto(index, 'order_sheet')}
@@ -684,11 +691,14 @@ export default function ProductPhotosPage() {
                   {currentPhotos.length > 0 && (
                     <div className="flex gap-2 mt-3 overflow-x-auto pb-2">
                       {currentPhotos.map((photo, index) => (
-                        <div key={index} className="relative flex-shrink-0 w-20 h-20">
-                          <img
+                        <div key={index} className="relative flex-shrink-0 w-20 h-20 rounded-lg overflow-hidden border-2 border-gray-300">
+                          <Image
                             src={photo.url}
                             alt={`보관 사진 ${index + 1}`}
-                            className="w-full h-full object-cover rounded-lg border-2 border-gray-300"
+                            fill
+                            className="object-cover"
+                            sizes="80px"
+                            loading="lazy"
                           />
                           <button
                             onClick={() => removePhoto(index)}
@@ -817,11 +827,14 @@ export default function ProductPhotosPage() {
                   ? (cameraPhotoType === 'product' ? receiptProductPhotos : receiptOrderSheetPhotos)
                   : storagePhotos
                 return photos.map((photo, idx) => (
-                  <div key={idx} className="relative flex-shrink-0">
-                    <img
+                  <div key={idx} className="relative flex-shrink-0 w-16 h-16 rounded overflow-hidden border-2 border-white">
+                    <Image
                       src={photo.url}
                       alt={`사진 ${idx + 1}`}
-                      className="w-16 h-16 object-cover rounded border-2 border-white"
+                      fill
+                      className="object-cover"
+                      sizes="64px"
+                      loading="lazy"
                     />
                     <button
                       onClick={() => {

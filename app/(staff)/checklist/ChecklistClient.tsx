@@ -1,16 +1,40 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import Image from 'next/image'
+import dynamic from 'next/dynamic'
 import { useRouter } from 'next/navigation'
 import { ChecklistItem } from '@/types/db'
 import { createClient } from '@/lib/supabase/client'
 import { Checklist } from '@/types/db'
 import { ChecklistTable } from './ChecklistTable'
-import { ChecklistCalendar } from '@/components/ChecklistCalendar'
 import { useTodayAttendance } from '@/contexts/AttendanceContext'
+
+// ChecklistCalendar 컴포넌트를 Dynamic Import로 로드 (날짜 선택 기능이 필요할 때만 로드)
+const ChecklistCalendar = dynamic(
+  () => import('@/components/ChecklistCalendar').then(mod => ({ default: mod.ChecklistCalendar })),
+  {
+    loading: () => <div className="text-center py-4 text-gray-500">캘린더 로딩 중...</div>,
+  }
+)
 import { calculateChecklistProgress } from '@/lib/utils/checklist'
-import { ChecklistCamera } from '@/components/ChecklistCamera'
 import { getTodayDateKST } from '@/lib/utils/date'
+
+// ChecklistCamera 컴포넌트를 Dynamic Import로 로드 (카메라 기능이 필요할 때만 로드)
+const ChecklistCamera = dynamic(
+  () => import('@/components/ChecklistCamera').then(mod => ({ default: mod.ChecklistCamera })),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="fixed inset-0 bg-black z-50 flex items-center justify-center">
+        <div className="text-white text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white mx-auto mb-4"></div>
+          <p className="text-lg">카메라 로딩 중...</p>
+        </div>
+      </div>
+    ),
+  }
+)
 
 export default function ChecklistClient() {
   const router = useRouter()
@@ -1155,11 +1179,16 @@ export default function ChecklistClient() {
                                                     }}
                                                     className="relative group w-full"
                                                   >
-                                                    <img
-                                                      src={item.before_photo_url}
-                                                      alt="관리 전"
-                                                      className="w-full h-32 object-cover rounded border-2 border-blue-300 hover:border-blue-500 transition-colors cursor-pointer"
-                                                    />
+                                                    <div className="relative w-full h-32 rounded overflow-hidden">
+                                                      <Image
+                                                        src={item.before_photo_url}
+                                                        alt="관리 전"
+                                                        fill
+                                                        className="object-cover border-2 border-blue-300 hover:border-blue-500 transition-colors cursor-pointer"
+                                                        sizes="(max-width: 768px) 50vw, 33vw"
+                                                        loading="lazy"
+                                                      />
+                                                    </div>
                                                   </button>
                                                 </div>
                                               )}
@@ -1209,11 +1238,16 @@ export default function ChecklistClient() {
                                                       }}
                                                       className="relative group w-full"
                                                     >
-                                                      <img
-                                                        src={item.before_photo_url}
-                                                        alt="관리 전"
-                                                        className="w-full h-32 object-cover rounded border-2 border-blue-300 hover:border-blue-500 transition-colors cursor-pointer"
-                                                      />
+                                                      <div className="relative w-full h-32 rounded overflow-hidden">
+                                                        <Image
+                                                          src={item.before_photo_url}
+                                                          alt="관리 전"
+                                                          fill
+                                                          className="object-cover border-2 border-blue-300 hover:border-blue-500 transition-colors cursor-pointer"
+                                                          sizes="(max-width: 768px) 50vw, 33vw"
+                                                          loading="lazy"
+                                                        />
+                                                      </div>
                                                     </button>
                                                   </div>
                                                 )}
@@ -1228,11 +1262,16 @@ export default function ChecklistClient() {
                                                       }}
                                                       className="relative group w-full"
                                                     >
-                                                      <img
-                                                        src={item.after_photo_url}
-                                                        alt="관리 후"
-                                                        className="w-full h-32 object-cover rounded border-2 border-green-300 hover:border-green-500 transition-colors cursor-pointer"
-                                                      />
+                                                      <div className="relative w-full h-32 rounded overflow-hidden">
+                                                        <Image
+                                                          src={item.after_photo_url}
+                                                          alt="관리 후"
+                                                          fill
+                                                          className="object-cover border-2 border-green-300 hover:border-green-500 transition-colors cursor-pointer"
+                                                          sizes="(max-width: 768px) 50vw, 33vw"
+                                                          loading="lazy"
+                                                        />
+                                                      </div>
                                                     </button>
                                                   </div>
                                                 )}
@@ -1283,11 +1322,16 @@ export default function ChecklistClient() {
                                                     }}
                                                     className="relative group w-full"
                                                   >
-                                                    <img
-                                                      src={item.after_photo_url}
-                                                      alt="관리 후"
-                                                      className="w-full h-32 object-cover rounded border-2 border-green-300 hover:border-green-500 transition-colors cursor-pointer"
-                                                    />
+                                                    <div className="relative w-full h-32 rounded overflow-hidden">
+                                                      <Image
+                                                        src={item.after_photo_url}
+                                                        alt="관리 후"
+                                                        fill
+                                                        className="object-cover border-2 border-green-300 hover:border-green-500 transition-colors cursor-pointer"
+                                                        sizes="(max-width: 768px) 50vw, 33vw"
+                                                        loading="lazy"
+                                                      />
+                                                    </div>
                                                   </button>
                                                 </div>
                                               )}
@@ -1397,12 +1441,17 @@ export default function ChecklistClient() {
                 >
                   ×
                 </button>
-                <img
-                  src={photoUrl}
-                  alt={`${foundItem.area} - ${viewingPhotoMode === 'before' ? '관리 전' : '관리 후'}`}
-                  className="w-full h-full object-contain rounded-lg"
-                  onClick={(e) => e.stopPropagation()}
-                />
+                <div className="relative w-full h-full">
+                  <Image
+                    src={photoUrl}
+                    alt={`${foundItem.area} - ${viewingPhotoMode === 'before' ? '관리 전' : '관리 후'}`}
+                    fill
+                    className="object-contain rounded-lg"
+                    onClick={(e) => e.stopPropagation()}
+                    sizes="100vw"
+                    quality={90}
+                  />
+                </div>
                 <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 bg-black bg-opacity-70 text-white px-4 py-2 rounded-lg">
                   {foundItem.area} - {viewingPhotoMode === 'before' ? '관리 전' : '관리 후'}
                 </div>

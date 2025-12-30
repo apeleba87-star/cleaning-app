@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
+import Image from 'next/image'
 import { createClient } from '@/lib/supabase/client'
 import { useTodayAttendance } from '@/contexts/AttendanceContext'
 import { uploadPhoto } from '@/lib/supabase/upload'
@@ -846,18 +847,13 @@ export default function IssuesPage() {
                     >
                       {photo.url ? (
                         <>
-                          <img
+                          <Image
                             src={photo.url}
                             alt={`사진 ${index + 1}`}
-                            className="w-full h-full object-cover"
-                            onError={(e) => {
-                              console.error('❌ Image load error for photo:', photo, 'URL:', photo.url?.substring(0, 100))
-                              const target = e.target as HTMLImageElement
-                              target.style.display = 'none'
-                            }}
-                            onLoad={() => {
-                              console.log('✅ Image loaded successfully:', photo.id, photo.url?.substring(0, 100))
-                            }}
+                            fill
+                            className="object-cover"
+                            sizes="80px"
+                            loading="lazy"
                           />
                           {photo.isUploading && (
                             <div className="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center">
@@ -1069,18 +1065,13 @@ export default function IssuesPage() {
                     >
                       {photo.url ? (
                         <>
-                          <img
+                          <Image
                             src={photo.url}
                             alt={`사진 ${index + 1}`}
-                            className="w-full h-full object-cover"
-                            onError={(e) => {
-                              console.error('❌ Image load error for photo:', photo, 'URL:', photo.url?.substring(0, 100))
-                              const target = e.target as HTMLImageElement
-                              target.style.display = 'none'
-                            }}
-                            onLoad={() => {
-                              console.log('✅ Image loaded successfully:', photo.id, photo.url?.substring(0, 100))
-                            }}
+                            fill
+                            className="object-cover"
+                            sizes="80px"
+                            loading="lazy"
                           />
                           {photo.isUploading && (
                             <div className="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center">
@@ -1223,11 +1214,14 @@ export default function IssuesPage() {
                   ? storeProblemForm.photos 
                   : lostItemForm.photos
                 return photos.map((photo, idx) => (
-                  <div key={photo.id || `photo-${idx}`} className="relative flex-shrink-0">
-                    <img
+                  <div key={photo.id || `photo-${idx}`} className="relative flex-shrink-0 w-16 h-16">
+                    <Image
                       src={photo.url}
                       alt={`사진 ${idx + 1}`}
-                      className="w-16 h-16 object-cover rounded border-2 border-white"
+                      fill
+                      className="object-cover rounded border-2 border-white"
+                      sizes="64px"
+                      loading="lazy"
                     />
                     <button
                       onClick={() => {

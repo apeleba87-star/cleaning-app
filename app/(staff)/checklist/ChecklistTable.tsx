@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import Image from 'next/image'
 import { ChecklistItem } from '@/types/db'
 
 interface ChecklistTableProps {
@@ -284,15 +285,16 @@ export function ChecklistTable({ items, storeId, onItemsChange, onCameraModeRequ
                             }}
                             className="relative group"
                           >
-                            <img
-                              src={item.before_photo_url}
-                              alt="관리 전"
-                              className="w-12 h-12 object-cover rounded border-2 border-blue-300 hover:border-blue-500 transition-colors cursor-pointer"
-                              onError={() => {
-                                console.error('Image load error:', item.before_photo_url)
-                                setImageErrors(prev => ({ ...prev, [`before-${originalIndex}`]: true }))
-                              }}
-                            />
+                            <div className="relative w-12 h-12 rounded overflow-hidden border-2 border-blue-300 hover:border-blue-500 transition-colors cursor-pointer">
+                              <Image
+                                src={item.before_photo_url}
+                                alt="관리 전"
+                                fill
+                                className="object-cover"
+                                sizes="48px"
+                                loading="lazy"
+                              />
+                            </div>
                             <div className="absolute -bottom-1 left-1/2 transform -translate-x-1/2 bg-blue-500 text-white text-xs px-1.5 py-0.5 rounded">
                               전
                             </div>
@@ -325,15 +327,16 @@ export function ChecklistTable({ items, storeId, onItemsChange, onCameraModeRequ
                           }}
                           className="relative group"
                         >
-                          <img
-                            src={item.after_photo_url}
-                            alt="관리 후"
-                            className="w-12 h-12 object-cover rounded border-2 border-green-300 hover:border-green-500 transition-colors cursor-pointer"
-                            onError={() => {
-                              console.error('Image load error:', item.after_photo_url)
-                              setImageErrors(prev => ({ ...prev, [`after-${originalIndex}`]: true }))
-                            }}
-                          />
+                          <div className="relative w-12 h-12 rounded overflow-hidden border-2 border-green-300 hover:border-green-500 transition-colors cursor-pointer">
+                            <Image
+                              src={item.after_photo_url}
+                              alt="관리 후"
+                              fill
+                              className="object-cover"
+                              sizes="48px"
+                              loading="lazy"
+                            />
+                          </div>
                           <div className="absolute -bottom-1 left-1/2 transform -translate-x-1/2 bg-green-500 text-white text-xs px-1.5 py-0.5 rounded">
                             후
                           </div>
@@ -367,15 +370,16 @@ export function ChecklistTable({ items, storeId, onItemsChange, onCameraModeRequ
                             }}
                             className="relative group"
                           >
-                            <img
-                              src={item.before_photo_url}
-                              alt="관리 전"
-                              className="w-12 h-12 object-cover rounded border-2 border-blue-300 hover:border-blue-500 transition-colors cursor-pointer"
-                              onError={() => {
-                                console.error('Image load error:', item.before_photo_url)
-                                setImageErrors(prev => ({ ...prev, [`before-${originalIndex}`]: true }))
-                              }}
-                            />
+                            <div className="relative w-12 h-12 rounded overflow-hidden border-2 border-blue-300 hover:border-blue-500 transition-colors cursor-pointer">
+                              <Image
+                                src={item.before_photo_url}
+                                alt="관리 전"
+                                fill
+                                className="object-cover"
+                                sizes="48px"
+                                loading="lazy"
+                              />
+                            </div>
                             <div className="absolute -bottom-1 left-1/2 transform -translate-x-1/2 bg-blue-500 text-white text-xs px-1.5 py-0.5 rounded">
                               전
                             </div>
@@ -399,15 +403,16 @@ export function ChecklistTable({ items, storeId, onItemsChange, onCameraModeRequ
                             }}
                             className="relative group"
                           >
-                            <img
-                              src={item.after_photo_url}
-                              alt="관리 후"
-                              className="w-12 h-12 object-cover rounded border-2 border-green-300 hover:border-green-500 transition-colors cursor-pointer"
-                              onError={() => {
-                                console.error('Image load error:', item.after_photo_url)
-                                setImageErrors(prev => ({ ...prev, [`after-${originalIndex}`]: true }))
-                              }}
-                            />
+                            <div className="relative w-12 h-12 rounded overflow-hidden border-2 border-green-300 hover:border-green-500 transition-colors cursor-pointer">
+                              <Image
+                                src={item.after_photo_url}
+                                alt="관리 후"
+                                fill
+                                className="object-cover"
+                                sizes="48px"
+                                loading="lazy"
+                              />
+                            </div>
                             <div className="absolute -bottom-1 left-1/2 transform -translate-x-1/2 bg-green-500 text-white text-xs px-1.5 py-0.5 rounded">
                               후
                             </div>
@@ -495,12 +500,17 @@ export function ChecklistTable({ items, storeId, onItemsChange, onCameraModeRequ
             >
               ×
             </button>
-            <img
-              src={viewingPhotoMode === 'before' ? items[viewingPhotoIndex].before_photo_url! : items[viewingPhotoIndex].after_photo_url!}
-              alt={`${items[viewingPhotoIndex].area} - ${viewingPhotoMode === 'before' ? '관리 전' : '관리 후'}`}
-              className="w-full h-full object-contain rounded-lg"
-              onClick={(e) => e.stopPropagation()}
-            />
+            <div className="relative w-full h-full">
+              <Image
+                src={viewingPhotoMode === 'before' ? items[viewingPhotoIndex].before_photo_url! : items[viewingPhotoIndex].after_photo_url!}
+                alt={`${items[viewingPhotoIndex].area} - ${viewingPhotoMode === 'before' ? '관리 전' : '관리 후'}`}
+                fill
+                className="object-contain rounded-lg"
+                onClick={(e) => e.stopPropagation()}
+                sizes="100vw"
+                quality={90}
+              />
+            </div>
             <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 bg-black bg-opacity-70 text-white px-4 py-2 rounded-lg">
               {items[viewingPhotoIndex].area} - {viewingPhotoMode === 'before' ? '관리 전' : '관리 후'}
             </div>

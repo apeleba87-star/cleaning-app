@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
+import Image from 'next/image'
 import { PhotoUploader } from '@/components/PhotoUploader'
 import { createClient } from '@/lib/supabase/client'
 import { CleaningPhoto } from '@/types/db'
@@ -187,11 +188,16 @@ export default function PhotosPage() {
         <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4">
           {photos.map((photo) => (
             <div key={photo.id} className="border border-gray-300 rounded-lg p-3">
-              <img
-                src={photo.photo_url}
-                alt={photo.area_category}
-                className="w-full h-48 object-cover rounded-md mb-2"
-              />
+              <div className="relative w-full h-48 mb-2 rounded-md overflow-hidden bg-gray-100">
+                <Image
+                  src={photo.photo_url}
+                  alt={photo.area_category || '청소 사진'}
+                  fill
+                  className="object-cover"
+                  sizes="(max-width: 768px) 50vw, 33vw"
+                  loading="lazy"
+                />
+              </div>
               <div className="text-sm">
                 <p className="font-medium">{photo.area_category}</p>
                 <p className="text-gray-600">

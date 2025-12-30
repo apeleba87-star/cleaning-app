@@ -1,9 +1,17 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
+import dynamic from 'next/dynamic'
 import { useRouter } from 'next/navigation'
-import { GeoGuard } from '@/components/GeoGuard'
 import { GPSLocation } from '@/types/db'
+
+// GeoGuard 컴포넌트를 Dynamic Import로 로드 (GPS 기능이 필요할 때만 로드)
+const GeoGuard = dynamic(
+  () => import('@/components/GeoGuard').then(mod => ({ default: mod.GeoGuard })),
+  {
+    ssr: false,
+  }
+)
 import { clockInAction, clockOutAction } from './actions'
 import { createClient } from '@/lib/supabase/client'
 import { Attendance } from '@/types/db'

@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
+import Image from 'next/image'
 import { createClient } from '@/lib/supabase/client'
 import { useTodayAttendance } from '@/contexts/AttendanceContext'
 import { getTodayDateKST } from '@/lib/utils/date'
@@ -619,16 +620,17 @@ export default function RequestsPage() {
                     {request.photo_url && (
                       <div className="mb-3 flex flex-wrap gap-2">
                         {getPhotoUrls(request.photo_url).map((url, idx) => (
-                          <img
-                            key={idx}
-                            src={url}
-                            alt={`${request.title} 사진 ${idx + 1}`}
-                            className="w-24 h-24 object-cover rounded border border-gray-300 cursor-pointer hover:opacity-80 transition-opacity"
-                            onClick={() => setSelectedImage(url)}
-                            onError={(e) => {
-                              e.currentTarget.style.display = 'none'
-                            }}
-                          />
+                          <div key={idx} className="relative w-24 h-24 rounded overflow-hidden border border-gray-300 cursor-pointer hover:opacity-80 transition-opacity">
+                            <Image
+                              src={url}
+                              alt={`${request.title} 사진 ${idx + 1}`}
+                              fill
+                              className="object-cover"
+                              sizes="96px"
+                              loading="lazy"
+                              onClick={() => setSelectedImage(url)}
+                            />
+                          </div>
                         ))}
                       </div>
                     )}
@@ -717,11 +719,14 @@ export default function RequestsPage() {
                     완료 사진 (선택)
                   </label>
                   {completionPhoto ? (
-                    <div className="relative">
-                      <img
+                    <div className="relative w-full h-48 rounded-lg overflow-hidden border-2 border-green-300">
+                      <Image
                         src={completionPhoto}
                         alt="완료 사진"
-                        className="w-full h-48 object-cover rounded-lg border-2 border-green-300 cursor-pointer hover:opacity-80 transition-opacity"
+                        fill
+                        className="object-cover cursor-pointer hover:opacity-80 transition-opacity"
+                        sizes="(max-width: 768px) 100vw, 50vw"
+                        loading="lazy"
                         onClick={() => setSelectedImage(completionPhoto)}
                       />
                       <button
@@ -869,11 +874,14 @@ export default function RequestsPage() {
                     반려 사진 (선택)
                   </label>
                   {rejectionPhoto ? (
-                    <div className="relative">
-                      <img
+                    <div className="relative w-full h-48 rounded-lg overflow-hidden border-2 border-red-300">
+                      <Image
                         src={rejectionPhoto}
                         alt="반려 사진"
-                        className="w-full h-48 object-cover rounded-lg border-2 border-red-300 cursor-pointer hover:opacity-80 transition-opacity"
+                        fill
+                        className="object-cover cursor-pointer hover:opacity-80 transition-opacity"
+                        sizes="(max-width: 768px) 100vw, 50vw"
+                        loading="lazy"
                         onClick={() => setSelectedImage(rejectionPhoto)}
                       />
                       <button
@@ -1030,11 +1038,14 @@ export default function RequestsPage() {
             {/* 촬영된 사진 썸네일 (왼쪽 하단) */}
             {(cameraType === 'completion' ? completionPhoto : rejectionPhoto) && (
               <div className="absolute top-20 bottom-44 left-4 z-20 md:top-20 md:bottom-20">
-                <div className="relative">
-                  <img
+                <div className="relative w-16 h-16 rounded overflow-hidden border-2 border-white">
+                  <Image
                     src={cameraType === 'completion' ? completionPhoto! : rejectionPhoto!}
                     alt="촬영된 사진"
-                    className="w-16 h-16 object-cover rounded border-2 border-white"
+                    fill
+                    className="object-cover"
+                    sizes="64px"
+                    loading="lazy"
                   />
                 </div>
               </div>
@@ -1071,11 +1082,14 @@ export default function RequestsPage() {
           className="fixed inset-0 bg-black bg-opacity-90 z-50 flex items-center justify-center p-4"
           onClick={() => setSelectedImage(null)}
         >
-          <div className="relative max-w-7xl max-h-full">
-            <img
+          <div className="relative max-w-7xl w-full max-h-[90vh]">
+            <Image
               src={selectedImage}
               alt="확대된 사진"
-              className="max-w-full max-h-[90vh] object-contain"
+              fill
+              className="object-contain"
+              sizes="100vw"
+              quality={90}
               onClick={(e) => e.stopPropagation()}
             />
             <button

@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
+import Image from 'next/image'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
@@ -337,11 +338,16 @@ export default function ProductSearchPage() {
                 {/* 제품 기본 정보 - 간소화 */}
                 <div className="flex gap-3 mb-4">
                   {product.image_url ? (
-                    <img
-                      src={product.image_url}
-                      alt={product.name}
-                      className="w-16 h-16 object-cover rounded-lg flex-shrink-0"
-                    />
+                    <div className="relative w-16 h-16 rounded-lg overflow-hidden flex-shrink-0">
+                      <Image
+                        src={product.image_url}
+                        alt={product.name}
+                        fill
+                        className="object-cover"
+                        sizes="64px"
+                        loading="lazy"
+                      />
+                    </div>
                   ) : (
                     <div className="w-16 h-16 bg-gray-200 rounded-lg flex items-center justify-center flex-shrink-0">
                       <span className="text-2xl">📦</span>
