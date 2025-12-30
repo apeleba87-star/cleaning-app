@@ -13,12 +13,10 @@ const nextConfig = {
   webpack: (config, { dev, isServer }) => {
     // 프로덕션 빌드일 때만 console 제거 (클라이언트 사이드만)
     if (!dev && !isServer) {
+      const minimizer = config.optimization.minimizer || []
       const TerserPlugin = require('terser-webpack-plugin')
       
-      // 기존 minimizer 찾기
-      const minimizer = config.optimization.minimizer || []
-      
-      // 기존 TerserPlugin 찾기 또는 새로 추가
+      // 기존 TerserPlugin 찾기
       const terserPluginIndex = minimizer.findIndex(
         (plugin) => plugin.constructor.name === 'TerserPlugin'
       )
