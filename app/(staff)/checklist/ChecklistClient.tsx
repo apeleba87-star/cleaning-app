@@ -245,7 +245,7 @@ export default function ChecklistClient() {
       loadAssignedChecklists()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [attendanceLoading, isClockedIn, JSON.stringify(activeStoreIds)])
+  }, [attendanceLoading, isClockedIn, activeStoreIds.join(',')])
 
   // 카메라 모드가 변경될 때 로딩 상태 관리
   useEffect(() => {

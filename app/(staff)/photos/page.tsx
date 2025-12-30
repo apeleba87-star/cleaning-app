@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { PhotoUploader } from '@/components/PhotoUploader'
 import { createClient } from '@/lib/supabase/client'
 import { CleaningPhoto } from '@/types/db'
@@ -18,23 +18,16 @@ export default function PhotosPage() {
   // 출근 정보 가져오기
   const { storeId: attendanceStoreId, isClockedIn, loading: attendanceLoading } = useTodayAttendance()
 
-  useEffect(() => {
-    if (!attendanceLoading) {
-      // 출근한 매장이 있으면 자동으로 설정
-      if (attendanceStoreId && isClockedIn) {
-        setStoreId(attendanceStoreId)
-      }
-      loadPhotos()
-    }
-  }, [attendanceLoading, attendanceStoreId, isClockedIn])
-
-  const loadPhotos = async () => {
+  const loadPhotos = useCallback(async () => {
     const supabase = createClient()
     const {
       data: { session },
     } = await supabase.auth.getSession()
 
-    if (!session) return
+    if (!session) {
+      setLoading(false)
+      return
+    }
 
     let query = supabase
       .from('cleaning_photos')
@@ -50,7 +43,17 @@ export default function PhotosPage() {
 
     setPhotos(data || [])
     setLoading(false)
-  }
+  }, [attendanceStoreId, isClockedIn])
+
+  useEffect(() => {
+    if (attendanceLoading) return
+
+    // 출근한 매장이 있으면 자동으로 설정
+    if (attendanceStoreId && isClockedIn) {
+      setStoreId(attendanceStoreId)
+    }
+    loadPhotos()
+  }, [attendanceLoading, attendanceStoreId, isClockedIn, loadPhotos])
 
   const handleUploadComplete = async (url: string) => {
     if (!storeId || !areaCategory) {

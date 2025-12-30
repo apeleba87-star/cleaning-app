@@ -83,84 +83,6 @@ export default function IssuesPage() {
     }
   }, [attendanceLoading, isClockedIn, attendanceStoreId])
 
-  // 페이지가 다시 활성화될 때 사진 목록 강제 업데이트 (카메라에서 돌아올 때)
-  useEffect(() => {
-    let visibilityTimeout: NodeJS.Timeout | null = null
-    
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible') {
-        // 페이지가 다시 보일 때 상태 강제 업데이트
-        console.log('📱 Page became visible, forcing state update')
-        
-        // 기존 타이머 취소
-        if (visibilityTimeout) {
-          clearTimeout(visibilityTimeout)
-        }
-        
-        // 여러 타이밍으로 강제 리렌더링 (카메라에서 돌아온 직후 확실히 표시)
-        const forceRerender = () => {
-          setStoreProblemForm(prev => ({ 
-            ...prev, 
-            photos: [...prev.photos] // 새 배열 참조로 강제 리렌더링
-          }))
-          setLostItemForm(prev => ({ 
-            ...prev, 
-            photos: [...prev.photos] // 새 배열 참조로 강제 리렌더링
-          }))
-        }
-        
-        // 즉시 실행
-        forceRerender()
-        
-        // 짧은 지연 후 다시 실행 (React 렌더링 사이클 고려)
-        visibilityTimeout = setTimeout(forceRerender, 50)
-        setTimeout(forceRerender, 150)
-        setTimeout(forceRerender, 300)
-      }
-    }
-
-    const handleFocus = () => {
-      // 윈도우 포커스 시에도 강제 업데이트
-      console.log('📱 Window focused, forcing state update')
-      setStoreProblemForm(prev => ({ 
-        ...prev, 
-        photos: [...prev.photos]
-      }))
-      setLostItemForm(prev => ({ 
-        ...prev, 
-        photos: [...prev.photos]
-      }))
-    }
-
-    document.addEventListener('visibilitychange', handleVisibilityChange)
-    window.addEventListener('focus', handleFocus)
-    return () => {
-      if (visibilityTimeout) {
-        clearTimeout(visibilityTimeout)
-      }
-      document.removeEventListener('visibilitychange', handleVisibilityChange)
-      window.removeEventListener('focus', handleFocus)
-    }
-  }, [])
-
-  // 디버깅: 현재 사진 개수 로깅 (조건부 반환 전에 배치 - React Hooks 규칙 준수)
-  useEffect(() => {
-    const currentPhotos = activeTab === 'store_problem' ? storeProblemForm.photos : lostItemForm.photos
-    console.log('🖼️ Current photos count:', currentPhotos.length, 'for tab:', activeTab)
-    if (currentPhotos.length > 0) {
-      console.log('🖼️ Photo IDs:', currentPhotos.map(p => p.id))
-    }
-  }, [storeProblemForm.photos.length, lostItemForm.photos.length, activeTab])
-
-  // 디버깅: 현재 사진 개수 로깅 (조건부 반환 전에 배치)
-  useEffect(() => {
-    const currentPhotos = activeTab === 'store_problem' ? storeProblemForm.photos : lostItemForm.photos
-    console.log('🖼️ Current photos count:', currentPhotos.length, 'for tab:', activeTab)
-    if (currentPhotos.length > 0) {
-      console.log('🖼️ Photo IDs:', currentPhotos.map(p => p.id))
-    }
-  }, [storeProblemForm.photos.length, lostItemForm.photos.length, activeTab, storeProblemForm.photos, lostItemForm.photos])
-
   // 카메라 모달이 닫힐 때 스트림 정리
   useEffect(() => {
     if (!showCamera && cameraStream) {
@@ -516,24 +438,6 @@ export default function IssuesPage() {
     handlePhotoUpload(fileList, currentTab)
       .then(() => {
         console.log('✅ Photo upload process completed successfully')
-        
-        // 사진 추가 직후 강제 리렌더링 (카메라에서 돌아온 직후 표시되도록)
-        // 여러 타이밍으로 시도하여 확실히 표시되도록 함
-        const forceRerender = () => {
-          if (currentTab === 'store_problem') {
-            setStoreProblemForm(prev => ({ ...prev, photos: [...prev.photos] }))
-          } else if (currentTab === 'lost_item') {
-            setLostItemForm(prev => ({ ...prev, photos: [...prev.photos] }))
-          }
-        }
-        
-        // 즉시 강제 리렌더링
-        forceRerender()
-        
-        // 페이지가 다시 활성화될 때도 강제 리렌더링
-        setTimeout(forceRerender, 100)
-        setTimeout(forceRerender, 300)
-        setTimeout(forceRerender, 500)
       })
       .catch(error => {
         console.error('❌ Photo upload error:', error)

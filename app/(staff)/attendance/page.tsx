@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { GeoGuard } from '@/components/GeoGuard'
 import { GPSLocation } from '@/types/db'
@@ -47,14 +47,88 @@ export default function AttendancePage() {
   }, [])
 
   // 출근 정보가 변경될 때마다 체크리스트 진행률 확인
+  const loadChecklistProgress = useCallback(async () => {
+    const supabase = createClient()
+    const {
+      data: { session },
+    } = await supabase.auth.getSession()
+
+    if (!session) return
+
+    const activeAttendances = todayAttendances.filter(a => !a.clock_out_at)
+    
+    if (activeAttendances.length === 0) {
+      setChecklistProgress({})
+      return
+    }
+
+    // 각 출근 기록의 work_date를 기준으로 체크리스트 조회
+    const checklistPromises = activeAttendances.map(async (attendance) => {
+      const { data: checklists, error } = await supabase
+        .from('checklist')
+        .select('id, store_id, items')
+        .eq('store_id', attendance.store_id)
+        .eq('work_date', attendance.work_date)
+        .eq('assigned_user_id', session.user.id)
+
+      if (error) {
+        console.error(`Error loading checklist for store ${attendance.store_id}:`, error)
+        return { storeId: attendance.store_id, checklists: [] }
+      }
+
+      return { storeId: attendance.store_id, checklists: checklists || [] }
+    })
+
+    const checklistResults = await Promise.all(checklistPromises)
+    
+    // 모든 체크리스트를 하나의 배열로 합치기
+    const allChecklists = checklistResults.flatMap(result => 
+      result.checklists.map((cl: any) => ({ ...cl, _storeId: result.storeId }))
+    )
+    
+    // 기존 로직과 호환을 위해 store_id로 그룹화
+    const checklists = allChecklists
+
+    const progress: Record<string, { completed: number; total: number; percentage: number }> = {}
+    
+    checklists?.forEach((checklist) => {
+      const validItems = (checklist.items as any[]).filter((item: any) => item.area?.trim())
+      const total = validItems.length
+      const completed = validItems.filter((item: any) => {
+        if (item.type === 'check') {
+          if (!item.checked) return false
+          if (item.status === 'bad' && !item.comment?.trim()) return false
+          return true
+        } else if (item.type === 'photo') {
+          return !!(item.before_photo_url && item.after_photo_url)
+        }
+        return false
+      }).length
+
+      const storeId = checklist.store_id
+      if (!progress[storeId]) {
+        progress[storeId] = { completed: 0, total: 0, percentage: 0 }
+      }
+      progress[storeId].completed += completed
+      progress[storeId].total += total
+    })
+
+    // 각 매장별로 퍼센트 계산
+    Object.keys(progress).forEach(storeId => {
+      const p = progress[storeId]
+      p.percentage = p.total > 0 ? Math.round((p.completed / p.total) * 100) : 0
+    })
+
+    setChecklistProgress(progress)
+  }, [todayAttendances])
+
   useEffect(() => {
     if (todayAttendances.length > 0) {
       loadChecklistProgress()
     } else {
       setChecklistProgress({})
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [todayAttendances.length])
+  }, [todayAttendances.length, loadChecklistProgress])
 
   // 체크리스트 업데이트 이벤트 리스너
   useEffect(() => {
@@ -67,7 +141,7 @@ export default function AttendancePage() {
     return () => {
       window.removeEventListener('checklistUpdated', handleChecklistUpdate)
     }
-  }, [])
+  }, [loadChecklistProgress])
 
   const loadTodayAttendance = async () => {
     const supabase = createClient()
@@ -180,87 +254,6 @@ export default function AttendancePage() {
     setLoading(false)
   }
 
-  const loadChecklistProgress = async () => {
-    const supabase = createClient()
-    const {
-      data: { session },
-    } = await supabase.auth.getSession()
-
-    if (!session) return
-
-    const activeAttendances = todayAttendances.filter(a => !a.clock_out_at)
-    
-    if (activeAttendances.length === 0) {
-      setChecklistProgress({})
-      return
-    }
-
-    // 각 출근 기록의 work_date를 기준으로 체크리스트 조회
-    const checklistPromises = activeAttendances.map(async (attendance) => {
-      const { data: checklists, error } = await supabase
-        .from('checklist')
-        .select('id, store_id, items')
-        .eq('store_id', attendance.store_id)
-        .eq('work_date', attendance.work_date)
-        .eq('assigned_user_id', session.user.id)
-
-      if (error) {
-        console.error(`Error loading checklist for store ${attendance.store_id}:`, error)
-        return { storeId: attendance.store_id, checklists: [] }
-      }
-
-      return { storeId: attendance.store_id, checklists: checklists || [] }
-    })
-
-    const checklistResults = await Promise.all(checklistPromises)
-    
-    // 모든 체크리스트를 하나의 배열로 합치기
-    const allChecklists = checklistResults.flatMap(result => 
-      result.checklists.map((cl: any) => ({ ...cl, _storeId: result.storeId }))
-    )
-    
-    // 기존 로직과 호환을 위해 store_id로 그룹화
-    const checklists = allChecklists
-
-    if (error) {
-      console.error('Error loading checklist progress:', error)
-      return
-    }
-
-    const progress: Record<string, { completed: number; total: number; percentage: number }> = {}
-    
-    checklists?.forEach((checklist) => {
-      const validItems = (checklist.items as any[]).filter((item: any) => item.area?.trim())
-      const total = validItems.length
-      const completed = validItems.filter((item: any) => {
-        if (item.type === 'check') {
-          if (!item.checked) return false
-          if (item.status === 'bad' && !item.comment?.trim()) return false
-          return true
-        } else if (item.type === 'photo') {
-          return !!(item.before_photo_url && item.after_photo_url)
-        }
-        return false
-      }).length
-
-      const percentage = total > 0 ? Math.round((completed / total) * 100) : 0
-      
-      if (!progress[checklist.store_id]) {
-        progress[checklist.store_id] = { completed: 0, total: 0, percentage: 0 }
-      }
-      
-      progress[checklist.store_id].completed += completed
-      progress[checklist.store_id].total += total
-    })
-
-    // 각 매장별로 전체 백분율 계산
-    Object.keys(progress).forEach(storeId => {
-      const { completed, total } = progress[storeId]
-      progress[storeId].percentage = total > 0 ? Math.round((completed / total) * 100) : 0
-    })
-
-    setChecklistProgress(progress)
-  }
 
   const handleClockIn = async () => {
     if (!location || !selectedStoreId) {

@@ -26,6 +26,11 @@ export default function BottomNavigation() {
     if (!mounted) return
     
     const loadBadgeCounts = async () => {
+      // 페이지가 visible하지 않으면 실행하지 않음
+      if (document.visibilityState !== 'visible') {
+        return
+      }
+
       try {
         const supabase = await import('@/lib/supabase/client').then(m => m.createClient())
         const { data: { session } } = await supabase.auth.getSession()
@@ -76,10 +81,25 @@ export default function BottomNavigation() {
       }
     }
 
+    // 초기 로드
     loadBadgeCounts()
-    // 30초마다 배지 업데이트
-    const interval = setInterval(loadBadgeCounts, 30000)
-    return () => clearInterval(interval)
+
+    // 120초마다 배지 업데이트 (페이지가 visible일 때만)
+    const interval = setInterval(loadBadgeCounts, 120000)
+
+    // 페이지가 다시 visible이 되면 즉시 업데이트
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        loadBadgeCounts()
+      }
+    }
+
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+
+    return () => {
+      clearInterval(interval)
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+    }
   }, [mounted])
 
   if (!mounted) {
