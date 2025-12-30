@@ -5,7 +5,7 @@ import { NavRoleSwitch } from '@/components/NavRoleSwitch'
 import BottomNavigation from '@/components/staff/BottomNavigation'
 
 interface StaffLayoutClientProps {
-  userRole: string
+  userRole: 'staff' | 'manager' | 'admin' | 'business_owner' | 'platform_admin' | 'franchise_manager' | 'store_manager'
   userName: string
   children: React.ReactNode
 }
