@@ -215,16 +215,18 @@ export async function POST(request: NextRequest) {
     // Service role key를 사용하여 admin API 접근
     const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
     if (!serviceRoleKey) {
+      console.error('SUPABASE_SERVICE_ROLE_KEY is not set')
       return NextResponse.json(
-        { error: '서버 설정 오류입니다.' },
+        { error: '서버 설정 오류입니다. SUPABASE_SERVICE_ROLE_KEY 환경 변수가 설정되지 않았습니다.' },
         { status: 500 }
       )
     }
 
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
     if (!supabaseUrl) {
+      console.error('NEXT_PUBLIC_SUPABASE_URL is not set')
       return NextResponse.json(
-        { error: '서버 설정 오류입니다.' },
+        { error: '서버 설정 오류입니다. NEXT_PUBLIC_SUPABASE_URL 환경 변수가 설정되지 않았습니다.' },
         { status: 500 }
       )
     }

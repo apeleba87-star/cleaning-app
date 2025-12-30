@@ -48,3 +48,4 @@ CREATE POLICY "관리자는 제품 삭제 가능" ON products
 
 
 
+

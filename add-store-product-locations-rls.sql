@@ -28,3 +28,4 @@ CREATE POLICY "관리자는 위치 정보 관리 가능" ON store_product_locati
 
 
 
+

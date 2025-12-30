@@ -37,6 +37,10 @@ export default function ChecklistList({ stores, staffUsers, companyId }: Checkli
   const [editingChecklist, setEditingChecklist] = useState<Checklist | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [copyingChecklist, setCopyingChecklist] = useState<Checklist | null>(null)
+  const [showCopyModal, setShowCopyModal] = useState(false)
+  const [copying, setCopying] = useState(false)
+  const [targetStoreId, setTargetStoreId] = useState<string>('')
 
   const handleStoreChange = async (storeId: string) => {
     setSelectedStoreId(storeId)
@@ -107,6 +111,77 @@ export default function ChecklistList({ stores, staffUsers, companyId }: Checkli
     } catch (err: any) {
       alert(err.message)
     }
+  }
+
+  const handleCopy = (checklist: Checklist) => {
+    setCopyingChecklist(checklist)
+    setTargetStoreId('')
+    setShowCopyModal(true)
+    setError(null)
+  }
+
+  const handleCopyConfirm = async () => {
+    if (!copyingChecklist || !targetStoreId) {
+      setError('대상 매장을 선택해주세요.')
+      return
+    }
+
+    setCopying(true)
+    setError(null)
+
+    try {
+      const response = await fetch('/api/business/checklists', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          store_id: targetStoreId,
+          items: copyingChecklist.items || [],
+          note: copyingChecklist.note || null,
+          requires_photos: copyingChecklist.requires_photos || false,
+        }),
+      })
+
+      const contentType = response.headers.get('content-type')
+      if (!contentType || !contentType.includes('application/json')) {
+        const text = await response.text()
+        throw new Error(`서버 오류가 발생했습니다. (${response.status} ${response.statusText})`)
+      }
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(data.error || '체크리스트 복사에 실패했습니다.')
+      }
+
+      const targetStoreName = stores.find(s => s.id === targetStoreId)?.name || targetStoreId
+
+      // 모달 닫기
+      setShowCopyModal(false)
+      setCopyingChecklist(null)
+      setTargetStoreId('')
+
+      // 복사된 매장이 현재 선택된 매장이면 목록 새로고침
+      if (targetStoreId === selectedStoreId) {
+        handleStoreChange(selectedStoreId)
+        alert(`체크리스트가 "${targetStoreName}" 매장에 복사되었습니다.`)
+      } else {
+        // 다른 매장에 복사된 경우, 성공 메시지만 표시
+        alert(`체크리스트가 "${targetStoreName}" 매장에 복사되었습니다.`)
+      }
+    } catch (err: any) {
+      setError(err.message)
+    } finally {
+      setCopying(false)
+    }
+  }
+
+  const handleCopyCancel = () => {
+    setShowCopyModal(false)
+    setCopyingChecklist(null)
+    setTargetStoreId('')
+    setError(null)
   }
 
   const getStatusLabel = (status: string) => {
@@ -270,6 +345,12 @@ export default function ChecklistList({ stores, staffUsers, companyId }: Checkli
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="flex items-center space-x-2">
                         <button
+                          onClick={() => handleCopy(checklist)}
+                          className="px-3 py-1 text-xs bg-green-600 text-white rounded hover:bg-green-700"
+                        >
+                          복사
+                        </button>
+                        <button
                           onClick={() => handleEdit(checklist)}
                           className="px-3 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700"
                         >
@@ -294,6 +375,63 @@ export default function ChecklistList({ stores, staffUsers, companyId }: Checkli
       {!selectedStoreId && (
         <div className="bg-gray-50 border border-gray-200 rounded-lg p-8 text-center">
           <p className="text-gray-500">매장을 선택하면 체크리스트를 조회하고 생성할 수 있습니다.</p>
+        </div>
+      )}
+
+      {/* 복사 모달 */}
+      {showCopyModal && copyingChecklist && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-xl p-6 max-w-md w-full mx-4">
+            <h3 className="text-lg font-semibold mb-4">체크리스트 복사</h3>
+            <p className="text-sm text-gray-600 mb-4">
+              이 체크리스트를 어느 매장에 복사하시겠습니까?
+            </p>
+
+            {error && (
+              <div className="mb-4 bg-red-50 border border-red-200 rounded-lg p-3">
+                <p className="text-red-800 text-sm">{error}</p>
+              </div>
+            )}
+
+            <div className="mb-4">
+              <label htmlFor="targetStore" className="block text-sm font-medium text-gray-700 mb-2">
+                대상 매장 선택:
+              </label>
+              <select
+                id="targetStore"
+                value={targetStoreId}
+                onChange={(e) => setTargetStoreId(e.target.value)}
+                className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                disabled={copying}
+              >
+                <option value="">매장을 선택하세요</option>
+                {stores
+                  .filter((store) => store.id !== copyingChecklist.store_id) // 현재 매장 제외
+                  .map((store) => (
+                    <option key={store.id} value={store.id}>
+                      {store.name}
+                    </option>
+                  ))}
+              </select>
+            </div>
+
+            <div className="flex justify-end space-x-3">
+              <button
+                onClick={handleCopyCancel}
+                disabled={copying}
+                className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                취소
+              </button>
+              <button
+                onClick={handleCopyConfirm}
+                disabled={copying || !targetStoreId}
+                className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {copying ? '복사 중...' : '복사'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

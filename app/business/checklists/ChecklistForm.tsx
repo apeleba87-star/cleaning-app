@@ -3,6 +3,23 @@
 import { useState, FormEvent } from 'react'
 import { Store } from '@/types/db'
 import { ChecklistItem } from '@/types/db'
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+} from '@dnd-kit/core'
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  verticalListSortingStrategy,
+  useSortable,
+} from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
 
 interface User {
   id: string
@@ -28,6 +45,10 @@ interface Checklist {
   work_date?: string
 }
 
+interface ChecklistItemWithId extends ChecklistItem {
+  _tempId: string // 드래그 앤 드롭을 위한 임시 ID
+}
+
 export default function ChecklistForm({
   storeId,
   stores,
@@ -37,8 +58,10 @@ export default function ChecklistForm({
   initialChecklist = null,
 }: ChecklistFormProps) {
   const isEditMode = !!initialChecklist
-  const [items, setItems] = useState<ChecklistItem[]>(
-    initialChecklist?.items?.length > 0
+  
+  // 초기 items에 임시 ID 추가
+  const initializeItems = (): ChecklistItemWithId[] => {
+    const baseItems = initialChecklist?.items?.length > 0
       ? initialChecklist.items.map((item: any) => {
           // 기존 'photo' 타입을 'before_after_photo'로 변환 (하위 호환성)
           if (item.type === 'photo') {
@@ -47,15 +70,54 @@ export default function ChecklistForm({
           return item
         })
       : [{ area: '', type: 'check', status: 'good', checked: false, comment: '' }]
-  )
+    
+    return baseItems.map((item, index) => ({
+      ...item,
+      _tempId: `item-${Date.now()}-${index}`, // 고유 ID 생성
+    }))
+  }
+  
+  const [items, setItems] = useState<ChecklistItemWithId[]>(initializeItems())
   const [note, setNote] = useState(initialChecklist?.note || '')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   const selectedStore = stores.find((s) => s.id === storeId)
 
+  // 드래그 앤 드롭 센서 설정
+  const sensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  )
+
+  // 드래그 종료 핸들러
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event
+
+    if (over && active.id !== over.id) {
+      setItems((items) => {
+        const oldIndex = items.findIndex((item) => item._tempId === active.id)
+        const newIndex = items.findIndex((item) => item._tempId === over.id)
+
+        return arrayMove(items, oldIndex, newIndex)
+      })
+    }
+  }
+
   const handleAddItem = () => {
-    setItems([...items, { area: '', type: 'check', status: 'good', checked: false, comment: '' }])
+    setItems([
+      ...items,
+      {
+        area: '',
+        type: 'check',
+        status: 'good',
+        checked: false,
+        comment: '',
+        _tempId: `item-${Date.now()}-${items.length}`,
+      },
+    ])
   }
 
   const handleItemTypeChange = (index: number, type: 'check' | 'before_photo' | 'after_photo' | 'before_after_photo') => {
@@ -118,14 +180,16 @@ export default function ChecklistForm({
         body: JSON.stringify({
           store_id: storeId,
           items: validItems.map((item) => {
+            // _tempId 제거하고 저장
+            const { _tempId, ...itemWithoutId } = item
             const itemToSave = {
-              area: item.area.trim(),
-              type: item.type,
-              status: item.type === 'check' ? item.status : undefined,
-              checked: item.type === 'check' ? item.checked || false : undefined,
-              comment: item.comment?.trim() || undefined,
-              before_photo_url: (item.type === 'before_photo' || item.type === 'before_after_photo') ? item.before_photo_url : undefined,
-              after_photo_url: (item.type === 'after_photo' || item.type === 'before_after_photo') ? item.after_photo_url : undefined,
+              area: itemWithoutId.area.trim(),
+              type: itemWithoutId.type,
+              status: itemWithoutId.type === 'check' ? itemWithoutId.status : undefined,
+              checked: itemWithoutId.type === 'check' ? itemWithoutId.checked || false : undefined,
+              comment: itemWithoutId.comment?.trim() || undefined,
+              before_photo_url: (itemWithoutId.type === 'before_photo' || itemWithoutId.type === 'before_after_photo') ? itemWithoutId.before_photo_url : undefined,
+              after_photo_url: (itemWithoutId.type === 'after_photo' || itemWithoutId.type === 'before_after_photo') ? itemWithoutId.after_photo_url : undefined,
             }
             // 디버깅: 저장되는 타입 확인
             console.log('💾 Saving checklist item:', {
@@ -178,83 +242,23 @@ export default function ChecklistForm({
           <label className="block text-sm font-medium text-gray-700 mb-2">
             체크리스트 항목 <span className="text-red-500">*</span>
           </label>
-          <div className="space-y-3">
-            {items.map((item, index) => (
-              <div key={index} className="flex items-start space-x-2 p-3 border border-gray-200 rounded-md">
-                <div className="flex-1 space-y-2">
-                  <input
-                    type="text"
-                    placeholder="항목명 (예: 홀 바닥, 주방 싱크)"
-                    value={item.area}
-                    onChange={(e) => handleItemChange(index, 'area', e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+          <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+            <SortableContext items={items.map(item => item._tempId)} strategy={verticalListSortingStrategy}>
+              <div className="space-y-3">
+                {items.map((item, index) => (
+                  <SortableItem
+                    key={item._tempId}
+                    item={item}
+                    index={index}
+                    onItemChange={handleItemChange}
+                    onItemTypeChange={handleItemTypeChange}
+                    onRemoveItem={handleRemoveItem}
+                    itemsLength={items.length}
                   />
-                  <div className="flex items-center space-x-2">
-                    <select
-                      value={item.type}
-                      onChange={(e) => handleItemTypeChange(index, e.target.value as 'check' | 'before_photo' | 'after_photo' | 'before_after_photo')}
-                      className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    >
-                      <option value="check">일반 체크</option>
-                      <option value="before_photo">관리 전 사진</option>
-                      <option value="after_photo">관리 후 사진</option>
-                      <option value="before_after_photo">관리 전/후 사진</option>
-                    </select>
-                    {item.type === 'check' && (
-                      <>
-                        <select
-                          value={item.status || 'good'}
-                          onChange={(e) =>
-                            handleItemChange(index, 'status', e.target.value as 'good' | 'bad')
-                          }
-                          className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        >
-                          <option value="good">양호</option>
-                          <option value="bad">불량</option>
-                        </select>
-                        <input
-                          type="text"
-                          placeholder={item.status === 'bad' ? '코멘트 (필수)' : '코멘트 (선택)'}
-                          value={item.comment || ''}
-                          onChange={(e) => handleItemChange(index, 'comment', e.target.value)}
-                          className={`flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                            item.status === 'bad' && !item.comment?.trim()
-                              ? 'border-red-300'
-                              : ''
-                          }`}
-                        />
-                      </>
-                    )}
-                    {(item.type === 'before_photo' || item.type === 'after_photo' || item.type === 'before_after_photo') && (
-                      <div className="flex-1">
-                        <div className="text-sm text-gray-600 mb-2">
-                          {item.type === 'before_photo' && '관리 전 사진만 촬영합니다.'}
-                          {item.type === 'after_photo' && '관리 후 사진만 촬영합니다.'}
-                          {item.type === 'before_after_photo' && '관리 전/후 사진을 모두 촬영해야 합니다.'}
-                        </div>
-                        <input
-                          type="text"
-                          placeholder="코멘트 입력 (선택)"
-                          value={item.comment || ''}
-                          onChange={(e) => handleItemChange(index, 'comment', e.target.value)}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
-                        />
-                      </div>
-                    )}
-                    {items.length > 1 && (
-                      <button
-                        type="button"
-                        onClick={() => handleRemoveItem(index)}
-                        className="px-3 py-2 text-red-600 hover:text-red-800"
-                      >
-                        삭제
-                      </button>
-                    )}
-                  </div>
-                </div>
+                ))}
               </div>
-            ))}
-          </div>
+            </SortableContext>
+          </DndContext>
           <button
             type="button"
             onClick={handleAddItem}
@@ -295,6 +299,145 @@ export default function ChecklistForm({
           </button>
         </div>
       </form>
+    </div>
+  )
+}
+
+// SortableItem 컴포넌트
+interface SortableItemProps {
+  item: ChecklistItemWithId
+  index: number
+  onItemChange: (index: number, field: keyof ChecklistItem, value: string | boolean) => void
+  onItemTypeChange: (index: number, type: 'check' | 'before_photo' | 'after_photo' | 'before_after_photo') => void
+  onRemoveItem: (index: number) => void
+  itemsLength: number
+}
+
+function SortableItem({
+  item,
+  index,
+  onItemChange,
+  onItemTypeChange,
+  onRemoveItem,
+  itemsLength,
+}: SortableItemProps) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: item._tempId })
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  }
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className={`flex items-start space-x-2 p-3 border border-gray-200 rounded-md ${
+        isDragging ? 'bg-blue-50' : 'bg-white'
+      }`}
+    >
+      {/* 드래그 핸들 */}
+      <div
+        {...attributes}
+        {...listeners}
+        className="flex items-center justify-center w-8 h-8 mt-1 cursor-grab active:cursor-grabbing text-gray-400 hover:text-gray-600"
+        title="드래그하여 순서 변경"
+      >
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          fill="none"
+          viewBox="0 0 24 24"
+          strokeWidth={1.5}
+          stroke="currentColor"
+          className="w-6 h-6"
+        >
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5"
+          />
+        </svg>
+      </div>
+
+      <div className="flex-1 space-y-2">
+        <input
+          type="text"
+          placeholder="항목명 (예: 홀 바닥, 주방 싱크)"
+          value={item.area}
+          onChange={(e) => onItemChange(index, 'area', e.target.value)}
+          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+        />
+        <div className="flex items-center space-x-2">
+          <select
+            value={item.type}
+            onChange={(e) =>
+              onItemTypeChange(index, e.target.value as 'check' | 'before_photo' | 'after_photo' | 'before_after_photo')
+            }
+            className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            <option value="check">일반 체크</option>
+            <option value="before_photo">관리 전 사진</option>
+            <option value="after_photo">관리 후 사진</option>
+            <option value="before_after_photo">관리 전/후 사진</option>
+          </select>
+          {item.type === 'check' && (
+            <>
+              <select
+                value={item.status || 'good'}
+                onChange={(e) => onItemChange(index, 'status', e.target.value as 'good' | 'bad')}
+                className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="good">양호</option>
+                <option value="bad">불량</option>
+              </select>
+              <input
+                type="text"
+                placeholder={item.status === 'bad' ? '코멘트 (필수)' : '코멘트 (선택)'}
+                value={item.comment || ''}
+                onChange={(e) => onItemChange(index, 'comment', e.target.value)}
+                className={`flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                  item.status === 'bad' && !item.comment?.trim() ? 'border-red-300' : ''
+                }`}
+              />
+            </>
+          )}
+          {(item.type === 'before_photo' ||
+            item.type === 'after_photo' ||
+            item.type === 'before_after_photo') && (
+            <div className="flex-1">
+              <div className="text-sm text-gray-600 mb-2">
+                {item.type === 'before_photo' && '관리 전 사진만 촬영합니다.'}
+                {item.type === 'after_photo' && '관리 후 사진만 촬영합니다.'}
+                {item.type === 'before_after_photo' && '관리 전/후 사진을 모두 촬영해야 합니다.'}
+              </div>
+              <input
+                type="text"
+                placeholder="코멘트 입력 (선택)"
+                value={item.comment || ''}
+                onChange={(e) => onItemChange(index, 'comment', e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+              />
+            </div>
+          )}
+          {itemsLength > 1 && (
+            <button
+              type="button"
+              onClick={() => onRemoveItem(index)}
+              className="px-3 py-2 text-red-600 hover:text-red-800"
+            >
+              삭제
+            </button>
+          )}
+        </div>
+      </div>
     </div>
   )
 }
