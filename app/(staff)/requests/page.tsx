@@ -1029,7 +1029,7 @@ export default function RequestsPage() {
 
             {/* 촬영된 사진 썸네일 (왼쪽 하단) */}
             {(cameraType === 'completion' ? completionPhoto : rejectionPhoto) && (
-              <div className="absolute bottom-24 left-4 z-20">
+              <div className="absolute top-20 bottom-44 left-4 z-20 md:top-20 md:bottom-20">
                 <div className="relative">
                   <img
                     src={cameraType === 'completion' ? completionPhoto! : rejectionPhoto!}
@@ -1042,7 +1042,7 @@ export default function RequestsPage() {
           </div>
 
           {/* 하단: 촬영 버튼 및 닫기 버튼 */}
-          <div className="absolute bottom-0 left-0 right-0 bg-black bg-opacity-90 p-4 z-20">
+          <div className="absolute bottom-16 left-0 right-0 bg-black bg-opacity-90 p-4 z-20 md:bottom-0">
             <div className="flex items-center justify-center gap-4">
               <button
                 onClick={closeCamera}

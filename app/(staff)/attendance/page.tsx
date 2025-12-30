@@ -20,6 +20,7 @@ export default function AttendancePage() {
   const [todayAttendances, setTodayAttendances] = useState<AttendanceWithStore[]>([])
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
+  const [clockInLoading, setClockInLoading] = useState(false) // 출근 처리 후 로딩 상태
   const [error, setError] = useState<string | null>(null)
   const [selectedStoreId, setSelectedStoreId] = useState<string>('')
   const [checklistProgress, setChecklistProgress] = useState<Record<string, { completed: number; total: number; percentage: number }>>({})
@@ -283,6 +284,9 @@ export default function AttendancePage() {
     )
 
     if (result.success && result.data) {
+      setSubmitting(false)
+      setClockInLoading(true) // 출근 처리 후 로딩 시작
+      
       // 출근 정보 다시 로드 (매장 정보 포함)
       await loadTodayAttendance()
       setSelectedStoreId('') // 매장 선택 초기화
@@ -292,15 +296,16 @@ export default function AttendancePage() {
         loadChecklistProgress()
       }, 500)
       
-      // 출근 완료 후 대시보드로 리다이렉트하여 메뉴 갱신
+      // 출근 정보 로드 완료 후 약간의 딜레이를 두고 로딩 종료 및 리다이렉트
+      // (퇴근 버튼이 나타나는 것을 확인할 수 있도록)
       setTimeout(() => {
+        setClockInLoading(false) // 로딩 종료
         router.push('/mobile-dashboard')
-      }, 1000) // 1초 후 리다이렉트 (성공 메시지 확인 시간)
+      }, 1500) // 1.5초 후 리다이렉트 (로딩 스피너 확인 시간 포함)
     } else {
       setError(result.error || '출근 처리 실패')
+      setSubmitting(false)
     }
-
-    setSubmitting(false)
   }
 
   const handleClockOut = async (storeId: string) => {
@@ -506,7 +511,18 @@ export default function AttendancePage() {
         {/* 오늘 출근한 매장 목록 */}
         <div className="space-y-3 md:space-y-4">
           <h2 className="text-base md:text-lg font-semibold">오늘 출근한 매장</h2>
-          {todayAttendances.length === 0 ? (
+          
+          {/* 출근 처리 후 로딩 스피너 */}
+          {clockInLoading && (
+            <div className="p-4 bg-blue-50 rounded-md border border-blue-200 flex items-center justify-center">
+              <div className="flex flex-col items-center gap-3">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                <p className="text-sm text-blue-700">출근 처리가 완료되었습니다. 퇴근 버튼을 불러오는 중...</p>
+              </div>
+            </div>
+          )}
+          
+          {todayAttendances.length === 0 && !clockInLoading ? (
             <div className="p-4 bg-gray-50 rounded-md text-center text-gray-500">
               아직 출근한 매장이 없습니다.
             </div>
