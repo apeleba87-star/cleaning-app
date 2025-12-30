@@ -48,6 +48,9 @@ export default async function ProductsPage() {
   }
 
   // 매장별 제품 위치 정보 조회 (업체관리자는 자신의 회사 매장만)
+  let locations: any[] = []
+  let locationsError: any = null
+  
   let locationsQuery = supabase
     .from('store_product_locations')
     .select(`
@@ -140,11 +143,11 @@ export default async function ProductsPage() {
         }
       }
       
-      var locations = allLocations
-      var locationsError = null
+      locations = allLocations
+      locationsError = null
     } else {
-      var locations: any[] = []
-      var locationsError = null
+      locations = []
+      locationsError = null
     }
   } else {
     // Supabase 기본 limit 1000개 제한을 해결하기 위해 range 사용 (limit을 1000으로 설정)
@@ -179,8 +182,8 @@ export default async function ProductsPage() {
         .range(offset, offset + limit - 1)
       
       if (batchError) {
-        var locationsError = batchError
-        var locations: any[] = []
+        locationsError = batchError
+        locations = []
         break
       }
       
@@ -196,8 +199,8 @@ export default async function ProductsPage() {
       }
     }
     
-    var locations = allLocations
-    var locationsError = null
+    locations = allLocations
+    locationsError = null
   }
 
   // 통계를 COUNT 쿼리로 별도 계산 (정확한 통계 보장)
