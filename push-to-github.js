@@ -13,7 +13,16 @@ try {
   console.log('✅ 완료\n');
 
   console.log('[3/4] 커밋 생성...');
-  const commitMessage = 'Fix: 체크리스트 날짜 검증 KST 적용 및 점주 앱 이미지 확대 기능 추가';
+  const commitMessage = `feat: 미관리 매장 확인 기능 개선 및 모바일 최적화
+
+- 네비게이션 라벨을 '미관리 매장 확인'으로 변경 및 대시보드 옆으로 이동
+- 페이지 제목 및 설명 문구 개선
+- 야간 매장 집계 완료 시 '야간 매장 집계 완료' 텍스트 표시
+- API에 total_night_stores 필드 추가
+- 대시보드 섹션 텍스트 변경
+- 모바일/태블릿 반응형 UI 최적화
+- 모바일 햄버거 메뉴 구현 (왼쪽 슬라이드)
+- 2025년 최신 UI 트렌드 적용 (그라데이션, Glassmorphism, 부드러운 애니메이션)`;
   execSync(`git commit -m "${commitMessage}"`, { stdio: 'inherit' });
   console.log('✅ 완료\n');
 

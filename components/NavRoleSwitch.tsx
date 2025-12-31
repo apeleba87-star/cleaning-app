@@ -36,6 +36,8 @@ export function NavRoleSwitch({ userRole, userName, onRefresh, isRefreshing }: N
   const [isRefreshingStore, setIsRefreshingStore] = useState(false)
   const [isIOS, setIsIOS] = useState(false)
   const [canGoBack, setCanGoBack] = useState(false)
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
+  const mobileMenuRef = useRef<HTMLDivElement | null>(null)
 
   useEffect(() => {
     setIsClient(true)
@@ -91,13 +93,29 @@ export function NavRoleSwitch({ userRole, userName, onRefresh, isRefreshing }: N
           setOpenDropdown(null)
         }
       }
+      // 모바일 메뉴 외부 클릭 시 닫기
+      if (isMobileMenuOpen && mobileMenuRef.current && !mobileMenuRef.current.contains(event.target as Node)) {
+        setIsMobileMenuOpen(false)
+      }
     }
 
     document.addEventListener('mousedown', handleClickOutside)
     return () => {
       document.removeEventListener('mousedown', handleClickOutside)
     }
-  }, [openDropdown])
+  }, [openDropdown, isMobileMenuOpen])
+
+  // 모바일 메뉴 열림 시 body 스크롤 방지
+  useEffect(() => {
+    if (isMobileMenuOpen) {
+      document.body.style.overflow = 'hidden'
+    } else {
+      document.body.style.overflow = ''
+    }
+    return () => {
+      document.body.style.overflow = ''
+    }
+  }, [isMobileMenuOpen])
 
   const staffNav = [
     { href: '/attendance', label: '관리시작/종료' },
@@ -280,23 +298,34 @@ export function NavRoleSwitch({ userRole, userName, onRefresh, isRefreshing }: N
     )
   }
 
-  const renderNavItem = (item: NavItem | NavGroup, index: number) => {
+  const renderNavItem = (item: NavItem | NavGroup, index: number, isMobile: boolean = false) => {
     // 단일 링크인 경우 (items가 없는 경우)
     if ('href' in item && !('items' in item)) {
       const navItem = item as NavItem
+      const baseClasses = isMobile
+        ? `block px-4 py-3 text-base font-medium transition-all duration-200 relative ${
+            isActive(navItem.href)
+              ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md'
+              : 'text-gray-700 hover:bg-gradient-to-r hover:from-gray-50 hover:to-gray-100'
+          }`
+        : `px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 relative backdrop-blur-sm ${
+            isActive(navItem.href)
+              ? 'bg-white/20 text-white shadow-lg border border-white/30'
+              : 'hover:bg-white/10 text-white/90 hover:text-white border border-transparent hover:border-white/20'
+          }`
+      
       return (
         <Link
           key={navItem.href}
           href={navItem.href}
-          className={`px-3 py-2 rounded-md text-sm font-medium transition-colors relative ${
-            isActive(navItem.href)
-              ? 'bg-blue-700'
-              : 'hover:bg-blue-700/50'
-          }`}
+          onClick={() => isMobile && setIsMobileMenuOpen(false)}
+          className={baseClasses}
         >
           {navItem.label}
           {navItem.badge !== undefined && navItem.badge > 0 && (
-            <span className="absolute -top-1 -right-1 inline-flex items-center justify-center w-5 h-5 text-xs font-bold text-white bg-red-500 rounded-full">
+            <span className={`inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 text-xs font-bold text-white bg-gradient-to-r from-red-500 to-pink-500 rounded-full ml-2 shadow-lg ${
+              isMobile ? 'relative' : 'absolute -top-1 -right-1'
+            }`}>
               {navItem.badge}
             </span>
           )}
@@ -309,6 +338,52 @@ export function NavRoleSwitch({ userRole, userName, onRefresh, isRefreshing }: N
     const isOpen = openDropdown === `dropdown-${index}`
     const isActiveGroup = isGroupActive(group)
 
+    if (isMobile) {
+      // 모바일에서는 아코디언 형태로 표시
+      return (
+        <div key={`group-${index}`} className="border-b border-gray-200/50">
+          <button
+            onClick={() => setOpenDropdown(isOpen ? null : `dropdown-${index}`)}
+            className={`w-full px-4 py-3 text-base font-medium transition-all duration-200 flex items-center justify-between ${
+              isActiveGroup
+                ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md'
+                : 'text-gray-700 hover:bg-gradient-to-r hover:from-gray-50 hover:to-gray-100'
+            }`}
+          >
+            <span>{group.label}</span>
+            <svg
+              className={`w-5 h-5 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`}
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
+            </svg>
+          </button>
+          {isOpen && group.items && (
+            <div className="bg-gradient-to-b from-gray-50 to-white">
+              {group.items.map((subItem) => (
+                <Link
+                  key={subItem.href}
+                  href={subItem.href}
+                  onClick={() => {
+                    setOpenDropdown(null)
+                    setIsMobileMenuOpen(false)
+                  }}
+                  className={`block px-8 py-2.5 text-sm text-gray-700 hover:bg-gradient-to-r hover:from-blue-50 hover:to-indigo-50 transition-all duration-200 ${
+                    isActive(subItem.href) ? 'bg-gradient-to-r from-blue-100 to-indigo-100 text-blue-700 font-semibold border-l-4 border-blue-600' : ''
+                  }`}
+                >
+                  {subItem.label}
+                </Link>
+              ))}
+            </div>
+          )}
+        </div>
+      )
+    }
+
+    // 데스크톱 버전
     return (
       <div
         key={`group-${index}`}
@@ -319,31 +394,31 @@ export function NavRoleSwitch({ userRole, userName, onRefresh, isRefreshing }: N
       >
         <button
           onClick={() => setOpenDropdown(isOpen ? null : `dropdown-${index}`)}
-          className={`px-3 py-2 rounded-md text-sm font-medium transition-colors flex items-center gap-1 ${
+          className={`px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 flex items-center gap-1.5 backdrop-blur-sm ${
             isActiveGroup
-              ? 'bg-blue-700'
-              : 'hover:bg-blue-700/50'
+              ? 'bg-white/20 text-white shadow-lg border border-white/30'
+              : 'hover:bg-white/10 text-white/90 hover:text-white border border-transparent hover:border-white/20'
           }`}
         >
           {group.label}
           <svg
-            className={`w-4 h-4 transition-transform ${isOpen ? 'rotate-180' : ''}`}
+            className={`w-4 h-4 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`}
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"
           >
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
           </svg>
         </button>
         {isOpen && group.items && (
-          <div className="absolute top-full left-0 mt-1 w-48 bg-white rounded-md shadow-lg py-1 z-50 border border-gray-200">
+          <div className="absolute top-full left-0 mt-2 w-56 bg-white/95 backdrop-blur-md rounded-xl shadow-2xl py-2 z-50 border border-gray-200/50 overflow-hidden">
             {group.items.map((subItem) => (
               <Link
                 key={subItem.href}
                 href={subItem.href}
                 onClick={() => setOpenDropdown(null)}
-                className={`block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors ${
-                  isActive(subItem.href) ? 'bg-blue-50 text-blue-700 font-medium' : ''
+                className={`block px-4 py-2.5 text-sm text-gray-700 hover:bg-gradient-to-r hover:from-blue-50 hover:to-indigo-50 transition-all duration-200 ${
+                  isActive(subItem.href) ? 'bg-gradient-to-r from-blue-100 to-indigo-100 text-blue-700 font-semibold border-l-4 border-blue-600' : ''
                 }`}
               >
                 {subItem.label}
@@ -356,31 +431,52 @@ export function NavRoleSwitch({ userRole, userName, onRefresh, isRefreshing }: N
   }
 
   return (
-    <nav className="bg-blue-600 text-white shadow-lg">
+    <>
+    <nav className="bg-gradient-to-r from-blue-600 via-blue-700 to-indigo-700 text-white shadow-xl backdrop-blur-sm border-b border-white/10 relative z-30">
       <div className="container mx-auto px-4">
         <div className="flex items-center justify-between h-16">
-          <div className="flex items-center space-x-4 lg:space-x-8">
+          <div className="flex items-center space-x-3 lg:space-x-6">
+            {/* 햄버거 메뉴 버튼 (모바일에서만 표시, 왼쪽에 배치) */}
+            <button
+              onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+              className="md:hidden p-2 rounded-lg hover:bg-white/10 transition-all duration-200 active:scale-95"
+              aria-label="메뉴 열기"
+            >
+              <svg
+                className="w-6 h-6"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                {isMobileMenuOpen ? (
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
+                ) : (
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M4 6h16M4 12h16M4 18h16" />
+                )}
+              </svg>
+            </button>
+            
             <div className="flex items-center gap-2 lg:gap-4">
               {userRole === 'business_owner' ? (
-                <Link href="/business/dashboard" className="flex flex-col lg:flex-row lg:items-center gap-0 lg:gap-2">
-                  <span className="text-xl font-bold">무플 (MUPL)</span>
-                  <span className="text-sm text-blue-200 hidden lg:inline">|</span>
-                  <span className="text-xs lg:text-sm text-blue-200">무인·현장 운영 관리 플랫폼</span>
+                <Link href="/business/dashboard" className="flex flex-col lg:flex-row lg:items-center gap-0 lg:gap-2 group">
+                  <span className="text-xl lg:text-2xl font-bold bg-gradient-to-r from-white to-blue-100 bg-clip-text text-transparent group-hover:from-white group-hover:to-white transition-all duration-200">무플 (MUPL)</span>
+                  <span className="text-xs lg:text-sm text-blue-100/80 hidden lg:inline">|</span>
+                  <span className="text-xs lg:text-sm text-blue-100/70 group-hover:text-blue-100 transition-colors">무인·현장 운영 관리 플랫폼</span>
                 </Link>
               ) : userRole === 'franchise_manager' ? (
-                <Link href="/franchise/stores/status" className="flex flex-col lg:flex-row lg:items-center gap-0 lg:gap-2">
-                  <span className="text-xl font-bold">무플 (MUPL)</span>
-                  <span className="text-sm text-blue-200 hidden lg:inline">|</span>
-                  <span className="text-xs lg:text-sm text-blue-200">무인·현장 운영 관리 플랫폼</span>
+                <Link href="/franchise/stores/status" className="flex flex-col lg:flex-row lg:items-center gap-0 lg:gap-2 group">
+                  <span className="text-xl lg:text-2xl font-bold bg-gradient-to-r from-white to-blue-100 bg-clip-text text-transparent group-hover:from-white group-hover:to-white transition-all duration-200">무플 (MUPL)</span>
+                  <span className="text-xs lg:text-sm text-blue-100/80 hidden lg:inline">|</span>
+                  <span className="text-xs lg:text-sm text-blue-100/70 group-hover:text-blue-100 transition-colors">무인·현장 운영 관리 플랫폼</span>
                 </Link>
               ) : userRole === 'store_manager' ? (
-                <Link href="/store-manager/dashboard" className="flex flex-col lg:flex-row lg:items-center gap-0 lg:gap-2">
-                  <span className="text-xl font-bold">무플 (MUPL)</span>
-                  <span className="text-sm text-blue-200 hidden lg:inline">|</span>
-                  <span className="text-xs lg:text-sm text-blue-200">무인·현장 운영 관리 플랫폼</span>
+                <Link href="/store-manager/dashboard" className="flex flex-col lg:flex-row lg:items-center gap-0 lg:gap-2 group">
+                  <span className="text-xl lg:text-2xl font-bold bg-gradient-to-r from-white to-blue-100 bg-clip-text text-transparent group-hover:from-white group-hover:to-white transition-all duration-200">무플 (MUPL)</span>
+                  <span className="text-xs lg:text-sm text-blue-100/80 hidden lg:inline">|</span>
+                  <span className="text-xs lg:text-sm text-blue-100/70 group-hover:text-blue-100 transition-colors">무인·현장 운영 관리 플랫폼</span>
                 </Link>
               ) : (
-                <Link href="/" className="text-xl font-bold">
+                <Link href="/" className="text-xl lg:text-2xl font-bold bg-gradient-to-r from-white to-blue-100 bg-clip-text text-transparent hover:from-white hover:to-white transition-all duration-200">
                   청소 관리
                 </Link>
               )}
@@ -393,7 +489,7 @@ export function NavRoleSwitch({ userRole, userName, onRefresh, isRefreshing }: N
                     }
                   }}
                   disabled={isRefreshingStore}
-                  className="px-3 py-1.5 bg-blue-700 hover:bg-blue-800 disabled:bg-gray-500 text-white rounded-md text-sm font-medium transition-colors flex items-center gap-2"
+                  className="px-3 py-1.5 bg-white/10 hover:bg-white/20 disabled:bg-white/5 backdrop-blur-sm text-white rounded-lg text-sm font-medium transition-all duration-200 flex items-center gap-2 border border-white/20 disabled:opacity-50"
                   title="새로고침"
                 >
                   <svg
@@ -415,26 +511,26 @@ export function NavRoleSwitch({ userRole, userName, onRefresh, isRefreshing }: N
                 </button>
               )}
             </div>
-            <div className="hidden md:flex space-x-4">
+            <div className="hidden md:flex space-x-2">
               {navItems.map((item, index) => renderNavItem(item, index))}
             </div>
           </div>
-          <div className="flex items-center space-x-4">
+          <div className="flex items-center space-x-2 sm:space-x-3">
             {userName && (
-              <span className="text-sm hidden md:inline">
-                {userName} ({
+              <span className="text-xs sm:text-sm hidden md:inline text-blue-100/90 font-medium">
+                {userName} <span className="text-blue-200/70">({
                   userRole === 'manager' ? '매니저' : 
                   userRole === 'business_owner' ? '업체관리자' :
                   userRole === 'franchise_manager' ? '프렌차이즈관리자' :
                   userRole === 'store_manager' ? '매장관리자' :
                   userRole === 'platform_admin' ? '시스템관리자' :
                   '관리자'
-                })
+                })</span>
               </span>
             )}
             <button
               onClick={handleLogout}
-              className="px-4 py-2 bg-red-500 hover:bg-red-600 rounded-md text-sm font-medium transition-colors"
+              className="px-3 sm:px-4 py-2 bg-red-500/90 hover:bg-red-600 backdrop-blur-sm rounded-lg text-xs sm:text-sm font-medium transition-all duration-200 shadow-lg hover:shadow-xl active:scale-95 border border-red-400/30"
             >
               로그아웃
             </button>
@@ -442,6 +538,73 @@ export function NavRoleSwitch({ userRole, userName, onRefresh, isRefreshing }: N
         </div>
       </div>
     </nav>
+
+    {/* 모바일 메뉴 오버레이 및 사이드바 (nav 밖으로 분리) */}
+    <>
+      {/* 오버레이 배경 */}
+      <div
+        className={`fixed inset-0 bg-black/60 backdrop-blur-sm z-[100] md:hidden transition-opacity duration-300 ${
+          isMobileMenuOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'
+        }`}
+        onClick={() => setIsMobileMenuOpen(false)}
+      />
+      {/* 사이드바 (왼쪽에서 슬라이드) */}
+      <div
+        ref={mobileMenuRef}
+        className={`fixed top-0 left-0 h-full w-80 max-w-[85vw] bg-gradient-to-b from-white via-gray-50 to-white shadow-2xl z-[110] transform transition-transform duration-300 ease-out md:hidden overflow-y-auto ${
+          isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'
+        }`}
+      >
+        <div className="flex flex-col h-full">
+          {/* 모바일 메뉴 헤더 */}
+          <div className="bg-gradient-to-r from-blue-600 via-blue-700 to-indigo-700 text-white p-6 flex items-center justify-between shadow-lg">
+            <div>
+              <p className="font-bold text-xl mb-1">{userName || '사용자'}</p>
+              <p className="text-sm text-blue-100/90 font-medium">
+                {userRole === 'manager' ? '매니저' : 
+                 userRole === 'business_owner' ? '업체관리자' :
+                 userRole === 'franchise_manager' ? '프렌차이즈관리자' :
+                 userRole === 'store_manager' ? '매장관리자' :
+                 userRole === 'platform_admin' ? '시스템관리자' :
+                 '관리자'}
+              </p>
+            </div>
+            <button
+              onClick={() => setIsMobileMenuOpen(false)}
+              className="p-2 rounded-lg hover:bg-white/10 transition-all duration-200 active:scale-95"
+              aria-label="메뉴 닫기"
+            >
+              <svg
+                className="w-6 h-6"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+
+          {/* 모바일 메뉴 항목 */}
+          <div className="flex-1 overflow-y-auto py-2">
+            <nav>
+              {navItems.map((item, index) => renderNavItem(item, index, true))}
+            </nav>
+          </div>
+
+          {/* 모바일 메뉴 푸터 */}
+          <div className="border-t border-gray-200/50 p-4 bg-gradient-to-t from-gray-50 to-white">
+            <button
+              onClick={handleLogout}
+              className="w-full px-4 py-3 bg-gradient-to-r from-red-500 to-pink-500 hover:from-red-600 hover:to-pink-600 text-white rounded-xl text-sm font-semibold transition-all duration-200 shadow-lg hover:shadow-xl active:scale-95"
+            >
+              로그아웃
+            </button>
+          </div>
+        </div>
+      </div>
+    </>
+    </>
   )
 }
 
