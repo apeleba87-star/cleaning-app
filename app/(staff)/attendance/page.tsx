@@ -289,6 +289,13 @@ export default function AttendancePage() {
     )
 
     if (result.success && result.data) {
+      // 미션 완료 이벤트 발생
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('missionComplete', {
+          detail: { missionId: 'start_management' }
+        }))
+      }
+
       setSubmitting(false)
       setClockInLoading(true) // 출근 처리 후 로딩 시작
       
@@ -437,7 +444,8 @@ export default function AttendancePage() {
                 />
                 <span className="text-sm">관리일 변경</span>
               </label>
-              <label className="flex items-center">
+              {/* 긴급 관리 옵션 임시 숨김 */}
+              {/* <label className="flex items-center">
                 <input
                   type="radio"
                   name="attendanceType"
@@ -447,7 +455,7 @@ export default function AttendancePage() {
                   className="mr-2"
                 />
                 <span className="text-sm">긴급 관리</span>
-              </label>
+              </label> */}
             </div>
           </div>
 
@@ -481,8 +489,8 @@ export default function AttendancePage() {
             </div>
           )}
 
-          {/* 긴급 관리인 경우 */}
-          {attendanceType === 'emergency' && (
+          {/* 긴급 관리인 경우 - 임시 숨김 */}
+          {/* {attendanceType === 'emergency' && (
             <div className="mt-4">
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 관련 문제 ID (선택)
@@ -498,7 +506,7 @@ export default function AttendancePage() {
                 긴급 관리로 해결할 문제 보고가 있으면 ID를 입력하세요.
               </p>
             </div>
-          )}
+          )} */}
 
           <button
             onClick={handleClockIn}

@@ -9,6 +9,7 @@ import { GeoGuard } from '@/components/GeoGuard'
 import { clockInAction, clockOutAction } from '../attendance/actions'
 import { GPSLocation } from '@/types/db'
 import { getTodayDateKST, getYesterdayDateKST } from '@/lib/utils/date'
+import QuickStartGuide from '@/components/staff/QuickStartGuide'
 
 interface StoreWithAssignment {
   id: string
@@ -191,7 +192,25 @@ export default function MobileDashboardPage() {
       }
       const data = await response.json()
       if (data.success && data.data) {
-        setAnnouncements(data.data)
+        // 읽은 공지사항은 3일 이내만 표시
+        const threeDaysAgo = new Date()
+        threeDaysAgo.setDate(threeDaysAgo.getDate() - 3)
+        
+        const filteredAnnouncements = data.data.filter((ann: any) => {
+          // 읽지 않은 공지사항은 모두 표시
+          if (!ann.is_read) return true
+          
+          // 읽은 공지사항은 read_at이 3일 이내인 것만 표시
+          if (ann.read_at) {
+            const readDate = new Date(ann.read_at)
+            return readDate >= threeDaysAgo
+          }
+          
+          // read_at이 없으면 표시하지 않음
+          return false
+        })
+        
+        setAnnouncements(filteredAnnouncements)
       }
     } catch (error) {
       console.error('Error loading announcements:', error)
@@ -221,25 +240,25 @@ export default function MobileDashboardPage() {
       }
       const data = await response.json()
       if (data.success) {
-        // 공지사항 목록 업데이트 및 7일 필터링 적용
+        // 공지사항 목록 업데이트 및 3일 필터링 적용
         const updatedAnnouncements = announcements.map((ann) =>
           ann.id === announcementId
             ? { ...ann, is_read: true, read_at: new Date().toISOString() }
             : ann
         )
         
-        // 읽은 공지사항은 7일 이내만 표시
-        const sevenDaysAgo = new Date()
-        sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7)
+        // 읽은 공지사항은 3일 이내만 표시
+        const threeDaysAgo = new Date()
+        threeDaysAgo.setDate(threeDaysAgo.getDate() - 3)
         
         const filteredAnnouncements = updatedAnnouncements.filter((ann) => {
           // 읽지 않은 공지사항은 모두 표시
           if (!ann.is_read) return true
           
-          // 읽은 공지사항은 read_at이 7일 이내인 것만 표시
+          // 읽은 공지사항은 read_at이 3일 이내인 것만 표시
           if (ann.read_at) {
             const readDate = new Date(ann.read_at)
-            return readDate >= sevenDaysAgo
+            return readDate >= threeDaysAgo
           }
           
           // read_at이 없으면 표시하지 않음
@@ -1256,7 +1275,7 @@ export default function MobileDashboardPage() {
             </div>
             <div className="space-y-2">
               {announcements.map((announcement) => {
-                // 읽은 공지사항은 7일 이내만 표시 (이미 loadAnnouncements에서 필터링됨)
+                // 읽은 공지사항은 3일 이내만 표시 (이미 loadAnnouncements에서 필터링됨)
                 // 여기서는 읽은 공지사항만 연하게 표시
                 const isRead = announcement.is_read
                 
@@ -1302,6 +1321,9 @@ export default function MobileDashboardPage() {
             </div>
           </div>
         )}
+
+        {/* 빠른 시작 가이드 */}
+        {user && <QuickStartGuide userId={user.id} />}
 
         {/* 매장 관리 현황 - 반응형 */}
         <GeoGuard onLocationReady={setLocation}>

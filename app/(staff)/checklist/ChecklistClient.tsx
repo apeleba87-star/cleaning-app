@@ -629,6 +629,13 @@ export default function ChecklistClient() {
           }
         }
 
+        // 미션 완료 이벤트 발생
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('missionComplete', {
+            detail: { missionId: 'checklist' }
+          }))
+        }
+
         // 제출 완료 알림
         alert('체크리스트가 제출되었습니다.')
         

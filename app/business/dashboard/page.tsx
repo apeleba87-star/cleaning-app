@@ -151,6 +151,7 @@ export default async function BusinessOwnerDashboardPage() {
     { title: '체크리스트 관리', href: '/business/checklists', description: '매장별 체크리스트 생성 및 관리', category: 'operation' },
     { title: '공지사항 관리', href: '/business/announcements', description: '점주용/직원용 공지사항 작성 및 확인 현황', category: 'operation' },
     { title: '리포트', href: '/business/reports', description: '월간/주간 리포트 조회', category: 'operation' },
+    { title: '매장 관리 현황 리포트', href: '/business/attendance-report', description: '어제 오후 1시 기준 매장 출근 현황 리포트', category: 'operation' },
     { title: '회사 관리', href: '/business/company', description: '회사 정보 및 요금제 관리', category: 'settings' },
   ]
 

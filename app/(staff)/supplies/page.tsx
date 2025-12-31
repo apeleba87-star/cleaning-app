@@ -156,6 +156,13 @@ export default function SuppliesPage() {
         customCategory: '',
         photo_url: '',
       })
+      // 미션 완료 이벤트 발생
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('missionComplete', {
+          detail: { missionId: 'supply_request' }
+        }))
+      }
+
       alert('물품 요청이 접수되었습니다.')
       loadSupplies()
     } catch (error: any) {

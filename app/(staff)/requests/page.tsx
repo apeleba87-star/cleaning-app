@@ -456,7 +456,7 @@ export default function RequestsPage() {
     // 출근한 매장인지 확인
     const attendanceStatus = storeAttendanceMap.get(request.store_id) || 'not_clocked_in'
     if (attendanceStatus !== 'clocked_in') {
-      alert('출근한 매장의 요청란만 처리할 수 있습니다.')
+      alert('관리시작 매장의 요청란만 처리할 수 있습니다.')
       setCompletingRequestId(null)
       setCompletionPhoto(null)
       setCompletionDescription('')
@@ -501,7 +501,7 @@ export default function RequestsPage() {
     // 출근한 매장인지 확인
     const attendanceStatus = storeAttendanceMap.get(request.store_id) || 'not_clocked_in'
     if (attendanceStatus !== 'clocked_in') {
-      alert('출근한 매장의 요청란만 처리할 수 있습니다.')
+      alert('관리시작 매장의 요청란만 처리할 수 있습니다.')
       return
     }
     
@@ -599,7 +599,7 @@ export default function RequestsPage() {
         <h1 className="text-2xl font-bold mb-2">처리중인 요청란</h1>
         <p className="text-gray-600 text-sm">
           {attendanceStoreId && isClockedIn
-            ? '출근한 매장의 요청란만 표시됩니다.'
+            ? '관리시작 매장의 요청란만 표시됩니다.'
             : '배정된 매장의 처리중인 요청란을 확인할 수 있습니다.'}
         </p>
       </div>
@@ -842,7 +842,7 @@ export default function RequestsPage() {
                 {isNotClockedIn && (
                   <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 mb-4">
                     <p className="text-sm text-yellow-800">
-                      출근한 매장의 요청란만 처리할 수 있습니다.
+                      관리시작 매장의 요청란만 처리할 수 있습니다.
                     </p>
                   </div>
                 )}
@@ -998,7 +998,7 @@ export default function RequestsPage() {
                 {isNotClockedIn && (
                   <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 mb-4">
                     <p className="text-sm text-yellow-800">
-                      출근한 매장의 요청란만 처리할 수 있습니다.
+                      관리시작 매장의 요청란만 처리할 수 있습니다.
                     </p>
                   </div>
                 )}

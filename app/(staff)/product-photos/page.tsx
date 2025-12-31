@@ -466,6 +466,13 @@ export default function ProductPhotosPage() {
           }
         }
 
+        // 미션 완료 이벤트 발생
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('missionComplete', {
+            detail: { missionId: 'product_photos' }
+          }))
+        }
+
         alert('제품 입고 사진이 등록되었습니다.')
         setReceiptProductPhotos([])
         setReceiptOrderSheetPhotos([])
@@ -515,6 +522,13 @@ export default function ProductPhotosPage() {
             }
           }
           throw new Error(errorMessage)
+        }
+
+        // 미션 완료 이벤트 발생 (보관 사진도 제품 입고 사진 미션에 포함)
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('missionComplete', {
+            detail: { missionId: 'product_photos' }
+          }))
         }
 
         alert('보관 사진이 등록되었습니다.')

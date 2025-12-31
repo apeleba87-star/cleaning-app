@@ -580,6 +580,13 @@ export default function IssuesPage() {
 
         const data = await response.json()
 
+        // 미션 완료 이벤트 발생
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('missionComplete', {
+            detail: { missionId: 'store_issues' }
+          }))
+        }
+
         alert('매장 문제 보고가 등록되었습니다.')
         setStoreProblemForm({
           category: '',
