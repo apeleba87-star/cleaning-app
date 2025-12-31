@@ -26,7 +26,8 @@ try {
 - product-search 페이지 타입 에러 수정
 - financial-summary API 타입 에러 수정 (todaySalaryUsersWithStatus 사용)
 - stores/status API 타입 에러 수정 (problemReportsError 제거)
-- TodayTasksWrapperClient 타입 에러 수정 (loadFinancialData 함수 추가)`;
+- TodayTasksWrapperClient 타입 에러 수정 (loadFinancialData 함수 추가)
+- FinancialDataContext 타입 정의 업데이트 (subcontract_amount, payment_id, role 필드 추가)`;
   execSync(`git commit -m "${commitMessage}"`, { stdio: 'inherit' });
   console.log('✅ 완료\n');
 

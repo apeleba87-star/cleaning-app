@@ -28,8 +28,11 @@ interface FinancialData {
     name: string
     salary_date: number | null
     salary_amount: number | null
+    subcontract_amount: number | null
     payroll_status?: 'paid' | 'scheduled'
     payroll_id?: string | null
+    payment_id?: string | null
+    role?: string
   }>
   today_payment_stores: Array<{
     id: string

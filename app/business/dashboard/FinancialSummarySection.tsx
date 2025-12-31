@@ -31,8 +31,11 @@ interface FinancialSummary {
     name: string
     salary_date: number | null
     salary_amount: number | null
+    subcontract_amount: number | null
     payroll_status?: 'paid' | 'scheduled' // 지급완료 또는 예정
     payroll_id?: string | null // 인건비 ID
+    payment_id?: string | null // 도급 지급 ID
+    role?: string
   }>
   today_payment_stores: Array<{
     id: string
