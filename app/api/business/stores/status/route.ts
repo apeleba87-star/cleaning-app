@@ -514,9 +514,6 @@ export async function GET(request: NextRequest) {
 
         // 디버깅: 실제 저장된 category 값 확인
         console.log(`\n=== Store ${store.id} (${store.name}) ===`)
-        if (problemReportsError) {
-          console.error('Error fetching problem reports:', problemReportsError)
-        }
         console.log(`Total problem reports found: ${problemReports?.length || 0}`)
         if (problemReports && problemReports.length > 0) {
           // 모든 고유한 category 값 확인
