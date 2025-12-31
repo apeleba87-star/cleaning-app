@@ -252,7 +252,7 @@ export default function StoreSelector({ selectedStoreId: propSelectedStoreId, on
       </select>
       {disabled && (
         <p className="mt-1 text-xs text-orange-600">
-          출근 후에는 매장을 변경할 수 없습니다.
+          관리시작 후에는 매장을 변경할 수 없습니다.
         </p>
       )}
     </div>

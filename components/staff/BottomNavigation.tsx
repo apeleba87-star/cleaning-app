@@ -114,7 +114,7 @@ export default function BottomNavigation() {
     },
     {
       href: '/attendance',
-      label: '출퇴근',
+      label: '관리시작/종료',
       icon: '⏰',
     },
     {

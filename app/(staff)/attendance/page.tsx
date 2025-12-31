@@ -310,7 +310,7 @@ export default function AttendancePage() {
         router.push('/mobile-dashboard')
       }, 1500) // 1.5초 후 리다이렉트 (로딩 스피너 확인 시간 포함)
     } else {
-      setError(result.error || '출근 처리 실패')
+      setError(result.error || '관리시작 처리 실패')
       setSubmitting(false)
     }
   }
@@ -350,7 +350,7 @@ export default function AttendancePage() {
       setChecklistProgress({})
     } else {
       console.error('Clock-out failed:', result.error)
-      setError(result.error || '퇴근 처리 실패')
+      setError(result.error || '관리완료 처리 실패')
     }
 
     setSubmitting(false)
@@ -370,7 +370,7 @@ export default function AttendancePage() {
       className="max-w-2xl mx-auto px-2 md:px-4"
     >
       <div className="bg-white rounded-lg shadow-md p-4 md:p-6 mb-16 md:mb-0">
-        <h1 className="text-xl md:text-2xl font-bold mb-4 md:mb-6">출퇴근 관리</h1>
+        <h1 className="text-xl md:text-2xl font-bold mb-4 md:mb-6">관리시작/종료</h1>
 
         {error && (
           <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-md text-red-800 text-sm">
@@ -384,9 +384,9 @@ export default function AttendancePage() {
           </div>
         )}
 
-        {/* 새 출근하기 섹션 */}
+        {/* 새 매장 관리 섹션 */}
         <div className="mb-4 md:mb-6 p-3 md:p-4 bg-gray-50 rounded-md border border-gray-200">
-          <h2 className="text-base md:text-lg font-semibold mb-3">새 매장 출근</h2>
+          <h2 className="text-base md:text-lg font-semibold mb-3">새 매장 관리</h2>
           <div className="space-y-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -404,15 +404,15 @@ export default function AttendancePage() {
             />
             {hasActiveAttendance && (
               <p className="mt-2 text-sm text-orange-600">
-                ⚠️ 먼저 출근 중인 매장의 퇴근 처리를 완료해주세요.
+                ⚠️ 먼저 관리 중인 매장의 관리완료 처리를 완료해주세요.
               </p>
             )}
           </div>
 
-          {/* 출근 유형 선택 */}
+          {/* 관리 유형 선택 */}
           <div className="mt-4">
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              출근 유형
+              관리 유형
             </label>
             <div className="space-y-2">
               <label className="flex items-center">
@@ -424,7 +424,7 @@ export default function AttendancePage() {
                   onChange={(e) => setAttendanceType(e.target.value as 'regular')}
                   className="mr-2"
                 />
-                <span className="text-sm">정규 출근 (오늘)</span>
+                <span className="text-sm">정규 관리(오늘)</span>
               </label>
               <label className="flex items-center">
                 <input
@@ -435,7 +435,7 @@ export default function AttendancePage() {
                   onChange={(e) => setAttendanceType(e.target.value as 'rescheduled')}
                   className="mr-2"
                 />
-                <span className="text-sm">출근일 변경</span>
+                <span className="text-sm">관리일 변경</span>
               </label>
               <label className="flex items-center">
                 <input
@@ -446,12 +446,12 @@ export default function AttendancePage() {
                   onChange={(e) => setAttendanceType(e.target.value as 'emergency')}
                   className="mr-2"
                 />
-                <span className="text-sm">긴급 출동</span>
+                <span className="text-sm">긴급 관리</span>
               </label>
             </div>
           </div>
 
-          {/* 출근일 변경 출근인 경우 */}
+          {/* 관리일 변경 관리인 경우 */}
           {attendanceType === 'rescheduled' && (
             <div className="mt-4 space-y-3">
               <div>
@@ -473,7 +473,7 @@ export default function AttendancePage() {
                 <textarea
                   value={changeReason}
                   onChange={(e) => setChangeReason(e.target.value)}
-                  placeholder="출근일 변경 사유를 입력하세요"
+                  placeholder="관리일 변경 사유를 입력하세요"
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                   rows={3}
                 />
@@ -481,7 +481,7 @@ export default function AttendancePage() {
             </div>
           )}
 
-          {/* 긴급 출동인 경우 */}
+          {/* 긴급 관리인 경우 */}
           {attendanceType === 'emergency' && (
             <div className="mt-4">
               <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -495,7 +495,7 @@ export default function AttendancePage() {
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
               <p className="mt-1 text-xs text-gray-500">
-                긴급 출동으로 해결할 문제 보고가 있으면 ID를 입력하세요.
+                긴급 관리로 해결할 문제 보고가 있으면 ID를 입력하세요.
               </p>
             </div>
           )}
@@ -511,29 +511,29 @@ export default function AttendancePage() {
                 <span>처리 중...</span>
               </>
             ) : (
-              '출근하기'
+              '관리시작'
             )}
           </button>
           </div>
         </div>
 
-        {/* 오늘 출근한 매장 목록 */}
+        {/* 오늘 관리한 매장 목록 */}
         <div className="space-y-3 md:space-y-4">
-          <h2 className="text-base md:text-lg font-semibold">오늘 출근한 매장</h2>
+          <h2 className="text-base md:text-lg font-semibold">오늘 관리한 매장</h2>
           
-          {/* 출근 처리 후 로딩 스피너 */}
+          {/* 관리시작 처리 후 로딩 스피너 */}
           {clockInLoading && (
             <div className="p-4 bg-blue-50 rounded-md border border-blue-200 flex items-center justify-center">
-              <div className="flex flex-col items-center gap-3">
+                <div className="flex flex-col items-center gap-3">
                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-                <p className="text-sm text-blue-700">출근 처리가 완료되었습니다. 퇴근 버튼을 불러오는 중...</p>
+                <p className="text-sm text-blue-700">관리시작 처리가 완료되었습니다. 관리완료 버튼을 불러오는 중...</p>
               </div>
             </div>
           )}
           
           {todayAttendances.length === 0 && !clockInLoading ? (
             <div className="p-4 bg-gray-50 rounded-md text-center text-gray-500">
-              아직 출근한 매장이 없습니다.
+              아직 관리한 매장이 없습니다.
             </div>
           ) : (
             todayAttendances.map((attendance) => (
@@ -544,13 +544,13 @@ export default function AttendancePage() {
                       {(attendance as AttendanceWithStore).stores?.name || attendance.store_id}
                     </h3>
                     <p className="text-sm text-gray-600 mt-1">
-                      출근 시간: {new Date(attendance.clock_in_at).toLocaleString('ko-KR')}
+                      관리시작 시간: {new Date(attendance.clock_in_at).toLocaleString('ko-KR')}
                     </p>
-                    {/* 출근 유형 표시 */}
+                    {/* 관리 유형 표시 */}
                     {attendance.attendance_type && attendance.attendance_type !== 'regular' && (
                       <p className="text-xs text-gray-500 mt-1">
-                        {attendance.attendance_type === 'rescheduled' && '📅 출근일 변경'}
-                        {attendance.attendance_type === 'emergency' && '🚨 긴급 출동'}
+                        {attendance.attendance_type === 'rescheduled' && '📅 관리일 변경'}
+                        {attendance.attendance_type === 'emergency' && '🚨 긴급 관리'}
                         {attendance.scheduled_date && attendance.attendance_type === 'rescheduled' && (
                           <span className="ml-1">(원래 예정일: {new Date(attendance.scheduled_date).toLocaleDateString('ko-KR')})</span>
                         )}
@@ -559,16 +559,16 @@ export default function AttendancePage() {
                     {attendance.clock_out_at ? (
                       <>
                         <p className="text-sm text-gray-600 mt-1">
-                          퇴근 시간: {new Date(attendance.clock_out_at).toLocaleString('ko-KR')}
+                          관리완료 시간: {new Date(attendance.clock_out_at).toLocaleString('ko-KR')}
                         </p>
                         <p className="text-sm text-green-600 mt-2 font-medium">
-                          ✓ 퇴근 완료
+                          ✓ 관리완료
                         </p>
                       </>
                     ) : (
                       <>
                         <p className="text-sm text-orange-600 mt-2 font-medium">
-                          ⚠️ 출근 중
+                          ⚠️ 관리 중
                         </p>
                         {checklistProgress[attendance.store_id] && (
                           <div className="mt-2">
@@ -604,7 +604,7 @@ export default function AttendancePage() {
                           <span>처리 중...</span>
                         </>
                       ) : (
-                        '퇴근'
+                        '관리완료'
                       )}
                     </button>
                   )}

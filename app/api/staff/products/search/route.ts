@@ -2,6 +2,14 @@ import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { getServerUser } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
 
+// 바코드 정규화 함수 (모든 공백, 특수문자 제거, 숫자만 남기기)
+function normalizeBarcode(barcode: string | null | undefined): string | null {
+  if (!barcode) return null
+  // 모든 공백, 작은따옴표, 큰따옴표, 특수문자 제거하고 숫자만 남기기
+  const normalized = barcode.replace(/\s+/g, '').replace(/'/g, '').replace(/"/g, '').replace(/[^\d]/g, '')
+  return normalized.length > 0 ? normalized : null
+}
+
 export async function GET(request: NextRequest) {
   try {
     const user = await getServerUser()
@@ -46,41 +54,35 @@ export async function GET(request: NextRequest) {
       .select('id, name, barcode, image_url, category_1, category_2')
       .is('deleted_at', null)
 
-    // 바코드 검색 (DB에 저장된 값에 작은따옴표가 있을 수 있으므로 두 가지 경우 모두 검색)
+    // 바코드 검색 (정규화된 값으로 검색)
     if (barcode) {
-      // 입력된 바코드에서 작은따옴표 제거 (앞뒤 공백 및 앞의 작은따옴표 제거)
-      const cleanBarcode = barcode.trim().replace(/^'/, '')
+      // 바코드 정규화 (모든 공백, 특수문자 제거, 숫자만 남기기)
+      const normalizedBarcode = normalizeBarcode(barcode)
       
-      // 두 가지 경우 모두 검색: cleanBarcode와 'cleanBarcode
-      // 각각 별도 쿼리로 실행
-      const query1 = supabase
+      if (!normalizedBarcode) {
+        return NextResponse.json({
+          success: true,
+          data: [],
+          message: '유효하지 않은 바코드입니다.'
+        })
+      }
+      
+      // 정규화된 바코드로 검색 (DB에 저장된 값도 정규화되어 있으므로 정확 일치 검색)
+      const { data: products, error: productError } = await supabase
         .from('products')
         .select('id, name, barcode, image_url, category_1, category_2')
         .is('deleted_at', null)
-        .eq('barcode', cleanBarcode)
+        .eq('barcode', normalizedBarcode)
       
-      const query2 = supabase
-        .from('products')
-        .select('id, name, barcode, image_url, category_1, category_2')
-        .is('deleted_at', null)
-        .eq('barcode', `'${cleanBarcode}`)
-      
-      const { data: products1, error: error1 } = await query1
-      const { data: products2, error: error2 } = await query2
-      
-      if (error1 && error2) {
-        console.error('Error searching products by barcode:', error1 || error2)
+      if (productError) {
+        console.error('Error searching products by barcode:', productError)
         return NextResponse.json(
-          { error: `제품 검색에 실패했습니다: ${(error1 || error2).message}` },
+          { error: `제품 검색에 실패했습니다: ${productError.message}` },
           { status: 500 }
         )
       }
       
-      // 두 결과를 합치고 중복 제거 (같은 ID를 가진 제품이 있을 수 있음)
-      const allProducts = [...(products1 || []), ...(products2 || [])]
-      const uniqueProducts = Array.from(
-        new Map(allProducts.map((p: any) => [p.id, p])).values()
-      )
+      const uniqueProducts = products || []
       
       // 제품이 없으면 빈 배열 반환
       if (uniqueProducts.length === 0) {
@@ -148,92 +150,116 @@ export async function GET(request: NextRequest) {
         data: result
       })
     }
-    // 제품명 검색
+    // 제품명 검색 (띄어쓰기 무시)
     else if (name) {
-      productQuery = productQuery.ilike('name', `%${name}%`)
+      // 검색어 정규화: 공백 제거 및 소문자 변환
+      const normalizedSearch = name.replace(/\s+/g, '').toLowerCase().trim()
+      
+      if (!normalizedSearch) {
+        return NextResponse.json(
+          { error: '검색어를 입력해주세요.' },
+          { status: 400 }
+        )
+      }
+      
+      // 모든 제품을 가져와서 서버 측에서 필터링 (띄어쓰기 완전 무시)
+      // 성능을 위해 검색어의 앞부분(최소 2글자)으로 먼저 필터링
+      const searchPrefix = normalizedSearch.length >= 2 
+        ? normalizedSearch.substring(0, 2) 
+        : normalizedSearch
+      
+      // 검색어의 앞부분으로 시작하는 제품들을 먼저 가져오기
+      const { data: allProducts, error: productError } = await supabase
+        .from('products')
+        .select('id, name, barcode, image_url, category_1, category_2')
+        .is('deleted_at', null)
+        .ilike('name', `%${searchPrefix}%`) // 앞부분으로 필터링
+      
+      if (productError) {
+        console.error('Error searching products:', productError)
+        return NextResponse.json(
+          { error: `제품 검색에 실패했습니다: ${productError.message}` },
+          { status: 500 }
+        )
+      }
+      
+      // 제품명의 공백을 제거한 값과 검색어의 공백을 제거한 값을 비교하여 필터링
+      const filteredProducts = (allProducts || []).filter((product: any) => {
+        const productNameNormalized = product.name.replace(/\s+/g, '').toLowerCase()
+        return productNameNormalized.includes(normalizedSearch)
+      })
+      
+      // 필터링된 제품이 없으면 빈 배열 반환
+      if (filteredProducts.length === 0) {
+        const { count: totalProducts } = await supabase
+          .from('products')
+          .select('*', { count: 'exact', head: true })
+          .is('deleted_at', null)
+
+        return NextResponse.json({
+          success: true,
+          data: [],
+          message: totalProducts === 0 
+            ? '데이터베이스에 등록된 제품이 없습니다. 관리자에게 CSV 파일 업로드를 요청해주세요.'
+            : '검색 결과가 없습니다. 제품명을 확인해주세요.'
+        })
+      }
+      
+      // 위치 정보 조회를 위해 productIds 설정
+      const productIds = filteredProducts.map((p: any) => p.id)
+      const { data: locations, error: locationError } = await supabase
+        .from('store_product_locations')
+        .select('product_id, vending_machine_number, position_number, stock_quantity, is_available')
+        .eq('store_id', storeId)
+        .in('product_id', productIds)
+        .order('vending_machine_number', { ascending: true })
+        .order('position_number', { ascending: true })
+
+      if (locationError) {
+        console.error('Error fetching locations:', locationError)
+        return NextResponse.json(
+          { error: '위치 정보 조회에 실패했습니다.' },
+          { status: 500 }
+        )
+      }
+
+      // 제품별로 위치 정보 그룹화
+      const locationMap = new Map()
+      if (locations) {
+        locations.forEach((loc: any) => {
+          if (!locationMap.has(loc.product_id)) {
+            locationMap.set(loc.product_id, [])
+          }
+          locationMap.get(loc.product_id).push({
+            vending_machine_number: loc.vending_machine_number,
+            position_number: loc.position_number,
+            stock_quantity: loc.stock_quantity,
+            is_available: loc.is_available
+          })
+        })
+      }
+
+      // 결과 조합
+      const result = filteredProducts.map((product: any) => ({
+        id: product.id,
+        name: product.name,
+        barcode: product.barcode,
+        image_url: product.image_url,
+        category_1: product.category_1,
+        category_2: product.category_2,
+        locations: locationMap.get(product.id) || []
+      }))
+
+      return NextResponse.json({
+        success: true,
+        data: result
+      })
     } else {
       return NextResponse.json(
         { error: '바코드 또는 제품명을 입력해주세요.' },
         { status: 400 }
       )
     }
-
-    const { data: products, error: productError } = await productQuery
-
-    if (productError) {
-      console.error('Error searching products:', productError)
-      console.error('Search params:', { barcode, name, storeId })
-      return NextResponse.json(
-        { error: `제품 검색에 실패했습니다: ${productError.message}` },
-        { status: 500 }
-      )
-    }
-
-    if (!products || products.length === 0) {
-      // 전체 제품 수 확인 (데이터가 있는지 체크)
-      const { count: totalProducts } = await supabase
-        .from('products')
-        .select('*', { count: 'exact', head: true })
-        .is('deleted_at', null)
-
-      return NextResponse.json({
-        success: true,
-        data: [],
-        message: totalProducts === 0 
-          ? '데이터베이스에 등록된 제품이 없습니다. 관리자에게 CSV 파일 업로드를 요청해주세요.'
-          : '검색 결과가 없습니다. 제품명을 확인해주세요.'
-      })
-    }
-
-    // 각 제품의 위치 정보 조회
-    const productIds = products.map(p => p.id)
-    const { data: locations, error: locationError } = await supabase
-      .from('store_product_locations')
-      .select('product_id, vending_machine_number, position_number, stock_quantity, is_available')
-      .eq('store_id', storeId)
-      .in('product_id', productIds)
-      .order('vending_machine_number', { ascending: true })
-      .order('position_number', { ascending: true })
-
-    if (locationError) {
-      console.error('Error fetching locations:', locationError)
-      return NextResponse.json(
-        { error: '위치 정보 조회에 실패했습니다.' },
-        { status: 500 }
-      )
-    }
-
-    // 제품별로 위치 정보 그룹화
-    const locationMap = new Map()
-    if (locations) {
-      locations.forEach((loc: any) => {
-        if (!locationMap.has(loc.product_id)) {
-          locationMap.set(loc.product_id, [])
-        }
-        locationMap.get(loc.product_id).push({
-          vending_machine_number: loc.vending_machine_number,
-          position_number: loc.position_number,
-          stock_quantity: loc.stock_quantity,
-          is_available: loc.is_available
-        })
-      })
-    }
-
-    // 결과 조합
-    const result = products.map((product: any) => ({
-      id: product.id,
-      name: product.name,
-      barcode: product.barcode,
-      image_url: product.image_url,
-      category_1: product.category_1,
-      category_2: product.category_2,
-      locations: locationMap.get(product.id) || []
-    }))
-
-    return NextResponse.json({
-      success: true,
-      data: result
-    })
   } catch (error: any) {
     console.error('Error in GET /api/staff/products/search:', error)
     return NextResponse.json(

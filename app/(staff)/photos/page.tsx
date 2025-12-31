@@ -101,10 +101,10 @@ export default function PhotosPage() {
       <div className="max-w-4xl mx-auto px-4 py-6 mb-16 md:mb-0">
         <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-6 text-center">
           <p className="text-yellow-800 font-medium mb-2">
-            출근 후 청소 사진을 확인할 수 있습니다.
+            관리시작 후 청소 사진을 확인할 수 있습니다.
           </p>
           <p className="text-yellow-600 text-sm">
-            출퇴근 페이지에서 출근을 먼저 진행해주세요.
+            관리시작/종료 페이지에서 관리시작을 먼저 진행해주세요.
           </p>
         </div>
       </div>

@@ -304,20 +304,61 @@ export default function IssuesPage() {
   const initCamera = async () => {
     try {
       const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent)
-      const constraints: MediaStreamConstraints = {
-        video: isMobile
-          ? {
+      const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent)
+      
+      let stream: MediaStream | null = null
+      
+      if (isMobile) {
+        // iOS 사파리에서는 exact를 먼저 시도하고, 실패하면 ideal로 fallback
+        if (isIOS) {
+          try {
+            // iOS에서는 exact를 사용하여 후면 카메라 강제 선택
+            const exactConstraints: MediaStreamConstraints = {
+              video: {
+                facingMode: { exact: 'environment' },
+                width: { ideal: 1920 },
+                height: { ideal: 1080 }
+              }
+            }
+            stream = await navigator.mediaDevices.getUserMedia(exactConstraints)
+          } catch (exactError) {
+            // exact가 실패하면 ideal로 시도
+            console.log('exact environment failed, trying ideal:', exactError)
+            const idealConstraints: MediaStreamConstraints = {
+              video: {
+                facingMode: { ideal: 'environment' },
+                width: { ideal: 1920 },
+                height: { ideal: 1080 }
+              }
+            }
+            stream = await navigator.mediaDevices.getUserMedia(idealConstraints)
+          }
+        } else {
+          // Android에서는 ideal 사용
+          const constraints: MediaStreamConstraints = {
+            video: {
               facingMode: { ideal: 'environment' },
               width: { ideal: 1920 },
               height: { ideal: 1080 }
             }
-          : {
-              width: { ideal: 1920 },
-              height: { ideal: 1080 }
-            }
+          }
+          stream = await navigator.mediaDevices.getUserMedia(constraints)
+        }
+      } else {
+        // PC에서는 기본 카메라
+        const constraints: MediaStreamConstraints = {
+          video: {
+            width: { ideal: 1920 },
+            height: { ideal: 1080 }
+          }
+        }
+        stream = await navigator.mediaDevices.getUserMedia(constraints)
       }
 
-      const stream = await navigator.mediaDevices.getUserMedia(constraints)
+      if (!stream) {
+        throw new Error('카메라 스트림을 가져올 수 없습니다.')
+      }
+
       setCameraStream(stream)
       setCameraError(null)
       if (videoRef.current) {
@@ -474,7 +515,7 @@ export default function IssuesPage() {
     }
 
     if (!isClockedIn) {
-      alert('출근 후 사용 가능합니다.')
+      alert('관리시작 후 사용 가능합니다.')
       return
     }
 
@@ -716,10 +757,10 @@ export default function IssuesPage() {
       <div className="max-w-4xl mx-auto px-4 py-6 mb-16 md:mb-0">
         <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-6 text-center">
           <p className="text-yellow-800 font-medium mb-2">
-            출근 후 매장 문제를 보고할 수 있습니다.
+            관리시작 후 매장 문제를 보고할 수 있습니다.
           </p>
           <p className="text-yellow-600 text-sm">
-            출퇴근 페이지에서 출근을 먼저 진행해주세요.
+            관리시작/종료 페이지에서 관리시작을 먼저 진행해주세요.
           </p>
         </div>
       </div>

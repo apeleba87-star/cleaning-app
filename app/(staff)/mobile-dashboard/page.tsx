@@ -64,8 +64,10 @@ export default function MobileDashboardPage() {
   const [weeklyWorkStats, setWeeklyWorkStats] = useState<WeeklyWorkStats[]>([])
   // 최근업무기록 아코디언 상태 (매장별로 접었다 폈다)
   const [expandedStores, setExpandedStores] = useState<Set<string>>(new Set())
-  // 최근 업무 기록 전체 접기/펼치기 상태
-  const [isWorkHistoryExpanded, setIsWorkHistoryExpanded] = useState(true)
+  // 최근 업무 기록 전체 접기/펼치기 상태 (초기값: 접힘)
+  const [isWorkHistoryExpanded, setIsWorkHistoryExpanded] = useState(false)
+  // 최근 업무 기록 데이터 로딩 여부 (한 번만 로드)
+  const [workHistoryDataLoaded, setWorkHistoryDataLoaded] = useState(false)
   // 체크리스트 진행율 (매장별)
   const [checklistProgress, setChecklistProgress] = useState<Record<string, { completed: number; total: number; percentage: number }>>({})
   // 요청란 미완료 건수 (매장별)
@@ -384,10 +386,10 @@ export default function MobileDashboardPage() {
           .sort((a, b) => {
             // 정렬 순서: 1. 출근중, 2. 출근전, 3. 퇴근완료, 4. 휴무
             const getSortOrder = (store: StoreWithAssignment) => {
-              if (!store.isWorkDay) return 4 // 휴무
-              if (store.attendanceStatus === 'clocked_in') return 1 // 출근중
-              if (store.attendanceStatus === 'not_clocked_in') return 2 // 출근전
-              if (store.attendanceStatus === 'clocked_out') return 3 // 퇴근완료
+              if (!store.isWorkDay) return 4 // 미관리일
+              if (store.attendanceStatus === 'clocked_in') return 1 // 관리중
+              if (store.attendanceStatus === 'not_clocked_in') return 2 // 관리전
+              if (store.attendanceStatus === 'clocked_out') return 3 // 관리완료
               return 5
             }
             return getSortOrder(a) - getSortOrder(b)
@@ -436,19 +438,8 @@ export default function MobileDashboardPage() {
           )
         }
 
-        // 오늘 업무 통계
-        if (storeIds.length > 0) {
-          loadPromises.push(
-            loadTodayWorkStats(storesData, session.user.id, today, supabase)
-          )
-        }
-
-        // 최근 1주일 업무 통계
-        if (storeIds.length > 0) {
-          loadPromises.push(
-            loadWeeklyWorkStats(storesData, session.user.id, supabase)
-          )
-        }
+        // 오늘 업무 통계 및 최근 1주일 업무 통계는 접힌 상태이므로 초기 로딩 시 불러오지 않음
+        // 사용자가 섹션을 펼칠 때만 로드됨 (아래 useEffect 참조)
 
         // 공지사항 로드
         loadPromises.push(loadAnnouncements())
@@ -857,6 +848,213 @@ export default function MobileDashboardPage() {
     }
   }, [router])
 
+  // 최근 업무 기록 섹션이 펼쳐질 때만 데이터 로드
+  useEffect(() => {
+    if (isWorkHistoryExpanded && !workHistoryDataLoaded && stores.length > 0 && user) {
+      const loadWorkHistoryData = async () => {
+        try {
+          const supabase = createClient()
+          const {
+            data: { session },
+          } = await supabase.auth.getSession()
+
+          if (!session) return
+
+          const today = getTodayDateKST()
+          
+          // loadTodayWorkStats 함수 정의
+          const loadTodayWorkStats = async (storesData: StoreWithAssignment[], userId: string, today: string, supabase: any) => {
+            const todayStart = new Date(today + 'T00:00:00')
+            const todayEnd = new Date(today + 'T23:59:59')
+
+            const statsPromises = storesData.map(async (store) => {
+              const checklistDate = store.attendanceStatus === 'clocked_in' && store.attendanceWorkDate
+                ? store.attendanceWorkDate
+                : today
+
+              const [
+                checklistsResult,
+                completedRequestsResult,
+                storeProblemsResult,
+                vendingProblemsResult,
+                productInflowResult,
+                storagePhotosResult
+              ] = await Promise.all([
+                supabase
+                  .from('checklist')
+                  .select('*')
+                  .eq('store_id', store.id)
+                  .eq('work_date', checklistDate)
+                  .eq('assigned_user_id', userId),
+                supabase
+                  .from('requests')
+                  .select('id')
+                  .eq('store_id', store.id)
+                  .eq('status', 'completed')
+                  .gte('updated_at', todayStart.toISOString())
+                  .lte('updated_at', todayEnd.toISOString()),
+                supabase
+                  .from('problem_reports')
+                  .select('id')
+                  .eq('store_id', store.id)
+                  .eq('category', 'other')
+                  .like('title', '매장 문제%')
+                  .gte('created_at', todayStart.toISOString())
+                  .lte('created_at', todayEnd.toISOString()),
+                supabase
+                  .from('problem_reports')
+                  .select('id')
+                  .eq('store_id', store.id)
+                  .not('vending_machine_number', 'is', null)
+                  .gte('created_at', todayStart.toISOString())
+                  .lte('created_at', todayEnd.toISOString()),
+                supabase
+                  .from('product_photos')
+                  .select('id')
+                  .eq('store_id', store.id)
+                  .eq('type', 'receipt')
+                  .gte('created_at', todayStart.toISOString())
+                  .lte('created_at', todayEnd.toISOString())
+                  .limit(1),
+                supabase
+                  .from('product_photos')
+                  .select('id')
+                  .eq('store_id', store.id)
+                  .eq('type', 'storage')
+                  .gte('created_at', todayStart.toISOString())
+                  .lte('created_at', todayEnd.toISOString())
+                  .limit(1)
+              ])
+
+              const checklists = checklistsResult.data
+              let checklistCompleted = 0
+              if (checklists) {
+                checklists.forEach((checklist: any) => {
+                  const progress = calculateChecklistProgress(checklist)
+                  if (progress.percentage === 100) {
+                    checklistCompleted++
+                  }
+                })
+              }
+
+              return {
+                store_id: store.id,
+                store_name: store.name,
+                checklist_completed: checklistCompleted,
+                request_completed: completedRequestsResult.data?.length || 0,
+                store_problem_count: storeProblemsResult.data?.length || 0,
+                vending_problem_count: vendingProblemsResult.data?.length || 0,
+                has_product_inflow: (productInflowResult.data?.length || 0) > 0,
+                has_storage_photo: (storagePhotosResult.data?.length || 0) > 0,
+              }
+            })
+
+            const stats = await Promise.all(statsPromises)
+            setTodayWorkStats(stats)
+          }
+
+          // loadWeeklyWorkStats 함수 정의
+          const loadWeeklyWorkStats = async (storesData: StoreWithAssignment[], userId: string, supabase: any) => {
+            const now = new Date()
+            const koreaTime = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Seoul' }))
+            const sevenDaysAgo = new Date(koreaTime)
+            sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7)
+            sevenDaysAgo.setHours(0, 0, 0, 0)
+
+            const statsPromises = storesData.map(async (store) => {
+              const [
+                checklistsResult,
+                completedRequestsResult,
+                storeProblemsResult,
+                productInflowResult,
+                vendingProblemsResult,
+                lostItemsResult
+              ] = await Promise.all([
+                supabase
+                  .from('checklist')
+                  .select('work_date')
+                  .eq('store_id', store.id)
+                  .eq('assigned_user_id', userId)
+                  .gte('work_date', sevenDaysAgo.toISOString().split('T')[0]),
+                supabase
+                  .from('requests')
+                  .select('id')
+                  .eq('store_id', store.id)
+                  .eq('status', 'completed')
+                  .gte('updated_at', sevenDaysAgo.toISOString()),
+                supabase
+                  .from('problem_reports')
+                  .select('id')
+                  .eq('store_id', store.id)
+                  .eq('category', 'other')
+                  .like('title', '매장 문제%')
+                  .gte('created_at', sevenDaysAgo.toISOString()),
+                supabase
+                  .from('product_photos')
+                  .select('id')
+                  .eq('store_id', store.id)
+                  .eq('type', 'receipt')
+                  .gte('created_at', sevenDaysAgo.toISOString()),
+                supabase
+                  .from('problem_reports')
+                  .select('id')
+                  .eq('store_id', store.id)
+                  .not('vending_machine_number', 'is', null)
+                  .gte('created_at', sevenDaysAgo.toISOString()),
+                supabase
+                  .from('lost_items')
+                  .select('id')
+                  .eq('store_id', store.id)
+                  .gte('created_at', sevenDaysAgo.toISOString())
+              ])
+
+              const checklists = checklistsResult.data || []
+              const dailyChecklists: { date: string; count: number }[] = []
+              const checklistMap = new Map<string, number>()
+
+              checklists.forEach((checklist: any) => {
+                const date = checklist.work_date
+                checklistMap.set(date, (checklistMap.get(date) || 0) + 1)
+              })
+
+              checklistMap.forEach((count, date) => {
+                dailyChecklists.push({ date, count })
+              })
+
+              dailyChecklists.sort((a, b) => a.date.localeCompare(b.date))
+
+              return {
+                store_id: store.id,
+                store_name: store.name,
+                daily_checklists: dailyChecklists,
+                store_problem_count: storeProblemsResult.data?.length || 0,
+                request_completed: completedRequestsResult.data?.length || 0,
+                product_inflow_count: productInflowResult.data?.length || 0,
+                vending_problem_count: vendingProblemsResult.data?.length || 0,
+                lost_item_count: lostItemsResult.data?.length || 0,
+              }
+            })
+
+            const stats = await Promise.all(statsPromises)
+            setWeeklyWorkStats(stats)
+          }
+          
+          // 오늘 업무 통계 로드
+          await loadTodayWorkStats(stores, user.id, today, supabase)
+          
+          // 최근 1주일 업무 통계 로드
+          await loadWeeklyWorkStats(stores, user.id, supabase)
+          
+          setWorkHistoryDataLoaded(true)
+        } catch (error) {
+          console.error('Error loading work history data:', error)
+        }
+      }
+
+      loadWorkHistoryData()
+    }
+  }, [isWorkHistoryExpanded, workHistoryDataLoaded, stores, user])
+
   // 체크리스트 업데이트 이벤트 리스너 (통합 및 최적화)
   const handleChecklistUpdate = useCallback(async () => {
     if (stores.length === 0) return
@@ -1105,12 +1303,12 @@ export default function MobileDashboardPage() {
           </div>
         )}
 
-        {/* 매장 출근 현황 - 반응형 */}
+        {/* 매장 관리 현황 - 반응형 */}
         <GeoGuard onLocationReady={setLocation}>
           <div className="bg-white rounded-lg shadow-md p-3 sm:p-4">
             <div className="flex items-center gap-2 mb-3">
               <span className="text-lg sm:text-xl">📍</span>
-              <h2 className="text-base sm:text-lg font-semibold">매장 출근 현황</h2>
+              <h2 className="text-base sm:text-lg font-semibold">매장 관리 현황</h2>
             </div>
             <div className="space-y-2">
               {stores.length === 0 ? (
@@ -1173,7 +1371,7 @@ export default function MobileDashboardPage() {
                         }
                       })
                     } else {
-                      alert(result.error || '출근 처리에 실패했습니다.')
+                      alert(result.error || '관리시작 처리에 실패했습니다.')
                     }
                   }
 
@@ -1231,7 +1429,7 @@ export default function MobileDashboardPage() {
                         return updated
                       })
                     } else {
-                      alert(result.error || '퇴근 처리에 실패했습니다.')
+                      alert(result.error || '관리완료 처리에 실패했습니다.')
                     }
                   }
 
@@ -1262,7 +1460,7 @@ export default function MobileDashboardPage() {
                             {store.management_days}
                           </div>
                         )}
-                          {/* 체크리스트 진행율 표시 (출근 중인 경우만) */}
+                          {/* 체크리스트 진행율 표시 (관리 중인 경우만) */}
                           {store.attendanceStatus === 'clocked_in' && checklistProgress[store.id] && (
                             <div className="mt-2 ml-4">
                               <div className="flex items-center justify-between text-xs mb-1">
@@ -1293,48 +1491,48 @@ export default function MobileDashboardPage() {
                             store.attendanceStatus === 'not_clocked_in' ? (
                               <>
                                 <span className="px-2 sm:px-3 py-0.5 sm:py-1 rounded-md text-xs font-medium bg-red-100 text-red-700 mb-1">
-                                  출근전
+                                  관리전
                                 </span>
                         <button
                                   onClick={handleClockIn}
                                   disabled={!location || hasActiveAttendance}
                                   className="px-3 sm:px-4 py-1.5 sm:py-2 rounded-md text-xs sm:text-sm font-medium bg-blue-600 text-white hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
                                 >
-                                  출근하기
+                                  관리시작
                         </button>
                               </>
                             ) : store.attendanceStatus === 'clocked_in' ? (
                               <>
                                 <span className="px-2 sm:px-3 py-0.5 sm:py-1 rounded-md text-xs font-medium bg-orange-100 text-orange-700 mb-1">
-                                  {store.attendanceType === 'rescheduled' ? '출근일 변경 출근중' : '출근중'}
+                                  {store.attendanceType === 'rescheduled' ? '관리일 변경 관리중' : '관리중'}
                                 </span>
                                 <button
                                   onClick={handleClockOut}
                                   disabled={!location || clockingOut === store.id}
                                   className="px-3 sm:px-4 py-1.5 sm:py-2 rounded-md text-xs sm:text-sm font-medium bg-red-600 text-white hover:bg-red-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
                                 >
-                                  {clockingOut === store.id ? '처리 중...' : '퇴근하기'}
+                                  {clockingOut === store.id ? '처리 중...' : '관리완료'}
                                 </button>
                               </>
                             ) : (
-                              // 퇴근완료 상태에서는 버튼을 표시하지 않음
+                              // 관리완료 상태에서는 버튼을 표시하지 않음
                               <span className="px-2 sm:px-3 py-0.5 sm:py-1 rounded-md text-xs font-medium bg-blue-100 text-blue-700">
-                                퇴근완료
+                                관리완료
                           </span>
                             )
                           ) : (
-                            // 출근일 변경으로 출근한 경우 퇴근 버튼 표시
+                            // 관리일 변경으로 관리 시작한 경우 관리완료 버튼 표시
                             store.attendanceStatus === 'clocked_in' && store.attendanceType === 'rescheduled' ? (
                               <>
                                 <span className="px-2 sm:px-3 py-0.5 sm:py-1 rounded-md text-xs font-medium bg-orange-100 text-orange-700 mb-1">
-                                  출근일 변경 출근중
+                                  관리일 변경 관리중
                                 </span>
                                 <button
                                   onClick={handleClockOut}
                                   disabled={!location || clockingOut === store.id}
                                   className="px-3 sm:px-4 py-1.5 sm:py-2 rounded-md text-xs sm:text-sm font-medium bg-red-600 text-white hover:bg-red-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
                                 >
-                                  {clockingOut === store.id ? '처리 중...' : '퇴근하기'}
+                                  {clockingOut === store.id ? '처리 중...' : '관리완료'}
                                 </button>
                               </>
                             ) : (
@@ -1342,7 +1540,7 @@ export default function MobileDashboardPage() {
                                 disabled
                                 className="px-3 sm:px-4 py-1.5 sm:py-2 rounded-md text-xs sm:text-sm font-medium bg-gray-200 text-gray-600 cursor-not-allowed"
                               >
-                                휴무
+                                미관리일
                               </button>
                             )
                           )}
@@ -1555,7 +1753,7 @@ export default function MobileDashboardPage() {
           >
             <div className="flex items-center gap-2">
               <span className="text-lg sm:text-xl">🕐</span>
-              <h2 className="text-base sm:text-lg font-semibold">최근 업무 기록</h2>
+              <h2 className="text-base sm:text-lg font-semibold">최근 관리 기록</h2>
             </div>
             <span className={`text-gray-400 transition-transform ${isWorkHistoryExpanded ? 'rotate-180' : ''}`}>
               ▼
@@ -1888,8 +2086,8 @@ export default function MobileDashboardPage() {
                 ⏰
               </div>
               <div className="flex-1 min-w-0">
-                <div className="font-semibold text-sm sm:text-base">출퇴근</div>
-                <div className="text-xs sm:text-sm text-gray-600">GPS 기반 출퇴근 관리</div>
+                <div className="font-semibold text-sm sm:text-base">관리시작/종료</div>
+                <div className="text-xs sm:text-sm text-gray-600">GPS 기반 매장 관리</div>
               </div>
               <div className="text-gray-400 text-xl">›</div>
             </div>

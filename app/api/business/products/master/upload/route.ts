@@ -2,6 +2,14 @@ import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { getServerUser } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
 
+// 바코드 정규화 함수 (모든 공백, 특수문자 제거, 숫자만 남기기)
+function normalizeBarcode(barcode: string | null | undefined): string | null {
+  if (!barcode) return null
+  // 모든 공백, 작은따옴표, 큰따옴표, 특수문자 제거하고 숫자만 남기기
+  const normalized = barcode.replace(/\s+/g, '').replace(/'/g, '').replace(/"/g, '').replace(/[^\d]/g, '')
+  return normalized.length > 0 ? normalized : null
+}
+
 export async function POST(request: NextRequest) {
   try {
     const user = await getServerUser()
@@ -93,7 +101,7 @@ export async function POST(request: NextRequest) {
       if (values.length > nameIndex && values[nameIndex]) {
         rows.push({
           제품명: values[nameIndex].replace(/"/g, ''),
-          바코드: barcodeIndex >= 0 && values[barcodeIndex] ? values[barcodeIndex].replace(/"/g, '').trim() : undefined,
+          바코드: barcodeIndex >= 0 && values[barcodeIndex] ? normalizeBarcode(values[barcodeIndex]) || undefined : undefined,
           '1차카테고리': category1Index >= 0 && values[category1Index] ? values[category1Index].replace(/"/g, '').trim() : undefined,
           '2차카테고리': category2Index >= 0 && values[category2Index] ? values[category2Index].replace(/"/g, '').trim() : undefined,
           이미지URL: imageUrlIndex >= 0 && values[imageUrlIndex] ? values[imageUrlIndex].replace(/"/g, '').trim() : undefined
@@ -183,21 +191,22 @@ export async function POST(request: NextRequest) {
           let needsUpdate = false
           
           // 바코드가 없고 새 파일에 바코드가 있으면 추가
-          if (!existingProduct.barcode && row.바코드 && row.바코드.trim()) {
-            // 바코드 중복 확인
+          const normalizedBarcode = normalizeBarcode(row.바코드)
+          if (!existingProduct.barcode && normalizedBarcode) {
+            // 바코드 중복 확인 (정규화된 값으로)
             const { data: duplicateBarcode } = await supabase
               .from('products')
               .select('id')
-              .eq('barcode', row.바코드.trim())
+              .eq('barcode', normalizedBarcode)
               .neq('id', existingProduct.id)
               .is('deleted_at', null)
               .maybeSingle()
 
             if (!duplicateBarcode) {
-              updateData.barcode = row.바코드.trim()
+              updateData.barcode = normalizedBarcode
               needsUpdate = true
             } else {
-              errors.push(`제품 "${productName}": 바코드 "${row.바코드.trim()}"가 이미 사용 중입니다.`)
+              errors.push(`제품 "${productName}": 바코드 "${normalizedBarcode}"가 이미 사용 중입니다.`)
             }
           }
           
@@ -242,17 +251,20 @@ export async function POST(request: NextRequest) {
           }
         } else {
           // 새 제품 생성
-          // 바코드 중복 확인
-          if (row.바코드 && row.바코드.trim()) {
+          // 바코드 정규화
+          const normalizedBarcode = normalizeBarcode(row.바코드)
+          
+          // 바코드 중복 확인 (정규화된 값으로)
+          if (normalizedBarcode) {
             const { data: duplicateBarcode } = await supabase
               .from('products')
               .select('id')
-              .eq('barcode', row.바코드.trim())
+              .eq('barcode', normalizedBarcode)
               .is('deleted_at', null)
               .maybeSingle()
 
             if (duplicateBarcode) {
-              errors.push(`제품 "${productName}": 바코드 "${row.바코드.trim()}"가 이미 사용 중입니다.`)
+              errors.push(`제품 "${productName}": 바코드 "${normalizedBarcode}"가 이미 사용 중입니다.`)
               continue
             }
           }
@@ -262,7 +274,7 @@ export async function POST(request: NextRequest) {
             .from('products')
             .insert({
               name: productName,
-              barcode: (row.바코드 && row.바코드.trim()) ? row.바코드.trim() : null,
+              barcode: normalizedBarcode,
               category_1: (row['1차카테고리'] && row['1차카테고리'].trim()) ? row['1차카테고리'].trim() : null,
               category_2: (row['2차카테고리'] && row['2차카테고리'].trim()) ? row['2차카테고리'].trim() : null,
               image_url: (row.이미지URL && row.이미지URL.trim()) ? row.이미지URL.trim() : null

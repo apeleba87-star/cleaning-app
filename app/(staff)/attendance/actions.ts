@@ -62,7 +62,7 @@ export async function clockInAction(
     }
 
     if (activeAttendance.data) {
-      return { success: false, error: '먼저 출근 중인 매장의 퇴근 처리를 완료해주세요.' }
+      return { success: false, error: '먼저 관리 중인 매장의 관리완료 처리를 완료해주세요.' }
     }
 
     // 동일 매장의 중복 출근 확인 (오늘 날짜)

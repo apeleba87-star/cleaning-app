@@ -19,6 +19,20 @@ function extractVendingMachineNumber(hardwareName: string): number | null {
   return match ? parseInt(match[1]) : null
 }
 
+// 제품명 정규화 함수 (모든 곳에서 일관되게 사용)
+function normalizeProductName(name: string | null | undefined): string {
+  if (!name) return ''
+  return name.trim()
+}
+
+// 바코드 정규화 함수 (모든 공백, 특수문자 제거, 숫자만 남기기)
+function normalizeBarcode(barcode: string | null | undefined): string | null {
+  if (!barcode) return null
+  // 모든 공백, 작은따옴표, 큰따옴표, 특수문자 제거하고 숫자만 남기기
+  const normalized = barcode.replace(/\s+/g, '').replace(/'/g, '').replace(/"/g, '').replace(/[^\d]/g, '')
+  return normalized.length > 0 ? normalized : null
+}
+
 export async function POST(request: NextRequest) {
   console.log('Upload API called')
   try {
@@ -118,7 +132,7 @@ export async function POST(request: NextRequest) {
             '1차카테고리': values[3].replace(/"/g, ''),
             '2차카테고리': values[4].replace(/"/g, ''),
             상품명: values[5].replace(/"/g, ''),
-            바코드: values[6].replace(/"/g, '').trim() || undefined,
+            바코드: normalizeBarcode(values[6]) || undefined,
             재고: parseInt(values[7]) || 0,
             위치: values[8].replace(/"/g, '')
           })
@@ -326,11 +340,12 @@ export async function POST(request: NextRequest) {
       storeGroups.get(storeName)!.push(row)
     })
 
-    // 모든 고유 제품명 수집 (배치 조회를 위해) - 앞뒤 공백 제거하여 정규화
+    // 모든 고유 제품명 수집 (배치 조회를 위해) - 정규화 함수 사용
     const uniqueProductNames = new Set<string>()
     rows.forEach(row => {
-      if (row.상품명 && row.상품명.trim()) {
-        uniqueProductNames.add(row.상품명.trim())
+      const normalizedName = normalizeProductName(row.상품명)
+      if (normalizedName) {
+        uniqueProductNames.add(normalizedName)
       }
     })
 
@@ -354,14 +369,16 @@ export async function POST(request: NextRequest) {
         console.error(`제품 배치 조회 오류 (배치 ${batchNumber}/${productBatchCount}):`, batchError)
       } else if (batchProducts) {
         batchProducts.forEach(product => {
-          // DB에서 조회한 제품명도 정규화하여 캐시 키로 사용 (일관성 확보)
-          const normalizedName = product.name?.trim() || product.name
-          productCache.set(normalizedName, {
-            id: product.id,
-            barcode: product.barcode,
-            category_1: product.category_1,
-            category_2: product.category_2
-          })
+          // DB에서 조회한 제품명도 정규화 함수로 정규화하여 캐시 키로 사용 (일관성 확보)
+          const normalizedName = normalizeProductName(product.name)
+          if (normalizedName) {
+            productCache.set(normalizedName, {
+              id: product.id,
+              barcode: product.barcode,
+              category_1: product.category_1,
+              category_2: product.category_2
+            })
+          }
         })
         console.log(`제품 배치 ${batchNumber}/${productBatchCount} 조회 완료: ${batchProducts.length}개 제품 발견`)
       }
@@ -474,14 +491,14 @@ export async function POST(request: NextRequest) {
     }>()
     
     rows.forEach(row => {
-      const productName = row.상품명?.trim()
+      const productName = normalizeProductName(row.상품명)
       if (!productName) return
       
       // 기존 캐시에서 제품 정보 가져오기 (있는 경우)
       const existingProduct = productCache.get(productName)
       
-      // 새로운 데이터 (CSV에서)
-      const newBarcode = (row.바코드 && row.바코드.trim()) ? row.바코드.trim() : null
+      // 새로운 데이터 (CSV에서) - 바코드는 정규화 함수로 처리
+      const newBarcode = normalizeBarcode(row.바코드)
       const newCategory1 = (row['1차카테고리'] && row['1차카테고리'].trim()) ? row['1차카테고리'].trim() : null
       const newCategory2 = (row['2차카테고리'] && row['2차카테고리'].trim()) ? row['2차카테고리'].trim() : null
       
@@ -578,41 +595,48 @@ export async function POST(request: NextRequest) {
       }
       
       // 2-2. 새 제품 배치 INSERT
-      // INSERT 전에 한 번 더 존재 여부 확인 (UNIQUE 제약 위반 방지)
+      // INSERT 전에 모든 제품명을 미리 조회하여 캐시에 로드 (중복 방지 강화)
       if (productsToInsert.length > 0) {
         const insertBatches = Math.ceil(productsToInsert.length / PRODUCT_BATCH_SIZE)
         
+        // INSERT 전에 모든 제품명을 한 번에 조회하여 캐시에 미리 로드
+        const allInsertProductNames = productsToInsert.map(p => normalizeProductName(p.name))
+        const uniqueInsertNames = Array.from(new Set(allInsertProductNames.filter(name => name)))
+        
+        console.log(`INSERT 전 전체 제품명 사전 조회 시작: ${uniqueInsertNames.length}개 고유 제품명`)
+        for (let i = 0; i < uniqueInsertNames.length; i += PRODUCT_BATCH_SIZE) {
+          const nameBatch = uniqueInsertNames.slice(i, i + PRODUCT_BATCH_SIZE)
+          const { data: preCheckProducts, error: preCheckError } = await supabase
+            .from('products')
+            .select('id, name, barcode, category_1, category_2')
+            .in('name', nameBatch)
+            .is('deleted_at', null)
+          
+          if (!preCheckError && preCheckProducts) {
+            preCheckProducts.forEach(product => {
+              const normalizedName = normalizeProductName(product.name)
+              if (normalizedName) {
+                productCache.set(normalizedName, {
+                  id: product.id,
+                  barcode: product.barcode,
+                  category_1: product.category_1,
+                  category_2: product.category_2
+                })
+              }
+            })
+            console.log(`INSERT 전 사전 조회 완료: ${preCheckProducts.length}개 제품이 이미 존재함`)
+          }
+        }
+        
+        // 실제 INSERT 처리 (이미 존재하는 제품은 제외)
         for (let i = 0; i < productsToInsert.length; i += PRODUCT_BATCH_SIZE) {
           const batch = productsToInsert.slice(i, i + PRODUCT_BATCH_SIZE)
           const batchNumber = Math.floor(i / PRODUCT_BATCH_SIZE) + 1
           
-          // INSERT 전에 한 번 더 존재 여부 확인 (정규화된 제품명 사용)
-          const productNamesToInsert = batch.map(p => p.name.trim())
-          const { data: existingProductsCheck, error: checkError } = await supabase
-            .from('products')
-            .select('id, name, barcode, category_1, category_2')
-            .in('name', productNamesToInsert)
-            .is('deleted_at', null)
-          
-          // 이미 존재하는 제품들을 캐시에 추가
-          const existingNames = new Set<string>()
-          if (!checkError && existingProductsCheck) {
-            existingProductsCheck.forEach(product => {
-              const normalizedName = product.name?.trim() || product.name
-              existingNames.add(normalizedName)
-              productCache.set(normalizedName, {
-                id: product.id,
-                barcode: product.barcode,
-                category_1: product.category_1,
-                category_2: product.category_2
-              })
-            })
-          }
-          
-          // 존재하는 제품 제외 (정규화된 이름으로 비교)
+          // 이미 캐시에 있는 제품 제외 (정규화된 이름으로 비교)
           const batchToInsert = batch.filter(p => {
-            const normalizedName = p.name.trim()
-            return !existingNames.has(normalizedName) && !productCache.has(normalizedName)
+            const normalizedName = normalizeProductName(p.name)
+            return normalizedName && !productCache.has(normalizedName)
           })
           
           if (batchToInsert.length > 0) {
@@ -622,44 +646,54 @@ export async function POST(request: NextRequest) {
               .select('id, name, barcode, category_1, category_2')
             
             if (insertError) {
-              console.error(`제품 배치 INSERT 오류 (배치 ${batchNumber}/${insertBatches}):`, insertError)
-              
-              // UNIQUE 제약 위반인 경우, 해당 제품들을 다시 조회하여 캐시에 추가
+              // UNIQUE 제약 위반은 정상적인 경우로 처리 (동시성 문제로 인한 중복)
               if (insertError.message.includes('unique constraint') || insertError.message.includes('duplicate key')) {
-                const failedProductNames = batchToInsert.map(p => p.name.trim())
-                const { data: existingProducts } = await supabase
-                  .from('products')
-                  .select('id, name, barcode, category_1, category_2')
-                  .in('name', failedProductNames)
-                  .is('deleted_at', null)
+                console.log(`제품 배치 ${batchNumber}/${insertBatches}: UNIQUE 제약 위반 감지 (동시성 문제), 제품 재조회 중...`)
                 
-                if (existingProducts) {
-                  existingProducts.forEach(product => {
-                    const normalizedName = product.name?.trim() || product.name
-                    productCache.set(normalizedName, {
-                      id: product.id,
-                      barcode: product.barcode,
-                      category_1: product.category_1,
-                      category_2: product.category_2
+                // 실패한 제품명들을 재조회하여 캐시에 추가
+                const failedProductNames = batchToInsert.map(p => normalizeProductName(p.name)).filter(name => name)
+                if (failedProductNames.length > 0) {
+                  const { data: existingProducts, error: fetchError } = await supabase
+                    .from('products')
+                    .select('id, name, barcode, category_1, category_2')
+                    .in('name', failedProductNames)
+                    .is('deleted_at', null)
+                  
+                  if (!fetchError && existingProducts) {
+                    existingProducts.forEach(product => {
+                      const normalizedName = normalizeProductName(product.name)
+                      if (normalizedName) {
+                        productCache.set(normalizedName, {
+                          id: product.id,
+                          barcode: product.barcode,
+                          category_1: product.category_1,
+                          category_2: product.category_2
+                        })
+                      }
                     })
-                  })
-                  console.log(`제품 배치 ${batchNumber}/${insertBatches}: UNIQUE 제약 위반으로 인해 ${existingProducts.length}개 제품을 캐시에 추가`)
+                    console.log(`제품 배치 ${batchNumber}/${insertBatches}: UNIQUE 제약 위반으로 인해 ${existingProducts.length}개 제품을 캐시에 추가 (정상 처리)`)
+                  }
                 }
+                // UNIQUE 제약 위반은 에러로 카운트하지 않음 (정상적인 동시성 처리)
+              } else {
+                // 다른 종류의 에러는 기록
+                console.error(`제품 배치 INSERT 오류 (배치 ${batchNumber}/${insertBatches}):`, insertError)
+                errors.push(`제품 배치 INSERT 실패 (배치 ${batchNumber}): ${insertError.message}`)
               }
-              errors.push(`제품 배치 INSERT 실패 (배치 ${batchNumber}): ${insertError.message}`)
             } else if (insertedProducts) {
               // INSERT 후 반환된 제품 정보를 캐시에 저장
               insertedProducts.forEach(product => {
-                const normalizedName = product.name?.trim() || product.name
-                productCache.set(normalizedName, {
-                  id: product.id,
-                  barcode: product.barcode,
-                  category_1: product.category_1,
-                  category_2: product.category_2
-                })
+                const normalizedName = normalizeProductName(product.name)
+                if (normalizedName) {
+                  productCache.set(normalizedName, {
+                    id: product.id,
+                    barcode: product.barcode,
+                    category_1: product.category_1,
+                    category_2: product.category_2
+                  })
+                }
               })
-              const existingCount = existingProductsCheck?.length || 0
-              console.log(`제품 배치 INSERT 완료 (배치 ${batchNumber}/${insertBatches}): ${insertedProducts.length}개 생성, ${existingCount}개는 이미 존재`)
+              console.log(`제품 배치 INSERT 완료 (배치 ${batchNumber}/${insertBatches}): ${insertedProducts.length}개 생성`)
             }
           } else {
             console.log(`제품 배치 ${batchNumber}/${insertBatches}: 모든 제품이 이미 존재하여 INSERT 생략`)
@@ -683,13 +717,15 @@ export async function POST(request: NextRequest) {
           
           if (!fetchError && fetchedProducts) {
             fetchedProducts.forEach(product => {
-              const normalizedName = product.name?.trim() || product.name
-              productCache.set(normalizedName, {
-                id: product.id,
-                barcode: product.barcode,
-                category_1: product.category_1,
-                category_2: product.category_2
-              })
+              const normalizedName = normalizeProductName(product.name)
+              if (normalizedName) {
+                productCache.set(normalizedName, {
+                  id: product.id,
+                  barcode: product.barcode,
+                  category_1: product.category_1,
+                  category_2: product.category_2
+                })
+              }
             })
           }
         }
@@ -733,7 +769,7 @@ export async function POST(request: NextRequest) {
           const positionNumber = convertLocationToPosition(row.위치)
 
           // 제품 ID 조회 (이미 배치 UPSERT로 처리됨, 캐시에서만 조회)
-          const productName = row.상품명?.trim() || ''
+          const productName = normalizeProductName(row.상품명)
           if (!productName) {
             errors.push('제품명이 없는 행을 건너뜁니다.')
             continue
@@ -742,8 +778,40 @@ export async function POST(request: NextRequest) {
           // 캐시에서 제품 ID 조회 (배치 UPSERT로 이미 처리됨)
           const cachedProduct = productCache.get(productName)
           if (!cachedProduct) {
-            errors.push(`제품을 찾을 수 없습니다: ${productName}`)
-            continue
+            // 제품을 찾을 수 없는 경우, 마지막으로 한 번 더 조회 시도
+            const { data: lastChanceProduct, error: lastChanceError } = await supabase
+              .from('products')
+              .select('id, name, barcode, category_1, category_2')
+              .eq('name', productName)
+              .is('deleted_at', null)
+              .limit(1)
+              .single()
+            
+            if (!lastChanceError && lastChanceProduct) {
+              // 마지막 시도에서 찾았으면 캐시에 추가
+              productCache.set(productName, {
+                id: lastChanceProduct.id,
+                barcode: lastChanceProduct.barcode,
+                category_1: lastChanceProduct.category_1,
+                category_2: lastChanceProduct.category_2
+              })
+              const productId = lastChanceProduct.id
+              
+              // 위치 정보를 배치 UPSERT 목록에 추가
+              locationsToUpsert.push({
+                store_id: storeId,
+                product_id: productId,
+                vending_machine_number: vendingMachineNumber,
+                position_number: positionNumber,
+                stock_quantity: row.재고,
+                is_available: row.재고 > 0,
+                last_updated_at: new Date().toISOString()
+              })
+              continue
+            } else {
+              errors.push(`제품을 찾을 수 없습니다: ${productName}`)
+              continue
+            }
           }
 
           const productId = cachedProduct.id
@@ -769,11 +837,12 @@ export async function POST(request: NextRequest) {
 
     // 위치 정보 배치 UPSERT 처리 (중복 제거)
     if (locationsToUpsert.length > 0) {
-      // 같은 키를 가진 위치 정보 중복 제거 (마지막 값으로 덮어쓰기)
+      // 같은 위치(매장, 자판기, 위치번호)를 가진 위치 정보 중복 제거 (마지막 값으로 덮어쓰기)
+      // 같은 위치에 다른 제품이 오면 교체되도록 product_id를 키에서 제외
       const uniqueLocationsMap = new Map<string, typeof locationsToUpsert[0]>()
       for (const location of locationsToUpsert) {
-        const key = `${location.store_id}-${location.product_id}-${location.vending_machine_number}-${location.position_number}`
-        uniqueLocationsMap.set(key, location) // 같은 키가 있으면 마지막 값으로 덮어쓰기
+        const key = `${location.store_id}-${location.vending_machine_number}-${location.position_number}`
+        uniqueLocationsMap.set(key, location) // 같은 위치가 있으면 마지막 값으로 덮어쓰기 (제품 교체)
       }
       const uniqueLocations = Array.from(uniqueLocationsMap.values())
       
@@ -792,7 +861,7 @@ export async function POST(request: NextRequest) {
         const { error: upsertError } = await supabase
           .from('store_product_locations')
           .upsert(batch, {
-            onConflict: 'store_id,product_id,vending_machine_number,position_number',
+            onConflict: 'store_id,vending_machine_number,position_number',
             ignoreDuplicates: false
           })
 

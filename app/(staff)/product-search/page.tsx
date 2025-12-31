@@ -96,13 +96,16 @@ export default function ProductSearchPage() {
     }
   }
 
-  const handleSearch = async () => {
+  const handleSearch = async (searchText?: string) => {
+    // searchText가 제공되면 사용, 없으면 searchValue 상태 사용
+    const query = searchText !== undefined ? searchText : searchValue
+    
     if (!selectedStoreId) {
       setError('매장을 선택해주세요.')
       return
     }
 
-    if (!searchValue.trim()) {
+    if (!query.trim()) {
       setError('검색어를 입력해주세요.')
       return
     }
@@ -117,12 +120,12 @@ export default function ProductSearchPage() {
       })
 
       // 스마트 전환: 숫자만 입력하면 바코드, 텍스트면 제품명
-      const isNumeric = /^\d+$/.test(searchValue.trim())
+      const isNumeric = /^\d+$/.test(query.trim())
       
       if (isNumeric) {
-        params.append('barcode', searchValue.trim())
+        params.append('barcode', query.trim())
       } else {
-        params.append('name', searchValue.trim())
+        params.append('name', query.trim())
       }
 
       const response = await fetch(`/api/staff/products/search?${params}`)
@@ -133,7 +136,18 @@ export default function ProductSearchPage() {
       }
 
       if (data.success) {
-        setProducts(data.data)
+        // 위치 정보가 있는 제품을 먼저, 없는 제품을 나중에 정렬
+        const sortedProducts = [...data.data].sort((a, b) => {
+          const aHasLocation = a.locations && a.locations.length > 0
+          const bHasLocation = b.locations && b.locations.length > 0
+          
+          // 위치가 있는 제품이 먼저 오도록 (true가 false보다 앞에)
+          if (aHasLocation && !bHasLocation) return -1
+          if (!aHasLocation && bHasLocation) return 1
+          return 0
+        })
+        
+        setProducts(sortedProducts)
         if (data.data.length === 0) {
           setError(data.message || '검색 결과가 없습니다. 제품명을 확인하거나 관리자에게 CSV 파일 업로드를 요청해주세요.')
         }
@@ -178,12 +192,12 @@ export default function ProductSearchPage() {
         },
         (decodedText, decodedResult) => {
           console.log('Barcode detected:', decodedText)
+          // 상태 업데이트와 검색을 동시에 수행
           setSearchValue(decodedText)
           stopBarcodeScan()
           
-          setTimeout(() => {
-            handleSearch()
-          }, 500)
+          // 바코드 값을 직접 전달하여 검색 (상태 업데이트 대기 불필요)
+          handleSearch(decodedText)
         },
         (errorMessage) => {
           // 에러는 무시 (계속 스캔 시도)
@@ -235,27 +249,28 @@ export default function ProductSearchPage() {
   }, [])
 
   return (
-    <div className="min-h-screen bg-gray-50 pb-20">
-      {/* 헤더 */}
-      <div className="bg-white border-b border-gray-200 px-4 py-4 sticky top-0 z-10">
+    <div className="min-h-screen bg-gradient-to-b from-blue-50 to-gray-50 pb-24">
+      {/* 헤더 - 모바일 최적화 */}
+      <div className="bg-white border-b border-gray-200 shadow-sm px-4 py-3 sticky top-0 z-20">
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <Link href="/mobile-dashboard" className="text-gray-600 text-xl">
+          <div className="flex items-center gap-2">
+            <Link href="/mobile-dashboard" className="text-gray-600 text-2xl hover:text-gray-800 transition-colors">
               ←
             </Link>
-            <h1 className="text-lg font-semibold">제품 위치 찾기</h1>
+            <h1 className="text-lg font-bold text-gray-800">제품 위치 찾기</h1>
           </div>
         </div>
       </div>
 
-      <div className="px-4 py-4 space-y-4">
-        {/* 매장 선택 - 간소화 */}
+      <div className="px-3 py-3 space-y-3 max-w-md mx-auto">
+        {/* 매장 선택 - 모바일 최적화 */}
         {stores.length > 1 && (
-          <div className="bg-white rounded-lg shadow-md p-3">
+          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-3">
+            <label className="block text-xs font-medium text-gray-600 mb-1.5">매장 선택</label>
             <select
               value={selectedStoreId}
               onChange={(e) => setSelectedStoreId(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+              className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm bg-white"
             >
               {stores.map((store) => (
                 <option key={store.id} value={store.id}>
@@ -266,19 +281,20 @@ export default function ProductSearchPage() {
           </div>
         )}
 
-        {/* 통합 검색 영역 - 상단 고정 */}
-        <div className="bg-white rounded-lg shadow-md p-4 sticky top-[73px] z-10">
-          <div className="flex gap-2">
-            {/* 바코드 스캔 버튼 */}
+        {/* 통합 검색 영역 - 모바일 최적화 */}
+        <div className="bg-white rounded-xl shadow-md border border-gray-100 p-3 sticky top-[57px] z-10">
+          {/* 검색 입력 영역 */}
+          <div className="flex gap-2 mb-2">
+            {/* 바코드 스캔 버튼 - 더 큰 터치 영역 */}
             <button
               onClick={scanning ? stopBarcodeScan : startBarcodeScan}
-              className={`px-4 py-3 rounded-lg font-medium transition-colors flex-shrink-0 ${
+              className={`px-4 py-3 rounded-xl font-semibold transition-all flex-shrink-0 shadow-sm ${
                 scanning
-                  ? 'bg-red-600 text-white'
-                  : 'bg-green-600 text-white hover:bg-green-700'
+                  ? 'bg-red-500 text-white active:bg-red-600'
+                  : 'bg-gradient-to-r from-green-500 to-green-600 text-white active:from-green-600 active:to-green-700'
               }`}
             >
-              {scanning ? '⏹ 중지' : '📷 스캔'}
+              <span className="text-lg">{scanning ? '⏹' : '📷'}</span>
             </button>
             
             {/* 통합 검색 입력창 */}
@@ -293,131 +309,186 @@ export default function ProductSearchPage() {
                     handleSearch()
                   }
                 }}
-                placeholder="바코드 또는 제품명 입력"
-                className="flex-1 px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-base"
+                placeholder="바코드 또는 제품명"
+                className="flex-1 px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 text-base bg-gray-50"
               />
               <button
                 onClick={handleSearch}
                 disabled={loading || !selectedStoreId || !searchValue.trim()}
-                className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors font-medium"
+                className="px-5 py-3 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-xl hover:from-blue-600 hover:to-blue-700 disabled:from-gray-300 disabled:to-gray-400 disabled:cursor-not-allowed transition-all font-semibold shadow-sm active:scale-95"
               >
-                {loading ? '...' : '검색'}
+                {loading ? (
+                  <span className="inline-block w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                ) : (
+                  '검색'
+                )}
               </button>
             </div>
           </div>
 
-          {/* 스캔 중일 때 카메라 화면 */}
+          {/* 스캔 중일 때 카메라 화면 - 모바일 최적화 */}
           {scanning && (
-            <div className="mt-4 relative">
-              <div id="barcode-scanner" className="w-full rounded-lg min-h-[300px] bg-black"></div>
+            <div className="mt-3 relative rounded-xl overflow-hidden shadow-lg">
+              <div id="barcode-scanner" className="w-full aspect-square bg-black"></div>
               <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                <div className="border-2 border-blue-500 w-64 h-64 rounded-lg"></div>
-                <p className="mt-4 text-white bg-black bg-opacity-70 px-4 py-2 rounded text-sm">
-                  바코드를 카메라에 비춰주세요
-                </p>
+                {/* 스캔 가이드 프레임 */}
+                <div className="relative">
+                  <div className="border-4 border-blue-500 rounded-2xl w-64 h-64 shadow-lg">
+                    {/* 모서리 강조 */}
+                    <div className="absolute -top-1 -left-1 w-8 h-8 border-t-4 border-l-4 border-blue-500 rounded-tl-2xl"></div>
+                    <div className="absolute -top-1 -right-1 w-8 h-8 border-t-4 border-r-4 border-blue-500 rounded-tr-2xl"></div>
+                    <div className="absolute -bottom-1 -left-1 w-8 h-8 border-b-4 border-l-4 border-blue-500 rounded-bl-2xl"></div>
+                    <div className="absolute -bottom-1 -right-1 w-8 h-8 border-b-4 border-r-4 border-blue-500 rounded-br-2xl"></div>
+                  </div>
+                </div>
+                {/* 안내 메시지 */}
+                <div className="mt-6 bg-black bg-opacity-75 backdrop-blur-sm px-6 py-3 rounded-full">
+                  <p className="text-white text-sm font-medium text-center">
+                    📷 바코드를 프레임 안에 맞춰주세요
+                  </p>
+                </div>
+                {/* 스캔 중지 버튼 */}
+                <div className="mt-4 pointer-events-auto">
+                  <button
+                    onClick={stopBarcodeScan}
+                    className="bg-red-500 hover:bg-red-600 text-white px-6 py-2.5 rounded-full font-semibold shadow-lg active:scale-95 transition-all"
+                  >
+                    스캔 중지
+                  </button>
+                </div>
               </div>
             </div>
           )}
         </div>
 
-        {/* 에러 메시지 */}
+        {/* 에러 메시지 - 모바일 최적화 */}
         {error && (
-          <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-            <p className="text-red-800 text-sm">{error}</p>
+          <div className="bg-red-50 border-l-4 border-red-500 rounded-lg p-4 shadow-sm">
+            <div className="flex items-start gap-2">
+              <span className="text-red-500 text-xl">⚠️</span>
+              <p className="text-red-800 text-sm flex-1">{error}</p>
+            </div>
           </div>
         )}
 
-        {/* 검색 결과 - 위치 정보 중심 */}
+        {/* 검색 결과 - 모바일 최적화 */}
         {products.length > 0 && (
-          <div className="space-y-4">
-            {products.map((product) => (
-              <div
-                key={product.id}
-                className="bg-white rounded-lg shadow-md p-5"
-              >
-                {/* 제품 기본 정보 - 간소화 */}
-                <div className="flex gap-3 mb-4">
-                  {product.image_url ? (
-                    <div className="relative w-16 h-16 rounded-lg overflow-hidden flex-shrink-0">
-                      <Image
-                        src={product.image_url}
-                        alt={product.name}
-                        fill
-                        className="object-cover"
-                        sizes="64px"
-                        loading="lazy"
-                      />
+          <div className="space-y-3">
+            {products.map((product) => {
+              const hasLocation = product.locations && product.locations.length > 0
+              
+              return (
+                <div
+                  key={product.id}
+                  className={`bg-white rounded-xl shadow-md border-2 overflow-hidden transition-all ${
+                    hasLocation 
+                      ? 'border-blue-200' 
+                      : 'border-gray-200 opacity-75'
+                  }`}
+                >
+                  {/* 제품 기본 정보 - 모바일 최적화 */}
+                  <div className="p-4 bg-gradient-to-r from-gray-50 to-white">
+                    <div className="flex gap-3 items-start">
+                      {product.image_url ? (
+                        <div className="relative w-20 h-20 rounded-xl overflow-hidden flex-shrink-0 shadow-sm border-2 border-gray-100">
+                          <Image
+                            src={product.image_url}
+                            alt={product.name}
+                            fill
+                            className="object-cover"
+                            sizes="80px"
+                            loading="lazy"
+                          />
+                        </div>
+                      ) : (
+                        <div className="w-20 h-20 bg-gradient-to-br from-gray-100 to-gray-200 rounded-xl flex items-center justify-center flex-shrink-0 shadow-sm border-2 border-gray-100">
+                          <span className="text-3xl">📦</span>
+                        </div>
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <h3 className="text-base font-bold text-gray-800 mb-1.5 line-clamp-2 leading-tight">
+                          {product.name}
+                        </h3>
+                        {product.barcode && (
+                          <p className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded-md inline-block">
+                            🏷️ {product.barcode}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* 위치 정보 - 모바일 최적화 */}
+                  {hasLocation ? (
+                    <div className="px-4 pb-4 pt-2">
+                      <div className="space-y-2.5">
+                        {product.locations.map((location, idx) => (
+                          <div
+                            key={idx}
+                            className={`p-4 rounded-xl shadow-sm transition-all ${
+                              location.is_available
+                                ? 'bg-gradient-to-br from-blue-50 to-blue-100 border-2 border-blue-400'
+                                : 'bg-gradient-to-br from-gray-50 to-gray-100 border-2 border-gray-300 opacity-70'
+                            }`}
+                          >
+                            <div className="text-center">
+                              {/* 위치 정보 - 모바일에서 더 크고 명확하게 */}
+                              <div className="flex items-center justify-center gap-2 mb-2">
+                                <span className="text-2xl">📍</span>
+                                <div className="text-2xl font-extrabold text-blue-700">
+                                  {location.vending_machine_number}번 자판기
+                                </div>
+                              </div>
+                              <div className="flex items-center justify-center gap-2 mb-3">
+                                <span className="text-xl">🔢</span>
+                                <div className="text-3xl font-extrabold text-blue-800">
+                                  {location.position_number}번
+                                </div>
+                              </div>
+                              <div className="flex items-center justify-center gap-4 text-sm">
+                                <div className="bg-white px-3 py-1.5 rounded-lg shadow-sm">
+                                  <span className="text-gray-600 font-medium">재고: </span>
+                                  <span className="text-blue-700 font-bold">{location.stock_quantity}개</span>
+                                </div>
+                              </div>
+                              {!location.is_available && (
+                                <div className="mt-3">
+                                  <span className="px-4 py-1.5 bg-red-100 text-red-700 text-sm rounded-full font-bold shadow-sm">
+                                    ⚠️ 품절
+                                  </span>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   ) : (
-                    <div className="w-16 h-16 bg-gray-200 rounded-lg flex items-center justify-center flex-shrink-0">
-                      <span className="text-2xl">📦</span>
+                    <div className="px-4 pb-4 pt-2">
+                      <div className="bg-yellow-50 border-2 border-yellow-200 rounded-xl p-4 text-center">
+                        <div className="text-3xl mb-2">📍</div>
+                        <p className="text-yellow-800 font-semibold text-sm">
+                          위치 정보가 없습니다
+                        </p>
+                        <p className="text-yellow-600 text-xs mt-1">
+                          관리자에게 CSV 파일 업로드를 요청해주세요
+                        </p>
+                      </div>
                     </div>
                   )}
-                  <div className="flex-1 min-w-0">
-                    <h3 className="text-base font-semibold mb-1 truncate">{product.name}</h3>
-                    {product.barcode && (
-                      <p className="text-xs text-gray-500">
-                        바코드: {product.barcode}
-                      </p>
-                    )}
+
+                  {/* 다시 검색 버튼 - 모바일 최적화 */}
+                  <div className="px-4 pb-4 pt-2 border-t border-gray-100">
+                    <button
+                      onClick={resetSearch}
+                      className="w-full px-4 py-3 bg-gradient-to-r from-gray-100 to-gray-200 text-gray-700 rounded-xl hover:from-gray-200 hover:to-gray-300 transition-all font-semibold shadow-sm active:scale-98"
+                    >
+                      🔄 다시 검색
+                    </button>
                   </div>
                 </div>
-
-                {/* 위치 정보 - 가장 크고 명확하게 */}
-                {product.locations.length > 0 ? (
-                  <div className="border-t pt-4">
-                    <div className="space-y-3">
-                      {product.locations.map((location, idx) => (
-                        <div
-                          key={idx}
-                          className={`p-4 rounded-xl ${
-                            location.is_available
-                              ? 'bg-blue-50 border-2 border-blue-500'
-                              : 'bg-gray-50 border-2 border-gray-300 opacity-60'
-                          }`}
-                        >
-                          <div className="text-center">
-                            {/* 위치 정보 - 가장 크게 표시 */}
-                            <div className="text-3xl font-bold text-blue-600 mb-2">
-                              {location.vending_machine_number}번 자판기
-                            </div>
-                            <div className="text-2xl font-bold text-blue-700 mb-2">
-                              {location.position_number}번
-                            </div>
-                            <div className="text-sm text-gray-600">
-                              재고: {location.stock_quantity}개
-                            </div>
-                            {!location.is_available && (
-                              <div className="mt-2">
-                                <span className="px-3 py-1 bg-red-100 text-red-700 text-sm rounded-full font-medium">
-                                  품절
-                                </span>
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                ) : (
-                  <div className="border-t pt-4 text-center">
-                    <p className="text-gray-500 text-sm py-2">
-                      위치 정보가 없습니다.
-                    </p>
-                  </div>
-                )}
-
-                {/* 다시 검색 버튼 */}
-                <div className="mt-4 pt-4 border-t">
-                  <button
-                    onClick={resetSearch}
-                    className="w-full px-4 py-3 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors font-medium"
-                  >
-                    다시 검색
-                  </button>
-                </div>
-              </div>
-            ))}
+              )
+            })}
           </div>
         )}
       </div>

@@ -37,24 +37,61 @@ export function ChecklistCamera({ items, mode, storeId, onComplete, onCancel }: 
       try {
         // 모바일 환경 확인
         const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent)
+        const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent)
         
-        // PC 환경에서는 facingMode를 사용하지 않음 (일반 웹캠 사용)
-        const constraints: MediaStreamConstraints = {
-          video: isMobile
-            ? {
-                facingMode: { ideal: 'environment' }, // 모바일에서는 후면 카메라
+        let mediaStream: MediaStream | null = null
+        
+        if (isMobile) {
+          // iOS 사파리에서는 exact를 먼저 시도하고, 실패하면 ideal로 fallback
+          if (isIOS) {
+            try {
+              // iOS에서는 exact를 사용하여 후면 카메라 강제 선택
+              const exactConstraints: MediaStreamConstraints = {
+                video: {
+                  facingMode: { exact: 'environment' },
+                  width: { ideal: 1920 },
+                  height: { ideal: 1080 }
+                }
+              }
+              mediaStream = await navigator.mediaDevices.getUserMedia(exactConstraints)
+            } catch (exactError) {
+              // exact가 실패하면 ideal로 시도
+              console.log('exact environment failed, trying ideal:', exactError)
+              const idealConstraints: MediaStreamConstraints = {
+                video: {
+                  facingMode: { ideal: 'environment' },
+                  width: { ideal: 1920 },
+                  height: { ideal: 1080 }
+                }
+              }
+              mediaStream = await navigator.mediaDevices.getUserMedia(idealConstraints)
+            }
+          } else {
+            // Android에서는 ideal 사용
+            const constraints: MediaStreamConstraints = {
+              video: {
+                facingMode: { ideal: 'environment' },
                 width: { ideal: 1920 },
                 height: { ideal: 1080 }
               }
-            : {
-                // PC에서는 기본 카메라
-                width: { ideal: 1920 },
-                height: { ideal: 1080 }
-              }
+            }
+            mediaStream = await navigator.mediaDevices.getUserMedia(constraints)
+          }
+        } else {
+          // PC에서는 기본 카메라
+          const constraints: MediaStreamConstraints = {
+            video: {
+              width: { ideal: 1920 },
+              height: { ideal: 1080 }
+            }
+          }
+          mediaStream = await navigator.mediaDevices.getUserMedia(constraints)
+        }
+        
+        if (!mediaStream) {
+          throw new Error('카메라 스트림을 가져올 수 없습니다.')
         }
 
-        const mediaStream = await navigator.mediaDevices.getUserMedia(constraints)
-        
         if (!isMounted) {
           // 컴포넌트가 언마운트된 경우 스트림 정리
           mediaStream.getTracks().forEach((track) => track.stop())

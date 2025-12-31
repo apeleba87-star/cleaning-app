@@ -2,6 +2,14 @@ import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { getServerUser } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
 
+// 바코드 정규화 함수 (모든 공백, 특수문자 제거, 숫자만 남기기)
+function normalizeBarcode(barcode: string | null | undefined): string | null {
+  if (!barcode) return null
+  // 모든 공백, 작은따옴표, 큰따옴표, 특수문자 제거하고 숫자만 남기기
+  const normalized = barcode.replace(/\s+/g, '').replace(/'/g, '').replace(/"/g, '').replace(/[^\d]/g, '')
+  return normalized.length > 0 ? normalized : null
+}
+
 // GET: 제품 목록 조회
 export async function GET(request: NextRequest) {
   try {
@@ -91,12 +99,15 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // 바코드가 있으면 중복 확인
-    if (barcode && barcode.trim()) {
+    // 바코드 정규화
+    const normalizedBarcode = normalizeBarcode(barcode)
+
+    // 바코드가 있으면 중복 확인 (정규화된 값으로)
+    if (normalizedBarcode) {
       const { data: existingBarcode, error: barcodeCheckError } = await supabase
         .from('products')
         .select('id')
-        .eq('barcode', barcode.trim())
+        .eq('barcode', normalizedBarcode)
         .is('deleted_at', null)
         .single()
 
@@ -113,7 +124,7 @@ export async function POST(request: NextRequest) {
       .from('products')
       .insert({
         name: name.trim(),
-        barcode: barcode?.trim() || null,
+        barcode: normalizedBarcode,
         image_url: image_url?.trim() || null,
         category_1: category_1?.trim() || null,
         category_2: category_2?.trim() || null

@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { usePathname } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { useEffect, useState, useRef } from 'react'
 
@@ -28,14 +28,24 @@ interface NavGroup {
 
 export function NavRoleSwitch({ userRole, userName, onRefresh, isRefreshing }: NavRoleSwitchProps) {
   const pathname = usePathname()
+  const router = useRouter()
   const [isClient, setIsClient] = useState(false)
   const [openDropdown, setOpenDropdown] = useState<string | null>(null)
   const dropdownRef = useRef<{ [key: string]: HTMLDivElement | null }>({})
   const [pendingUserCount, setPendingUserCount] = useState<number>(0)
   const [isRefreshingStore, setIsRefreshingStore] = useState(false)
+  const [isIOS, setIsIOS] = useState(false)
+  const [canGoBack, setCanGoBack] = useState(false)
 
   useEffect(() => {
     setIsClient(true)
+    // iOS 감지
+    const userAgent = navigator.userAgent || navigator.vendor || (window as any).opera
+    const isIOSDevice = /iPhone|iPad|iPod/i.test(userAgent)
+    setIsIOS(isIOSDevice)
+    
+    // 뒤로가기 가능 여부 확인 (히스토리가 있는지)
+    setCanGoBack(window.history.length > 1)
   }, [])
 
   // 점주앱의 경우 로딩 상태를 실시간으로 확인
@@ -90,7 +100,7 @@ export function NavRoleSwitch({ userRole, userName, onRefresh, isRefreshing }: N
   }, [openDropdown])
 
   const staffNav = [
-    { href: '/attendance', label: '출퇴근' },
+    { href: '/attendance', label: '관리시작/종료' },
     { href: '/photos', label: '청소 사진' },
     { href: '/checklist', label: '체크리스트' },
     { href: '/issues', label: '이슈' },
@@ -212,17 +222,45 @@ export function NavRoleSwitch({ userRole, userName, onRefresh, isRefreshing }: N
 
   if (!isClient) return null
 
+  // 뒤로가기 핸들러
+  const handleBack = () => {
+    if (window.history.length > 1) {
+      router.back()
+    } else {
+      // 히스토리가 없으면 대시보드로 이동
+      router.push('/mobile-dashboard')
+    }
+  }
+
+  // 뒤로가기 가능 여부 확인 (루트 페이지가 아니고 히스토리가 있는 경우)
+  const showBackButton = isIOS && canGoBack && pathname !== '/mobile-dashboard' && pathname !== '/'
+
   // 모바일에서는 간단한 헤더만 표시
   if (userRole === 'staff') {
     return (
       <nav className="bg-blue-600 text-white shadow-lg">
         <div className="container mx-auto px-4">
           <div className="flex items-center justify-between h-14 md:h-16">
-            <Link href="/mobile-dashboard" className="flex flex-col lg:flex-row lg:items-center gap-0 lg:gap-2">
-              <span className="text-lg md:text-xl font-bold">무플 (MUPL)</span>
-              <span className="text-xs lg:text-sm text-blue-200">무인·현장 운영 관리 플랫폼</span>
-            </Link>
-            <div className="flex items-center space-x-2 md:space-x-4">
+            <div className="flex items-center gap-2 flex-1 min-w-0">
+              {/* 아이폰용 뒤로가기 버튼 */}
+              {showBackButton && (
+                <button
+                  onClick={handleBack}
+                  className="flex-shrink-0 px-2 py-1 md:px-3 md:py-2 bg-blue-700 hover:bg-blue-800 rounded-md text-sm font-medium transition-colors flex items-center gap-1"
+                  aria-label="뒤로가기"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                  </svg>
+                  <span className="hidden sm:inline">뒤로</span>
+                </button>
+              )}
+              <Link href="/mobile-dashboard" className="flex flex-col lg:flex-row lg:items-center gap-0 lg:gap-2 flex-1 min-w-0">
+                <span className="text-lg md:text-xl font-bold">무플 (MUPL)</span>
+                <span className="text-xs lg:text-sm text-blue-200">무인·현장 운영 관리 플랫폼</span>
+              </Link>
+            </div>
+            <div className="flex items-center space-x-2 md:space-x-4 flex-shrink-0">
               {userName && (
                 <span className="text-xs md:text-sm hidden md:inline">
                   {userName}
