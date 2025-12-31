@@ -25,7 +25,8 @@ try {
 - 2025년 최신 UI 트렌드 적용 (그라데이션, Glassmorphism, 부드러운 애니메이션)
 - product-search 페이지 타입 에러 수정
 - financial-summary API 타입 에러 수정 (todaySalaryUsersWithStatus 사용)
-- stores/status API 타입 에러 수정 (problemReportsError 제거)`;
+- stores/status API 타입 에러 수정 (problemReportsError 제거)
+- TodayTasksWrapperClient 타입 에러 수정 (loadFinancialData 함수 추가)`;
   execSync(`git commit -m "${commitMessage}"`, { stdio: 'inherit' });
   console.log('✅ 완료\n');
 

@@ -5,7 +5,7 @@ import TodayTasksSection from './TodayTasksSection'
 import { useFinancialData } from './FinancialDataContext'
 
 export default function TodayTasksWrapperClient({ companyId }: { companyId: string }) {
-  const { financialData } = useFinancialData()
+  const { financialData, loadFinancialData } = useFinancialData()
   const [loading, setLoading] = useState(!financialData)
 
   useEffect(() => {

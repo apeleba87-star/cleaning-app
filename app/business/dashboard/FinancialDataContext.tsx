@@ -47,6 +47,7 @@ interface FinancialDataContextType {
   setFinancialData: (data: FinancialData | null) => void
   loading: boolean
   setLoading: (loading: boolean) => void
+  loadFinancialData: () => Promise<void>
 }
 
 const FinancialDataContext = createContext<FinancialDataContextType | undefined>(undefined)
@@ -55,8 +56,32 @@ export function FinancialDataProvider({ children }: { children: ReactNode }) {
   const [financialData, setFinancialData] = useState<FinancialData | null>(null)
   const [loading, setLoading] = useState(true)
 
+  const loadFinancialData = async () => {
+    try {
+      setLoading(true)
+      const response = await fetch('/api/business/financial-summary')
+      
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || '재무 데이터를 불러올 수 없습니다.')
+      }
+
+      const data = await response.json()
+      if (data.success) {
+        setFinancialData(data.data)
+      } else {
+        throw new Error('재무 데이터를 불러올 수 없습니다.')
+      }
+    } catch (err: any) {
+      console.error('Failed to load financial data:', err)
+      throw err
+    } finally {
+      setLoading(false)
+    }
+  }
+
   return (
-    <FinancialDataContext.Provider value={{ financialData, setFinancialData, loading, setLoading }}>
+    <FinancialDataContext.Provider value={{ financialData, setFinancialData, loading, setLoading, loadFinancialData }}>
       {children}
     </FinancialDataContext.Provider>
   )
