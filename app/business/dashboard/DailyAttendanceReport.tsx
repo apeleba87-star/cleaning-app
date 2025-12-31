@@ -21,6 +21,7 @@ interface AttendanceReport {
   attended_stores: number
   not_attended_stores: number
   not_counted_stores?: number
+  total_night_stores?: number // 야간 매장 총 개수
   stores: StoreReport[]
 }
 
@@ -101,6 +102,11 @@ export default function DailyAttendanceReport() {
   const notAttendedStores = report.stores.filter(s => !s.has_attendance && !s.is_not_counted)
   const notCountedStores = report.stores.filter(s => s.is_not_counted)
   const attendedStores = report.stores.filter(s => s.has_attendance)
+  
+  // 오후 리포트인지 확인 (오후 1시 이후)
+  const isAfternoonReport = report.report_time === '13:00' || !report.is_morning_report
+  // 야간 매장이 있는지 확인
+  const hasNightStores = report.stores.some(s => s.is_night_shift)
 
   return (
     <div className="bg-white rounded-lg shadow-md p-6 mb-6">
@@ -109,6 +115,9 @@ export default function DailyAttendanceReport() {
           <h2 className="text-lg font-semibold text-gray-900">어제 매장 관리 현황</h2>
           <p className="text-sm text-gray-500 mt-1">
             {report.report_date} {report.report_time} 기준
+            {isAfternoonReport && hasNightStores && (
+              <span className="ml-2 text-blue-600 font-medium">(야간 매장 집계 완료)</span>
+            )}
           </p>
         </div>
         <label className="flex items-center gap-2 cursor-pointer">
@@ -123,10 +132,13 @@ export default function DailyAttendanceReport() {
       </div>
 
       {/* 요약 통계 */}
-      <div className={`grid gap-4 mb-6 ${report.not_counted_stores && report.not_counted_stores > 0 ? 'grid-cols-1 md:grid-cols-4' : 'grid-cols-1 md:grid-cols-3'}`}>
+      <div className={`grid gap-4 mb-6 ${report.total_night_stores && report.total_night_stores > 0 ? 'grid-cols-1 md:grid-cols-4' : 'grid-cols-1 md:grid-cols-3'}`}>
         <div className="bg-blue-50 rounded-lg p-4 border-2 border-blue-200">
           <p className="text-sm text-gray-600 mb-1">전체 매장</p>
           <p className="text-3xl font-bold text-blue-600">{report.total_stores}곳</p>
+          {isAfternoonReport && hasNightStores && !includeNightShift && (
+            <p className="text-xs text-blue-500 mt-1">(야간 매장 제외)</p>
+          )}
         </div>
         <div className="bg-green-50 rounded-lg p-4 border-2 border-green-200">
           <p className="text-sm text-gray-600 mb-1">관리 완료</p>
@@ -136,14 +148,36 @@ export default function DailyAttendanceReport() {
           <p className="text-sm text-gray-600 mb-1">미관리</p>
           <p className="text-3xl font-bold text-red-600">{report.not_attended_stores}곳</p>
         </div>
-        {report.not_counted_stores && report.not_counted_stores > 0 && (
+        {/* 야간 매장이 있는 경우 항상 미집계 카드 표시 */}
+        {report.total_night_stores && report.total_night_stores > 0 && (
           <div className="bg-gray-50 rounded-lg p-4 border-2 border-gray-200">
             <p className="text-sm text-gray-600 mb-1">미집계</p>
-            <p className="text-3xl font-bold text-gray-600">{report.not_counted_stores}곳</p>
-            <p className="text-xs text-gray-500 mt-1">(야간 매장)</p>
+            {report.is_morning_report ? (
+              <>
+                <p className="text-3xl font-bold text-gray-600">{report.not_counted_stores || 0}곳</p>
+                <p className="text-xs text-gray-500 mt-1">(야간 매장 - 오후 1시 집계)</p>
+              </>
+            ) : report.not_counted_stores === 0 ? (
+              <p className="text-lg font-bold text-gray-600">야간 매장<br />집계 완료</p>
+            ) : (
+              <>
+                <p className="text-3xl font-bold text-gray-600">{report.not_counted_stores}곳</p>
+                <p className="text-xs text-gray-500 mt-1">(야간 매장)</p>
+              </>
+            )}
           </div>
         )}
       </div>
+      
+      {/* 오후 리포트이고 야간 매장이 포함되지 않았을 때 안내 메시지 */}
+      {isAfternoonReport && hasNightStores && !includeNightShift && (
+        <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+          <p className="text-sm text-blue-800">
+            <span className="font-semibold">💡 안내:</span> 야간 매장은 오후 1시에 집계가 완료되었습니다. 
+            "야간 매장 포함" 체크박스를 체크하면 야간 매장의 관리 현황도 확인할 수 있습니다.
+          </p>
+        </div>
+      )}
 
       {/* 미집계 매장 목록 (오전 리포트일 때만) */}
       {notCountedStores.length > 0 && (

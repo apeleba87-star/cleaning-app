@@ -2,32 +2,21 @@
 
 import { useState, useEffect } from 'react'
 import TodayTasksSection from './TodayTasksSection'
+import { useFinancialData } from './FinancialDataContext'
 
 export default function TodayTasksWrapperClient({ companyId }: { companyId: string }) {
-  const [financialData, setFinancialData] = useState<any>(null)
-  const [loading, setLoading] = useState(true)
+  const { financialData } = useFinancialData()
+  const [loading, setLoading] = useState(!financialData)
 
   useEffect(() => {
-    loadFinancialData()
-  }, [companyId])
-
-  const loadFinancialData = async () => {
-    try {
-      const period = new Date().toISOString().slice(0, 7) // YYYY-MM
-      const response = await fetch(`/api/business/financial-summary?period=${period}`)
-      if (!response.ok) {
-        throw new Error('재무 데이터를 불러올 수 없습니다.')
-      }
-      const data = await response.json()
-      if (data.success) {
-        setFinancialData(data.data)
-      }
-    } catch (error: any) {
-      console.error('Error loading financial data:', error)
-    } finally {
+    // Context에 데이터가 없을 때만 로드 (FinancialSummarySection이 먼저 로드되므로 일반적으로는 필요 없음)
+    if (!financialData) {
+      setLoading(false) // FinancialSummarySection이 로드 중이므로 대기
+    } else {
       setLoading(false)
     }
-  }
+  }, [financialData])
+
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('ko-KR', {
@@ -122,7 +111,14 @@ export default function TodayTasksWrapperClient({ companyId }: { companyId: stri
   }
 
   if (loading || !financialData) {
-    return null
+    return (
+      <div className="bg-white rounded-lg shadow-md p-6 mb-6">
+        <div className="text-center py-4">
+          <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600 mx-auto mb-2"></div>
+          <p className="text-sm text-gray-500">오늘의 작업을 불러오는 중...</p>
+        </div>
+      </div>
+    )
   }
 
   const handleMarkSubcontractAsPaid = async (paymentId: string, userName: string) => {

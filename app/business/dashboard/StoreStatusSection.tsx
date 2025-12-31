@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import Link from 'next/link'
 
 interface StoreStatusData {
@@ -35,12 +35,31 @@ interface StoreStatusSummary {
 export default function StoreStatusSection() {
   const [statusSummary, setStatusSummary] = useState<StoreStatusSummary | null>(null)
   const [loading, setLoading] = useState(true)
+  const [shouldLoad, setShouldLoad] = useState(false)
+  const containerRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
-    loadStoreStatus()
+    // Intersection Observer로 뷰포트에 들어올 때 로드
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting) {
+          setShouldLoad(true)
+          observer.disconnect()
+        }
+      },
+      { rootMargin: '100px' } // 100px 전에 미리 로드
+    )
+
+    if (containerRef.current) {
+      observer.observe(containerRef.current)
+    }
+
+    return () => {
+      observer.disconnect()
+    }
   }, [])
 
-  const loadStoreStatus = async () => {
+  const loadStoreStatus = useCallback(async () => {
     try {
       setLoading(true)
       const response = await fetch('/api/business/stores/status')
@@ -108,6 +127,23 @@ export default function StoreStatusSection() {
     } finally {
       setLoading(false)
     }
+  }, [])
+
+  useEffect(() => {
+    if (shouldLoad) {
+      loadStoreStatus()
+    }
+  }, [shouldLoad, loadStoreStatus])
+
+  if (!shouldLoad) {
+    return (
+      <div ref={containerRef} className="bg-white rounded-lg shadow-md p-6 mb-6">
+        <div className="text-center py-4">
+          <h2 className="text-lg font-semibold text-gray-900 mb-2">매장 상태 현황</h2>
+          <p className="text-sm text-gray-500">로딩 중...</p>
+        </div>
+      </div>
+    )
   }
 
   if (loading) {

@@ -1,8 +1,9 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
 import QuickExpenseForm from './QuickExpenseForm'
+import { useFinancialData } from './FinancialDataContext'
 
 interface FinancialSummary {
   period: string
@@ -56,8 +57,9 @@ interface FinancialSummarySectionProps {
 }
 
 export default function FinancialSummarySection({ companyId }: FinancialSummarySectionProps) {
-  const [summary, setSummary] = useState<FinancialSummary | null>(null)
-  const [loading, setLoading] = useState(true)
+  const { financialData, setFinancialData, setLoading: setContextLoading } = useFinancialData()
+  const [summary, setSummary] = useState<FinancialSummary | null>(financialData)
+  const [loading, setLoading] = useState(!financialData)
   const [error, setError] = useState<string | null>(null)
   const [showPartialPaymentModal, setShowPartialPaymentModal] = useState(false)
   const [selectedStore, setSelectedStore] = useState<{ store_id: string; store_name: string } | null>(null)
@@ -69,11 +71,7 @@ export default function FinancialSummarySection({ companyId }: FinancialSummaryS
   const [submitting, setSubmitting] = useState(false)
   const [payrollSubmitting, setPayrollSubmitting] = useState<string | null>(null) // 특정 인건비 제출 중 상태
 
-  useEffect(() => {
-    loadFinancialSummary()
-  }, [companyId])
-
-  const loadFinancialSummary = async () => {
+  const loadFinancialSummary = useCallback(async () => {
     try {
       setLoading(true)
       const response = await fetch('/api/business/financial-summary')
@@ -108,6 +106,7 @@ export default function FinancialSummarySection({ companyId }: FinancialSummaryS
           console.log('[Financial Summary] No salary users found for today!')
         }
         setSummary(data.data)
+        setFinancialData(data.data) // Context에 데이터 저장
       } else {
         throw new Error('재무 데이터를 불러올 수 없습니다.')
       }
@@ -117,7 +116,17 @@ export default function FinancialSummarySection({ companyId }: FinancialSummaryS
     } finally {
       setLoading(false)
     }
-  }
+  }, [setFinancialData])
+
+  useEffect(() => {
+    // Context에 데이터가 없을 때만 로드
+    if (!financialData) {
+      loadFinancialSummary()
+    } else {
+      setSummary(financialData)
+      setLoading(false)
+    }
+  }, [companyId, financialData, loadFinancialSummary])
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('ko-KR', {

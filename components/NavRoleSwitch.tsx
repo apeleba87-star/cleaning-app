@@ -123,6 +123,7 @@ export function NavRoleSwitch({ userRole, userName, onRefresh, isRefreshing }: N
         // 업체 관리자 메뉴 - 그룹화된 구조
         const businessOwnerNav: (NavItem | NavGroup)[] = [
           { href: '/business/dashboard', label: '대시보드' },
+          { href: '/business/attendance-report', label: '미관리 매장 확인' },
           {
             label: '매장',
             items: [

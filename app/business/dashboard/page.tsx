@@ -1,11 +1,14 @@
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { getServerUser } from '@/lib/supabase/server'
+import { Suspense } from 'react'
 import FinancialSummarySection from './FinancialSummarySection'
 import InitialSetupGuide from './InitialSetupGuide'
 import QuickActionsSection from './QuickActionsSection'
-import CategoryGroupedSections from './CategoryGroupedSections'
+import CategoryGroupedSectionsLazy from './CategoryGroupedSectionsLazy'
 import TodayTasksWrapperClient from './TodayTasksWrapperClient'
 import StoreStatusSection from './StoreStatusSection'
+import MonthlyGrowthRateCard from './MonthlyGrowthRateCard'
+import { FinancialDataProvider } from './FinancialDataContext'
 
 export default async function BusinessOwnerDashboardPage() {
   const user = await getServerUser()
@@ -21,38 +24,13 @@ export default async function BusinessOwnerDashboardPage() {
     )
   }
 
-  // 회사 정보 조회
-  const { data: company } = await supabase
-    .from('companies')
-    .select('*')
-    .eq('id', user.company_id)
-    .single()
-
-  // 회사에 속한 매장 ID 조회 (이슈 집계를 위해 배열로 사용)
-  const { data: storeRows, error: storeListError } = await supabase
-    .from('stores')
-    .select('id')
-    .eq('company_id', user.company_id)
-    .is('deleted_at', null)
-
-  if (storeListError) {
-    console.error('Error loading company stores for dashboard:', storeListError)
-  }
-
-  const storeIds = storeRows?.map((s) => s.id) || []
-
-  // 월별 성장률 계산을 위한 날짜 계산 (KST 기준)
-  const now = new Date()
-  const koreaTime = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Seoul' }))
-  const currentYear = koreaTime.getFullYear()
-  const currentMonth = koreaTime.getMonth()
-  const currentMonthStart = new Date(currentYear, currentMonth, 1, 0, 0, 0, 0)
-  const currentMonthEnd = new Date(currentYear, currentMonth + 1, 0, 23, 59, 59, 999)
-  const previousMonthStart = new Date(currentYear, currentMonth - 1, 1, 0, 0, 0, 0)
-  const previousMonthEnd = new Date(currentYear, currentMonth, 0, 23, 59, 59, 999)
-
-  // 통계 조회
-  const [storesResult, usersResult, issuesResult, usersByRoleResult, currentMonthReceipts, previousMonthReceipts] = await Promise.all([
+  // 필수 데이터만 먼저 조회 (빠른 초기 렌더링)
+  const [companyResult, storesResult, usersResult] = await Promise.all([
+    supabase
+      .from('companies')
+      .select('id, name')
+      .eq('id', user.company_id)
+      .single(),
     supabase
       .from('stores')
       .select('id', { count: 'exact', head: true })
@@ -60,48 +38,16 @@ export default async function BusinessOwnerDashboardPage() {
       .is('deleted_at', null),
     supabase
       .from('users')
-      .select('id', { count: 'exact', head: true })
+      .select('id, role', { count: 'exact' })
       .eq('company_id', user.company_id),
-    storeIds.length === 0
-      ? { count: 0 }
-      : await supabase
-          .from('issues')
-          .select('id', { count: 'exact', head: true })
-          .in('store_id', storeIds)
-          .gte('created_at', new Date(new Date().setDate(1)).toISOString()),
-    supabase
-      .from('users')
-      .select('role')
-      .eq('company_id', user.company_id),
-    supabase
-      .from('receipts')
-      .select('amount')
-      .eq('company_id', user.company_id)
-      .gte('received_at', currentMonthStart.toISOString())
-      .lte('received_at', currentMonthEnd.toISOString())
-      .is('deleted_at', null),
-    supabase
-      .from('receipts')
-      .select('amount')
-      .eq('company_id', user.company_id)
-      .gte('received_at', previousMonthStart.toISOString())
-      .lte('received_at', previousMonthEnd.toISOString())
-      .is('deleted_at', null),
   ])
 
-  // 월별 성장률 계산
-  const currentMonthRevenue = currentMonthReceipts.data?.reduce((sum, r) => sum + (r.amount || 0), 0) || 0
-  const previousMonthRevenue = previousMonthReceipts.data?.reduce((sum, r) => sum + (r.amount || 0), 0) || 0
-  
-  let monthlyGrowthRate: number | null = null
-  if (previousMonthRevenue > 0) {
-    monthlyGrowthRate = ((currentMonthRevenue - previousMonthRevenue) / previousMonthRevenue) * 100
-  } else if (currentMonthRevenue > 0) {
-    monthlyGrowthRate = null // 신규 (전월 데이터 없음)
-  }
+  const company = companyResult.data
+  const totalStores = storesResult.count || 0
+  const totalUsers = usersResult.count || 0
 
-  // 역할별 사용자 카운트 계산
-  const usersByRole = (usersByRoleResult.data || []).reduce((acc: Record<string, number>, user: any) => {
+  // 역할별 사용자 카운트 계산 (이미 조회한 데이터 사용)
+  const usersByRole = (usersResult.data || []).reduce((acc: Record<string, number>, user: any) => {
     const role = user.role || 'unknown'
     acc[role] = (acc[role] || 0) + 1
     return acc
@@ -129,15 +75,6 @@ export default async function BusinessOwnerDashboardPage() {
     }
   }
 
-  const stats = {
-    totalStores: storesResult.count || 0,
-    totalUsers: usersResult.count || 0,
-    monthlyIssues: issuesResult.count || 0,
-    usersByRole,
-    getRoleLabel,
-    monthlyGrowthRate,
-  }
-
   // 카테고리별 섹션 정의
   const sections = [
     { title: '매장 관리', href: '/business/stores', description: '매장 등록 및 관리', category: 'store' },
@@ -151,7 +88,7 @@ export default async function BusinessOwnerDashboardPage() {
     { title: '체크리스트 관리', href: '/business/checklists', description: '매장별 체크리스트 생성 및 관리', category: 'operation' },
     { title: '공지사항 관리', href: '/business/announcements', description: '점주용/직원용 공지사항 작성 및 확인 현황', category: 'operation' },
     { title: '리포트', href: '/business/reports', description: '월간/주간 리포트 조회', category: 'operation' },
-    { title: '매장 관리 현황 리포트', href: '/business/attendance-report', description: '어제 오후 1시 기준 매장 출근 현황 리포트', category: 'operation' },
+    { title: '미관리 매장 확인', href: '/business/attendance-report', description: '어제 오후 1시 기준 매장 출근 현황 리포트', category: 'operation' },
     { title: '회사 관리', href: '/business/company', description: '회사 정보 및 요금제 관리', category: 'settings' },
   ]
 
@@ -167,40 +104,27 @@ export default async function BusinessOwnerDashboardPage() {
         )}
       </div>
 
-      {/* 초기 설정 가이드 */}
+      {/* 초기 설정 가이드 - 즉시 표시 */}
       <InitialSetupGuide
         hasCompany={!!company}
-        storeCount={stats.totalStores}
-        userCount={stats.totalUsers}
+        storeCount={totalStores}
+        userCount={totalUsers}
       />
 
-      {/* 매장 상태 현황 */}
-      <StoreStatusSection />
-
-      {/* 오늘의 작업 섹션 - 클라이언트 컴포넌트로 전달 */}
-      <TodayTasksWrapperClient companyId={user.company_id} />
-
-      {/* 빠른 등록 섹션 */}
-      <QuickActionsSection />
-
-      {/* 재무 지표 섹션 */}
-      <FinancialSummarySection companyId={user.company_id} />
-
-      {/* 통계 카드 */}
+      {/* 통계 카드 - 즉시 표시 (필수 데이터만) */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
         <div className="bg-white rounded-lg shadow-md p-6">
           <h3 className="text-sm font-medium text-gray-500 mb-2">전체 관리매장</h3>
-          <p className="text-3xl font-bold text-gray-900">{stats.totalStores}곳</p>
+          <p className="text-3xl font-bold text-gray-900">{totalStores}곳</p>
         </div>
         <div className="bg-white rounded-lg shadow-md p-6">
           <h3 className="text-sm font-medium text-gray-500 mb-2">전체 사용자</h3>
-          <p className="text-3xl font-bold text-gray-900 mb-2">{stats.totalUsers} 명</p>
+          <p className="text-3xl font-bold text-gray-900 mb-2">{totalUsers} 명</p>
           <div className="space-y-1">
-            {Object.keys(stats.usersByRole).filter(role => role !== 'business_owner' && role !== 'platform_admin').length > 0 ? (
-              Object.entries(stats.usersByRole)
+            {Object.keys(usersByRole).filter(role => role !== 'business_owner' && role !== 'platform_admin').length > 0 ? (
+              Object.entries(usersByRole)
                 .filter(([role]) => role !== 'business_owner' && role !== 'platform_admin')
                 .sort(([a], [b]) => {
-                  // 직원을 먼저, 그 다음 프렌차이즈 관리자, 나머지는 알파벳 순
                   if (a === 'staff') return -1
                   if (b === 'staff') return 1
                   if (a === 'franchise_manager') return -1
@@ -209,7 +133,7 @@ export default async function BusinessOwnerDashboardPage() {
                 })
                 .map(([role, count]) => (
                   <p key={role} className="text-sm text-gray-600 pl-2">
-                    -{stats.getRoleLabel(role)} {count}명
+                    -{getRoleLabel(role)} {count}명
                   </p>
                 ))
             ) : (
@@ -217,20 +141,65 @@ export default async function BusinessOwnerDashboardPage() {
             )}
           </div>
         </div>
-        <div className="bg-white rounded-lg shadow-md p-6">
-          <h3 className="text-sm font-medium text-gray-500 mb-2">월별 성장률</h3>
-          {stats.monthlyGrowthRate !== null ? (
-            <p className={`text-3xl font-bold ${stats.monthlyGrowthRate >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-              {stats.monthlyGrowthRate >= 0 ? '+' : ''}{stats.monthlyGrowthRate.toFixed(1)}%
-            </p>
-          ) : (
-            <p className="text-3xl font-bold text-gray-600">신규</p>
-          )}
-        </div>
+        <Suspense fallback={
+          <div className="bg-white rounded-lg shadow-md p-6">
+            <h3 className="text-sm font-medium text-gray-500 mb-2">월별 성장률</h3>
+            <div className="animate-pulse">
+              <div className="h-8 bg-gray-200 rounded w-24"></div>
+            </div>
+          </div>
+        }>
+          <MonthlyGrowthRateCard companyId={user.company_id} />
+        </Suspense>
       </div>
 
-      {/* 카테고리별 그룹화된 기능 */}
-      <CategoryGroupedSections sections={sections} />
+      {/* 매장 상태 현황 - Suspense로 감싸서 독립적으로 로드 */}
+      <Suspense fallback={
+        <div className="bg-white rounded-lg shadow-md p-6 mb-6">
+          <div className="text-center py-4">
+            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600 mx-auto mb-2"></div>
+            <p className="text-sm text-gray-500">매장 상태를 불러오는 중...</p>
+          </div>
+        </div>
+      }>
+        <StoreStatusSection />
+      </Suspense>
+
+      {/* 재무 데이터 Provider로 감싸서 데이터 공유 */}
+      <FinancialDataProvider>
+        {/* 오늘의 작업 섹션 - Context에서 데이터를 가져와 사용 */}
+        <Suspense fallback={
+          <div className="bg-white rounded-lg shadow-md p-6 mb-6">
+            <div className="text-center py-4">
+              <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600 mx-auto mb-2"></div>
+              <p className="text-sm text-gray-500">오늘의 작업을 불러오는 중...</p>
+            </div>
+          </div>
+        }>
+          <TodayTasksWrapperClient companyId={user.company_id} />
+        </Suspense>
+
+        {/* 재무 지표 섹션 - 먼저 로드하여 데이터를 Context에 저장 */}
+        <Suspense fallback={
+          <div className="bg-white rounded-lg shadow-md p-6 mb-8">
+            <h2 className="text-xl font-semibold mb-4">재무 현황</h2>
+            <div className="text-center py-8">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-2"></div>
+              <p className="text-sm text-gray-500">재무 데이터를 불러오는 중...</p>
+            </div>
+          </div>
+        }>
+          <FinancialSummarySection companyId={user.company_id} />
+        </Suspense>
+      </FinancialDataProvider>
+
+      {/* 빠른 등록 섹션 - 즉시 표시 */}
+      <QuickActionsSection />
+
+      {/* 카테고리별 그룹화된 기능 - Lazy Loading */}
+      <Suspense fallback={null}>
+        <CategoryGroupedSectionsLazy sections={sections} />
+      </Suspense>
     </div>
   )
 }

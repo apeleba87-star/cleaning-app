@@ -278,7 +278,7 @@ export default function StoreManagerDashboardPage() {
     }
   }, [storeIdsString, storeStatuses.length])
 
-  // 모든 매장의 요청을 미리 로드 (카운트 계산용)
+  // 모든 매장의 요청을 미리 로드 (카운트 계산용) - 병렬 처리로 최적화
   const loadAllRequestsForCount = async () => {
     if (storeStatuses.length === 0) return
     
@@ -288,9 +288,10 @@ export default function StoreManagerDashboardPage() {
       const allCompletedRequests: any[] = []
       const allRejectedRequests: any[] = []
 
-      for (const store of storeStatuses) {
+      // Promise.all로 모든 매장의 요청을 병렬로 조회
+      const timestamp = new Date().getTime()
+      const requestPromises = storeStatuses.map(async (store) => {
         try {
-          const timestamp = new Date().getTime()
           const response = await fetch(`/api/store-manager/stores/${store.store_id}/requests?t=${timestamp}`, {
             cache: 'no-store',
             headers: {
@@ -305,41 +306,50 @@ export default function StoreManagerDashboardPage() {
               const requestsData = data.data
               
               // 매장 정보를 각 요청에 추가
-              const received = (requestsData.received || []).map((req: any) => ({
-                ...req,
-                store_name: store.store_name,
-                store_id: store.store_id,
-              }))
-              
-              const inProgress = (requestsData.in_progress || []).map((req: any) => ({
-                ...req,
-                store_name: store.store_name,
-                store_id: store.store_id,
-              }))
-              
-              const completed = (requestsData.completed || []).map((req: any) => ({
-                ...req,
-                store_name: store.store_name,
-                store_id: store.store_id,
-              }))
-              
-              const rejected = (requestsData.rejected || []).map((req: any) => ({
-                ...req,
-                store_name: store.store_name,
-                store_id: store.store_id,
-              }))
-              
-              allReceivedRequests.push(...received)
-              allInProgressRequests.push(...inProgress)
-              allCompletedRequests.push(...completed)
-              allRejectedRequests.push(...rejected)
+              return {
+                received: (requestsData.received || []).map((req: any) => ({
+                  ...req,
+                  store_name: store.store_name,
+                  store_id: store.store_id,
+                })),
+                inProgress: (requestsData.in_progress || []).map((req: any) => ({
+                  ...req,
+                  store_name: store.store_name,
+                  store_id: store.store_id,
+                })),
+                completed: (requestsData.completed || []).map((req: any) => ({
+                  ...req,
+                  store_name: store.store_name,
+                  store_id: store.store_id,
+                })),
+                rejected: (requestsData.rejected || []).map((req: any) => ({
+                  ...req,
+                  store_name: store.store_name,
+                  store_id: store.store_id,
+                })),
+              }
             }
           }
+          return null
         } catch (error) {
           console.error(`Error fetching requests for store ${store.store_id}:`, error)
-          // 개별 매장 오류는 무시하고 계속 진행
+          // 개별 매장 오류는 null 반환하여 무시
+          return null
         }
-      }
+      })
+
+      // 모든 요청을 병렬로 처리
+      const results = await Promise.all(requestPromises)
+      
+      // 결과를 합치기
+      results.forEach((result) => {
+        if (result) {
+          allReceivedRequests.push(...result.received)
+          allInProgressRequests.push(...result.inProgress)
+          allCompletedRequests.push(...result.completed)
+          allRejectedRequests.push(...result.rejected)
+        }
+      })
 
       // 모든 매장의 요청을 합쳐서 설정
       setRequestStatusModalData({
@@ -784,15 +794,16 @@ export default function StoreManagerDashboardPage() {
     setRequestStatusModalData({ received: [], in_progress: [], completed: [], rejected: [] })
 
     try {
-      // 모든 매장의 요청을 가져와서 합치기
+      // 모든 매장의 요청을 가져와서 합치기 - 병렬 처리로 최적화
       const allReceivedRequests: any[] = []
       const allInProgressRequests: any[] = []
       const allCompletedRequests: any[] = []
       const allRejectedRequests: any[] = []
 
-      for (const store of storeStatuses) {
+      // Promise.all로 모든 매장의 요청을 병렬로 조회
+      const timestamp = new Date().getTime()
+      const requestPromises = storeStatuses.map(async (store) => {
         try {
-          const timestamp = new Date().getTime()
           const response = await fetch(`/api/store-manager/stores/${store.store_id}/requests?t=${timestamp}`, {
             cache: 'no-store',
             headers: {
@@ -807,34 +818,28 @@ export default function StoreManagerDashboardPage() {
               const requestsData = data.data
               
               // 매장 정보를 각 요청에 추가
-              const received = (requestsData.received || []).map((req: any) => ({
-                ...req,
-                store_name: store.store_name,
-                store_id: store.store_id,
-              }))
-              
-              const inProgress = (requestsData.in_progress || []).map((req: any) => ({
-                ...req,
-                store_name: store.store_name,
-                store_id: store.store_id,
-              }))
-              
-              const completed = (requestsData.completed || []).map((req: any) => ({
-                ...req,
-                store_name: store.store_name,
-                store_id: store.store_id,
-              }))
-              
-              const rejected = (requestsData.rejected || []).map((req: any) => ({
-                ...req,
-                store_name: store.store_name,
-                store_id: store.store_id,
-              }))
-              
-              allReceivedRequests.push(...received)
-              allInProgressRequests.push(...inProgress)
-              allCompletedRequests.push(...completed)
-              allRejectedRequests.push(...rejected)
+              return {
+                received: (requestsData.received || []).map((req: any) => ({
+                  ...req,
+                  store_name: store.store_name,
+                  store_id: store.store_id,
+                })),
+                inProgress: (requestsData.in_progress || []).map((req: any) => ({
+                  ...req,
+                  store_name: store.store_name,
+                  store_id: store.store_id,
+                })),
+                completed: (requestsData.completed || []).map((req: any) => ({
+                  ...req,
+                  store_name: store.store_name,
+                  store_id: store.store_id,
+                })),
+                rejected: (requestsData.rejected || []).map((req: any) => ({
+                  ...req,
+                  store_name: store.store_name,
+                  store_id: store.store_id,
+                })),
+              }
             }
           } else {
             const errorText = await response.text()
@@ -844,14 +849,29 @@ export default function StoreManagerDashboardPage() {
               error: errorText
             })
           }
+          return null
         } catch (error: any) {
           console.error(`Error fetching requests for store ${store.store_id}:`, {
             message: error?.message,
             stack: error?.stack
           })
-          // 개별 매장 오류는 무시하고 계속 진행
+          // 개별 매장 오류는 null 반환하여 무시
+          return null
         }
-      }
+      })
+
+      // 모든 요청을 병렬로 처리
+      const results = await Promise.all(requestPromises)
+      
+      // 결과를 합치기
+      results.forEach((result) => {
+        if (result) {
+          allReceivedRequests.push(...result.received)
+          allInProgressRequests.push(...result.inProgress)
+          allCompletedRequests.push(...result.completed)
+          allRejectedRequests.push(...result.rejected)
+        }
+      })
 
       // 모든 매장의 요청을 합쳐서 설정
       setRequestStatusModalData({

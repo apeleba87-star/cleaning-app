@@ -90,6 +90,125 @@ export async function GET(request: NextRequest) {
     console.log(`오늘 날짜 (UTC): ${todayDateUTC}`)
     console.log(`오늘 요일: ${todayDayName}`)
 
+    // 배치 쿼리 최적화: 모든 매장의 store_assign을 한 번에 조회
+    const storeIds = stores.map(s => s.id)
+    const { data: allStoreAssigns, error: allStoreAssignsError } = await supabase
+      .from('store_assign')
+      .select('store_id, user_id')
+      .in('store_id', storeIds)
+
+    if (allStoreAssignsError) {
+      console.error('Error fetching all store assigns:', allStoreAssignsError)
+    }
+
+    // 매장별로 배정된 직원 ID 목록을 메모리에 저장
+    const assignsByStore = new Map<string, string[]>()
+    allStoreAssigns?.forEach(assign => {
+      if (!assignsByStore.has(assign.store_id)) {
+        assignsByStore.set(assign.store_id, [])
+      }
+      assignsByStore.get(assign.store_id)!.push(assign.user_id)
+    })
+
+    // 배치 쿼리 최적화: 모든 매장의 문제보고, 분실물, 요청란, 물품요청, 체크리스트, 청소사진을 한 번에 조회
+    const thirtyDaysAgo = new Date()
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
+    thirtyDaysAgo.setHours(0, 0, 0, 0)
+
+    const [
+      { data: allProblemReports, error: allProblemReportsError },
+      { data: allLostItems, error: allLostItemsError },
+      { data: allRequests, error: allRequestsError },
+      { data: allSupplyRequests, error: allSupplyRequestsError },
+      { data: allChecklists, error: allChecklistsError },
+      { data: allCleaningPhotos, error: allCleaningPhotosError },
+    ] = await Promise.all([
+      supabase
+        .from('problem_reports')
+        .select('id, store_id, category, status, title, created_at')
+        .in('store_id', storeIds)
+        .gte('created_at', thirtyDaysAgo.toISOString())
+        .lte('created_at', todayEnd.toISOString()),
+      supabase
+        .from('lost_items')
+        .select('id, store_id, status, created_at, updated_at')
+        .in('store_id', storeIds)
+        .or(`created_at.gte.${thirtyDaysAgo.toISOString()},updated_at.gte.${thirtyDaysAgo.toISOString()}`),
+      supabase
+        .from('requests')
+        .select('id, store_id, title, status, created_at')
+        .in('store_id', storeIds)
+        .gte('created_at', thirtyDaysAgo.toISOString())
+        .order('created_at', { ascending: false }),
+      supabase
+        .from('supply_requests')
+        .select('id, store_id, status')
+        .in('store_id', storeIds)
+        .eq('status', 'manager_in_progress'),
+      supabase
+        .from('checklist')
+        .select('id, store_id, items, updated_at, work_date, assigned_user_id')
+        .in('store_id', storeIds)
+        .or(`work_date.eq.${todayDateKST},work_date.eq.${todayDateUTC},work_date.eq.2000-01-01`),
+      supabase
+        .from('cleaning_photos')
+        .select('id, store_id, kind, created_at, area_category')
+        .in('store_id', storeIds)
+        .neq('area_category', 'inventory')
+        .gte('created_at', todayStart.toISOString())
+        .lte('created_at', todayEnd.toISOString()),
+    ])
+
+    // 메모리에서 매장별로 그룹화
+    const problemReportsByStore = new Map<string, typeof allProblemReports>()
+    const lostItemsByStore = new Map<string, typeof allLostItems>()
+    const requestsByStore = new Map<string, typeof allRequests>()
+    const supplyRequestsByStore = new Map<string, typeof allSupplyRequests>()
+    const checklistsByStore = new Map<string, typeof allChecklists>()
+    const cleaningPhotosByStore = new Map<string, typeof allCleaningPhotos>()
+
+    allProblemReports?.forEach(pr => {
+      if (!problemReportsByStore.has(pr.store_id)) {
+        problemReportsByStore.set(pr.store_id, [])
+      }
+      problemReportsByStore.get(pr.store_id)!.push(pr)
+    })
+
+    allLostItems?.forEach(li => {
+      if (!lostItemsByStore.has(li.store_id)) {
+        lostItemsByStore.set(li.store_id, [])
+      }
+      lostItemsByStore.get(li.store_id)!.push(li)
+    })
+
+    allRequests?.forEach(req => {
+      if (!requestsByStore.has(req.store_id)) {
+        requestsByStore.set(req.store_id, [])
+      }
+      requestsByStore.get(req.store_id)!.push(req)
+    })
+
+    allSupplyRequests?.forEach(sr => {
+      if (!supplyRequestsByStore.has(sr.store_id)) {
+        supplyRequestsByStore.set(sr.store_id, [])
+      }
+      supplyRequestsByStore.get(sr.store_id)!.push(sr)
+    })
+
+    allChecklists?.forEach(cl => {
+      if (!checklistsByStore.has(cl.store_id)) {
+        checklistsByStore.set(cl.store_id, [])
+      }
+      checklistsByStore.get(cl.store_id)!.push(cl)
+    })
+
+    allCleaningPhotos?.forEach(cp => {
+      if (!cleaningPhotosByStore.has(cp.store_id)) {
+        cleaningPhotosByStore.set(cp.store_id, [])
+      }
+      cleaningPhotosByStore.get(cp.store_id)!.push(cp)
+    })
+
     // 각 매장별 상태 조회
     const storeStatuses = await Promise.all(
       stores.map(async (store) => {
@@ -99,27 +218,9 @@ export async function GET(request: NextRequest) {
           ? store.management_days.split(',').map((d) => d.trim()).includes(todayDayName)
           : false
 
-        // 매장에 배정된 모든 직원 조회
-        let assignedUserIds: string[] = []
-        try {
-          const { data: assignedStaff, error: assignError } = await supabase
-            .from('store_assign')
-            .select('user_id')
-            .eq('store_id', store.id)
-
-          if (assignError) {
-            console.error(`Store ${store.name}: store_assign 조회 오류:`, assignError)
-            // 에러가 발생해도 빈 배열로 처리하여 계속 진행
-            assignedUserIds = []
-          } else {
-            assignedUserIds = assignedStaff?.map(s => s.user_id) || []
-            console.log(`Store ${store.name}: 배정된 직원 ID 목록:`, assignedUserIds)
-          }
-        } catch (error) {
-          console.error(`Store ${store.name}: store_assign 조회 중 예외 발생:`, error)
-          // 예외 발생 시 빈 배열로 처리하여 계속 진행
-          assignedUserIds = []
-        }
+        // 배치 쿼리에서 가져온 배정된 직원 ID 목록 사용
+        const assignedUserIds = assignsByStore.get(store.id) || []
+        console.log(`Store ${store.name}: 배정된 직원 ID 목록:`, assignedUserIds)
 
         // 해당 매장의 오늘 출근 정보 조회 (store_id만으로 조회하여 배정과 무관하게 실제 출근 기록 확인)
         let todayAttendances: any[] = []
@@ -393,7 +494,7 @@ export async function GET(request: NextRequest) {
           todayAttendances = []
         }
 
-        // 출근한 직원 정보 조회 (가장 최근 출근한 직원)
+        // 출근한 직원 정보 조회 (가장 최근 출근한 직원) - 배치 쿼리로 최적화 필요하지만 복잡도가 높아 개별 조회 유지
         let staffName: string | null = null
         const latestAttendance = todayAttendances.length > 0 ? todayAttendances[0] : null
         if (latestAttendance?.user_id) {
@@ -405,31 +506,9 @@ export async function GET(request: NextRequest) {
           staffName = staff?.name || null
         }
 
-        // 최근 30일 문제보고 (매장 문제 보고, 자판기 내부 문제, 분실물)
-        const thirtyDaysAgo = new Date()
-        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
-        thirtyDaysAgo.setHours(0, 0, 0, 0)
-
-        const { data: problemReports, error: problemReportsError } = await supabase
-          .from('problem_reports')
-          .select('id, category, status, title, created_at')
-          .eq('store_id', store.id)
-          .gte('created_at', thirtyDaysAgo.toISOString())
-          .lte('created_at', todayEnd.toISOString())
-
-        // 분실물 조회 - 최근 30일간 생성되었거나 최근에 업데이트된 모든 분실물
-        // created_at 또는 updated_at이 30일 이내인 항목 조회 (확인된 항목도 포함)
-        // Supabase의 or 쿼리는 괄호로 그룹화 필요
-        const { data: lostItems, error: lostItemsError } = await supabase
-          .from('lost_items')
-          .select('id, status, created_at, updated_at')
-          .eq('store_id', store.id)
-          .or(`created_at.gte.${thirtyDaysAgo.toISOString()},updated_at.gte.${thirtyDaysAgo.toISOString()}`)
-        
-        if (lostItemsError) {
-          console.error(`Error fetching lost items for store ${store.id} (${store.name}):`, lostItemsError)
-          // 에러 발생 시 빈 배열로 처리하여 다른 데이터는 정상 조회되도록 함
-        }
+        // 배치 쿼리에서 가져온 데이터 사용
+        const problemReports = problemReportsByStore.get(store.id) || []
+        const lostItems = lostItemsByStore.get(store.id) || []
         
         console.log(`Lost items query for ${store.name}: found ${lostItems?.length || 0} items`)
 
@@ -623,121 +702,43 @@ export async function GET(request: NextRequest) {
           // 테이블이 없거나 오류 발생 시 빈 배열 유지
         }
 
-        // 최근 30일 요청란 (접수, 진행중, 완료, 반려)
-        let receivedRequestCount = 0
-        let inProgressRequestCount = 0
-        let completedRequestCount = 0
-        let rejectedRequestCount = 0
-        let unconfirmedCompletedCount = 0
-        let unconfirmedRejectedCount = 0
+        // 배치 쿼리에서 가져온 데이터 사용
+        const recentRequests = requestsByStore.get(store.id) || []
+        const receivedRequests = recentRequests.filter((r: any) => r.status === 'received')
+        const inProgressRequests = recentRequests.filter((r: any) => r.status === 'in_progress')
+        const completedRequests = recentRequests.filter((r: any) => r.status === 'completed')
+        const rejectedRequests = recentRequests.filter((r: any) => r.status === 'rejected')
+        const receivedRequestCount = receivedRequests.length
+        const inProgressRequestCount = inProgressRequests.length
+        const completedRequestCount = completedRequests.length
+        const rejectedRequestCount = rejectedRequests.length
+        // confirmed_at 컬럼이 없으므로 completed 상태인 모든 요청을 미확인으로 처리
+        const unconfirmedCompletedCount = completedRequests.length
+        const unconfirmedRejectedCount = rejectedRequests.length
 
-        try {
-          const { data: recentRequests, error: requestsError } = await supabase
-            .from('requests')
-            .select('id, title, status, created_at')
-            .eq('store_id', store.id)
-            .gte('created_at', thirtyDaysAgo.toISOString())
-            .order('created_at', { ascending: false })
+        // 배치 쿼리에서 가져온 물품 요청 데이터 사용
+        const supplyRequests = supplyRequestsByStore.get(store.id) || []
+        const receivedSupplyRequestCount = supplyRequests.filter((r: any) => r.status === 'received').length
+        const inProgressSupplyRequestCount = supplyRequests.filter((r: any) => r.status === 'in_progress' || r.status === 'manager_in_progress').length
 
-          if (requestsError) {
-            console.error(`Error fetching requests for store ${store.id} (${store.name}):`, requestsError)
-            console.error('Requests error details:', JSON.stringify(requestsError, null, 2))
-          } else {
-            console.log(`Store ${store.id} (${store.name}): Found ${recentRequests?.length || 0} requests in last 30 days`)
-            const receivedRequests = recentRequests?.filter((r: any) => r.status === 'received') || []
-            const inProgressRequests = recentRequests?.filter((r: any) => r.status === 'in_progress') || []
-            const completedRequests = recentRequests?.filter((r: any) => r.status === 'completed') || []
-            const rejectedRequests = recentRequests?.filter((r: any) => r.status === 'rejected') || []
-            receivedRequestCount = receivedRequests.length
-            inProgressRequestCount = inProgressRequests.length
-            completedRequestCount = completedRequests.length
-            rejectedRequestCount = rejectedRequests.length
-            // confirmed_at 컬럼이 없으므로 completed 상태인 모든 요청을 미확인으로 처리
-            unconfirmedCompletedCount = completedRequests.length
-            unconfirmedRejectedCount = rejectedRequests.length
-            console.log(`Store ${store.id} counts - received: ${receivedRequestCount}, in_progress: ${inProgressRequestCount}, completed: ${completedRequestCount}, rejected: ${rejectedRequestCount}`)
-          }
-        } catch (error) {
-          console.error(`Error processing requests for store ${store.id}:`, error)
-          // 에러 발생 시 기본값 유지 (모두 0)
-        }
+        // 배치 쿼리에서 가져온 체크리스트 데이터 사용
+        const storeChecklists = checklistsByStore.get(store.id) || []
+        const todayChecklistsKST = storeChecklists.filter((c: any) => c.work_date === todayDateKST)
+        const todayChecklistsUTC = storeChecklists.filter((c: any) => c.work_date === todayDateUTC)
+        const templateChecklists = storeChecklists.filter((c: any) => c.work_date === '2000-01-01' && !c.assigned_user_id)
+        const todayChecklists = [...todayChecklistsKST, ...todayChecklistsUTC]
+        const hasTodayChecklists = todayChecklists.length > 0
+        const checklistsToUse = hasTodayChecklists ? todayChecklists : templateChecklists
 
-        // 물품 요청 접수 건수 조회 (status = 'received')
-        let receivedSupplyRequestCount = 0
-        try {
-          const { data: recentSupplyRequests, error: supplyRequestsError } = await supabase
-            .from('supply_requests')
-            .select('id, status, created_at')
-            .eq('store_id', store.id)
-            .eq('status', 'received')
-            .gte('created_at', thirtyDaysAgo.toISOString())
-
-          if (supplyRequestsError) {
-            console.error(`Error fetching supply requests for store ${store.id} (${store.name}):`, supplyRequestsError)
-          } else {
-            receivedSupplyRequestCount = recentSupplyRequests?.length || 0
-            console.log(`Store ${store.id} (${store.name}): Found ${receivedSupplyRequestCount} received supply requests`)
-            if (receivedSupplyRequestCount > 0) {
-              console.log(`  - Supply request IDs:`, recentSupplyRequests?.map((r: any) => ({ id: r.id, status: r.status, created_at: r.created_at })))
-            }
-          }
-        } catch (error) {
-          console.error(`Error processing supply requests for store ${store.id}:`, error)
-          // 에러 발생 시 기본값 유지 (0)
-        }
-
-        // 물품 요청 처리중 건수 조회 (status = 'in_progress' 또는 'manager_in_progress')
-        let inProgressSupplyRequestCount = 0
-        try {
-          const { data: inProgressSupplyRequests, error: inProgressSupplyRequestsError } = await supabase
-            .from('supply_requests')
-            .select('id, status, created_at')
-            .eq('store_id', store.id)
-            .in('status', ['in_progress', 'manager_in_progress'])
-            .gte('created_at', thirtyDaysAgo.toISOString())
-
-          if (inProgressSupplyRequestsError) {
-            console.error(`Error fetching in-progress supply requests for store ${store.id} (${store.name}):`, inProgressSupplyRequestsError)
-          } else {
-            inProgressSupplyRequestCount = inProgressSupplyRequests?.length || 0
-            console.log(`Store ${store.id} (${store.name}): Found ${inProgressSupplyRequestCount} in-progress supply requests`)
-          }
-        } catch (error) {
-          console.error(`Error processing in-progress supply requests for store ${store.id}:`, error)
-          // 에러 발생 시 기본값 유지 (0)
-        }
-
-        // 오늘 체크리스트 수행률 (KST와 UTC 둘 다 확인)
-        const { data: todayChecklistsKST } = await supabase
-          .from('checklist')
-          .select('items, updated_at')
-          .eq('store_id', store.id)
-          .eq('work_date', todayDateKST)
-        
-        const { data: todayChecklistsUTC } = await supabase
-          .from('checklist')
-          .select('items, updated_at')
-          .eq('store_id', store.id)
-          .eq('work_date', todayDateUTC)
-        
-        const todayChecklists = [...(todayChecklistsKST || []), ...(todayChecklistsUTC || [])]
-
-        // 오늘 관리전후사진
-        const { data: todayCleaningPhotos } = await supabase
-          .from('cleaning_photos')
-          .select('id, kind, created_at')
-          .eq('store_id', store.id)
-          .neq('area_category', 'inventory')
-          .gte('created_at', todayStart.toISOString())
-          .lte('created_at', todayEnd.toISOString())
-
-        const beforePhotos = todayCleaningPhotos?.filter((p: any) => p.kind === 'before') || []
-        const afterPhotos = todayCleaningPhotos?.filter((p: any) => p.kind === 'after') || []
+        // 배치 쿼리에서 가져온 청소 사진 데이터 사용
+        const todayCleaningPhotos = cleaningPhotosByStore.get(store.id) || []
+        const beforePhotos = todayCleaningPhotos.filter((p: any) => p.kind === 'before')
+        const afterPhotos = todayCleaningPhotos.filter((p: any) => p.kind === 'after')
 
         // 체크리스트에서 관리전후 사진 추출 (중복 제거: area 기준)
         const beforeAfterPhotosMap = new Map<string, { id: string; before_photo_url: string | null; after_photo_url: string | null; area: string }>()
-        if (todayChecklists && todayChecklists.length > 0) {
-          todayChecklists.forEach((checklist: any) => {
+        if (checklistsToUse && checklistsToUse.length > 0) {
+          checklistsToUse.forEach((checklist: any) => {
             const items = checklist.items || []
             items.forEach((item: any, index: number) => {
               // 타입 정규화 (하위 호환성)
@@ -780,13 +781,32 @@ export async function GET(request: NextRequest) {
         let checklistCompleted = 0
         let checklistTotal = 0
 
-        if (todayChecklists && todayChecklists.length > 0) {
-          todayChecklists.forEach((checklist: any) => {
-            // calculateChecklistProgress 함수를 사용하여 정확한 진행률 계산
-            const progress = calculateChecklistProgress(checklist)
-            checklistTotal += progress.totalItems
-            checklistCompleted += progress.completedItems
-          })
+        if (checklistsToUse && checklistsToUse.length > 0) {
+          if (hasTodayChecklists) {
+            // 오늘 날짜 체크리스트가 있으면 진행률 계산
+            checklistsToUse.forEach((checklist: any) => {
+              const progress = calculateChecklistProgress(checklist)
+              checklistTotal += progress.totalItems
+              checklistCompleted += progress.completedItems
+            })
+          } else {
+            // 템플릿 체크리스트만 있는 경우: 전체 항목 수만 계산 (완료 항목은 0)
+            checklistsToUse.forEach((checklist: any) => {
+              const items = checklist.items || []
+              items.forEach((item: any) => {
+                if (item.area && item.area.trim()) {
+                  const itemType = item.type || 'check'
+                  if (itemType === 'check') {
+                    checklistTotal++
+                  } else if (itemType === 'before_photo' || itemType === 'after_photo') {
+                    checklistTotal++
+                  } else if (itemType === 'before_after_photo' || itemType === 'photo') {
+                    checklistTotal += 2
+                  }
+                }
+              })
+            })
+          }
 
           checklistCompletionRate = checklistTotal > 0 ? Math.round((checklistCompleted / checklistTotal) * 100) : 0
         }

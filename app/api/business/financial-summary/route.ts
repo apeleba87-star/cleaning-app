@@ -23,30 +23,73 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url)
     const period = searchParams.get('period') || new Date().toISOString().slice(0, 7) // YYYY-MM
 
-    // 이번 달 매출(청구 합계)
-    const { data: revenues, error: revenuesError } = await supabase
-      .from('revenues')
-      .select('amount')
-      .eq('company_id', user.company_id)
-      .eq('service_period', period)
-      .is('deleted_at', null)
+    // 병렬 쿼리 실행으로 최적화: 독립적인 쿼리들을 동시에 실행
+    const currentMonth = new Date().toISOString().slice(0, 7)
+    const [year, month] = currentMonth.split('-').map(Number)
+    const lastDay = new Date(year, month, 0).getDate()
+    const startDate = `${currentMonth}-01`
+    const endDate = `${currentMonth}-${String(lastDay).padStart(2, '0')}`
+
+    // 병렬로 실행 가능한 쿼리들
+    const [
+      { data: revenues, error: revenuesError },
+      { data: periodRevenues, error: periodRevenuesError },
+      { data: allRevenues, error: allRevenuesError },
+      { data: expenses, error: expensesError },
+      { data: payrolls, error: payrollsError },
+    ] = await Promise.all([
+      supabase
+        .from('revenues')
+        .select('amount')
+        .eq('company_id', user.company_id)
+        .eq('service_period', period)
+        .is('deleted_at', null),
+      supabase
+        .from('revenues')
+        .select('id')
+        .eq('company_id', user.company_id)
+        .eq('service_period', period)
+        .is('deleted_at', null),
+      supabase
+        .from('revenues')
+        .select('id, amount')
+        .eq('company_id', user.company_id)
+        .is('deleted_at', null),
+      supabase
+        .from('expenses')
+        .select('amount')
+        .eq('company_id', user.company_id)
+        .gte('date', startDate)
+        .lte('date', endDate)
+        .is('deleted_at', null),
+      supabase
+        .from('payrolls')
+        .select('amount, status')
+        .eq('company_id', user.company_id)
+        .eq('pay_period', period)
+        .is('deleted_at', null),
+    ])
 
     if (revenuesError) {
       throw new Error(`Failed to fetch revenues: ${revenuesError.message}`)
+    }
+    if (periodRevenuesError) {
+      throw new Error(`Failed to fetch period revenues: ${periodRevenuesError.message}`)
+    }
+    if (allRevenuesError) {
+      throw new Error(`Failed to fetch all revenues: ${allRevenuesError.message}`)
+    }
+    if (expensesError) {
+      throw new Error(`Failed to fetch expenses: ${expensesError.message}`)
+    }
+    if (payrollsError) {
+      throw new Error(`Failed to fetch payrolls: ${payrollsError.message}`)
     }
 
     const totalRevenue = revenues?.reduce((sum, r) => sum + (r.amount || 0), 0) || 0
     const revenueCount = revenues?.length || 0
 
     // 이번 달 수금 합계
-    // 먼저 해당 기간의 revenue_id 목록 가져오기
-    const { data: periodRevenues } = await supabase
-      .from('revenues')
-      .select('id')
-      .eq('company_id', user.company_id)
-      .eq('service_period', period)
-      .is('deleted_at', null)
-
     const revenueIds = periodRevenues?.map(r => r.id) || []
     
     let totalReceived = 0
@@ -64,17 +107,6 @@ export async function GET(request: NextRequest) {
 
       totalReceived = receipts?.reduce((sum, r) => sum + (r.amount || 0), 0) || 0
       receiptCount = receipts?.length || 0
-    }
-
-    // 현재 미수금 잔액 (전체)
-    const { data: allRevenues, error: allRevenuesError } = await supabase
-      .from('revenues')
-      .select('id, amount')
-      .eq('company_id', user.company_id)
-      .is('deleted_at', null)
-
-    if (allRevenuesError) {
-      throw new Error(`Failed to fetch all revenues: ${allRevenuesError.message}`)
     }
 
     const totalAllRevenue = allRevenues?.reduce((sum, r) => sum + (r.amount || 0), 0) || 0
@@ -108,39 +140,8 @@ export async function GET(request: NextRequest) {
     }) || []
     const unpaidCount = unpaidRevenues.length
 
-    // 이번 달 지출 합계
-    const currentMonth = new Date().toISOString().slice(0, 7)
-    const [year, month] = currentMonth.split('-').map(Number)
-    const lastDay = new Date(year, month, 0).getDate() // 해당 월의 마지막 날짜
-    const startDate = `${currentMonth}-01`
-    const endDate = `${currentMonth}-${String(lastDay).padStart(2, '0')}`
-    
-    const { data: expenses, error: expensesError } = await supabase
-      .from('expenses')
-      .select('amount')
-      .eq('company_id', user.company_id)
-      .gte('date', startDate)
-      .lte('date', endDate)
-      .is('deleted_at', null)
-
-    if (expensesError) {
-      throw new Error(`Failed to fetch expenses: ${expensesError.message}`)
-    }
-
     const totalExpenses = expenses?.reduce((sum, e) => sum + (e.amount || 0), 0) || 0
     const expenseCount = expenses?.length || 0
-
-    // 이번 달 인건비 합계 (지급완료/예정 분리)
-    const { data: payrolls, error: payrollsError } = await supabase
-      .from('payrolls')
-      .select('amount, status')
-      .eq('company_id', user.company_id)
-      .eq('pay_period', period)
-      .is('deleted_at', null)
-
-    if (payrollsError) {
-      throw new Error(`Failed to fetch payrolls: ${payrollsError.message}`)
-    }
 
     const totalPayroll = payrolls?.reduce((sum, p) => sum + (p.amount || 0), 0) || 0
     const paidPayrolls = payrolls?.filter(p => p.status === 'paid') || []
@@ -150,7 +151,7 @@ export async function GET(request: NextRequest) {
     const paidPayrollCount = paidPayrolls.length
     const scheduledPayrollCount = scheduledPayrolls.length
 
-    // 미수금 상위 매장 리스트
+    // 미수금 상위 매장 리스트 - 배치 쿼리로 최적화
     const { data: unpaidTrackingStores } = await supabase
       .from('stores')
       .select('id, name, payment_day')
@@ -158,39 +159,80 @@ export async function GET(request: NextRequest) {
       .eq('unpaid_tracking_enabled', true)
       .is('deleted_at', null)
 
-    const unpaidByStore = await Promise.all(
-      (unpaidTrackingStores || []).map(async (store) => {
-        const { data: storeRevenues } = await supabase
-          .from('revenues')
-          .select('id, amount')
-          .eq('store_id', store.id)
+    // 모든 매장의 매출을 한 번에 조회
+    const storeIds = (unpaidTrackingStores || []).map(s => s.id)
+    let allStoreRevenues: Array<{ id: string; store_id: string; amount: number }> = []
+    let allStoreReceipts: Array<{ revenue_id: string; amount: number }> = []
+    
+    if (storeIds.length > 0) {
+      // 모든 매장의 매출을 한 번에 조회
+      const { data: revenuesData, error: revenuesError } = await supabase
+        .from('revenues')
+        .select('id, amount, store_id')
+        .in('store_id', storeIds)
+        .is('deleted_at', null)
+
+      if (revenuesError) {
+        console.error('Error fetching all store revenues:', revenuesError)
+      } else {
+        allStoreRevenues = revenuesData || []
+      }
+
+      // 모든 매장의 수금을 한 번에 조회
+      const revenueIds = allStoreRevenues.map(r => r.id)
+      if (revenueIds.length > 0) {
+        const { data: receiptsData, error: receiptsError } = await supabase
+          .from('receipts')
+          .select('revenue_id, amount')
+          .in('revenue_id', revenueIds)
           .is('deleted_at', null)
 
-        const storeRevenue = storeRevenues?.reduce((sum, r) => sum + (r.amount || 0), 0) || 0
-        
-        // 해당 매장의 수금액 계산
-        const storeRevenueIds = storeRevenues?.map(r => r.id) || []
-        let storeReceived = 0
-        if (storeRevenueIds.length > 0) {
-          const { data: storeReceipts } = await supabase
-            .from('receipts')
-            .select('amount')
-            .in('revenue_id', storeRevenueIds)
-            .is('deleted_at', null)
-
-          storeReceived = storeReceipts?.reduce((sum, r) => sum + (r.amount || 0), 0) || 0
+        if (receiptsError) {
+          console.error('Error fetching all store receipts:', receiptsError)
+        } else {
+          allStoreReceipts = receiptsData || []
         }
+      }
+    }
 
-        const unpaid = storeRevenue - storeReceived
+    // 메모리에서 매장별로 그룹화하여 계산
+    const revenuesByStore = new Map<string, Array<{ id: string; amount: number }>>()
+    const receiptsByRevenue = new Map<string, number>()
+    
+    // 매출을 매장별로 그룹화
+    allStoreRevenues.forEach(revenue => {
+      if (!revenuesByStore.has(revenue.store_id)) {
+        revenuesByStore.set(revenue.store_id, [])
+      }
+      revenuesByStore.get(revenue.store_id)!.push({ id: revenue.id, amount: revenue.amount || 0 })
+    })
 
-        return {
-          store_id: store.id,
-          store_name: store.name,
-          unpaid_amount: unpaid,
-          payment_day: store.payment_day,
-        }
-      })
-    )
+    // 수금을 revenue_id별로 합산
+    allStoreReceipts.forEach(receipt => {
+      const current = receiptsByRevenue.get(receipt.revenue_id) || 0
+      receiptsByRevenue.set(receipt.revenue_id, current + (receipt.amount || 0))
+    })
+
+    // 각 매장의 미수금 계산
+    const unpaidByStore = (unpaidTrackingStores || []).map(store => {
+      const storeRevenues = revenuesByStore.get(store.id) || []
+      const storeRevenue = storeRevenues.reduce((sum, r) => sum + r.amount, 0)
+      
+      // 해당 매장의 수금액 계산
+      const storeReceived = storeRevenues.reduce((sum, r) => {
+        const received = receiptsByRevenue.get(r.id) || 0
+        return sum + received
+      }, 0)
+
+      const unpaid = storeRevenue - storeReceived
+
+      return {
+        store_id: store.id,
+        store_name: store.name,
+        unpaid_amount: unpaid,
+        payment_day: store.payment_day,
+      }
+    })
 
     const topUnpaidStores = unpaidByStore
       .filter(s => s.unpaid_amount > 0)
@@ -224,186 +266,227 @@ export async function GET(request: NextRequest) {
       role: u.role
     })))
 
-    // 오늘 급여일인 직원 필터링 및 인건비 상태 확인
+    // 오늘 급여일인 직원 필터링 및 인건비 상태 확인 - 배치 쿼리로 최적화
     // 일당 직원 제외: pay_type이 'daily'인 직원은 제외
     // 도급 직원/업체 포함
     const companyId = user.company_id // 변수명 충돌 방지
-    const todaySalaryUsersWithStatus = await Promise.all(
-      (allUsers || []).map(async (userRecord) => {
-        // 일당 직원 제외
-        if (userRecord.pay_type === 'daily') {
-          console.log(`[Financial Summary] User ${userRecord.name} excluded: pay_type is daily`)
-          return null
-        }
-        
-        const salaryDate = userRecord.salary_date
-        
-        // null이 아니고 숫자인 경우
-        if (salaryDate === null || salaryDate === undefined) {
-          console.log(`[Financial Summary] User ${userRecord.name} excluded: salary_date is null/undefined`)
-          return null
-        }
-        
-        // 문자열이나 숫자 모두 처리
-        const salaryDateNum = typeof salaryDate === 'string' 
-          ? parseInt(salaryDate.trim(), 10) 
-          : Number(salaryDate)
-        
-        if (isNaN(salaryDateNum)) {
-          console.log(`[Financial Summary] User ${userRecord.name} excluded: salary_date is not a valid number`)
-          return null
-        }
-        
-        console.log(`[Financial Summary] User ${userRecord.name}: salary_date=${salaryDate}, salaryDateNum=${salaryDateNum}, todayDay=${todayDay}`)
-        
-        // 급여일이 오늘인지 확인 (말일 조정 포함)
-        // 오늘 날짜 기준으로 조정된 급여일이 오늘인지 확인
-        const isMatch = isTodayPaymentDay(salaryDateNum)
-        
-        if (!isMatch) {
-          console.log(`[Financial Summary] User ${userRecord.name} excluded: salary_date (${salaryDateNum}) is not today (adjusted)`)
-          return null
-        }
-        
-        console.log(`[Financial Summary] User ${userRecord.name} matched! salary_date=${salaryDateNum} is today (adjusted)`)
+    
+    // 먼저 오늘 급여일인 사용자만 필터링
+    const todaySalaryUsers = (allUsers || []).filter(userRecord => {
+      // 일당 직원 제외
+      if (userRecord.pay_type === 'daily') {
+        return false
+      }
+      
+      const salaryDate = userRecord.salary_date
+      if (salaryDate === null || salaryDate === undefined) {
+        return false
+      }
+      
+      const salaryDateNum = typeof salaryDate === 'string' 
+        ? parseInt(salaryDate.trim(), 10) 
+        : Number(salaryDate)
+      
+      if (isNaN(salaryDateNum)) {
+        return false
+      }
+      
+      return isTodayPaymentDay(salaryDateNum)
+    })
 
-        const isSubcontract = userRecord.role === 'subcontract_individual' || userRecord.role === 'subcontract_company'
+    const todaySalaryUserIds = todaySalaryUsers.map(u => u.id)
+    const subcontractUserIds = todaySalaryUsers
+      .filter(u => u.role === 'subcontract_individual' || u.role === 'subcontract_company')
+      .map(u => u.id)
+    const regularUserIds = todaySalaryUsers
+      .filter(u => u.role !== 'subcontract_individual' && u.role !== 'subcontract_company')
+      .map(u => u.id)
 
-        // 도급 직원/업체인 경우 도급 정산 정보 조회
-        if (isSubcontract) {
-          // 사용자 테이블의 도급 금액 (우선 사용)
-          const userAmount = userRecord.pay_amount || userRecord.salary_amount || 0
-          
-          // 해당 사용자의 활성 도급 조회
-          const { data: subcontract } = await supabase
-            .from('subcontracts')
-            .select('id, subcontract_type, monthly_amount, tax_rate')
-            .eq('company_id', companyId)
-            .or(`worker_id.eq.${userRecord.id},worker_name.eq.${userRecord.name}`)
-            .eq('status', 'active')
-            .is('deleted_at', null)
-            .maybeSingle()
+    // 배치 쿼리: 모든 도급 정보를 한 번에 조회
+    let allSubcontracts: Array<{ id: string; worker_id: string | null; worker_name: string | null; monthly_amount: number; tax_rate: number }> = []
+    if (subcontractUserIds.length > 0) {
+      const subcontractUserNames = todaySalaryUsers
+        .filter(u => subcontractUserIds.includes(u.id))
+        .map(u => u.name)
+      
+      const { data: subcontractsData, error: subcontractsError } = await supabase
+        .from('subcontracts')
+        .select('id, worker_id, worker_name, monthly_amount, tax_rate')
+        .eq('company_id', companyId)
+        .eq('status', 'active')
+        .is('deleted_at', null)
+        .or(`worker_id.in.(${subcontractUserIds.join(',')}),worker_name.in.(${subcontractUserNames.map(n => `"${n}"`).join(',')})`)
 
-          // 도급 정산이 있으면 정산 금액 사용, 없으면 사용자 테이블의 금액 사용
-          let subcontractAmount = userAmount
-          let paymentStatus: 'paid' | 'scheduled' = 'scheduled'
-          let paymentId: string | null = null
-          
-          if (subcontract) {
-            // 이번 달 도급 정산 조회 (subcontract_payments)
-            const { data: subcontractPayments } = await supabase
-              .from('subcontract_payments')
-              .select('id, status, amount, base_amount, deduction_amount, paid_at')
-              .eq('subcontract_id', subcontract.id)
-              .eq('pay_period', period)
-              .is('deleted_at', null)
-              .order('created_at', { ascending: false })
-              .limit(1)
+      if (subcontractsError) {
+        console.error('Error fetching subcontracts:', subcontractsError)
+      } else {
+        allSubcontracts = subcontractsData || []
+      }
+    }
 
-            const payment = subcontractPayments && subcontractPayments.length > 0 ? subcontractPayments[0] : null
-            if (payment) {
-              // 정산이 있으면 정산 금액 사용
-              subcontractAmount = payment.amount || userAmount
-              
-              // 지급완료된 경우, paid_at이 오늘인지 확인하여 당일만 표시
-              if (payment.status === 'paid') {
-                if (payment.paid_at) {
-                  const paidDate = payment.paid_at.split('T')[0] // 'YYYY-MM-DD'
-                  if (paidDate === todayKST) {
-                    paymentStatus = 'paid' // 오늘 지급완료된 것만 표시
-                  } else {
-                    // 오늘이 아닌 날 지급완료된 것은 null 반환하여 제외
-                    return null
-                  }
+    // 배치 쿼리: 모든 도급 정산 정보를 한 번에 조회
+    const subcontractIds = allSubcontracts.map(s => s.id)
+    let allSubcontractPayments: Array<{ subcontract_id: string; id: string; status: string; amount: number; paid_at: string | null }> = []
+    if (subcontractIds.length > 0) {
+      const { data: paymentsData, error: paymentsError } = await supabase
+        .from('subcontract_payments')
+        .select('id, subcontract_id, status, amount, paid_at')
+        .in('subcontract_id', subcontractIds)
+        .eq('pay_period', period)
+        .is('deleted_at', null)
+        .order('created_at', { ascending: false })
+
+      if (paymentsError) {
+        console.error('Error fetching subcontract payments:', paymentsError)
+      } else {
+        // 각 subcontract_id별로 가장 최근 것만 선택
+        const paymentsBySubcontract = new Map<string, typeof paymentsData[0]>()
+        paymentsData?.forEach(payment => {
+          if (!paymentsBySubcontract.has(payment.subcontract_id)) {
+            paymentsBySubcontract.set(payment.subcontract_id, payment)
+          }
+        })
+        allSubcontractPayments = Array.from(paymentsBySubcontract.values())
+      }
+    }
+
+    // 배치 쿼리: 모든 인건비 정보를 한 번에 조회
+    let allPayrolls: Array<{ user_id: string; id: string; status: string; amount: number | null; paid_at: string | null }> = []
+    if (regularUserIds.length > 0) {
+      const { data: payrollsData, error: payrollsError } = await supabase
+        .from('payrolls')
+        .select('id, user_id, status, amount, paid_at')
+        .in('user_id', regularUserIds)
+        .eq('pay_period', period)
+        .is('deleted_at', null)
+        .order('created_at', { ascending: false })
+
+      if (payrollsError) {
+        console.error('Error fetching payrolls:', payrollsError)
+      } else {
+        // 각 user_id별로 가장 최근 것만 선택
+        const payrollsByUser = new Map<string, typeof payrollsData[0]>()
+        payrollsData?.forEach(payroll => {
+          if (!payrollsByUser.has(payroll.user_id)) {
+            payrollsByUser.set(payroll.user_id, payroll)
+          }
+        })
+        allPayrolls = Array.from(payrollsByUser.values())
+      }
+    }
+
+    // 메모리에서 매핑 생성
+    const subcontractsByWorkerId = new Map<string, typeof allSubcontracts[0]>()
+    const subcontractsByWorkerName = new Map<string, typeof allSubcontracts[0]>()
+    allSubcontracts.forEach(sub => {
+      if (sub.worker_id) subcontractsByWorkerId.set(sub.worker_id, sub)
+      if (sub.worker_name) subcontractsByWorkerName.set(sub.worker_name, sub)
+    })
+
+    const paymentsBySubcontractId = new Map<string, typeof allSubcontractPayments[0]>()
+    allSubcontractPayments.forEach(payment => {
+      paymentsBySubcontractId.set(payment.subcontract_id, payment)
+    })
+
+    const payrollsByUserId = new Map<string, typeof allPayrolls[0]>()
+    allPayrolls.forEach(payroll => {
+      payrollsByUserId.set(payroll.user_id, payroll)
+    })
+
+    // 각 사용자별로 데이터 조합
+    const todaySalaryUsersWithStatus = todaySalaryUsers.map(userRecord => {
+      const isSubcontract = userRecord.role === 'subcontract_individual' || userRecord.role === 'subcontract_company'
+
+      // 도급 직원/업체인 경우
+      if (isSubcontract) {
+        const userAmount = userRecord.pay_amount || userRecord.salary_amount || 0
+        const subcontract = subcontractsByWorkerId.get(userRecord.id) || subcontractsByWorkerName.get(userRecord.name)
+        
+        let subcontractAmount = userAmount
+        let paymentStatus: 'paid' | 'scheduled' = 'scheduled'
+        let paymentId: string | null = null
+        
+        if (subcontract) {
+          const payment = paymentsBySubcontractId.get(subcontract.id)
+          if (payment) {
+            subcontractAmount = payment.amount || userAmount
+            
+            if (payment.status === 'paid') {
+              if (payment.paid_at) {
+                const paidDate = payment.paid_at.split('T')[0]
+                if (paidDate === todayKST) {
+                  paymentStatus = 'paid'
                 } else {
-                  paymentStatus = 'scheduled'
+                  return null // 오늘이 아닌 날 지급완료된 것은 제외
                 }
               } else {
                 paymentStatus = 'scheduled'
               }
-              
-              paymentId = payment.id
             } else {
-              // 정산이 없으면 사용자 테이블의 금액에 세율 적용
-              const taxRate = subcontract.tax_rate || (userRecord.role === 'subcontract_individual' ? 0.033 : 0)
-              subcontractAmount = Math.floor(userAmount * (1 - taxRate))
+              paymentStatus = 'scheduled'
             }
+            
+            paymentId = payment.id
           } else {
-            // 도급이 등록되지 않았으면 사용자 테이블의 금액에 기본 세율 적용
-            const taxRate = userRecord.role === 'subcontract_individual' ? 0.033 : 0
+            const taxRate = subcontract.tax_rate || (userRecord.role === 'subcontract_individual' ? 0.033 : 0)
             subcontractAmount = Math.floor(userAmount * (1 - taxRate))
           }
-
-          return {
-            id: userRecord.id,
-            name: userRecord.name,
-            salary_date: userRecord.salary_date,
-            salary_amount: null, // 도급은 salary_amount 사용 안 함
-            subcontract_amount: subcontractAmount, // 도급금액
-            payroll_status: paymentStatus,
-            payroll_id: null,
-            payment_id: paymentId, // 도급 정산 ID
-            role: userRecord.role,
-          }
+        } else {
+          const taxRate = userRecord.role === 'subcontract_individual' ? 0.033 : 0
+          subcontractAmount = Math.floor(userAmount * (1 - taxRate))
         }
-
-        // 일반 직원인 경우 인건비 조회
-        // 이번 달 인건비 조회하여 지급 상태 확인
-        const { data: payrolls } = await supabase
-          .from('payrolls')
-          .select('id, status, paid_at, amount')
-          .eq('user_id', userRecord.id)
-          .eq('pay_period', period)
-          .is('deleted_at', null)
-          .order('created_at', { ascending: false })
-          .limit(1)
-
-        const payroll = payrolls && payrolls.length > 0 ? payrolls[0] : null
-        let payrollStatus: 'paid' | 'scheduled' = 'scheduled'
-        
-        if (payroll) {
-          if (payroll.status === 'paid') {
-            // 지급완료된 경우, paid_at이 오늘인지 확인하여 당일만 표시
-            if (payroll.paid_at) {
-              const paidDate = payroll.paid_at.split('T')[0] // 'YYYY-MM-DD'
-              if (paidDate === todayKST) {
-                payrollStatus = 'paid' // 오늘 지급완료된 것만 표시
-              } else {
-                // 오늘이 아닌 날 지급완료된 것은 null 반환하여 제외
-                return null
-              }
-            } else {
-              // paid_at이 없으면 scheduled로 처리
-              payrollStatus = 'scheduled'
-            }
-          } else {
-            payrollStatus = 'scheduled'
-          }
-        }
-
-        const payrollId = payroll ? payroll.id : null
-        
-        // 인건비가 있으면 인건비 금액을 사용, 없으면 사용자의 salary_amount 사용
-        const displaySalaryAmount = payroll && payroll.amount !== null
-          ? payroll.amount
-          : userRecord.salary_amount
 
         return {
           id: userRecord.id,
           name: userRecord.name,
           salary_date: userRecord.salary_date,
-          salary_amount: displaySalaryAmount,
-          subcontract_amount: null, // 일반 직원은 도급금액 없음
-          payroll_status: payrollStatus, // 'paid' 또는 'scheduled'
-          payroll_id: payrollId, // 인건비 ID 추가
-          payment_id: null,
-          role: userRecord.role, // 역할 추가 (도급 역할 표시용)
+          salary_amount: null,
+          subcontract_amount: subcontractAmount,
+          payroll_status: paymentStatus,
+          payroll_id: null,
+          payment_id: paymentId,
+          role: userRecord.role,
         }
-      })
-    )
+      }
 
-    // null이 아닌 항목만 필터링 (지급완료된 항목도 포함하여 당일 표시용으로 포함)
-    const todaySalaryUsers = todaySalaryUsersWithStatus.filter((user): user is NonNullable<typeof user> => user !== null)
+      // 일반 직원인 경우
+      const payroll = payrollsByUserId.get(userRecord.id)
+      let payrollStatus: 'paid' | 'scheduled' = 'scheduled'
+      const payrollId = payroll ? payroll.id : null
+      
+      if (payroll) {
+        if (payroll.status === 'paid') {
+          if (payroll.paid_at) {
+            const paidDate = payroll.paid_at.split('T')[0]
+            if (paidDate === todayKST) {
+              payrollStatus = 'paid'
+            } else {
+              return null // 오늘이 아닌 날 지급완료된 것은 제외
+            }
+          } else {
+            payrollStatus = 'scheduled'
+          }
+        } else {
+          payrollStatus = 'scheduled'
+        }
+      }
+
+      const displaySalaryAmount = payroll && payroll.amount !== null
+        ? payroll.amount
+        : userRecord.salary_amount
+
+      return {
+        id: userRecord.id,
+        name: userRecord.name,
+        salary_date: userRecord.salary_date,
+        salary_amount: displaySalaryAmount,
+        subcontract_amount: null,
+        payroll_status: payrollStatus,
+        payroll_id: payrollId,
+        payment_id: null,
+        role: userRecord.role,
+      }
+    }).filter((user): user is NonNullable<typeof user> => user !== null)
 
     // 오늘 수금일인 매장 조회 및 결제 상태 확인
     // 모든 매장을 가져온 후 말일 조정하여 필터링
@@ -424,50 +507,100 @@ export async function GET(request: NextRequest) {
       return isTodayPaymentDay(store.payment_day)
     })
 
-    // 각 매장의 결제 완료 여부 확인
-    const todayPaymentStores = await Promise.all(
-      (todayPaymentStoresRaw || []).map(async (store) => {
-        // 해당 매장의 이번 달 매출 조회
-        const { data: storeRevenues } = await supabase
-          .from('revenues')
-          .select('id, amount')
-          .eq('store_id', store.id)
-          .eq('service_period', period)
+    // 배치 쿼리로 최적화: 모든 매장의 매출과 수금을 한 번에 조회
+    const todayPaymentStoreIds = todayPaymentStoresRaw.map(s => s.id)
+    let allPaymentStoreRevenues: Array<{ id: string; store_id: string; amount: number }> = []
+    let allPaymentStoreReceipts: Array<{ revenue_id: string; amount: number }> = []
+    
+    if (todayPaymentStoreIds.length > 0) {
+      // 모든 매장의 이번 달 매출을 한 번에 조회
+      const { data: revenuesData, error: revenuesError } = await supabase
+        .from('revenues')
+        .select('id, amount, store_id')
+        .in('store_id', todayPaymentStoreIds)
+        .eq('service_period', period)
+        .is('deleted_at', null)
+
+      if (revenuesError) {
+        console.error('Error fetching payment store revenues:', revenuesError)
+      } else {
+        allPaymentStoreRevenues = revenuesData || []
+      }
+
+      // 모든 매장의 수금을 한 번에 조회
+      const revenueIds = allPaymentStoreRevenues.map(r => r.id)
+      if (revenueIds.length > 0) {
+        const { data: receiptsData, error: receiptsError } = await supabase
+          .from('receipts')
+          .select('revenue_id, amount')
+          .in('revenue_id', revenueIds)
           .is('deleted_at', null)
 
-        let isPaid = false
-        let isAutoPayment = store.payment_method === 'auto_payment'
-
-        if (storeRevenues && storeRevenues.length > 0) {
-          // 매출 총액 계산
-          const totalRevenue = storeRevenues.reduce((sum, r) => sum + (r.amount || 0), 0)
-          
-          // 수금 총액 계산
-          const revenueIds = storeRevenues.map(r => r.id)
-          if (revenueIds.length > 0) {
-            const { data: receipts } = await supabase
-              .from('receipts')
-              .select('amount')
-              .in('revenue_id', revenueIds)
-              .is('deleted_at', null)
-
-            const totalReceived = receipts?.reduce((sum, r) => sum + (r.amount || 0), 0) || 0
-            
-            // 완납 여부 확인 (매출액과 수금액이 같거나 수금액이 더 큰 경우)
-            isPaid = totalReceived >= totalRevenue
-          }
+        if (receiptsError) {
+          console.error('Error fetching payment store receipts:', receiptsError)
+        } else {
+          allPaymentStoreReceipts = receiptsData || []
         }
+      }
+    }
 
-        return {
-          id: store.id,
-          name: store.name,
-          payment_day: store.payment_day,
-          service_amount: store.service_amount,
-          is_paid: isPaid,
-          is_auto_payment: isAutoPayment,
-        }
-      })
-    )
+    // 메모리에서 매장별로 그룹화하여 계산 (todayPaymentStores용)
+    const paymentRevenuesByStore = new Map<string, Array<{ id: string; amount: number }>>()
+    const paymentReceiptsByRevenue = new Map<string, number>()
+    
+    // 매출을 매장별로 그룹화
+    allPaymentStoreRevenues.forEach(revenue => {
+      if (!paymentRevenuesByStore.has(revenue.store_id)) {
+        paymentRevenuesByStore.set(revenue.store_id, [])
+      }
+      paymentRevenuesByStore.get(revenue.store_id)!.push({ id: revenue.id, amount: revenue.amount || 0 })
+    })
+
+    // 수금을 revenue_id별로 합산
+    allPaymentStoreReceipts.forEach(receipt => {
+      const current = paymentReceiptsByRevenue.get(receipt.revenue_id) || 0
+      paymentReceiptsByRevenue.set(receipt.revenue_id, current + (receipt.amount || 0))
+    })
+
+    // 각 매장의 결제 완료 여부 확인
+    const todayPaymentStores = todayPaymentStoresRaw.map(store => {
+      const storeRevenues = paymentRevenuesByStore.get(store.id) || []
+      let isPaid = false
+      const isAutoPayment = store.payment_method === 'auto_payment'
+
+      if (storeRevenues.length > 0) {
+        // 매출 총액 계산
+        const totalRevenue = storeRevenues.reduce((sum, r) => sum + r.amount, 0)
+        
+        // 수금 총액 계산
+        const totalReceived = storeRevenues.reduce((sum, r) => {
+          const received = paymentReceiptsByRevenue.get(r.id) || 0
+          return sum + received
+        }, 0)
+        
+        // 완납 여부 확인 (매출액과 수금액이 같거나 수금액이 더 큰 경우)
+        isPaid = totalReceived >= totalRevenue
+      }
+
+      return {
+        id: store.id,
+        name: store.name,
+        payment_day: store.payment_day,
+        service_amount: store.service_amount,
+        is_paid: isPaid,
+        is_auto_payment: isAutoPayment,
+      }
+    })
+
+    // 수금일 매장 정렬: 결제 상태 우선순위 (미결제 > 결제완료) + 매장 이름 순서
+    todayPaymentStores.sort((a, b) => {
+      // 결제 상태 우선순위: 미결제(false)가 결제완료(true)보다 앞에
+      if (a.is_paid !== b.is_paid) {
+        return a.is_paid ? 1 : -1
+      }
+      // 같은 결제 상태 내에서는 매장 이름 순서
+      return a.name.localeCompare(b.name, 'ko')
+    })
 
 
     // 일당 직원 조회 (worker_name이 있는 payrolls)

@@ -108,6 +108,7 @@ export async function GET(request: NextRequest) {
           attended_stores: 0,
           not_attended_stores: 0,
           not_counted_stores: 0,
+          total_night_stores: 0,
           stores: []
         }
       })
@@ -120,11 +121,12 @@ export async function GET(request: NextRequest) {
     })
 
     // 어제 근무일인 매장만 필터링
-    // management_days가 null이거나 빈 값인 경우는 모든 요일을 근무일로 간주
+    // management_days가 null이거나 빈 값인 경우는 리포트에서 제외 (관리일이 명확하지 않으므로)
     const workDayStores = stores.filter(store => {
       if (!store.management_days || store.management_days.trim() === '') {
-        // management_days가 없으면 모든 요일을 근무일로 간주
-        return true
+        // management_days가 없으면 리포트에서 제외
+        // 관리일이 설정되지 않은 매장은 관리 현황 리포트에 포함할 수 없음
+        return false
       }
       return isWorkDay(store.management_days, yesterdayDayName)
     })
@@ -143,6 +145,7 @@ export async function GET(request: NextRequest) {
           attended_stores: 0,
           not_attended_stores: 0,
           not_counted_stores: 0,
+          total_night_stores: 0,
           stores: []
         }
       })
@@ -279,6 +282,8 @@ export async function GET(request: NextRequest) {
     const attendedCount = reportData.filter(s => s.has_attendance).length
     const notAttendedCount = reportData.filter(s => !s.has_attendance && !s.is_not_counted).length
     const notCountedCount = reportData.filter(s => s.is_not_counted).length
+    // 야간 매장 총 개수 (집계 여부와 관계없이)
+    const totalNightStores = reportData.filter(s => s.is_night_shift).length
 
     return NextResponse.json({
       success: true,
@@ -291,6 +296,7 @@ export async function GET(request: NextRequest) {
         attended_stores: attendedCount,
         not_attended_stores: notAttendedCount,
         not_counted_stores: notCountedCount,
+        total_night_stores: totalNightStores, // 야간 매장 총 개수 추가
         stores: reportData.sort((a, b) => {
           // 미집계 매장을 가장 먼저 표시
           if (a.is_not_counted && !b.is_not_counted) return -1
