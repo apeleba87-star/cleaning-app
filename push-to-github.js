@@ -22,7 +22,8 @@ try {
 - 대시보드 섹션 텍스트 변경
 - 모바일/태블릿 반응형 UI 최적화
 - 모바일 햄버거 메뉴 구현 (왼쪽 슬라이드)
-- 2025년 최신 UI 트렌드 적용 (그라데이션, Glassmorphism, 부드러운 애니메이션)`;
+- 2025년 최신 UI 트렌드 적용 (그라데이션, Glassmorphism, 부드러운 애니메이션)
+- product-search 페이지 타입 에러 수정`;
   execSync(`git commit -m "${commitMessage}"`, { stdio: 'inherit' });
   console.log('✅ 완료\n');
 

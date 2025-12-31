@@ -313,7 +313,7 @@ export default function ProductSearchPage() {
                 className="flex-1 px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 text-base bg-gray-50"
               />
               <button
-                onClick={handleSearch}
+                onClick={() => handleSearch()}
                 disabled={loading || !selectedStoreId || !searchValue.trim()}
                 className="px-5 py-3 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-xl hover:from-blue-600 hover:to-blue-700 disabled:from-gray-300 disabled:to-gray-400 disabled:cursor-not-allowed transition-all font-semibold shadow-sm active:scale-95"
               >
