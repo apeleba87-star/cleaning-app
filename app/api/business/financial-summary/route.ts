@@ -57,7 +57,7 @@ export async function GET(request: NextRequest) {
         .is('deleted_at', null),
       supabase
         .from('expenses')
-        .select('amount')
+        .select('amount, recurring_expense_id')
         .eq('company_id', user.company_id)
         .gte('date', startDate)
         .lte('date', endDate)
@@ -142,6 +142,7 @@ export async function GET(request: NextRequest) {
 
     const totalExpenses = expenses?.reduce((sum, e) => sum + (e.amount || 0), 0) || 0
     const expenseCount = expenses?.length || 0
+    const totalRecurringExpenses = expenses?.filter(e => e.recurring_expense_id !== null).reduce((sum, e) => sum + (e.amount || 0), 0) || 0
 
     const totalPayroll = payrolls?.reduce((sum, p) => sum + (p.amount || 0), 0) || 0
     const paidPayrolls = payrolls?.filter(p => p.status === 'paid') || []
@@ -722,6 +723,7 @@ export async function GET(request: NextRequest) {
         unpaid_count: unpaidCount,
         total_expenses: totalExpenses,
         expense_count: expenseCount,
+        total_recurring_expenses: totalRecurringExpenses,
         total_payroll: totalPayroll,
         paid_payroll: paidPayroll,
         paid_payroll_count: paidPayrollCount,

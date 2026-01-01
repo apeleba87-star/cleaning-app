@@ -15,6 +15,7 @@ interface FinancialSummary {
   unpaid_count: number
   total_expenses: number
   expense_count: number
+  total_recurring_expenses: number
   total_payroll: number
   paid_payroll: number
   paid_payroll_count: number
@@ -414,6 +415,9 @@ export default function FinancialSummarySection({ companyId }: FinancialSummaryS
           <h3 className="text-sm font-medium text-gray-600 mb-1">이번 달 지출</h3>
           <p className="text-2xl font-bold text-gray-900">{formatCurrency(summary.total_expenses)}</p>
           <p className="text-xs text-gray-500 mt-1">{summary.expense_count}건</p>
+          {summary.total_recurring_expenses > 0 && (
+            <p className="text-xs text-purple-700 mt-1">고정비: {formatCurrency(summary.total_recurring_expenses)}</p>
+          )}
           <p className="text-xs text-orange-600 mt-2 font-medium">전체보기 →</p>
         </Link>
 

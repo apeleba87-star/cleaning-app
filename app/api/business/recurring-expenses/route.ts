@@ -139,7 +139,7 @@ export async function POST(request: NextRequest) {
           date: firstDayOfMonth,
           category,
           amount: parseFloat(amount),
-          memo: memo?.trim() ? `${memo.trim()} (고정비)` : '고정비',
+          memo: memo?.trim() || null,
           store_id: (store_id && store_id.trim() !== '') ? store_id : null,
           created_by: user.id,
           recurring_expense_id: recurringExpense.id,

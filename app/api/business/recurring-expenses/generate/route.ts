@@ -105,7 +105,7 @@ export async function POST(request: NextRequest) {
             date: firstDayOfMonth,
             category: template.category,
             amount: template.amount,
-            memo: template.memo ? `${template.memo} (고정비)` : '고정비',
+            memo: template.memo || null,
             store_id: template.store_id,
             created_by: user.id,
             recurring_expense_id: template.id,

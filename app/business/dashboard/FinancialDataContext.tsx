@@ -12,6 +12,7 @@ interface FinancialData {
   unpaid_count: number
   total_expenses: number
   expense_count: number
+  total_recurring_expenses: number
   total_payroll: number
   paid_payroll: number
   paid_payroll_count: number

@@ -60,6 +60,10 @@ export default function ExpenseDetailSection({ period, onRefresh }: ExpenseDetai
   const [categoryFilter, setCategoryFilter] = useState<string>('all')
   const [submitting, setSubmitting] = useState(false)
   const [statsTab, setStatsTab] = useState<'category' | 'store' | 'recurring'>('category') // 통계 탭 상태
+  
+  // 정렬 상태
+  const [sortColumn, setSortColumn] = useState<string | null>(null)
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc')
 
   // 빠른 입력 폼 상태
   const [quickDate, setQuickDate] = useState(new Date().toISOString().slice(0, 10))
@@ -506,11 +510,86 @@ export default function ExpenseDetailSection({ period, onRefresh }: ExpenseDetai
       (recurringFilter === 'regular' && expense.recurring_expense_id === null)
     return matchesSearch && matchesCategory && matchesRecurring
   })
+  
+  // 정렬 처리
+  const handleSort = (column: string) => {
+    if (sortColumn === column) {
+      // 같은 컬럼 클릭 시 정렬 방향 전환
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc')
+    } else {
+      // 다른 컬럼 클릭 시 해당 컬럼으로 정렬 (기본 오름차순)
+      setSortColumn(column)
+      setSortDirection('asc')
+    }
+  }
+  
+  // 정렬 아이콘 표시
+  const getSortIcon = (column: string) => {
+    if (sortColumn !== column) {
+      return (
+        <span className="text-gray-400">
+          <svg className="w-4 h-4 inline-block" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" />
+          </svg>
+        </span>
+      )
+    }
+    return sortDirection === 'asc' ? (
+      <span className="text-orange-600">
+        <svg className="w-4 h-4 inline-block" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+        </svg>
+      </span>
+    ) : (
+      <span className="text-orange-600">
+        <svg className="w-4 h-4 inline-block" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+        </svg>
+      </span>
+    )
+  }
+  
+  // 정렬된 지출 목록
+  const sortedExpenses = [...filteredExpenses].sort((a, b) => {
+    if (!sortColumn) return 0
+    
+    let aValue: any
+    let bValue: any
+    
+    switch (sortColumn) {
+      case 'date':
+        aValue = new Date(a.date).getTime()
+        bValue = new Date(b.date).getTime()
+        break
+      case 'category':
+        aValue = a.category
+        bValue = b.category
+        break
+      case 'amount':
+        aValue = a.amount
+        bValue = b.amount
+        break
+      case 'store':
+        aValue = a.stores?.name || ''
+        bValue = b.stores?.name || ''
+        break
+      case 'memo':
+        aValue = a.memo || ''
+        bValue = b.memo || ''
+        break
+      default:
+        return 0
+    }
+    
+    if (aValue < bValue) return sortDirection === 'asc' ? -1 : 1
+    if (aValue > bValue) return sortDirection === 'asc' ? 1 : -1
+    return 0
+  })
 
-  // 총 지출액
+  // 총 지출액 (정렬 전 filteredExpenses 사용)
   const totalAmount = filteredExpenses.reduce((sum, e) => sum + e.amount, 0)
   
-  // 고정비 지출 총액
+  // 고정비 지출 총액 (정렬 전 filteredExpenses 사용)
   const totalRecurringAmount = filteredExpenses
     .filter(e => e.recurring_expense_id !== null)
     .reduce((sum, e) => sum + e.amount, 0)
@@ -929,20 +1008,50 @@ export default function ExpenseDetailSection({ period, onRefresh }: ExpenseDetai
         <table className="min-w-full divide-y divide-gray-200">
           <thead className="bg-gray-50">
             <tr>
-              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                날짜
+              <th 
+                className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                onClick={() => handleSort('date')}
+              >
+                <div className="flex items-center space-x-1">
+                  <span>날짜</span>
+                  {getSortIcon('date')}
+                </div>
               </th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                카테고리
+              <th 
+                className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                onClick={() => handleSort('category')}
+              >
+                <div className="flex items-center space-x-1">
+                  <span>카테고리</span>
+                  {getSortIcon('category')}
+                </div>
               </th>
-              <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                금액
+              <th 
+                className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                onClick={() => handleSort('amount')}
+              >
+                <div className="flex items-center justify-end space-x-1">
+                  <span>금액</span>
+                  {getSortIcon('amount')}
+                </div>
               </th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                매장
+              <th 
+                className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                onClick={() => handleSort('store')}
+              >
+                <div className="flex items-center space-x-1">
+                  <span>매장</span>
+                  {getSortIcon('store')}
+                </div>
               </th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                메모
+              <th 
+                className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                onClick={() => handleSort('memo')}
+              >
+                <div className="flex items-center space-x-1">
+                  <span>메모</span>
+                  {getSortIcon('memo')}
+                </div>
               </th>
               <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
                 작업
@@ -950,14 +1059,14 @@ export default function ExpenseDetailSection({ period, onRefresh }: ExpenseDetai
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
-            {filteredExpenses.length === 0 ? (
+            {sortedExpenses.length === 0 ? (
               <tr>
                 <td colSpan={6} className="px-4 py-8 text-center text-gray-500">
                   지출 데이터가 없습니다.
                 </td>
               </tr>
             ) : (
-              filteredExpenses.map((expense) => (
+              sortedExpenses.map((expense) => (
                 <tr key={expense.id} className="hover:bg-gray-50">
                   <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
                     {formatDate(expense.date)}
