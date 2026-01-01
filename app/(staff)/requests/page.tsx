@@ -280,56 +280,42 @@ export default function RequestsPage() {
 
   const initCamera = async () => {
     try {
-      const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent)
-      const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent)
-      
       let stream: MediaStream | null = null
       
-      if (isMobile) {
-        // iOS 사파리에서는 exact를 먼저 시도하고, 실패하면 ideal로 fallback
-        if (isIOS) {
-          try {
-            // iOS에서는 exact를 사용하여 후면 카메라 강제 선택
-            const exactConstraints: MediaStreamConstraints = {
-              video: {
-                facingMode: { exact: 'environment' },
-                width: { ideal: 1920 },
-                height: { ideal: 1080 }
-              }
-            }
-            stream = await navigator.mediaDevices.getUserMedia(exactConstraints)
-          } catch (exactError) {
-            // exact가 실패하면 ideal로 시도
-            console.log('exact environment failed, trying ideal:', exactError)
-            const idealConstraints: MediaStreamConstraints = {
-              video: {
-                facingMode: { ideal: 'environment' },
-                width: { ideal: 1920 },
-                height: { ideal: 1080 }
-              }
-            }
-            stream = await navigator.mediaDevices.getUserMedia(idealConstraints)
+      // 모든 환경에서 후면 카메라 강제 사용
+      // 1단계: exact로 후면 카메라 강제 시도
+      try {
+        const exactConstraints: MediaStreamConstraints = {
+          video: {
+            facingMode: { exact: 'environment' },
+            width: { ideal: 1920 },
+            height: { ideal: 1080 }
           }
-        } else {
-          // Android에서는 ideal 사용
-          const constraints: MediaStreamConstraints = {
+        }
+        stream = await navigator.mediaDevices.getUserMedia(exactConstraints)
+      } catch (exactError) {
+        // exact가 실패하면 ideal로 시도
+        console.log('exact environment failed, trying ideal:', exactError)
+        try {
+          const idealConstraints: MediaStreamConstraints = {
             video: {
               facingMode: { ideal: 'environment' },
               width: { ideal: 1920 },
               height: { ideal: 1080 }
             }
           }
-          stream = await navigator.mediaDevices.getUserMedia(constraints)
-        }
-      } else {
-        // PC에서는 기본 카메라
-        const constraints: MediaStreamConstraints = {
-          video: {
-            width: { ideal: 1920 },
-            height: { ideal: 1080 }
+          stream = await navigator.mediaDevices.getUserMedia(idealConstraints)
+        } catch (idealError) {
+          // ideal도 실패하면 facingMode 없이 시도 (최후의 수단)
+          console.log('ideal environment failed, trying without facingMode:', idealError)
+          const fallbackConstraints: MediaStreamConstraints = {
+            video: {
+              width: { ideal: 1920 },
+              height: { ideal: 1080 }
+            }
           }
+          stream = await navigator.mediaDevices.getUserMedia(fallbackConstraints)
         }
-        stream = await navigator.mediaDevices.getUserMedia(constraints)
       }
 
       if (!stream) {

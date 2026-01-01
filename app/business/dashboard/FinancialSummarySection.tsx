@@ -194,9 +194,19 @@ export default function FinancialSummarySection({ companyId }: FinancialSummaryS
                   if (receiptResult.success) {
                     successCount++
                   } else {
+                    console.error('[FinancialSummarySection] Receipt creation failed:', {
+                      revenue_id: revenue.id,
+                      error: receiptResult.error,
+                    })
                     failCount++
                   }
                 } else {
+                  const errorData = await receiptResponse.json().catch(() => ({}))
+                  console.error('[FinancialSummarySection] Receipt creation failed:', {
+                    revenue_id: revenue.id,
+                    status: receiptResponse.status,
+                    error: errorData,
+                  })
                   failCount++
                 }
               }

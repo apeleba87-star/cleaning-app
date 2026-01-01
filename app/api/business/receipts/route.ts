@@ -103,6 +103,11 @@ export async function POST(request: NextRequest) {
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
     
     if (!serviceRoleKey || !supabaseUrl) {
+      console.error('[Receipts API] Missing environment variables:', {
+        hasServiceRoleKey: !!serviceRoleKey,
+        hasSupabaseUrl: !!supabaseUrl,
+        nodeEnv: process.env.NODE_ENV,
+      })
       throw new Error('Server configuration error: Service role key is required')
     }
 
@@ -111,6 +116,13 @@ export async function POST(request: NextRequest) {
         autoRefreshToken: false,
         persistSession: false,
       },
+    })
+
+    console.log('[Receipts API] Creating receipt:', {
+      revenue_id,
+      company_id: user.company_id,
+      amount: parseFloat(amount),
+      received_at: received_at || new Date().toISOString(),
     })
 
     const { data: receipt, error } = await adminSupabase
@@ -138,6 +150,15 @@ export async function POST(request: NextRequest) {
       .single()
 
     if (error) {
+      console.error('[Receipts API] Failed to create receipt:', {
+        error: error.message,
+        code: error.code,
+        details: error.details,
+        hint: error.hint,
+        revenue_id,
+        company_id: user.company_id,
+        amount: parseFloat(amount),
+      })
       throw new Error(`Failed to create receipt: ${error.message}`)
     }
 
@@ -146,6 +167,11 @@ export async function POST(request: NextRequest) {
       data: receipt,
     })
   } catch (error: any) {
+    console.error('[Receipts API] Error in POST:', {
+      message: error.message,
+      name: error.name,
+      stack: error.stack,
+    })
     return handleApiError(error)
   }
 }

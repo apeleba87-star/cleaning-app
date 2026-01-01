@@ -36,51 +36,18 @@ export default function UnpaidDetailSection({ onRefresh }: UnpaidDetailSectionPr
   const loadUnpaidRevenues = async () => {
     try {
       setLoading(true)
-      // 모든 매출 조회
-      const revenueResponse = await fetch('/api/business/revenues')
-      if (!revenueResponse.ok) {
-        throw new Error('매출 데이터를 불러올 수 없습니다.')
+      // 최적화된 API: 한 번의 호출로 모든 미수금 데이터 조회
+      const response = await fetch('/api/business/unpaid-revenues')
+      if (!response.ok) {
+        throw new Error('미수금 데이터를 불러올 수 없습니다.')
       }
-      const revenueData = await revenueResponse.json()
-      const revenues = revenueData.data || []
-
-      // 각 매출의 수금액 계산
-      const unpaidList: UnpaidRevenue[] = []
-      for (const revenue of revenues) {
-        const receiptResponse = await fetch(`/api/business/receipts?revenue_id=${revenue.id}`)
-        if (receiptResponse.ok) {
-          const receiptData = await receiptResponse.json()
-          const receipts = receiptData.data || []
-          const receivedAmount = receipts.reduce((sum: number, r: any) => sum + (r.amount || 0), 0)
-          const unpaidAmount = revenue.amount - receivedAmount
-
-          if (unpaidAmount > 0) {
-            const dueDate = new Date(revenue.due_date)
-            const today = new Date()
-            const daysOverdue = Math.floor((today.getTime() - dueDate.getTime()) / (1000 * 60 * 60 * 24))
-
-            unpaidList.push({
-              revenue_id: revenue.id,
-              store_id: revenue.store_id,
-              store_name: revenue.stores?.name || '-',
-              service_period: revenue.service_period,
-              amount: revenue.amount,
-              received_amount: receivedAmount,
-              unpaid_amount: unpaidAmount,
-              due_date: revenue.due_date,
-              days_overdue: daysOverdue,
-            })
-          }
-        }
+      const result = await response.json()
+      if (!result.success) {
+        throw new Error(result.error || '미수금 데이터를 불러올 수 없습니다.')
       }
-
-      // 청구일 기준 오름차순 정렬 (1일부터)
-      unpaidList.sort((a, b) => {
-        const dateA = new Date(a.due_date).getTime()
-        const dateB = new Date(b.due_date).getTime()
-        return dateA - dateB
-      })
-      setUnpaidRevenues(unpaidList)
+      
+      // 서버에서 이미 계산된 미수금 데이터 사용
+      setUnpaidRevenues(result.data || [])
     } catch (error: any) {
       console.error('Error loading unpaid revenues:', error)
     } finally {
@@ -137,13 +104,25 @@ export default function UnpaidDetailSection({ onRefresh }: UnpaidDetailSectionPr
 
       if (!response.ok) {
         const errorData = await response.json()
-        throw new Error(errorData.error || '수금 등록 실패')
+        console.error('[UnpaidDetailSection] Receipt creation failed:', {
+          status: response.status,
+          statusText: response.statusText,
+          error: errorData,
+        })
+        throw new Error(errorData.error || `수금 등록 실패 (${response.status})`)
+      }
+
+      const result = await response.json()
+      if (!result.success) {
+        console.error('[UnpaidDetailSection] Receipt creation failed:', result)
+        throw new Error(result.error || '수금 등록 실패')
       }
 
       alert('전체 완납이 등록되었습니다.')
       loadUnpaidRevenues()
       onRefresh()
     } catch (err: any) {
+      console.error('[UnpaidDetailSection] Full payment error:', err)
       alert(err.message || '완납 처리 중 오류가 발생했습니다.')
     } finally {
       setSubmitting(false)

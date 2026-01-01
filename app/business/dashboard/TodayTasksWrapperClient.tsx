@@ -97,7 +97,22 @@ export default function TodayTasksWrapperClient({ companyId }: { companyId: stri
             })
 
             if (!receiptResponse.ok) {
-              throw new Error('수금 등록 중 오류가 발생했습니다.')
+              const errorData = await receiptResponse.json().catch(() => ({}))
+              console.error('[TodayTasksWrapperClient] Receipt creation failed:', {
+                revenue_id: revenue.id,
+                status: receiptResponse.status,
+                error: errorData,
+              })
+              throw new Error(errorData.error || `수금 등록 중 오류가 발생했습니다. (${receiptResponse.status})`)
+            }
+
+            const receiptResult = await receiptResponse.json()
+            if (!receiptResult.success) {
+              console.error('[TodayTasksWrapperClient] Receipt creation failed:', {
+                revenue_id: revenue.id,
+                error: receiptResult.error,
+              })
+              throw new Error(receiptResult.error || '수금 등록 실패')
             }
           }
         }

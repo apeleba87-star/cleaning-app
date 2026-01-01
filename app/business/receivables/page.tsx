@@ -47,6 +47,10 @@ export default function ReceivablesPage() {
   const [receipts, setReceipts] = useState<Receipt[]>([])
   const [editingReceipt, setEditingReceipt] = useState<Receipt | null>(null)
   const [expandedStores, setExpandedStores] = useState<Set<string>>(new Set())
+  
+  // 정렬 상태
+  const [sortColumn, setSortColumn] = useState<string | null>(null)
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc')
 
   // 매출(청구) 폼 상태
   const [revenueStoreId, setRevenueStoreId] = useState('')
@@ -642,6 +646,81 @@ export default function ReceivablesPage() {
     )
   }
 
+  // 정렬 함수
+  const handleSort = (column: string) => {
+    if (sortColumn === column) {
+      // 같은 컬럼 클릭 시 정렬 방향 전환
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc')
+    } else {
+      // 다른 컬럼 클릭 시 해당 컬럼으로 정렬 (기본 오름차순)
+      setSortColumn(column)
+      setSortDirection('asc')
+    }
+  }
+
+  // 정렬된 데이터
+  const sortedReceivables = [...receivables].sort((a, b) => {
+    if (!sortColumn) return 0
+
+    let aValue: any
+    let bValue: any
+
+    switch (sortColumn) {
+      case 'store_name':
+        aValue = a.store_name
+        bValue = b.store_name
+        break
+      case 'revenue_count':
+        aValue = a.revenue_count
+        bValue = b.revenue_count
+        break
+      case 'total_revenue':
+        aValue = a.total_revenue
+        bValue = b.total_revenue
+        break
+      case 'total_received':
+        aValue = a.total_received
+        bValue = b.total_received
+        break
+      case 'unpaid_amount':
+        aValue = a.unpaid_amount
+        bValue = b.unpaid_amount
+        break
+      case 'status':
+        // 상태 정렬: 완납 > 부분수금 > 수금 미등록 > 청구 없음
+        const statusOrder: Record<string, number> = {
+          'paid': 1,
+          'partial': 2,
+          'unregistered': 3,
+          'unpaid': 3,
+          'no_revenue': 4,
+        }
+        const getStatus = (r: StoreReceivable) => {
+          if (r.total_revenue === 0) return 'no_revenue'
+          if (r.total_received === 0) return 'unregistered'
+          if (r.unpaid_amount === 0) return 'paid'
+          return 'partial'
+        }
+        aValue = statusOrder[getStatus(a)] || 5
+        bValue = statusOrder[getStatus(b)] || 5
+        break
+      default:
+        return 0
+    }
+
+    if (aValue < bValue) return sortDirection === 'asc' ? -1 : 1
+    if (aValue > bValue) return sortDirection === 'asc' ? 1 : -1
+    return 0
+  })
+
+  // 정렬 아이콘 표시 함수
+  const getSortIcon = (column: string) => {
+    if (sortColumn !== column) {
+      return <span className="text-gray-400">↕</span>
+    }
+    return sortDirection === 'asc' ? <span className="text-blue-600">↑</span> : <span className="text-blue-600">↓</span>
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
@@ -681,30 +760,46 @@ export default function ReceivablesPage() {
               className="px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
-          <div className="flex space-x-2">
-            <button
-              onClick={() => {
-                setShowRevenueForm(true)
-                resetRevenueForm()
-              }}
-              className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
-            >
-              + 매출(청구) 등록
-            </button>
-            <button
-              onClick={handleAutoAddStores}
-              className="px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700"
-            >
-              + 신규 매장 자동 추가
-            </button>
-            <button
-              onClick={() => {
-                setShowReceiptForm(true)
-              }}
-              className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700"
-            >
-              + 수금 등록
-            </button>
+          <div className="flex flex-col space-y-2">
+            <div className="flex space-x-2">
+              <button
+                onClick={handleAutoAddStores}
+                className="px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700"
+              >
+                + 매장 매출 자동 추가
+              </button>
+              <button
+                onClick={() => {
+                  setShowRevenueForm(true)
+                  resetRevenueForm()
+                }}
+                className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+              >
+                + 신규 매출(청구) 등록
+              </button>
+              <button
+                onClick={() => {
+                  setShowReceiptForm(true)
+                }}
+                className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700"
+              >
+                + 수금 등록
+              </button>
+            </div>
+            <div className="flex space-x-4 text-xs text-gray-600">
+              <div className="flex items-center space-x-1">
+                <div className="w-3 h-3 bg-purple-600 rounded"></div>
+                <span>매장별 청구금액과 납기일을 자동으로 계산하여 일괄 등록</span>
+              </div>
+              <div className="flex items-center space-x-1">
+                <div className="w-3 h-3 bg-blue-600 rounded"></div>
+                <span>개별 매장의 매출(청구)을 수동으로 등록</span>
+              </div>
+              <div className="flex items-center space-x-1">
+                <div className="w-3 h-3 bg-green-600 rounded"></div>
+                <span>등록된 매출에 대한 수금 내역을 등록</span>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -1126,23 +1221,59 @@ export default function ReceivablesPage() {
         <table className="min-w-full divide-y divide-gray-200">
           <thead className="bg-gray-50">
             <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                매장명
+              <th 
+                className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                onClick={() => handleSort('store_name')}
+              >
+                <div className="flex items-center space-x-1">
+                  <span>매장명</span>
+                  {getSortIcon('store_name')}
+                </div>
               </th>
-              <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                청구 건수
+              <th 
+                className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                onClick={() => handleSort('revenue_count')}
+              >
+                <div className="flex items-center justify-center space-x-1">
+                  <span>청구 건수</span>
+                  {getSortIcon('revenue_count')}
+                </div>
               </th>
-              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                총 청구액
+              <th 
+                className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                onClick={() => handleSort('total_revenue')}
+              >
+                <div className="flex items-center justify-end space-x-1">
+                  <span>총 청구액</span>
+                  {getSortIcon('total_revenue')}
+                </div>
               </th>
-              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                총 수금액
+              <th 
+                className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                onClick={() => handleSort('total_received')}
+              >
+                <div className="flex items-center justify-end space-x-1">
+                  <span>총 수금액</span>
+                  {getSortIcon('total_received')}
+                </div>
               </th>
-              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                미수금
+              <th 
+                className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                onClick={() => handleSort('unpaid_amount')}
+              >
+                <div className="flex items-center justify-end space-x-1">
+                  <span>미수금</span>
+                  {getSortIcon('unpaid_amount')}
+                </div>
               </th>
-              <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                상태
+              <th 
+                className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                onClick={() => handleSort('status')}
+              >
+                <div className="flex items-center justify-center space-x-1">
+                  <span>상태</span>
+                  {getSortIcon('status')}
+                </div>
               </th>
             </tr>
           </thead>
@@ -1154,7 +1285,7 @@ export default function ReceivablesPage() {
                 </td>
               </tr>
             ) : (
-              receivables.map((receivable) => {
+              sortedReceivables.map((receivable) => {
                 const isExpanded = expandedStores.has(receivable.store_id)
                 
                 // 상태 계산 로직

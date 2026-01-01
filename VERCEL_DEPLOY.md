@@ -23,6 +23,10 @@ Vercel 대시보드에서 다음 환경 변수를 추가하세요:
 ### 필수 환경 변수:
 - `NEXT_PUBLIC_SUPABASE_URL`: Supabase 프로젝트 URL
 - `NEXT_PUBLIC_SUPABASE_ANON_KEY`: Supabase Anon Key
+- `SUPABASE_SERVICE_ROLE_KEY`: Supabase Service Role Key (서버 사이드 전용, **중요**)
+
+### ⚠️ 중요: SUPABASE_SERVICE_ROLE_KEY 설정
+**완납 처리 및 기타 서버 사이드 기능이 작동하려면 반드시 설정해야 합니다.**
 
 ### 설정 방법:
 1. 프로젝트 설정 → Environment Variables
@@ -30,7 +34,14 @@ Vercel 대시보드에서 다음 환경 변수를 추가하세요:
    - Name: `NEXT_PUBLIC_SUPABASE_URL`
    - Value: (Supabase 프로젝트의 URL)
    - Environment: Production, Preview, Development 모두 선택
-3. 동일하게 `NEXT_PUBLIC_SUPABASE_ANON_KEY` 추가
+3. 동일하게 다음 변수들 추가:
+   - `NEXT_PUBLIC_SUPABASE_ANON_KEY`: Supabase Anon Key
+   - `SUPABASE_SERVICE_ROLE_KEY`: Supabase Service Role Key (Supabase 대시보드 → Settings → API → service_role key)
+
+### 환경 변수 확인 방법:
+1. Vercel 대시보드 → 프로젝트 → Settings → Environment Variables
+2. 모든 환경 변수가 Production, Preview, Development에 설정되어 있는지 확인
+3. 변수 이름에 오타가 없는지 확인 (대소문자 구분)
 
 ## 5. 배포 실행
 1. "Deploy" 버튼 클릭
@@ -56,6 +67,9 @@ Vercel 대시보드에서 다음 환경 변수를 추가하세요:
 ### 환경 변수 관련 에러:
 - 모든 환경 변수가 Production, Preview, Development에 모두 설정되어 있는지 확인
 - 변수 이름에 오타가 없는지 확인 (대소문자 구분)
+- **완납 처리 오류 발생 시**: `SUPABASE_SERVICE_ROLE_KEY`가 설정되어 있는지 확인
+  - Vercel 로그에서 "Server configuration error: Service role key is required" 메시지 확인
+  - 환경 변수 재설정 후 재배포 필요
 
 ## 참고사항
 - Vercel은 Next.js를 완벽하게 지원합니다
