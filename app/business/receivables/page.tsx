@@ -48,9 +48,15 @@ export default function ReceivablesPage() {
   const [editingReceipt, setEditingReceipt] = useState<Receipt | null>(null)
   const [expandedStores, setExpandedStores] = useState<Set<string>>(new Set())
   
-  // 정렬 상태
+  // 정렬 상태 (매장별 수금/미수금 현황 테이블용)
   const [sortColumn, setSortColumn] = useState<string | null>(null)
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc')
+  
+  // 매출 목록 정렬 상태
+  const [revenueSortColumn, setRevenueSortColumn] = useState<string | null>(null)
+  const [revenueSortDirection, setRevenueSortDirection] = useState<'asc' | 'desc'>('asc')
+  const [revenueCurrentPage, setRevenueCurrentPage] = useState(1)
+  const revenueItemsPerPage = 30
 
   // 매출(청구) 폼 상태
   const [revenueStoreId, setRevenueStoreId] = useState('')
@@ -329,20 +335,12 @@ export default function ReceivablesPage() {
       // 서비스 기간 파싱 (YYYY-MM)
       const [year, month] = servicePeriod.split('-').map(Number)
       
-      // 다음 달 계산
-      let nextMonth = month + 1
-      let nextYear = year
-      
-      if (nextMonth > 12) {
-        nextMonth = 1
-        nextYear = year + 1
-      }
-
+      // 서비스 기간과 같은 달로 납기일 설정
       // payment_day가 해당 월에 유효한지 확인 (말일 조정)
-      const finalDay = adjustPaymentDayToLastDay(nextYear, nextMonth, paymentDay)
+      const finalDay = adjustPaymentDayToLastDay(year, month, paymentDay)
 
       // YYYY-MM-DD 형식으로 반환
-      return `${nextYear}-${String(nextMonth).padStart(2, '0')}-${String(finalDay).padStart(2, '0')}`
+      return `${year}-${String(month).padStart(2, '0')}-${String(finalDay).padStart(2, '0')}`
     } catch (error) {
       console.error('Error calculating due date:', error)
       return ''
@@ -721,6 +719,86 @@ export default function ReceivablesPage() {
     return sortDirection === 'asc' ? <span className="text-blue-600">↑</span> : <span className="text-blue-600">↓</span>
   }
 
+  // 매출 목록 정렬 함수
+  const handleRevenueSort = (column: string) => {
+    if (revenueSortColumn === column) {
+      setRevenueSortDirection(revenueSortDirection === 'asc' ? 'desc' : 'asc')
+    } else {
+      setRevenueSortColumn(column)
+      setRevenueSortDirection('asc')
+    }
+    setRevenueCurrentPage(1) // 정렬 변경 시 첫 페이지로
+  }
+
+  // 매출 목록 정렬 아이콘
+  const getRevenueSortIcon = (column: string) => {
+    if (revenueSortColumn !== column) {
+      return <span className="text-gray-400">↕</span>
+    }
+    return revenueSortDirection === 'asc' ? <span className="text-blue-600">↑</span> : <span className="text-blue-600">↓</span>
+  }
+
+  // 매출 목록 정렬 및 페이지네이션
+  const sortedRevenues = [...revenues].sort((a, b) => {
+    if (!revenueSortColumn) return 0
+
+    let aValue: any
+    let bValue: any
+
+    switch (revenueSortColumn) {
+      case 'store_name':
+        aValue = (a as any).stores?.name || ''
+        bValue = (b as any).stores?.name || ''
+        break
+      case 'service_period':
+        aValue = a.service_period
+        bValue = b.service_period
+        break
+      case 'amount':
+        aValue = a.amount
+        bValue = b.amount
+        break
+      case 'due_date':
+        aValue = new Date(a.due_date).getTime()
+        bValue = new Date(b.due_date).getTime()
+        break
+      case 'status':
+        // 상태는 receipts를 계산해야 하므로 복잡함, 여기서는 간단히 처리
+        const aReceipts = receipts.filter(r => r.revenue_id === a.id)
+        const bReceipts = receipts.filter(r => r.revenue_id === b.id)
+        const aReceived = aReceipts.reduce((sum, r) => sum + r.amount, 0)
+        const bReceived = bReceipts.reduce((sum, r) => sum + r.amount, 0)
+        const aUnpaid = a.amount - aReceived
+        const bUnpaid = b.amount - bReceived
+        
+        const statusOrder: Record<string, number> = {
+          'paid': 1,
+          'partial': 2,
+          'unregistered': 3,
+        }
+        const getStatus = (unpaid: number, received: number) => {
+          if (received === 0) return 'unregistered'
+          if (unpaid === 0) return 'paid'
+          return 'partial'
+        }
+        aValue = statusOrder[getStatus(aUnpaid, aReceived)] || 4
+        bValue = statusOrder[getStatus(bUnpaid, bReceived)] || 4
+        break
+      default:
+        return 0
+    }
+
+    if (aValue < bValue) return revenueSortDirection === 'asc' ? -1 : 1
+    if (aValue > bValue) return revenueSortDirection === 'asc' ? 1 : -1
+    return 0
+  })
+
+  // 페이지네이션 계산
+  const revenueTotalPages = Math.ceil(sortedRevenues.length / revenueItemsPerPage)
+  const revenueStartIndex = (revenueCurrentPage - 1) * revenueItemsPerPage
+  const revenueEndIndex = revenueStartIndex + revenueItemsPerPage
+  const paginatedRevenues = sortedRevenues.slice(revenueStartIndex, revenueEndIndex)
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
@@ -760,14 +838,19 @@ export default function ReceivablesPage() {
               className="px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
-          <div className="flex flex-col space-y-2">
-            <div className="flex space-x-2">
+          <div className="flex space-x-4">
+            <div className="flex flex-col items-center">
               <button
                 onClick={handleAutoAddStores}
                 className="px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700"
               >
                 + 매장 매출 자동 추가
               </button>
+              <span className="mt-1 text-xs text-gray-600 text-center max-w-[180px]">
+                매장별 청구금액과 납기일을<br />자동으로 계산하여 일괄 등록
+              </span>
+            </div>
+            <div className="flex flex-col items-center">
               <button
                 onClick={() => {
                   setShowRevenueForm(true)
@@ -777,6 +860,11 @@ export default function ReceivablesPage() {
               >
                 + 신규 매출(청구) 등록
               </button>
+              <span className="mt-1 text-xs text-gray-600 text-center max-w-[180px]">
+                개별 매장의 매출(청구)을<br />수동으로 등록
+              </span>
+            </div>
+            <div className="flex flex-col items-center">
               <button
                 onClick={() => {
                   setShowReceiptForm(true)
@@ -785,20 +873,9 @@ export default function ReceivablesPage() {
               >
                 + 수금 등록
               </button>
-            </div>
-            <div className="flex space-x-4 text-xs text-gray-600">
-              <div className="flex items-center space-x-1">
-                <div className="w-3 h-3 bg-purple-600 rounded"></div>
-                <span>매장별 청구금액과 납기일을 자동으로 계산하여 일괄 등록</span>
-              </div>
-              <div className="flex items-center space-x-1">
-                <div className="w-3 h-3 bg-blue-600 rounded"></div>
-                <span>개별 매장의 매출(청구)을 수동으로 등록</span>
-              </div>
-              <div className="flex items-center space-x-1">
-                <div className="w-3 h-3 bg-green-600 rounded"></div>
-                <span>등록된 매출에 대한 수금 내역을 등록</span>
-              </div>
+              <span className="mt-1 text-xs text-gray-600 text-center max-w-[180px]">
+                등록된 매출에 대한<br />수금 내역을 등록
+              </span>
             </div>
           </div>
         </div>
@@ -1473,20 +1550,50 @@ export default function ReceivablesPage() {
         <table className="min-w-full divide-y divide-gray-200">
           <thead className="bg-gray-50">
             <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                매장명
+              <th 
+                className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                onClick={() => handleRevenueSort('store_name')}
+              >
+                <div className="flex items-center space-x-1">
+                  <span>매장명</span>
+                  {getRevenueSortIcon('store_name')}
+                </div>
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                서비스 기간
+              <th 
+                className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                onClick={() => handleRevenueSort('service_period')}
+              >
+                <div className="flex items-center space-x-1">
+                  <span>서비스 기간</span>
+                  {getRevenueSortIcon('service_period')}
+                </div>
               </th>
-              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                청구 금액
+              <th 
+                className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                onClick={() => handleRevenueSort('amount')}
+              >
+                <div className="flex items-center justify-end space-x-1">
+                  <span>청구 금액</span>
+                  {getRevenueSortIcon('amount')}
+                </div>
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                납기일
+              <th 
+                className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                onClick={() => handleRevenueSort('due_date')}
+              >
+                <div className="flex items-center space-x-1">
+                  <span>납기일</span>
+                  {getRevenueSortIcon('due_date')}
+                </div>
               </th>
-              <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                상태
+              <th 
+                className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                onClick={() => handleRevenueSort('status')}
+              >
+                <div className="flex items-center justify-center space-x-1">
+                  <span>상태</span>
+                  {getRevenueSortIcon('status')}
+                </div>
               </th>
               <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
                 작업
@@ -1494,14 +1601,14 @@ export default function ReceivablesPage() {
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
-            {revenues.length === 0 ? (
+            {sortedRevenues.length === 0 ? (
               <tr>
                 <td colSpan={6} className="px-6 py-4 text-center text-gray-500">
                   {selectedPeriod ? `${selectedPeriod} 기간의 매출 데이터가 없습니다.` : '매출 데이터가 없습니다.'}
                 </td>
               </tr>
             ) : (
-              revenues.map((revenue) => {
+              paginatedRevenues.map((revenue) => {
                 // Revenue별 receipts 계산
                 const revenueReceipts = receipts.filter(r => r.revenue_id === revenue.id)
                 const totalReceived = revenueReceipts.reduce((sum, r) => sum + r.amount, 0)
@@ -1564,6 +1671,59 @@ export default function ReceivablesPage() {
             )}
           </tbody>
         </table>
+        
+        {/* 페이지네이션 */}
+        {revenueTotalPages > 1 && (
+          <div className="bg-gray-50 px-6 py-4 border-t border-gray-200 flex items-center justify-between">
+            <div className="text-sm text-gray-700">
+              {revenueStartIndex + 1} - {Math.min(revenueEndIndex, sortedRevenues.length)} / {sortedRevenues.length}건
+            </div>
+            <div className="flex space-x-2">
+              <button
+                onClick={() => setRevenueCurrentPage(prev => Math.max(1, prev - 1))}
+                disabled={revenueCurrentPage === 1}
+                className="px-3 py-1 border border-gray-300 rounded-md text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-100"
+              >
+                이전
+              </button>
+              {Array.from({ length: revenueTotalPages }, (_, i) => i + 1).map((page) => {
+                // 페이지 번호 표시 로직: 현재 페이지 주변만 표시
+                if (
+                  page === 1 ||
+                  page === revenueTotalPages ||
+                  (page >= revenueCurrentPage - 2 && page <= revenueCurrentPage + 2)
+                ) {
+                  return (
+                    <button
+                      key={page}
+                      onClick={() => setRevenueCurrentPage(page)}
+                      className={`px-3 py-1 border border-gray-300 rounded-md text-sm ${
+                        revenueCurrentPage === page
+                          ? 'bg-blue-600 text-white border-blue-600'
+                          : 'hover:bg-gray-100'
+                      }`}
+                    >
+                      {page}
+                    </button>
+                  )
+                } else if (
+                  page === revenueCurrentPage - 3 ||
+                  page === revenueCurrentPage + 3
+                ) {
+                  return <span key={page} className="px-2 text-gray-500">...</span>
+                }
+                return null
+              })}
+              <button
+                onClick={() => setRevenueCurrentPage(prev => Math.min(revenueTotalPages, prev + 1))}
+                disabled={revenueCurrentPage === revenueTotalPages}
+                className="px-3 py-1 border border-gray-300 rounded-md text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-100"
+              >
+                다음
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   )

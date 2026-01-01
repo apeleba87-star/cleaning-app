@@ -5,6 +5,7 @@ import Image from 'next/image'
 import { createClient } from '@/lib/supabase/client'
 import { useTodayAttendance } from '@/contexts/AttendanceContext'
 import { uploadPhoto } from '@/lib/supabase/upload'
+import { useToast } from '@/components/Toast'
 
 type TabType = 'store_problem' | 'vending_machine' | 'lost_item'
 
@@ -69,6 +70,9 @@ export default function IssuesPage() {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const galleryInputRef = useRef<HTMLInputElement>(null)
   const photoIdCounterRef = useRef(0)
+
+  // 토스트 메시지
+  const { showToast, ToastContainer } = useToast()
 
   // 카메라 모달 관련
   const [showCamera, setShowCamera] = useState(false)
@@ -573,7 +577,7 @@ export default function IssuesPage() {
           }))
         }
 
-        alert('매장 문제 보고가 등록되었습니다.')
+        showToast('매장 문제 보고가 등록되었습니다.', 'success')
         setStoreProblemForm({
           category: '',
           description: '',
@@ -635,7 +639,7 @@ export default function IssuesPage() {
 
         const data = await response.json()
 
-        alert('자판기 내부 문제가 등록되었습니다.')
+        showToast('자판기 내부 문제가 등록되었습니다.', 'success')
         setVendingMachineForm({
           category: '',
           vending_machine_number: '',
@@ -704,7 +708,7 @@ export default function IssuesPage() {
 
         const data = await response.json()
 
-        alert('분실물 습득이 등록되었습니다.')
+        showToast('분실물 습득이 등록되었습니다.', 'success')
         setLostItemForm({
           category: '',
           photos: [],
@@ -724,6 +728,7 @@ export default function IssuesPage() {
       
       // 더 자세한 에러 메시지 표시
       let errorMessage = `등록 실패: ${error.message}`
+      showToast(errorMessage, 'error')
       if (error.details) {
         errorMessage += `\n\n상세: ${error.details}`
       }
@@ -765,8 +770,10 @@ export default function IssuesPage() {
   const canAddMorePhotos = currentPhotos.length < maxPhotos
 
   return (
-    <div className="max-w-4xl mx-auto px-2 md:px-4 py-4 md:py-6 space-y-4 md:space-y-6 mb-16 md:mb-0">
-      <h1 className="text-xl md:text-2xl font-bold">매장 문제 보고</h1>
+    <>
+      <ToastContainer />
+      <div className="max-w-4xl mx-auto px-2 md:px-4 py-4 md:py-6 space-y-4 md:space-y-6 mb-16 md:mb-0">
+        <h1 className="text-xl md:text-2xl font-bold">매장 문제 보고</h1>
 
       {/* 탭 메뉴 */}
       <div className="flex border-b border-gray-200">
@@ -1305,5 +1312,6 @@ export default function IssuesPage() {
         </div>
       )}
     </div>
+    </>
   )
 }

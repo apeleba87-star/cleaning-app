@@ -188,14 +188,29 @@ export function ChecklistCamera({ items, mode, storeId, onComplete, onCancel }: 
     }
 
     setSaving(true)
+    let uploadError: Error | null = null
 
     try {
       // 업로드 및 업데이트
       const uploadPhotoFile = async (index: number, dataURL: string): Promise<string | null> => {
         try {
-          // base64를 Blob로 변환
-          const response = await fetch(dataURL)
-          const blob = await response.blob()
+          // base64를 Blob로 변환 (사파리 호환성 개선)
+          let blob: Blob
+          try {
+            const response = await fetch(dataURL)
+            blob = await response.blob()
+          } catch (fetchError) {
+            // fetch 실패 시 base64 직접 변환
+            const base64Data = dataURL.split(',')[1]
+            const byteCharacters = atob(base64Data)
+            const byteNumbers = new Array(byteCharacters.length)
+            for (let i = 0; i < byteCharacters.length; i++) {
+              byteNumbers[i] = byteCharacters.charCodeAt(i)
+            }
+            const byteArray = new Uint8Array(byteNumbers)
+            blob = new Blob([byteArray], { type: 'image/jpeg' })
+          }
+          
           const file = new File([blob], `photo-${Date.now()}-${index}.jpg`, { type: 'image/jpeg' })
 
           // Supabase Storage에 업로드
@@ -205,20 +220,30 @@ export function ChecklistCamera({ items, mode, storeId, onComplete, onCancel }: 
             storeId,
             mode === 'before' ? 'checklist_before' : 'checklist_after'
           )
+          
+          if (!url || url.trim() === '') {
+            throw new Error('업로드된 파일의 URL을 가져올 수 없습니다.')
+          }
+          
           return url
         } catch (error) {
           console.error('사진 업로드 실패:', error)
-          alert(`사진 업로드 실패: ${error instanceof Error ? error.message : '알 수 없는 오류'}`)
+          const errorMessage = error instanceof Error ? error.message : '알 수 없는 오류'
+          uploadError = new Error(`사진 업로드 실패 (${photoItems[index]?.area || '알 수 없음'}): ${errorMessage}`)
           return null
         }
       }
 
       // 모든 사진 업로드 (순차적으로)
       const updatedItems = [...items]
+      let successCount = 0
+      let failCount = 0
+      
       for (let i = 0; i < photoItems.length; i++) {
         if (tempPhotos[i]) {
           const url = await uploadPhotoFile(i, tempPhotos[i])
           if (url) {
+            successCount++
             // area로 매칭하여 해당 아이템 찾기 (photoItems는 이미 필터링된 사진 아이템들)
             const itemToUpdate = updatedItems.find(item => item.area === photoItems[i].area && (item.type === 'before_photo' || item.type === 'after_photo' || item.type === 'before_after_photo'))
             if (itemToUpdate) {
@@ -235,8 +260,17 @@ export function ChecklistCamera({ items, mode, storeId, onComplete, onCancel }: 
                 }
               }
             }
+          } else {
+            failCount++
           }
         }
+      }
+
+      // 업로드 결과 확인
+      if (failCount > 0) {
+        const errorMsg = uploadError?.message || '일부 사진 업로드에 실패했습니다.'
+        console.error('사진 업로드 실패:', errorMsg)
+        alert(`경고: ${failCount}개의 사진 업로드에 실패했습니다.\n\n${errorMsg}\n\n성공한 ${successCount}개의 사진은 저장됩니다.`)
       }
 
       // 스트림 정리
@@ -244,9 +278,34 @@ export function ChecklistCamera({ items, mode, storeId, onComplete, onCancel }: 
         stream.getTracks().forEach((track) => track.stop())
       }
 
-      onComplete(updatedItems)
-    } finally {
+      // 성공한 사진이 하나라도 있으면 onComplete 호출
+      if (successCount > 0) {
+        onComplete(updatedItems)
+      } else {
+        // 모든 사진 업로드 실패
+        throw new Error(uploadError?.message || '모든 사진 업로드에 실패했습니다. 네트워크 연결을 확인하고 다시 시도해주세요.')
+      }
+    } catch (error: any) {
+      console.error('저장 중 오류:', error)
+      const errorMessage = error instanceof Error ? error.message : '알 수 없는 오류가 발생했습니다.'
+      
+      // 스트림 정리
+      if (stream) {
+        stream.getTracks().forEach((track) => track.stop())
+      }
+      
+      // 사파리 호환성을 위해 setTimeout으로 alert 지연
+      setTimeout(() => {
+        alert(`저장 실패: ${errorMessage}\n\n다시 시도해주세요.`)
+      }, 100)
+      
+      // 에러 발생 시에도 saving 상태 해제
       setSaving(false)
+    } finally {
+      // 성공한 경우는 onComplete에서 처리되므로 여기서는 실패한 경우만 처리
+      if (uploadError && uploadError.message.includes('모든 사진 업로드에 실패')) {
+        setSaving(false)
+      }
     }
   }
 

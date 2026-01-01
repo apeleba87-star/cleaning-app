@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase/client'
 import { useTodayAttendance } from '@/contexts/AttendanceContext'
 import { getTodayDateKST } from '@/lib/utils/date'
 import { uploadPhoto } from '@/lib/supabase/upload'
+import { useToast } from '@/components/Toast'
 
 interface RequestWithStore {
   id: string
@@ -47,6 +48,9 @@ export default function RequestsPage() {
   const [rejectionDescription, setRejectionDescription] = useState('')
   const [uploadingRejectionPhoto, setUploadingRejectionPhoto] = useState(false)
   const [selectedImage, setSelectedImage] = useState<string | null>(null)
+  
+  // 토스트 메시지
+  const { showToast, ToastContainer } = useToast()
 
   // 카메라 관련 state 및 ref
   const [showCamera, setShowCamera] = useState(false)
@@ -257,10 +261,12 @@ export default function RequestsPage() {
       } else {
         setRejectionPhoto(url)
       }
+      showToast('사진이 저장되었습니다.', 'success')
       return url
     } catch (error) {
       console.error('Photo upload error:', error)
-      alert('사진 업로드 중 오류가 발생했습니다.')
+      const errorMessage = error instanceof Error ? error.message : '알 수 없는 오류'
+      showToast(`사진 업로드 실패: ${errorMessage}`, 'error')
       throw error
     } finally {
       if (type === 'completion') {
@@ -580,9 +586,11 @@ export default function RequestsPage() {
   }
 
   return (
-    <div className="max-w-4xl mx-auto p-4">
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold mb-2">처리중인 요청란</h1>
+    <>
+      <ToastContainer />
+      <div className="max-w-4xl mx-auto p-4">
+        <div className="mb-6">
+          <h1 className="text-2xl font-bold mb-2">처리중인 요청란</h1>
         <p className="text-gray-600 text-sm">
           {attendanceStoreId && isClockedIn
             ? '관리시작 매장의 요청란만 표시됩니다.'
@@ -1129,6 +1137,7 @@ export default function RequestsPage() {
         </div>
       )}
     </div>
+    </>
   )
 }
 

@@ -736,50 +736,66 @@ export default function ChecklistClient() {
         mode={cameraMode}
         storeId={selectedChecklist.store_id}
         onComplete={async (updatedItems) => {
-          // 업데이트된 사진 항목을 전체 items에 반영
-          const updatedAllItems = items.map(item => {
-            const updated = updatedItems.find(u => u.area === item.area)
-            if (updated) {
-              if (cameraMode === 'before') {
-                // 관리전 사진이 촬영되면 자동으로 체크 (checked 상태 추가)
-                return { ...item, before_photo_url: updated.before_photo_url, checked: true }
-              } else {
-                return { ...item, after_photo_url: updated.after_photo_url }
-              }
-            }
-            return item
-          })
-          setItems(updatedAllItems)
-          // items 변경을 통해 진행률 자동 업데이트
-          
-          // 관리전/관리후 사진 촬영 완료 시 자동 저장
-          if (selectedChecklist) {
-            try {
-              await saveChecklistProgress(selectedChecklist.id, updatedAllItems, note)
-              if (cameraMode === 'before') {
-                alert('관리전 사진이 저장되었습니다. 대시보드로 돌아가 다른 업무를 진행할 수 있습니다.')
-              } else {
-                // 관리후 사진 저장 완료 시 체크리스트 완료 여부 확인
-                const afterPhotoItems = updatedAllItems.filter(item => 
-                  (item.type === 'after_photo' || item.type === 'before_after_photo') && item.area?.trim()
-                )
-                const checkItems = updatedAllItems.filter(item => item.type === 'check' && item.area?.trim())
-                const hasAllAfterPhotos = afterPhotoItems.length === 0 || afterPhotoItems.every(item => item.after_photo_url)
-                const hasAllCheckItemsCompleted = checkItems.length === 0 || checkItems.every(item => item.checked)
-                
-                if (hasAllAfterPhotos && hasAllCheckItemsCompleted) {
-                  alert('관리후 사진이 저장되었습니다. 체크리스트가 완료되었습니다.')
+          try {
+            // 업데이트된 사진 항목을 전체 items에 반영
+            const updatedAllItems = items.map(item => {
+              const updated = updatedItems.find(u => u.area === item.area)
+              if (updated) {
+                if (cameraMode === 'before') {
+                  // 관리전 사진이 촬영되면 자동으로 체크 (checked 상태 추가)
+                  return { ...item, before_photo_url: updated.before_photo_url, checked: true }
                 } else {
-                  alert('관리후 사진이 저장되었습니다.')
+                  return { ...item, after_photo_url: updated.after_photo_url }
                 }
               }
-            } catch (error: any) {
-              console.error('자동 저장 실패:', error)
-              alert('저장 중 오류가 발생했습니다: ' + (error.message || '알 수 없는 오류'))
+              return item
+            })
+            setItems(updatedAllItems)
+            // items 변경을 통해 진행률 자동 업데이트
+            
+            // 관리전/관리후 사진 촬영 완료 시 자동 저장
+            if (selectedChecklist) {
+              try {
+                await saveChecklistProgress(selectedChecklist.id, updatedAllItems, note)
+                
+                // 사파리 호환성을 위해 setTimeout으로 alert 지연
+                setTimeout(() => {
+                  if (cameraMode === 'before') {
+                    alert('관리전 사진이 저장되었습니다. 대시보드로 돌아가 다른 업무를 진행할 수 있습니다.')
+                  } else {
+                    // 관리후 사진 저장 완료 시 체크리스트 완료 여부 확인
+                    const afterPhotoItems = updatedAllItems.filter(item => 
+                      (item.type === 'after_photo' || item.type === 'before_after_photo') && item.area?.trim()
+                    )
+                    const checkItems = updatedAllItems.filter(item => item.type === 'check' && item.area?.trim())
+                    const hasAllAfterPhotos = afterPhotoItems.length === 0 || afterPhotoItems.every(item => item.after_photo_url)
+                    const hasAllCheckItemsCompleted = checkItems.length === 0 || checkItems.every(item => item.checked)
+                    
+                    if (hasAllAfterPhotos && hasAllCheckItemsCompleted) {
+                      alert('관리후 사진이 저장되었습니다. 체크리스트가 완료되었습니다.')
+                    } else {
+                      alert('관리후 사진이 저장되었습니다.')
+                    }
+                  }
+                }, 100)
+              } catch (error: any) {
+                console.error('자동 저장 실패:', error)
+                const errorMessage = error instanceof Error ? error.message : '알 수 없는 오류'
+                setTimeout(() => {
+                  alert('저장 중 오류가 발생했습니다: ' + errorMessage)
+                }, 100)
+              }
             }
+            
+            setCameraMode(null)
+          } catch (error: any) {
+            console.error('사진 처리 중 오류:', error)
+            const errorMessage = error instanceof Error ? error.message : '알 수 없는 오류'
+            setTimeout(() => {
+              alert('사진 처리 중 오류가 발생했습니다: ' + errorMessage)
+            }, 100)
+            setCameraMode(null)
           }
-          
-          setCameraMode(null)
         }}
         onCancel={() => {
           setCameraMode(null)

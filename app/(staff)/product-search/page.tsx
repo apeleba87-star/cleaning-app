@@ -331,9 +331,9 @@ export default function ProductSearchPage() {
             <div className="mt-3 relative rounded-xl overflow-hidden shadow-lg">
               <div id="barcode-scanner" className="w-full aspect-square bg-black"></div>
               <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                {/* 스캔 가이드 프레임 */}
+                {/* 스캔 가이드 프레임 - qrbox 크기(250px)와 정확히 일치 */}
                 <div className="relative">
-                  <div className="border-4 border-blue-500 rounded-2xl w-64 h-64 shadow-lg">
+                  <div className="border-4 border-blue-500 rounded-2xl w-[250px] h-[250px] shadow-lg">
                     {/* 모서리 강조 */}
                     <div className="absolute -top-1 -left-1 w-8 h-8 border-t-4 border-l-4 border-blue-500 rounded-tl-2xl"></div>
                     <div className="absolute -top-1 -right-1 w-8 h-8 border-t-4 border-r-4 border-blue-500 rounded-tr-2xl"></div>

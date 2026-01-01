@@ -5,6 +5,7 @@ import Image from 'next/image'
 import { createClient } from '@/lib/supabase/client'
 import { useTodayAttendance } from '@/contexts/AttendanceContext'
 import { uploadPhoto } from '@/lib/supabase/upload'
+import { useToast } from '@/components/Toast'
 
 type PhotoTab = 'receipt' | 'storage'
 type PhotoSubType = 'product' | 'order_sheet'
@@ -26,6 +27,9 @@ export default function ProductPhotosPage() {
   const [uploading, setUploading] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [activePhotoType, setActivePhotoType] = useState<PhotoSubType>('product')
+  
+  // 토스트 메시지
+  const { showToast, ToastContainer } = useToast()
   
   const cameraInputRef = useRef<HTMLInputElement>(null)
   const galleryInputRef = useRef<HTMLInputElement>(null)
@@ -459,7 +463,7 @@ export default function ProductPhotosPage() {
           }))
         }
 
-        alert('제품 입고 사진이 등록되었습니다.')
+        showToast('제품 입고 사진이 등록되었습니다.', 'success')
         setReceiptProductPhotos([])
         setReceiptOrderSheetPhotos([])
         setReceiptDescription('')
@@ -517,13 +521,13 @@ export default function ProductPhotosPage() {
           }))
         }
 
-        alert('보관 사진이 등록되었습니다.')
+        showToast('보관 사진이 등록되었습니다.', 'success')
         setStoragePhotos([])
         setStorageDescription('')
       }
     } catch (error: any) {
       console.error('Error submitting photos:', error)
-      alert(error.message || '등록 중 오류가 발생했습니다.')
+      showToast(error.message || '등록 중 오류가 발생했습니다.', 'error')
     } finally {
       setSubmitting(false)
     }
@@ -542,7 +546,9 @@ export default function ProductPhotosPage() {
   const hasReceiptPhotos = receiptProductPhotos.length > 0 || receiptOrderSheetPhotos.length > 0
 
   return (
-    <div className="min-h-screen bg-gray-50 pb-20">
+    <>
+      <ToastContainer />
+      <div className="min-h-screen bg-gray-50 pb-20">
       <div className="bg-white border-b border-gray-200 px-4 py-3">
         <h1 className="text-lg font-semibold">제품 입고 및 보관 사진</h1>
       </div>
@@ -927,6 +933,7 @@ export default function ProductPhotosPage() {
         </div>
       )}
     </div>
+    </>
   )
 }
 

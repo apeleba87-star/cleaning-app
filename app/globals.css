@@ -11,3 +11,23 @@
     touch-action: manipulation;
   }
 }
+
+/* html5-qrcode 스캔 영역 스타일 조정 (사파리/크롬 호환) */
+#barcode-scanner {
+  position: relative;
+}
+
+/* html5-qrcode 비디오 스트림 스타일 */
+#barcode-scanner video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+/* html5-qrcode가 생성하는 스캔 영역의 스타일 조정 (브라우저 호환성) */
+#barcode-scanner canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}

@@ -27,10 +27,19 @@ export default function RevenueDetailSection({ period, onRefresh }: RevenueDetai
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
   const [statusFilter, setStatusFilter] = useState<string>('all')
+  const [sortColumn, setSortColumn] = useState<string | null>(null)
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc')
+  const [currentPage, setCurrentPage] = useState(1)
+  const itemsPerPage = 30
 
   useEffect(() => {
     loadRevenues()
   }, [period])
+
+  // 검색어나 필터 변경 시 첫 페이지로
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [searchTerm, statusFilter])
 
   const loadRevenues = async () => {
     try {
@@ -84,6 +93,69 @@ export default function RevenueDetailSection({ period, onRefresh }: RevenueDetai
     return matchesSearch && matchesStatus
   })
 
+  // 정렬 함수
+  const handleSort = (column: string) => {
+    if (sortColumn === column) {
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc')
+    } else {
+      setSortColumn(column)
+      setSortDirection('asc')
+    }
+    setCurrentPage(1) // 정렬 변경 시 첫 페이지로
+  }
+
+  // 정렬 아이콘
+  const getSortIcon = (column: string) => {
+    if (sortColumn !== column) {
+      return <span className="text-gray-400">↕</span>
+    }
+    return sortDirection === 'asc' ? <span className="text-blue-600">↑</span> : <span className="text-blue-600">↓</span>
+  }
+
+  // 정렬된 데이터
+  const sortedRevenues = [...filteredRevenues].sort((a, b) => {
+    if (!sortColumn) return 0
+
+    let aValue: any
+    let bValue: any
+
+    switch (sortColumn) {
+      case 'store_name':
+        aValue = a.stores?.name || ''
+        bValue = b.stores?.name || ''
+        break
+      case 'due_date':
+        aValue = new Date(a.due_date).getTime()
+        bValue = new Date(b.due_date).getTime()
+        break
+      case 'amount':
+        aValue = a.amount
+        bValue = b.amount
+        break
+      case 'status':
+        const statusOrder: Record<string, number> = {
+          'paid': 1,
+          'partial': 2,
+          'unpaid': 3,
+        }
+        aValue = statusOrder[a.status] || 4
+        bValue = statusOrder[b.status] || 4
+        break
+      default:
+        return 0
+    }
+
+    if (aValue < bValue) return sortDirection === 'asc' ? -1 : 1
+    if (aValue > bValue) return sortDirection === 'asc' ? 1 : -1
+    return 0
+  })
+
+  // 페이지네이션 계산
+  const totalPages = Math.ceil(sortedRevenues.length / itemsPerPage)
+  const startIndex = (currentPage - 1) * itemsPerPage
+  const endIndex = startIndex + itemsPerPage
+  const paginatedRevenues = sortedRevenues.slice(startIndex, endIndex)
+
   const totalAmount = filteredRevenues.reduce((sum, r) => sum + (r.amount || 0), 0)
 
   if (loading) {
@@ -135,17 +207,41 @@ export default function RevenueDetailSection({ period, onRefresh }: RevenueDetai
         <table className="min-w-full divide-y divide-gray-200">
           <thead className="bg-gray-50">
             <tr>
-              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                매장명
+              <th 
+                className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                onClick={() => handleSort('store_name')}
+              >
+                <div className="flex items-center space-x-1">
+                  <span>매장명</span>
+                  {getSortIcon('store_name')}
+                </div>
               </th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                청구일
+              <th 
+                className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                onClick={() => handleSort('due_date')}
+              >
+                <div className="flex items-center space-x-1">
+                  <span>청구일</span>
+                  {getSortIcon('due_date')}
+                </div>
               </th>
-              <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                금액
+              <th 
+                className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                onClick={() => handleSort('amount')}
+              >
+                <div className="flex items-center justify-end space-x-1">
+                  <span>금액</span>
+                  {getSortIcon('amount')}
+                </div>
               </th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                상태
+              <th 
+                className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                onClick={() => handleSort('status')}
+              >
+                <div className="flex items-center space-x-1">
+                  <span>상태</span>
+                  {getSortIcon('status')}
+                </div>
               </th>
               <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 메모
@@ -153,14 +249,14 @@ export default function RevenueDetailSection({ period, onRefresh }: RevenueDetai
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
-            {filteredRevenues.length === 0 ? (
+            {sortedRevenues.length === 0 ? (
               <tr>
                 <td colSpan={5} className="px-4 py-8 text-center text-gray-500">
                   매출 데이터가 없습니다.
                 </td>
               </tr>
             ) : (
-              filteredRevenues.map((revenue) => (
+              paginatedRevenues.map((revenue) => (
                 <tr key={revenue.id} className="hover:bg-gray-50">
                   <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
                     {revenue.stores?.name || '-'}
@@ -182,6 +278,59 @@ export default function RevenueDetailSection({ period, onRefresh }: RevenueDetai
             )}
           </tbody>
         </table>
+        
+        {/* 페이지네이션 */}
+        {totalPages > 1 && (
+          <div className="bg-gray-50 px-4 py-4 border-t border-gray-200 flex items-center justify-between">
+            <div className="text-sm text-gray-700">
+              {startIndex + 1} - {Math.min(endIndex, sortedRevenues.length)} / {sortedRevenues.length}건
+            </div>
+            <div className="flex space-x-2">
+              <button
+                onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                disabled={currentPage === 1}
+                className="px-3 py-1 border border-gray-300 rounded-md text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-100"
+              >
+                이전
+              </button>
+              {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => {
+                // 페이지 번호 표시 로직: 현재 페이지 주변만 표시
+                if (
+                  page === 1 ||
+                  page === totalPages ||
+                  (page >= currentPage - 2 && page <= currentPage + 2)
+                ) {
+                  return (
+                    <button
+                      key={page}
+                      onClick={() => setCurrentPage(page)}
+                      className={`px-3 py-1 border border-gray-300 rounded-md text-sm ${
+                        currentPage === page
+                          ? 'bg-blue-600 text-white border-blue-600'
+                          : 'hover:bg-gray-100'
+                      }`}
+                    >
+                      {page}
+                    </button>
+                  )
+                } else if (
+                  page === currentPage - 3 ||
+                  page === currentPage + 3
+                ) {
+                  return <span key={page} className="px-2 text-gray-500">...</span>
+                }
+                return null
+              })}
+              <button
+                onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                disabled={currentPage === totalPages}
+                className="px-3 py-1 border border-gray-300 rounded-md text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-100"
+              >
+                다음
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   )
