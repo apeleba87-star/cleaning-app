@@ -497,23 +497,31 @@ export default function UserList({ initialUsers, stores, franchises, userStoreMa
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="space-y-2">
-                      <select
-                        value={user.role}
-                        onChange={(e) => handleRoleChange(user.id, e.target.value as UserRole)}
-                        disabled={loading || user.role === 'business_owner' || user.role === 'platform_admin'}
-                        className="text-sm border border-gray-300 rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100"
-                      >
-                        <option value="staff">직원</option>
-                        <option value="manager">매니저</option>
-                        <option value="franchise_manager">프렌차이즈관리자</option>
-                        <option value="store_manager">매장관리자(점주)</option>
-                        <option value="subcontract_individual">도급(개인)</option>
-                        <option value="subcontract_company">도급(업체)</option>
-                      </select>
-                      {user.role === 'franchise_manager' && user.franchise_id && (
-                        <div className="text-xs text-gray-500">
-                          {franchises.find(f => f.id === user.franchise_id)?.name || '프렌차이즈 연결됨'}
+                      {user.role === 'business_owner' || user.role === 'platform_admin' ? (
+                        <div className="text-sm font-medium text-gray-900">
+                          {getRoleLabel(user.role)}
                         </div>
+                      ) : (
+                        <>
+                          <select
+                            value={user.role}
+                            onChange={(e) => handleRoleChange(user.id, e.target.value as UserRole)}
+                            disabled={loading}
+                            className="text-sm border border-gray-300 rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100"
+                          >
+                            <option value="staff">직원</option>
+                            <option value="manager">매니저</option>
+                            <option value="franchise_manager">프렌차이즈관리자</option>
+                            <option value="store_manager">매장관리자(점주)</option>
+                            <option value="subcontract_individual">도급(개인)</option>
+                            <option value="subcontract_company">도급(업체)</option>
+                          </select>
+                          {user.role === 'franchise_manager' && user.franchise_id && (
+                            <div className="text-xs text-gray-500">
+                              {franchises.find(f => f.id === user.franchise_id)?.name || '프렌차이즈 연결됨'}
+                            </div>
+                          )}
+                        </>
                       )}
                     </div>
                   </td>
