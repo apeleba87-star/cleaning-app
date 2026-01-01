@@ -59,7 +59,7 @@ export default function ExpenseDetailSection({ period, onRefresh }: ExpenseDetai
   const [searchTerm, setSearchTerm] = useState('')
   const [categoryFilter, setCategoryFilter] = useState<string>('all')
   const [submitting, setSubmitting] = useState(false)
-  const [statsTab, setStatsTab] = useState<'category' | 'store'>('category') // 통계 탭 상태
+  const [statsTab, setStatsTab] = useState<'category' | 'store' | 'recurring'>('category') // 통계 탭 상태
 
   // 빠른 입력 폼 상태
   const [quickDate, setQuickDate] = useState(new Date().toISOString().slice(0, 10))
@@ -88,10 +88,19 @@ export default function ExpenseDetailSection({ period, onRefresh }: ExpenseDetai
   // 매장 목록
   const [stores, setStores] = useState<Array<{ id: string; name: string }>>([])
 
-  useEffect(() => {
-    loadExpenses()
-    loadStores()
-  }, [period])
+  const loadRecurringExpenses = async () => {
+    try {
+      const response = await fetch('/api/business/recurring-expenses')
+      if (response.ok) {
+        const data = await response.json()
+        if (data.success) {
+          setRecurringExpenses(data.data || [])
+        }
+      }
+    } catch (error) {
+      console.error('Error loading recurring expenses:', error)
+    }
+  }
 
   const loadStores = async () => {
     try {
@@ -125,6 +134,12 @@ export default function ExpenseDetailSection({ period, onRefresh }: ExpenseDetai
     }
   }
 
+  useEffect(() => {
+    loadExpenses()
+    loadStores()
+    loadRecurringExpenses()
+  }, [period])
+
   const handleQuickSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
@@ -149,7 +164,7 @@ export default function ExpenseDetailSection({ period, onRefresh }: ExpenseDetai
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             category: quickCategory,
-            amount: parseFloat(quickAmount),
+            amount: parseFloat(getNumericValue(quickAmount)),
             memo: finalMemo || null,
             store_id: quickStoreId || null,
             create_current_month: true, // 현재 월 지출도 함께 생성
@@ -225,7 +240,7 @@ export default function ExpenseDetailSection({ period, onRefresh }: ExpenseDetai
     setSelectedExpense(expense)
     setEditDate(expense.date)
     setEditCategory(expense.category)
-    setEditAmount(expense.amount.toString())
+    setEditAmount(formatAmountInput(expense.amount.toString()))
     
     // memo에서 직접 입력 매장명 추출 (형식: [매장명] 메모)
     let memo = expense.memo || ''
@@ -274,7 +289,7 @@ export default function ExpenseDetailSection({ period, onRefresh }: ExpenseDetai
         body: JSON.stringify({
           date: editDate,
           category: editCategory,
-          amount: parseFloat(editAmount),
+          amount: parseFloat(getNumericValue(editAmount)),
           memo: finalMemo || null,
           store_id: editStoreId || null, // 직접 입력 시에는 null
         }),
@@ -411,6 +426,20 @@ export default function ExpenseDetailSection({ period, onRefresh }: ExpenseDetai
       currency: 'KRW',
     }).format(amount)
   }
+  
+  // 금액 포맷팅 (천 단위 구분)
+  const formatAmountInput = (value: string) => {
+    // 숫자만 추출
+    const numericValue = value.replace(/[^0-9]/g, '')
+    if (!numericValue) return ''
+    // 천 단위 구분 기호 추가
+    return numericValue.replace(/\B(?=(\d{3})+(?!\d))/g, ',')
+  }
+  
+  // 금액 값에서 숫자만 추출
+  const getNumericValue = (value: string) => {
+    return value.replace(/[^0-9]/g, '')
+  }
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('ko-KR', {
@@ -451,6 +480,19 @@ export default function ExpenseDetailSection({ period, onRefresh }: ExpenseDetai
     return acc
   }, {} as Record<string, { count: number; total: number }>)
 
+  // 고정비 집계
+  const recurringStats = expenses.reduce((acc, expense) => {
+    if (expense.recurring_expense_id) {
+      const category = expense.category
+      if (!acc[category]) {
+        acc[category] = { count: 0, total: 0 }
+      }
+      acc[category].count++
+      acc[category].total += expense.amount
+    }
+    return acc
+  }, {} as Record<string, { count: number; total: number }>)
+
   // 필터링된 지출 목록
   const filteredExpenses = expenses.filter((expense) => {
     const matchesSearch =
@@ -467,6 +509,11 @@ export default function ExpenseDetailSection({ period, onRefresh }: ExpenseDetai
 
   // 총 지출액
   const totalAmount = filteredExpenses.reduce((sum, e) => sum + e.amount, 0)
+  
+  // 고정비 지출 총액
+  const totalRecurringAmount = filteredExpenses
+    .filter(e => e.recurring_expense_id !== null)
+    .reduce((sum, e) => sum + e.amount, 0)
 
   // 일평균 지출액
   const daysInMonth = new Date(new Date(period + '-01').getFullYear(), new Date(period + '-01').getMonth() + 1, 0).getDate()
@@ -494,113 +541,129 @@ export default function ExpenseDetailSection({ period, onRefresh }: ExpenseDetai
       <div className="bg-orange-50 rounded-lg p-4 mb-6 border-l-4 border-orange-500">
         <h3 className="text-sm font-semibold text-gray-700 mb-3">빠른 지출 등록</h3>
         <form onSubmit={handleQuickSubmit} className="space-y-2">
-          <div className="grid grid-cols-1 md:grid-cols-5 gap-2">
-            <input
-              type="date"
-              value={quickDate}
-              onChange={(e) => setQuickDate(e.target.value)}
-              className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500 text-sm"
-              required
-              disabled={submitting}
-            />
-          <select
-            value={quickCategory}
-            onChange={(e) => setQuickCategory(e.target.value)}
-            className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500 text-sm"
-            required
-            disabled={submitting}
-          >
-            <option value="">카테고리 선택</option>
-            {allCategories.map((cat) => (
-              <option key={cat} value={cat}>
-                {cat}
-              </option>
-            ))}
-          </select>
-          <input
-            type="number"
-            value={quickAmount}
-            onChange={(e) => setQuickAmount(e.target.value)}
-            placeholder="금액"
-            className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500 text-sm"
-            required
-            disabled={submitting}
-            min="0"
-            step="1"
-          />
-          <input
-            type="text"
-            value={quickMemo}
-            onChange={(e) => setQuickMemo(e.target.value)}
-            placeholder="메모 (선택)"
-            className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500 text-sm"
-            disabled={submitting}
-          />
-          {quickStoreId === '__custom__' ? (
-            <div className="relative">
+          <div className="grid grid-cols-1 md:grid-cols-12 gap-2">
+            <div className="md:col-span-2">
+              <input
+                type="date"
+                value={quickDate}
+                onChange={(e) => setQuickDate(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500 text-sm"
+                required
+                disabled={submitting}
+              />
+            </div>
+            <div className="md:col-span-2">
+              <select
+                value={quickCategory}
+                onChange={(e) => setQuickCategory(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500 text-sm"
+                required
+                disabled={submitting}
+              >
+                <option value="">카테고리 선택</option>
+                {allCategories.map((cat) => (
+                  <option key={cat} value={cat}>
+                    {cat}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="md:col-span-2 relative">
               <input
                 type="text"
-                value={quickStoreCustom}
-                onChange={(e) => setQuickStoreCustom(e.target.value)}
-                placeholder="매장명 직접 입력"
-                className="w-full px-3 py-2 pr-20 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500 text-sm"
+                value={quickAmount}
+                onChange={(e) => {
+                  const formatted = formatAmountInput(e.target.value)
+                  setQuickAmount(formatted)
+                }}
+                placeholder="금액"
+                className="w-full px-3 py-2 pr-14 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500 text-sm"
+                required
                 disabled={submitting}
               />
-              <button
-                type="button"
-                onClick={() => {
-                  setQuickStoreId('')
-                  setQuickStoreCustom('')
-                }}
-                className="absolute right-1 top-1/2 -translate-y-1/2 px-2 py-1.5 text-xs text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded border border-gray-300 bg-white disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                disabled={submitting}
-                title="선택으로 돌아가기"
-              >
-                선택
-              </button>
+              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-gray-500 pointer-events-none">
+                원
+              </span>
             </div>
-          ) : (
-            <select
-              value={quickStoreId}
-              onChange={(e) => {
-                setQuickStoreId(e.target.value)
-                if (e.target.value !== '__custom__') {
-                  setQuickStoreCustom('') // 드롭다운 선택 시 직접 입력 초기화
-                }
-              }}
-              className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500 text-sm"
+            <div className="md:col-span-3">
+              <input
+                type="text"
+                value={quickMemo}
+                onChange={(e) => setQuickMemo(e.target.value)}
+                placeholder="메모 (선택)"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500 text-sm"
+                disabled={submitting}
+              />
+            </div>
+            <div className="md:col-span-3">
+              {quickStoreId === '__custom__' ? (
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={quickStoreCustom}
+                    onChange={(e) => setQuickStoreCustom(e.target.value)}
+                    placeholder="매장명 직접 입력"
+                    className="w-full px-3 py-2 pr-20 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500 text-sm"
+                    disabled={submitting}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setQuickStoreId('')
+                      setQuickStoreCustom('')
+                    }}
+                    className="absolute right-1 top-1/2 -translate-y-1/2 px-2 py-1.5 text-xs text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded border border-gray-300 bg-white disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    disabled={submitting}
+                    title="선택으로 돌아가기"
+                  >
+                    선택
+                  </button>
+                </div>
+              ) : (
+                <select
+                  value={quickStoreId}
+                  onChange={(e) => {
+                    setQuickStoreId(e.target.value)
+                    if (e.target.value !== '__custom__') {
+                      setQuickStoreCustom('') // 드롭다운 선택 시 직접 입력 초기화
+                    }
+                  }}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500 text-sm"
+                  disabled={submitting}
+                >
+                  <option value="">매장 선택 (선택)</option>
+                  <option value="__custom__">직접 입력</option>
+                  {stores.map((store) => (
+                    <option key={store.id} value={store.id}>
+                      {store.name}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </div>
+          </div>
+          <div className="flex items-center gap-4">
+            <button
+              type="submit"
+              className="px-4 py-2 bg-orange-600 text-white rounded-md hover:bg-orange-700 disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium"
               disabled={submitting}
             >
-              <option value="">매장 선택 (선택)</option>
-              <option value="__custom__">직접 입력</option>
-              {stores.map((store) => (
-                <option key={store.id} value={store.id}>
-                  {store.name}
-                </option>
-              ))}
-            </select>
-          )}
-          <button
-            type="submit"
-            className="px-4 py-2 bg-orange-600 text-white rounded-md hover:bg-orange-700 disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium"
-            disabled={submitting}
-          >
-            {submitting ? '등록 중...' : quickIsRecurring ? '고정비 등록' : '추가'}
-          </button>
-          </div>
-          <div className="flex items-center">
-            <label className="flex items-center text-sm text-gray-700 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={quickIsRecurring}
-                onChange={(e) => setQuickIsRecurring(e.target.checked)}
-                className="mr-2 h-4 w-4 text-purple-600 focus:ring-purple-500 border-gray-300 rounded"
-                disabled={submitting}
-              />
-              <span className={quickIsRecurring ? 'text-purple-700 font-medium' : ''}>
-                고정비로 등록 (매달 자동 생성)
-              </span>
-            </label>
+              {submitting ? '등록 중...' : quickIsRecurring ? '고정비 등록' : '추가'}
+            </button>
+            <div className="flex items-center">
+              <label className="flex items-center text-sm text-gray-700 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={quickIsRecurring}
+                  onChange={(e) => setQuickIsRecurring(e.target.checked)}
+                  className="mr-2 h-4 w-4 text-purple-600 focus:ring-purple-500 border-gray-300 rounded"
+                  disabled={submitting}
+                />
+                <span className={quickIsRecurring ? 'text-purple-700 font-medium' : ''}>
+                  고정비로 등록 (매달 자동 생성)
+                </span>
+              </label>
+            </div>
           </div>
         </form>
       </div>
@@ -695,6 +758,11 @@ export default function ExpenseDetailSection({ period, onRefresh }: ExpenseDetai
           <h3 className="text-sm font-medium text-gray-600 mb-1">총 지출</h3>
           <p className="text-2xl font-bold text-gray-900">{formatCurrency(totalAmount)}</p>
           <p className="text-xs text-gray-500 mt-1">{filteredExpenses.length}건</p>
+          {totalRecurringAmount > 0 && (
+            <p className="text-xs text-purple-600 mt-1">
+              고정비: {formatCurrency(totalRecurringAmount)}
+            </p>
+          )}
         </div>
         <div className="bg-blue-50 rounded-lg p-4 border-l-4 border-blue-500">
           <h3 className="text-sm font-medium text-gray-600 mb-1">일평균 지출</h3>
@@ -731,6 +799,16 @@ export default function ExpenseDetailSection({ period, onRefresh }: ExpenseDetai
               }`}
             >
               매장별 지출
+            </button>
+            <button
+              onClick={() => setStatsTab('recurring')}
+              className={`py-2 px-4 border-b-2 font-medium text-sm ${
+                statsTab === 'recurring'
+                  ? 'border-purple-500 text-purple-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
+            >
+              고정비 지출
             </button>
           </nav>
         </div>
@@ -769,6 +847,28 @@ export default function ExpenseDetailSection({ period, onRefresh }: ExpenseDetai
           </div>
         )}
 
+        {/* 고정비 통계 */}
+        {statsTab === 'recurring' && Object.keys(recurringStats).length > 0 && (
+          <div className="p-4 bg-gray-50 rounded-lg">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              {Object.entries(recurringStats)
+                .sort((a, b) => b[1].total - a[1].total)
+                .map(([category, stats]) => (
+                  <div key={category} className="bg-white rounded p-3 border border-purple-200">
+                    <div className="flex items-center gap-2 mb-1">
+                      <div className="text-xs text-gray-500">{category}</div>
+                      <span className="px-1.5 py-0.5 bg-purple-100 text-purple-700 text-xs rounded font-medium">
+                        고정비
+                      </span>
+                    </div>
+                    <div className="text-lg font-bold text-gray-900">{formatCurrency(stats.total)}</div>
+                    <div className="text-xs text-gray-400">{stats.count}건</div>
+                  </div>
+                ))}
+            </div>
+          </div>
+        )}
+
         {/* 데이터가 없을 때 */}
         {statsTab === 'category' && Object.keys(categoryStats).length === 0 && (
           <div className="p-4 bg-gray-50 rounded-lg text-center text-gray-500 text-sm">
@@ -779,6 +879,12 @@ export default function ExpenseDetailSection({ period, onRefresh }: ExpenseDetai
         {statsTab === 'store' && Object.keys(storeStats).length === 0 && (
           <div className="p-4 bg-gray-50 rounded-lg text-center text-gray-500 text-sm">
             매장별 지출 데이터가 없습니다.
+          </div>
+        )}
+
+        {statsTab === 'recurring' && Object.keys(recurringStats).length === 0 && (
+          <div className="p-4 bg-gray-50 rounded-lg text-center text-gray-500 text-sm">
+            고정비 지출 데이터가 없습니다.
           </div>
         )}
       </div>
@@ -943,17 +1049,23 @@ export default function ExpenseDetailSection({ period, onRefresh }: ExpenseDetai
                 <label htmlFor="edit-amount" className="block text-sm font-medium text-gray-700 mb-1">
                   금액
                 </label>
-                <input
-                  id="edit-amount"
-                  type="number"
-                  value={editAmount}
-                  onChange={(e) => setEditAmount(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  required
-                  disabled={submitting}
-                  min="0"
-                  step="1"
-                />
+                <div className="relative">
+                  <input
+                    id="edit-amount"
+                    type="text"
+                    value={editAmount}
+                    onChange={(e) => {
+                      const formatted = formatAmountInput(e.target.value)
+                      setEditAmount(formatted)
+                    }}
+                    className="w-full px-3 py-2 pr-14 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    required
+                    disabled={submitting}
+                  />
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-gray-500 pointer-events-none">
+                    원
+                  </span>
+                </div>
               </div>
               <div>
                 <label htmlFor="edit-store" className="block text-sm font-medium text-gray-700 mb-1">
