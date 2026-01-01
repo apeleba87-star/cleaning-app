@@ -353,6 +353,21 @@ export interface Expense {
   store_id: string | null
   company_id: string
   created_by: string | null
+  recurring_expense_id: string | null
+  created_at: string
+  updated_at: string
+  deleted_at: string | null
+}
+
+export interface RecurringExpense {
+  id: string
+  company_id: string
+  category: string
+  amount: number
+  memo: string | null
+  store_id: string | null
+  created_by: string | null
+  is_active: boolean
   created_at: string
   updated_at: string
   deleted_at: string | null

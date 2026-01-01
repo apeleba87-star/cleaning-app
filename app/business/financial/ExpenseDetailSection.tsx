@@ -9,6 +9,20 @@ interface Expense {
   amount: number
   memo: string | null
   store_id: string | null
+  recurring_expense_id: string | null
+  stores: {
+    id: string
+    name: string
+  } | null
+}
+
+interface RecurringExpense {
+  id: string
+  category: string
+  amount: number
+  memo: string | null
+  store_id: string | null
+  is_active: boolean
   stores: {
     id: string
     name: string
@@ -54,6 +68,12 @@ export default function ExpenseDetailSection({ period, onRefresh }: ExpenseDetai
   const [quickMemo, setQuickMemo] = useState('')
   const [quickStoreId, setQuickStoreId] = useState<string>('')
   const [quickStoreCustom, setQuickStoreCustom] = useState<string>('') // 직접 입력 매장명
+  const [quickIsRecurring, setQuickIsRecurring] = useState(false) // 고정비 등록 여부
+  
+  // 고정비 템플릿 관련 상태
+  const [recurringExpenses, setRecurringExpenses] = useState<RecurringExpense[]>([])
+  const [showRecurringSection, setShowRecurringSection] = useState(false)
+  const [recurringFilter, setRecurringFilter] = useState<'all' | 'recurring' | 'regular'>('all')
 
   // 수정 모달 상태
   const [showEditModal, setShowEditModal] = useState(false)
@@ -116,6 +136,49 @@ export default function ExpenseDetailSection({ period, onRefresh }: ExpenseDetai
     try {
       setSubmitting(true)
       
+      // 고정비로 등록하는 경우
+      if (quickIsRecurring) {
+        // 직접 입력한 매장명이 있으면 memo에 포함
+        let finalMemo = quickMemo.trim()
+        if (quickStoreCustom.trim()) {
+          finalMemo = `[${quickStoreCustom.trim()}] ${finalMemo}`.trim()
+        }
+        
+        const response = await fetch('/api/business/recurring-expenses', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            category: quickCategory,
+            amount: parseFloat(quickAmount),
+            memo: finalMemo || null,
+            store_id: quickStoreId || null,
+            create_current_month: true, // 현재 월 지출도 함께 생성
+          }),
+        })
+
+        if (!response.ok) {
+          const errorData = await response.json()
+          throw new Error(errorData.error || '고정비 등록 실패')
+        }
+
+        await loadRecurringExpenses()
+        await loadExpenses()
+        onRefresh()
+        alert('고정비가 등록되었습니다. 이번 달 지출도 함께 생성되었습니다.')
+        
+        // 폼 초기화
+        setQuickDate(new Date().toISOString().slice(0, 10))
+        setQuickCategory('')
+        setQuickAmount('')
+        setQuickMemo('')
+        setQuickStoreId('')
+        setQuickStoreCustom('')
+        setQuickIsRecurring(false)
+        setSubmitting(false)
+        return
+      }
+      
+      // 일반 지출 등록
       // 직접 입력한 매장명이 있으면 memo에 포함
       let finalMemo = quickMemo.trim()
       if (quickStoreCustom.trim()) {
@@ -146,6 +209,7 @@ export default function ExpenseDetailSection({ period, onRefresh }: ExpenseDetai
       setQuickMemo('')
       setQuickStoreId('')
       setQuickStoreCustom('')
+      setQuickIsRecurring(false)
 
       loadExpenses()
       onRefresh()
@@ -261,6 +325,86 @@ export default function ExpenseDetailSection({ period, onRefresh }: ExpenseDetai
     }
   }
 
+  // 고정비 생성 함수
+  const handleGenerateRecurringExpenses = async () => {
+    if (!confirm('이번 달 고정비 지출을 생성하시겠습니까?')) {
+      return
+    }
+
+    try {
+      setSubmitting(true)
+      const response = await fetch('/api/business/recurring-expenses/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          target_month: period, // YYYY-MM 형식
+        }),
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || '고정비 생성 실패')
+      }
+
+      const data = await response.json()
+      if (data.success) {
+        await loadExpenses()
+        onRefresh()
+        alert(`${data.data.generated_count}개의 고정비 지출이 생성되었습니다.`)
+      }
+    } catch (err: any) {
+      alert(err.message || '고정비 생성 중 오류가 발생했습니다.')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+  
+  // 고정비 템플릿 활성화/비활성화
+  const handleToggleRecurringExpense = async (id: string, currentStatus: boolean) => {
+    try {
+      const response = await fetch(`/api/business/recurring-expenses/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          is_active: !currentStatus,
+        }),
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || '고정비 상태 변경 실패')
+      }
+
+      await loadRecurringExpenses()
+      alert(`고정비가 ${!currentStatus ? '활성화' : '비활성화'}되었습니다.`)
+    } catch (err: any) {
+      alert(err.message || '고정비 상태 변경 중 오류가 발생했습니다.')
+    }
+  }
+  
+  // 고정비 템플릿 삭제
+  const handleDeleteRecurringExpense = async (id: string) => {
+    if (!confirm('이 고정비 템플릿을 삭제하시겠습니까? (이미 생성된 지출은 삭제되지 않습니다)')) {
+      return
+    }
+
+    try {
+      const response = await fetch(`/api/business/recurring-expenses/${id}`, {
+        method: 'DELETE',
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || '고정비 삭제 실패')
+      }
+
+      await loadRecurringExpenses()
+      alert('고정비 템플릿이 삭제되었습니다.')
+    } catch (err: any) {
+      alert(err.message || '고정비 삭제 중 오류가 발생했습니다.')
+    }
+  }
+
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('ko-KR', {
       style: 'currency',
@@ -314,7 +458,11 @@ export default function ExpenseDetailSection({ period, onRefresh }: ExpenseDetai
       expense.stores?.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       expense.category.toLowerCase().includes(searchTerm.toLowerCase())
     const matchesCategory = categoryFilter === 'all' || expense.category === categoryFilter
-    return matchesSearch && matchesCategory
+    const matchesRecurring = 
+      recurringFilter === 'all' ||
+      (recurringFilter === 'recurring' && expense.recurring_expense_id !== null) ||
+      (recurringFilter === 'regular' && expense.recurring_expense_id === null)
+    return matchesSearch && matchesCategory && matchesRecurring
   })
 
   // 총 지출액
@@ -345,15 +493,16 @@ export default function ExpenseDetailSection({ period, onRefresh }: ExpenseDetai
       {/* 빠른 입력 폼 */}
       <div className="bg-orange-50 rounded-lg p-4 mb-6 border-l-4 border-orange-500">
         <h3 className="text-sm font-semibold text-gray-700 mb-3">빠른 지출 등록</h3>
-        <form onSubmit={handleQuickSubmit} className="grid grid-cols-1 md:grid-cols-5 gap-2">
-          <input
-            type="date"
-            value={quickDate}
-            onChange={(e) => setQuickDate(e.target.value)}
-            className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500 text-sm"
-            required
-            disabled={submitting}
-          />
+        <form onSubmit={handleQuickSubmit} className="space-y-2">
+          <div className="grid grid-cols-1 md:grid-cols-5 gap-2">
+            <input
+              type="date"
+              value={quickDate}
+              onChange={(e) => setQuickDate(e.target.value)}
+              className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500 text-sm"
+              required
+              disabled={submitting}
+            />
           <select
             value={quickCategory}
             onChange={(e) => setQuickCategory(e.target.value)}
@@ -436,9 +585,108 @@ export default function ExpenseDetailSection({ period, onRefresh }: ExpenseDetai
             className="px-4 py-2 bg-orange-600 text-white rounded-md hover:bg-orange-700 disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium"
             disabled={submitting}
           >
-            {submitting ? '등록 중...' : '추가'}
+            {submitting ? '등록 중...' : quickIsRecurring ? '고정비 등록' : '추가'}
           </button>
+          </div>
+          <div className="flex items-center">
+            <label className="flex items-center text-sm text-gray-700 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={quickIsRecurring}
+                onChange={(e) => setQuickIsRecurring(e.target.checked)}
+                className="mr-2 h-4 w-4 text-purple-600 focus:ring-purple-500 border-gray-300 rounded"
+                disabled={submitting}
+              />
+              <span className={quickIsRecurring ? 'text-purple-700 font-medium' : ''}>
+                고정비로 등록 (매달 자동 생성)
+              </span>
+            </label>
+          </div>
         </form>
+      </div>
+      
+      {/* 고정비 관리 섹션 */}
+      <div className="bg-purple-50 rounded-lg p-4 mb-6 border-l-4 border-purple-500">
+        <div className="flex justify-between items-center mb-3">
+          <div>
+            <h3 className="text-sm font-semibold text-gray-700">고정비 관리</h3>
+            <p className="text-xs text-gray-500 mt-1">
+              고정비 템플릿을 관리하고 매월 자동으로 지출을 생성할 수 있습니다.
+            </p>
+          </div>
+          <div className="flex gap-2">
+            <button
+              onClick={handleGenerateRecurringExpenses}
+              className="px-3 py-1.5 bg-purple-600 text-white rounded-md hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium"
+              disabled={submitting || recurringExpenses.length === 0}
+            >
+              {submitting ? '생성 중...' : `이번 달 생성 (${recurringExpenses.filter(r => r.is_active).length}개)`}
+            </button>
+            <button
+              onClick={() => setShowRecurringSection(!showRecurringSection)}
+              className="px-3 py-1.5 bg-purple-100 text-purple-700 rounded-md hover:bg-purple-200 text-sm font-medium"
+            >
+              {showRecurringSection ? '숨기기' : '템플릿 보기'}
+            </button>
+          </div>
+        </div>
+        
+        {showRecurringSection && (
+          <div className="mt-4 space-y-2 max-h-64 overflow-y-auto">
+            {recurringExpenses.length === 0 ? (
+              <p className="text-sm text-gray-500 text-center py-4">등록된 고정비 템플릿이 없습니다.</p>
+            ) : (
+              recurringExpenses.map((template) => (
+                <div
+                  key={template.id}
+                  className={`p-3 bg-white rounded-md border ${
+                    template.is_active ? 'border-purple-200' : 'border-gray-200 opacity-60'
+                  }`}
+                >
+                  <div className="flex justify-between items-start">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium text-sm text-gray-900">{template.category}</span>
+                        <span className="text-sm font-semibold text-purple-700">
+                          {formatCurrency(template.amount)}
+                        </span>
+                        {!template.is_active && (
+                          <span className="text-xs text-gray-500 bg-gray-100 px-2 py-0.5 rounded">비활성</span>
+                        )}
+                      </div>
+                      {template.memo && (
+                        <p className="text-xs text-gray-500 mt-1">{template.memo}</p>
+                      )}
+                      {template.stores && (
+                        <p className="text-xs text-gray-500 mt-1">매장: {template.stores.name}</p>
+                      )}
+                    </div>
+                    <div className="flex gap-2 ml-4">
+                      <button
+                        onClick={() => handleToggleRecurringExpense(template.id, template.is_active)}
+                        className={`px-2 py-1 text-xs rounded ${
+                          template.is_active
+                            ? 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                            : 'bg-purple-100 text-purple-700 hover:bg-purple-200'
+                        }`}
+                        disabled={submitting}
+                      >
+                        {template.is_active ? '비활성화' : '활성화'}
+                      </button>
+                      <button
+                        onClick={() => handleDeleteRecurringExpense(template.id)}
+                        className="px-2 py-1 text-xs bg-red-100 text-red-700 rounded hover:bg-red-200"
+                        disabled={submitting}
+                      >
+                        삭제
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        )}
       </div>
 
       {/* 통계 카드 */}
@@ -536,9 +784,9 @@ export default function ExpenseDetailSection({ period, onRefresh }: ExpenseDetai
       </div>
 
       {/* 필터 및 검색 */}
-      <div className="flex justify-between items-center mb-4">
+      <div className="flex justify-between items-center mb-4 flex-wrap gap-4">
         <h2 className="text-xl font-semibold">지출 목록</h2>
-        <div className="flex gap-4">
+        <div className="flex gap-4 flex-wrap">
           <input
             type="text"
             placeholder="검색 (메모, 매장, 카테고리)..."
@@ -557,6 +805,15 @@ export default function ExpenseDetailSection({ period, onRefresh }: ExpenseDetai
                 {cat}
               </option>
             ))}
+          </select>
+          <select
+            value={recurringFilter}
+            onChange={(e) => setRecurringFilter(e.target.value as 'all' | 'recurring' | 'regular')}
+            className="px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500 text-sm"
+          >
+            <option value="all">전체</option>
+            <option value="regular">일반 지출</option>
+            <option value="recurring">고정비</option>
           </select>
         </div>
       </div>
@@ -600,9 +857,16 @@ export default function ExpenseDetailSection({ period, onRefresh }: ExpenseDetai
                     {formatDate(expense.date)}
                   </td>
                   <td className="px-4 py-3 whitespace-nowrap">
-                    <span className="px-2 py-1 bg-orange-100 text-orange-700 text-xs rounded-full">
-                      {expense.category}
-                    </span>
+                    <div className="flex items-center gap-2">
+                      <span className="px-2 py-1 bg-orange-100 text-orange-700 text-xs rounded-full">
+                        {expense.category}
+                      </span>
+                      {expense.recurring_expense_id && (
+                        <span className="px-2 py-1 bg-purple-100 text-purple-700 text-xs rounded-full font-medium">
+                          고정비
+                        </span>
+                      )}
+                    </div>
                   </td>
                   <td className="px-4 py-3 whitespace-nowrap text-sm font-semibold text-gray-900 text-right">
                     {formatCurrency(expense.amount)}
