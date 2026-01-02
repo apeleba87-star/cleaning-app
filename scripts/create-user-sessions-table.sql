@@ -20,10 +20,18 @@ CREATE TABLE IF NOT EXISTS public.user_sessions (
 CREATE INDEX IF NOT EXISTS idx_user_sessions_user_id ON public.user_sessions(user_id);
 CREATE INDEX IF NOT EXISTS idx_user_sessions_role ON public.user_sessions(role);
 CREATE INDEX IF NOT EXISTS idx_user_sessions_last_activity ON public.user_sessions(last_activity_at);
-CREATE INDEX IF NOT EXISTS idx_user_sessions_active ON public.user_sessions(user_id, last_activity_at) WHERE expires_at IS NULL OR expires_at > NOW();
+CREATE INDEX IF NOT EXISTS idx_user_sessions_expires_at ON public.user_sessions(expires_at);
+-- 활성 세션 조회를 위한 복합 인덱스 (NOW()는 IMMUTABLE이 아니므로 WHERE 절에서 제거)
+CREATE INDEX IF NOT EXISTS idx_user_sessions_active ON public.user_sessions(user_id, last_activity_at);
 
 -- RLS 정책 설정
 ALTER TABLE public.user_sessions ENABLE ROW LEVEL SECURITY;
+
+-- 기존 정책 삭제 (이미 존재하는 경우)
+DROP POLICY IF EXISTS "Users can view their own sessions" ON public.user_sessions;
+DROP POLICY IF EXISTS "Users can insert their own sessions" ON public.user_sessions;
+DROP POLICY IF EXISTS "Users can update their own sessions" ON public.user_sessions;
+DROP POLICY IF EXISTS "Users can delete their own sessions" ON public.user_sessions;
 
 -- 사용자는 자신의 세션만 조회 가능
 CREATE POLICY "Users can view their own sessions"
@@ -31,8 +39,24 @@ CREATE POLICY "Users can view their own sessions"
   FOR SELECT
   USING (auth.uid() = user_id);
 
--- 서비스 역할로 모든 작업 가능 (API에서 사용)
--- 실제로는 서비스 역할을 사용하므로 별도 정책 불필요
+-- 사용자는 자신의 세션을 생성할 수 있음
+CREATE POLICY "Users can insert their own sessions"
+  ON public.user_sessions
+  FOR INSERT
+  WITH CHECK (auth.uid() = user_id);
+
+-- 사용자는 자신의 세션을 업데이트할 수 있음
+CREATE POLICY "Users can update their own sessions"
+  ON public.user_sessions
+  FOR UPDATE
+  USING (auth.uid() = user_id)
+  WITH CHECK (auth.uid() = user_id);
+
+-- 사용자는 자신의 세션을 삭제할 수 있음
+CREATE POLICY "Users can delete their own sessions"
+  ON public.user_sessions
+  FOR DELETE
+  USING (auth.uid() = user_id);
 
 -- 만료된 세션 자동 정리 함수 (선택사항)
 CREATE OR REPLACE FUNCTION public.cleanup_expired_sessions()
