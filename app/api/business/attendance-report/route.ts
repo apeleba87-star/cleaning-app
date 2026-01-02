@@ -121,9 +121,6 @@ export async function GET(request: NextRequest) {
       if (generalSummary?.unmanaged_store_ids) {
         generalSummary.unmanaged_store_ids.forEach((id: string) => unmanagedStoreIds.add(id))
       }
-      if (nightSummary?.unmanaged_store_ids && includeNightShift) {
-        nightSummary.unmanaged_store_ids.forEach((id: string) => unmanagedStoreIds.add(id))
-      }
 
       // 리포트 데이터 구성 (모든 매장 포함)
       const reportStores: any[] = Array.from(allStoreIds).map(storeId => {
