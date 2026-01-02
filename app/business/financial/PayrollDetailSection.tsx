@@ -152,7 +152,8 @@ export default function PayrollDetailSection({ period, onRefresh }: PayrollDetai
       }
 
       alert('지급 완료 처리되었습니다.')
-      loadPayrolls()
+      const hasFilters = searchTerm || statusFilter !== 'all'
+      loadPayrolls(!hasFilters)
       onRefresh()
     } catch (err: any) {
       alert(err.message || '지급 완료 처리 중 오류가 발생했습니다.')
@@ -214,7 +215,8 @@ export default function PayrollDetailSection({ period, onRefresh }: PayrollDetai
       alert('인건비 정보가 수정되었습니다.')
       setShowDetailModal(false)
       setSelectedPayroll(null)
-      loadPayrolls()
+      const hasFilters = searchTerm || statusFilter !== 'all'
+      loadPayrolls(!hasFilters)
       onRefresh()
     } catch (err: any) {
       alert(err.message || '인건비 수정 중 오류가 발생했습니다.')
@@ -250,7 +252,8 @@ export default function PayrollDetailSection({ period, onRefresh }: PayrollDetai
       alert('인건비가 삭제되었습니다.')
       setShowDetailModal(false)
       setSelectedPayroll(null)
-      loadPayrolls()
+      const hasFilters = searchTerm || statusFilter !== 'all'
+      loadPayrolls(!hasFilters)
       onRefresh()
     } catch (err: any) {
       alert(err.message || '인건비 삭제 중 오류가 발생했습니다.')
