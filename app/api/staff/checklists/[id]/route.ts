@@ -186,12 +186,31 @@ export async function PATCH(
         details: error.details,
         hint: error.hint,
         checklistId: params.id,
-        itemsCount: items.length
+        itemsCount: items.length,
+        userId: user.id,
+        role: user.role
       })
+      
+      // 에러 코드에 따른 상세 메시지
+      let errorMessage = '체크리스트 업데이트에 실패했습니다.'
+      let statusCode = 500
+      
+      if (error.code === '42501' || error.message.includes('row-level security') || error.message.includes('permission denied')) {
+        errorMessage = '권한이 없습니다. 이 체크리스트를 수정할 권한이 없습니다.'
+        statusCode = 403
+      } else if (error.code === '23503' || error.message.includes('foreign key')) {
+        errorMessage = '데이터 참조 오류가 발생했습니다. 관리자에게 문의해주세요.'
+      } else if (error.code === '23505' || error.message.includes('unique constraint')) {
+        errorMessage = '중복된 데이터가 있습니다. 페이지를 새로고침하고 다시 시도해주세요.'
+      } else if (error.message.includes('violates check constraint')) {
+        errorMessage = '데이터 형식이 올바르지 않습니다. 모든 필수 항목을 확인해주세요.'
+      }
+      
       return NextResponse.json({ 
-        error: '체크리스트 업데이트에 실패했습니다.',
-        details: error.message 
-      }, { status: 500 })
+        error: errorMessage,
+        details: error.message,
+        code: error.code
+      }, { status: statusCode })
     }
 
     console.log('✅ 체크리스트 업데이트 성공:', {

@@ -504,7 +504,21 @@ export default function ChecklistClient() {
           error: data.error,
           details: data.details
         })
-        throw new Error(data.error || '체크리스트 저장에 실패했습니다.')
+        
+        // 에러 메시지에 details 포함
+        let errorMessage = data.error || '체크리스트 저장에 실패했습니다.'
+        if (data.details) {
+          errorMessage += ` (${data.details})`
+        }
+        
+        // 특정 에러에 대한 안내 메시지 추가
+        if (data.details && data.details.includes('row-level security')) {
+          errorMessage += '\n\n권한 문제가 발생했습니다. 관리자에게 문의해주세요.'
+        } else if (data.details && data.details.includes('violates')) {
+          errorMessage += '\n\n데이터 형식 오류가 발생했습니다. 페이지를 새로고침하고 다시 시도해주세요.'
+        }
+        
+        throw new Error(errorMessage)
       }
 
       console.log('✅ 체크리스트 저장 성공')
@@ -607,7 +621,13 @@ export default function ChecklistClient() {
         setChecklistStage('after')
         alert('관리전 체크리스트가 완료되었습니다. 이제 관리후 사진을 촬영하세요.')
       } catch (err: any) {
-        setError(err.message)
+        console.error('❌ 관리전 체크리스트 저장 실패:', err)
+        let errorMessage = err.message || '체크리스트 저장에 실패했습니다.'
+        if (err.message?.includes('권한') || err.message?.includes('permission')) {
+          errorMessage = '권한이 없습니다. 관리자에게 문의해주세요.'
+        }
+        setError(errorMessage)
+        alert(`저장 실패:\n\n${errorMessage}`)
       } finally {
         setSubmitting(false)
       }
@@ -641,6 +661,18 @@ export default function ChecklistClient() {
       setError(null)
 
       try {
+        // 제출 전에 items 상태 재확인 (관리후 사진이 제대로 반영되었는지)
+        const afterPhotoItemsCheck = validItems.filter(item => 
+          (item.type === 'after_photo' || item.type === 'before_after_photo') && item.area?.trim()
+        )
+        const missingAfterPhotos = afterPhotoItemsCheck.filter(item => !item.after_photo_url)
+        
+        if (missingAfterPhotos.length > 0) {
+          setError(`관리후 사진이 저장되지 않은 항목이 있습니다. 페이지를 새로고침하고 다시 시도해주세요. (${missingAfterPhotos.map(i => i.area).join(', ')})`)
+          setSubmitting(false)
+          return
+        }
+
         await saveChecklistProgress(selectedChecklist.id, validItems, note)
 
         // 체크리스트 목록 다시 로드
@@ -693,7 +725,27 @@ export default function ChecklistClient() {
           setSelectedChecklist(null) // 체크리스트 선택 해제하여 완료 목록 표시
         }
       } catch (err: any) {
-        setError(err.message)
+        console.error('❌ 체크리스트 제출 실패:', err)
+        // 에러 메시지를 더 자세하게 표시
+        let errorMessage = err.message || '체크리스트 제출에 실패했습니다.'
+        
+        // 네트워크 에러인 경우
+        if (err.message?.includes('fetch') || err.message?.includes('network')) {
+          errorMessage = '네트워크 연결을 확인하고 다시 시도해주세요.'
+        }
+        
+        // 권한 에러인 경우
+        if (err.message?.includes('권한') || err.message?.includes('permission') || err.message?.includes('row-level security')) {
+          errorMessage = '권한이 없습니다. 관리자에게 문의해주세요.'
+        }
+        
+        // 데이터 형식 에러인 경우
+        if (err.message?.includes('유효하지 않은') || err.message?.includes('Invalid')) {
+          errorMessage = '데이터 형식 오류가 발생했습니다. 페이지를 새로고침하고 다시 시도해주세요.'
+        }
+        
+        setError(errorMessage)
+        alert(`체크리스트 제출 실패:\n\n${errorMessage}`)
       } finally {
         setSubmitting(false)
       }
@@ -819,19 +871,32 @@ export default function ChecklistClient() {
                   console.log(`✅ 관리전 사진 반영: ${item.area}`, merged.before_photo_url ? '있음' : '없음')
                   return merged
                 } else {
+                  // 관리후 사진: 기존 데이터 유지하면서 after_photo_url만 업데이트
                   const merged = { 
-                    ...item, 
+                    ...item,
+                    // 기존 before_photo_url은 유지
+                    before_photo_url: item.before_photo_url || null,
+                    // 관리후 사진 URL 업데이트
+                    after_photo_url: updated.after_photo_url || item.after_photo_url || null
                   }
-                  // 관리후 사진 URL 업데이트 (기존 before_photo_url은 유지)
-                  if (updated.after_photo_url) {
-                    merged.after_photo_url = updated.after_photo_url
-                  }
-                  console.log(`✅ 관리후 사진 반영: ${item.area}`, merged.after_photo_url ? '있음' : '없음')
+                  console.log(`✅ 관리후 사진 반영: ${item.area}`, {
+                    before: merged.before_photo_url ? '있음' : '없음',
+                    after: merged.after_photo_url ? '있음' : '없음'
+                  })
                   return merged
                 }
               }
               return item
             })
+            
+            // 관리후 사진 반영 확인
+            if (cameraMode === 'after') {
+              const afterPhotoCount = updatedAllItems.filter(item => 
+                (item.type === 'after_photo' || item.type === 'before_after_photo') && 
+                item.after_photo_url
+              ).length
+              console.log(`📊 관리후 사진 반영 완료: ${afterPhotoCount}개 항목`)
+            }
             
             // 업데이트된 항목 확인
             const updatedCount = updatedAllItems.filter((item, idx) => {
@@ -845,15 +910,25 @@ export default function ChecklistClient() {
             
             console.log(`📊 업데이트된 항목 수: ${updatedCount}/${updatedAllItems.length}`)
             
+            // 상태 업데이트 (React 상태 업데이트는 비동기이므로 즉시 반영되지 않을 수 있음)
             setItems(updatedAllItems)
+            
+            // 상태 업데이트가 완료될 때까지 잠시 대기 (React 18의 자동 배칭 고려)
+            await new Promise(resolve => setTimeout(resolve, 100))
+            
             // items 변경을 통해 진행률 자동 업데이트
             
             // 관리전/관리후 사진 촬영 완료 시 자동 저장
             if (selectedChecklist) {
               try {
                 console.log('💾 체크리스트 저장 시작...')
-                await saveChecklistProgress(selectedChecklist.id, updatedAllItems, note)
+                // 최신 상태로 다시 확인
+                const latestItems = updatedAllItems
+                await saveChecklistProgress(selectedChecklist.id, latestItems, note)
                 console.log('✅ 체크리스트 저장 완료')
+                
+                // 상태를 다시 설정하여 확실히 반영
+                setItems(latestItems)
                 
                 // 사파리 호환성을 위해 setTimeout으로 alert 지연
                 setTimeout(() => {
