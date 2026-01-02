@@ -69,7 +69,7 @@ export async function GET(request: NextRequest) {
     const yesterday = getYesterdayDateKST()
     const yesterdayDayName = getYesterdayDayNameKST()
     
-    // 저장된 집계 결과 조회
+    // 저장된 집계 결과 조회 (일반 매장만)
     const { data: generalSummary } = await supabase
       .from('unmanaged_stores_summary')
       .select('*')
@@ -78,23 +78,12 @@ export async function GET(request: NextRequest) {
       .eq('store_type', 'general')
       .single()
 
-    const { data: nightSummary } = await supabase
-      .from('unmanaged_stores_summary')
-      .select('*')
-      .eq('company_id', user.company_id)
-      .eq('report_date', yesterday)
-      .eq('store_type', 'night')
-      .single()
-
     // 저장된 집계 결과가 있으면 사용
-    if (generalSummary || nightSummary) {
-      // 매장 정보 조회
+    if (generalSummary) {
+      // 매장 정보 조회 (일반 매장만)
       const storeIds = new Set<string>()
       if (generalSummary?.unmanaged_store_ids) {
         generalSummary.unmanaged_store_ids.forEach((id: string) => storeIds.add(id))
-      }
-      if (nightSummary?.unmanaged_store_ids && includeNightShift) {
-        nightSummary.unmanaged_store_ids.forEach((id: string) => storeIds.add(id))
       }
 
       const { data: stores } = await supabase
@@ -105,10 +94,9 @@ export async function GET(request: NextRequest) {
 
       const storeMap = new Map((stores || []).map(s => [s.id, s]))
 
-      // 모든 관련 매장 정보 조회
+      // 일반 매장 전체 조회 (관리 완료 + 미관리)
       const allStoreIds = new Set<string>()
       if (generalSummary) {
-        // 일반 매장 전체 조회 (관리 완료 + 미관리)
         const { data: allGeneralStores } = await supabase
           .from('stores')
           .select('id, name, is_night_shift')
@@ -118,20 +106,6 @@ export async function GET(request: NextRequest) {
         
         if (allGeneralStores) {
           allGeneralStores.forEach(s => allStoreIds.add(s.id))
-        }
-      }
-      
-      if (nightSummary && includeNightShift) {
-        // 야간 매장 전체 조회
-        const { data: allNightStores } = await supabase
-          .from('stores')
-          .select('id, name, is_night_shift')
-          .eq('company_id', user.company_id)
-          .eq('is_night_shift', true)
-          .is('deleted_at', null)
-        
-        if (allNightStores) {
-          allNightStores.forEach(s => allStoreIds.add(s.id))
         }
       }
 
@@ -167,21 +141,13 @@ export async function GET(request: NextRequest) {
         }
       }).filter(Boolean) as any[]
 
-      // 집계 시각 결정
-      let reportTime = '08:00'
-      let aggregatedAt = generalSummary?.aggregated_at || nightSummary?.aggregated_at
-      
-      if (includeNightShift && nightSummary) {
-        reportTime = '12:00'
-        aggregatedAt = nightSummary.aggregated_at
-      } else if (generalSummary) {
-        reportTime = '08:00'
-        aggregatedAt = generalSummary.aggregated_at
-      }
+      // 집계 시각 (다음날 00:00)
+      const reportTime = '00:00'
+      const aggregatedAt = generalSummary?.aggregated_at
 
-      const totalStores = (generalSummary?.total_stores || 0) + (includeNightShift ? (nightSummary?.total_stores || 0) : 0)
-      const managedCount = (generalSummary?.managed_count || 0) + (includeNightShift ? (nightSummary?.managed_count || 0) : 0)
-      const unmanagedCount = (generalSummary?.unmanaged_count || 0) + (includeNightShift ? (nightSummary?.unmanaged_count || 0) : 0)
+      const totalStores = generalSummary?.total_stores || 0
+      const managedCount = generalSummary?.managed_count || 0
+      const unmanagedCount = generalSummary?.unmanaged_count || 0
 
       return NextResponse.json({
         success: true,
@@ -189,13 +155,13 @@ export async function GET(request: NextRequest) {
           report_date: yesterday,
           report_time: reportTime,
           aggregated_at: aggregatedAt,
-          is_morning_report: reportTime === '08:00',
-          include_night_shift: includeNightShift,
+          is_morning_report: false,
+          include_night_shift: false,
           total_stores: totalStores,
           attended_stores: managedCount,
           not_attended_stores: unmanagedCount,
           not_counted_stores: 0,
-          total_night_stores: nightSummary?.total_stores || 0,
+          total_night_stores: 0,
           stores: reportStores.sort((a, b) => a.store_name.localeCompare(b.store_name))
         }
       })

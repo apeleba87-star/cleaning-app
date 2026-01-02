@@ -7,7 +7,7 @@ export default function AttendanceReportPage() {
         <div className="flex-1">
           <h1 className="text-xl sm:text-2xl font-bold">미관리 매장 확인</h1>
           <p className="text-xs sm:text-sm text-gray-500 mt-1 leading-relaxed">
-            각 매장의 미관리 현황을 확인할 수 있습니다.<br className="sm:hidden" /> 일반 매장은 매일 오전 8시, 야간 매장은 매일 낮 12시에 집계 완료
+            각 매장의 미관리 현황을 확인할 수 있습니다.<br className="sm:hidden" /> 일반 매장은 매일 자정(00:00)에 집계 완료
           </p>
         </div>
         <a
