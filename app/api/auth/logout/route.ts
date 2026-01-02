@@ -4,6 +4,22 @@ import { NextRequest, NextResponse } from 'next/server'
 export async function POST(request: NextRequest) {
   try {
     const supabase = await createServerSupabaseClient()
+    const { data: { session } } = await supabase.auth.getSession()
+    
+    // 세션 삭제 (user_sessions 테이블에서)
+    if (session?.user) {
+      try {
+        const supabase = await createServerSupabaseClient()
+        // 현재 사용자의 모든 세션 삭제
+        await supabase
+          .from('user_sessions')
+          .delete()
+          .eq('user_id', session.user.id)
+      } catch (error) {
+        // 에러는 무시
+        console.error('Session deletion error:', error)
+      }
+    }
     
     // 로그아웃 처리
     const { error } = await supabase.auth.signOut()

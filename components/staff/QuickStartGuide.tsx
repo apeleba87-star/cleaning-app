@@ -191,18 +191,70 @@ export default function QuickStartGuide({ userId }: QuickStartGuideProps) {
       saveMissionCompletion('start_management', true)
     }
 
-    // 2. 체크리스트 확인 - 체크리스트 페이지 방문 또는 체크리스트 완료
-    const { data: checklist } = await supabase
+    // 2. 체크리스트 확인 - 체크리스트 완료 확인
+    // completed_at이 있거나, 모든 항목이 완료된 체크리스트가 있는지 확인
+    const { data: checklists } = await supabase
       .from('checklist')
-      .select('id')
+      .select('id, items, completed_at')
       .eq('assigned_user_id', userId)
       .eq('work_date', today)
-      .not('completed_at', 'is', null)
-      .limit(1)
-      .maybeSingle()
+      .limit(10)
 
-    if (checklist) {
-      saveMissionCompletion('checklist', true)
+    if (checklists && checklists.length > 0) {
+      // completed_at이 있는 체크리스트가 있으면 완료
+      const hasCompletedAt = checklists.some((cl: any) => cl.completed_at)
+      
+      // 또는 items를 분석하여 완료된 체크리스트가 있는지 확인
+      let hasCompletedChecklist = false
+      if (!hasCompletedAt) {
+        hasCompletedChecklist = checklists.some((cl: any) => {
+          if (!cl.items || !Array.isArray(cl.items) || cl.items.length === 0) {
+            return false
+          }
+
+          let totalItems = 0
+          let completedItems = 0
+
+          cl.items.forEach((item: any) => {
+            if (!item.area || !item.area.trim()) {
+              return
+            }
+
+            const itemType = item.type || 'check'
+
+            if (itemType === 'check') {
+              totalItems++
+              if (item.checked) {
+                completedItems++
+              }
+            } else if (itemType === 'before_photo') {
+              totalItems++
+              if (item.before_photo_url) {
+                completedItems++
+              }
+            } else if (itemType === 'after_photo') {
+              totalItems++
+              if (item.after_photo_url) {
+                completedItems++
+              }
+            } else if (itemType === 'before_after_photo') {
+              totalItems += 2
+              if (item.before_photo_url) {
+                completedItems++
+              }
+              if (item.after_photo_url) {
+                completedItems++
+              }
+            }
+          })
+
+          return totalItems > 0 && completedItems === totalItems
+        })
+      }
+
+      if (hasCompletedAt || hasCompletedChecklist) {
+        saveMissionCompletion('checklist', true)
+      }
     }
 
     // 3. 요청란 확인 - supplies 페이지 방문은 pathname으로 체크

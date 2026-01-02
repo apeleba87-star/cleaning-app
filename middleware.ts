@@ -43,6 +43,37 @@ export async function middleware(request: NextRequest) {
     data: { session },
   } = await supabase.auth.getSession()
 
+  // 세션이 있고, 동시 접속 제한이 필요한 역할인 경우 세션 갱신
+  if (session?.user) {
+    try {
+      // 사용자 정보 조회
+      const { data: userData } = await supabase
+        .from('users')
+        .select('role')
+        .eq('id', session.user.id)
+        .single()
+
+      if (userData) {
+        const restrictedRoles = ['franchise_manager', 'business_owner', 'store_manager']
+        if (restrictedRoles.includes(userData.role)) {
+          // 세션 활동 시간 갱신 (비동기, 에러 무시)
+          // 가장 최근 세션을 찾아서 갱신 (session_id 없이 호출하면 자동으로 최근 세션 갱신)
+          fetch(`${request.nextUrl.origin}/api/auth/sessions`, {
+            method: 'PATCH',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({}),
+          }).catch(() => {
+            // 에러는 무시 (비동기 처리)
+          })
+        }
+      }
+    } catch (error) {
+      // 에러는 무시 (비동기 처리)
+    }
+  }
+
   return supabaseResponse
 }
 

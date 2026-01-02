@@ -6,11 +6,13 @@ import { Subcontract, SubcontractPayment } from '@/types/db'
 interface SubcontractManagementSectionProps {
   selectedPeriod: string
   onRefresh: () => void
+  searchTerm?: string
 }
 
 export default function SubcontractManagementSection({
   selectedPeriod,
   onRefresh,
+  searchTerm = '',
 }: SubcontractManagementSectionProps) {
   const [subcontracts, setSubcontracts] = useState<Subcontract[]>([])
   const [payments, setPayments] = useState<SubcontractPayment[]>([])
@@ -268,8 +270,26 @@ export default function SubcontractManagementSection({
     )
   }
 
-  const companySubcontracts = subcontracts.filter((s) => s.subcontract_type === 'company')
-  const individualSubcontracts = subcontracts.filter((s) => s.subcontract_type === 'individual')
+  const companySubcontractsBase = subcontracts.filter((s) => s.subcontract_type === 'company')
+  const individualSubcontractsBase = subcontracts.filter((s) => s.subcontract_type === 'individual')
+  
+  // 검색 필터링
+  const companySubcontracts = searchTerm
+    ? companySubcontractsBase.filter(s => 
+        s.franchises?.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        s.contract_period_start?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        s.contract_period_end?.toLowerCase().includes(searchTerm.toLowerCase())
+      )
+    : companySubcontractsBase
+  
+  const individualSubcontracts = searchTerm
+    ? individualSubcontractsBase.filter(s => 
+        s.worker_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        s.contract_period_start?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        s.contract_period_end?.toLowerCase().includes(searchTerm.toLowerCase())
+      )
+    : individualSubcontractsBase
+  
   const companyPayments = payments.filter((p) => p.subcontract?.subcontract_type === 'company')
   const individualPayments = payments.filter((p) => p.subcontract?.subcontract_type === 'individual')
 

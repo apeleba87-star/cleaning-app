@@ -25,8 +25,19 @@ export default function MobileHeader({ userName }: MobileHeaderProps) {
   }, [])
 
   const handleLogout = async () => {
-    const supabase = createClient()
-    await supabase.auth.signOut()
+    try {
+      // 세션 ID 삭제
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('session_id')
+      }
+      // 로그아웃 API 호출 (세션 삭제 포함)
+      await fetch('/api/auth/logout', {
+        method: 'POST',
+      })
+    } catch (error) {
+      console.error('Logout error:', error)
+    }
+    // 로그아웃 페이지로 이동
     window.location.href = '/login'
   }
 

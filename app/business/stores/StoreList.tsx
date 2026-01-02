@@ -22,6 +22,7 @@ export default function StoreList({ initialStores, franchises, categoryTemplates
   const [showForm, setShowForm] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [searchTerm, setSearchTerm] = useState('')
 
   const handleCreate = () => {
     setEditingStore(null)
@@ -80,15 +81,35 @@ export default function StoreList({ initialStores, franchises, categoryTemplates
     setError(null)
   }
 
+  // 검색 필터링
+  const filteredStores = stores.filter(store => {
+    if (!searchTerm) return true
+    const searchLower = searchTerm.toLowerCase()
+    return (
+      store.name.toLowerCase().includes(searchLower) ||
+      store.address?.toLowerCase().includes(searchLower) ||
+      store.category?.toLowerCase().includes(searchLower)
+    )
+  })
+
   return (
     <div>
-      <div className="flex justify-between items-center mb-4">
+      <div className="flex justify-between items-center mb-4 gap-4">
         <button
           onClick={handleCreate}
           className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors"
         >
           + 새 매장 추가
         </button>
+        <div className="flex-1 max-w-md">
+          <input
+            type="text"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            placeholder="매장명, 주소, 카테고리로 검색..."
+            className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+        </div>
       </div>
 
       {error && (
@@ -136,14 +157,14 @@ export default function StoreList({ initialStores, franchises, categoryTemplates
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
-            {stores.length === 0 ? (
+            {filteredStores.length === 0 ? (
               <tr>
                 <td colSpan={6} className="px-6 py-4 text-center text-gray-500">
-                  등록된 매장이 없습니다.
+                  {searchTerm ? '검색 결과가 없습니다.' : '등록된 매장이 없습니다.'}
                 </td>
               </tr>
             ) : (
-              stores.map((store) => {
+              filteredStores.map((store) => {
                 // 프렌차이즈 정보 찾기 (join된 데이터 또는 prop에서)
                 const franchise = (store as any).franchises 
                   ? (store as any).franchises 

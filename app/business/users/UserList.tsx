@@ -29,6 +29,7 @@ export default function UserList({ initialUsers, stores, franchises, userStoreMa
   const [showAssign, setShowAssign] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [searchTerm, setSearchTerm] = useState('')
 
   const handleCreate = () => {
     // 사용자 수정 폼이 열려있으면 경고 메시지 표시
@@ -285,14 +286,34 @@ export default function UserList({ initialUsers, stores, franchises, userStoreMa
   }
 
   // 승인된 사용자만 필터링 (승인 대기 제외)
-  const approvedUsers = users.filter((u) => u.approval_status !== 'pending')
+  const approvedUsersBase = users.filter((u) => u.approval_status !== 'pending')
+  
+  // 검색 필터링
+  const approvedUsers = searchTerm
+    ? approvedUsersBase.filter((user) => {
+        const searchLower = searchTerm.toLowerCase()
+        const userName = user.name?.toLowerCase() || ''
+        const userEmail = ((user as any).email || '').toLowerCase()
+        const userPhone = (user.phone || '').toLowerCase()
+        const userRole = getRoleLabel(user.role).toLowerCase()
+        const assignedStores = getUserStores(user.id).map(s => s.name.toLowerCase()).join(' ')
+        
+        return (
+          userName.includes(searchLower) ||
+          userEmail.includes(searchLower) ||
+          userPhone.includes(searchLower) ||
+          userRole.includes(searchLower) ||
+          assignedStores.includes(searchLower)
+        )
+      })
+    : approvedUsersBase
 
   return (
     <div>
       {/* 승인 대기 섹션 */}
       <PendingUsersSection stores={stores} onApprove={handleApprovalComplete} />
 
-      <div className="flex justify-between items-center mb-4">
+      <div className="flex justify-between items-center mb-4 gap-4">
         <button
           onClick={handleCreate}
           disabled={showForm || showAssign}
@@ -305,6 +326,15 @@ export default function UserList({ initialUsers, stores, franchises, userStoreMa
         >
           + 새 사용자 초대
         </button>
+        <div className="flex-1 max-w-md">
+          <input
+            type="text"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            placeholder="이름, 이메일, 전화번호, 역할, 배정 매장으로 검색..."
+            className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+        </div>
       </div>
 
       {error && (
@@ -485,7 +515,7 @@ export default function UserList({ initialUsers, stores, franchises, userStoreMa
             {approvedUsers.length === 0 ? (
               <tr>
                 <td colSpan={7} className="px-6 py-4 text-center text-gray-500">
-                  등록된 사용자가 없습니다.
+                  {searchTerm ? '검색 결과가 없습니다.' : '등록된 사용자가 없습니다.'}
                 </td>
               </tr>
             ) : (

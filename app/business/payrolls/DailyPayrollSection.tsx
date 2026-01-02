@@ -29,6 +29,7 @@ interface DailyPayrollSectionProps {
   onDelete?: (id: string) => void
   onMarkAsPaid?: (id: string, workerName: string) => void
   onUpdate?: (id: string, data: { amount?: number; paid_at?: string | null; status?: 'scheduled' | 'paid'; memo?: string | null }) => Promise<void>
+  searchTerm?: string
 }
 
 export default function DailyPayrollSection({
@@ -38,6 +39,7 @@ export default function DailyPayrollSection({
   onDelete,
   onMarkAsPaid,
   onUpdate,
+  searchTerm = '',
 }: DailyPayrollSectionProps) {
   const [dailyEmployees, setDailyEmployees] = useState<DailyEmployee[]>([])
   const [loading, setLoading] = useState(true)
@@ -202,25 +204,40 @@ export default function DailyPayrollSection({
       </div>
 
       {/* 등록된 일당 인건비 목록 */}
-      {existingDailyPayrolls.length > 0 && (
-        <div className="mt-6">
-          <h3 className="text-lg font-semibold mb-4">등록된 일당 인건비</h3>
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">이름</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">기간</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">일당</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">일수</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">총액</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">지급일</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">상태</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">작업</th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {existingDailyPayrolls.map((payroll) => (
+      {(() => {
+        const filteredPayrolls = searchTerm
+          ? existingDailyPayrolls.filter(p => 
+              p.worker_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+              p.pay_period?.toLowerCase().includes(searchTerm.toLowerCase())
+            )
+          : existingDailyPayrolls
+
+        if (filteredPayrolls.length === 0) {
+          return null
+        }
+
+        return (
+          <div className="mt-6">
+            <h3 className="text-lg font-semibold mb-4">등록된 일당 인건비</h3>
+            {searchTerm && filteredPayrolls.length === 0 && (
+              <p className="text-gray-500 text-sm mb-4">검색 결과가 없습니다.</p>
+            )}
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">이름</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">기간</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">일당</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">일수</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">총액</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">지급일</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">상태</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">작업</th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {filteredPayrolls.map((payroll) => (
                   <tr key={payroll.id} className="hover:bg-gray-50">
                     <td className="px-4 py-3 text-sm font-medium text-gray-900">
                       {payroll.worker_name || '-'}
@@ -330,12 +347,13 @@ export default function DailyPayrollSection({
                       </div>
                     </td>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
-        </div>
-      )}
+        )
+      })()}
     </div>
   )
 }

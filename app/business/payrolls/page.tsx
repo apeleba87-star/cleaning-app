@@ -17,6 +17,9 @@ export default function PayrollsPage() {
   const [generatingRegular, setGeneratingRegular] = useState(false)
   const [activeTab, setActiveTab] = useState<TabType>('regular')
   const [pendingCount, setPendingCount] = useState<number | null>(null)
+  const [regularSearchTerm, setRegularSearchTerm] = useState('')
+  const [dailySearchTerm, setDailySearchTerm] = useState('')
+  const [subcontractSearchTerm, setSubcontractSearchTerm] = useState('')
   
   // 대량 등록용 상태
   const [bulkEntries, setBulkEntries] = useState<Array<{
@@ -485,8 +488,23 @@ export default function PayrollsPage() {
     : payrolls
 
   // 정규 직원과 일당 근로자 분리
-  const regularPayrolls = filteredPayrolls.filter(p => p.user_id)
-  const dailyPayrolls = filteredPayrolls.filter(p => !p.user_id)
+  const regularPayrollsBase = filteredPayrolls.filter(p => p.user_id)
+  const dailyPayrollsBase = filteredPayrolls.filter(p => !p.user_id)
+  
+  // 검색 필터링
+  const regularPayrolls = regularSearchTerm
+    ? regularPayrollsBase.filter(p => 
+        p.users?.name?.toLowerCase().includes(regularSearchTerm.toLowerCase()) ||
+        p.pay_period?.toLowerCase().includes(regularSearchTerm.toLowerCase())
+      )
+    : regularPayrollsBase
+  
+  const dailyPayrolls = dailySearchTerm
+    ? dailyPayrollsBase.filter(p => 
+        p.worker_name?.toLowerCase().includes(dailySearchTerm.toLowerCase()) ||
+        p.pay_period?.toLowerCase().includes(dailySearchTerm.toLowerCase())
+      )
+    : dailyPayrollsBase
 
   if (loading) {
     return (
@@ -565,15 +583,44 @@ export default function PayrollsPage() {
 
       {/* 도급 관리 탭 */}
       {activeTab === 'subcontract' && (
-        <SubcontractManagementSection
-          selectedPeriod={selectedPeriod}
-          onRefresh={loadData}
-        />
+        <>
+          <div className="bg-white rounded-lg shadow-md p-6 mb-6">
+            <div className="flex justify-end items-center">
+              <div className="flex-1 max-w-xs">
+                <input
+                  type="text"
+                  value={subcontractSearchTerm}
+                  onChange={(e) => setSubcontractSearchTerm(e.target.value)}
+                  placeholder="이름, 기간으로 검색..."
+                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
+                />
+              </div>
+            </div>
+          </div>
+          <SubcontractManagementSection
+            selectedPeriod={selectedPeriod}
+            onRefresh={loadData}
+            searchTerm={subcontractSearchTerm}
+          />
+        </>
       )}
 
       {/* 일당 관리 탭 */}
       {activeTab === 'daily' && (
         <>
+          <div className="bg-white rounded-lg shadow-md p-6 mb-6">
+            <div className="flex justify-end items-center">
+              <div className="flex-1 max-w-xs">
+                <input
+                  type="text"
+                  value={dailySearchTerm}
+                  onChange={(e) => setDailySearchTerm(e.target.value)}
+                  placeholder="이름, 기간으로 검색..."
+                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
+                />
+              </div>
+            </div>
+          </div>
           <DailyPayrollSection
             selectedPeriod={selectedPeriod}
             onRefresh={loadData}
@@ -1060,9 +1107,22 @@ export default function PayrollsPage() {
 
           {/* 정규 직원 인건비 목록 */}
           <div className="bg-white rounded-lg shadow-md p-6">
-            <h2 className="text-lg font-semibold mb-4">정규 직원 인건비</h2>
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-lg font-semibold">정규 직원 인건비</h2>
+              <div className="flex-1 max-w-xs ml-4">
+                <input
+                  type="text"
+                  value={regularSearchTerm}
+                  onChange={(e) => setRegularSearchTerm(e.target.value)}
+                  placeholder="이름, 기간으로 검색..."
+                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+            </div>
             {regularPayrolls.length === 0 ? (
-              <p className="text-gray-500 text-sm">등록된 인건비가 없습니다.</p>
+              <p className="text-gray-500 text-sm">
+                {regularSearchTerm ? '검색 결과가 없습니다.' : '등록된 인건비가 없습니다.'}
+              </p>
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full">

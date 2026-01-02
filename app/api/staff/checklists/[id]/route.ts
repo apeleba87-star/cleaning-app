@@ -77,17 +77,72 @@ export async function PATCH(
       return NextResponse.json({ error: '출근한 날에만 체크리스트를 수행할 수 있습니다.' }, { status: 403 })
     }
 
+    // 체크리스트 완료 여부 확인
+    let isCompleted = false
+    if (Array.isArray(items) && items.length > 0) {
+      let totalItems = 0
+      let completedItems = 0
+
+      items.forEach((item: any) => {
+        // area가 없는 항목은 제외
+        if (!item.area || !item.area.trim()) {
+          return
+        }
+
+        const itemType = item.type || 'check'
+
+        if (itemType === 'check') {
+          // 체크 항목: 체크만 되면 완료
+          totalItems++
+          if (item.checked) {
+            completedItems++
+          }
+        } else if (itemType === 'before_photo') {
+          // 관리 전 사진: before_photo_url만 확인
+          totalItems++
+          if (item.before_photo_url) {
+            completedItems++
+          }
+        } else if (itemType === 'after_photo') {
+          // 관리 후 사진: after_photo_url만 확인
+          totalItems++
+          if (item.after_photo_url) {
+            completedItems++
+          }
+        } else if (itemType === 'before_after_photo') {
+          // 관리 전/후 사진: 둘 다 완료되어야 함
+          totalItems += 2
+          if (item.before_photo_url) {
+            completedItems++
+          }
+          if (item.after_photo_url) {
+            completedItems++
+          }
+        }
+      })
+
+      // 모든 항목이 완료되었으면 완료 처리
+      isCompleted = totalItems > 0 && completedItems === totalItems
+    }
+
+    const updateData: any = {
+      items,
+      before_photo_url: before_photo_url || null,
+      after_photo_url: after_photo_url || null,
+      note: note || null,
+      // work_date는 변경하지 않음 (이미 출근 날짜로 설정됨)
+      review_status: 'pending', // 검토 대기
+      // updated_at은 데이터베이스 트리거가 자동으로 현재 시간(UTC)으로 업데이트함
+    }
+
+    // 완료되었으면 completed_at 설정
+    if (isCompleted) {
+      updateData.completed_at = new Date().toISOString()
+    }
+
     const { error } = await supabase
       .from('checklist')
-      .update({
-        items,
-        before_photo_url: before_photo_url || null,
-        after_photo_url: after_photo_url || null,
-        note: note || null,
-        // work_date는 변경하지 않음 (이미 출근 날짜로 설정됨)
-        review_status: 'pending', // 검토 대기
-        // updated_at은 데이터베이스 트리거가 자동으로 현재 시간(UTC)으로 업데이트함
-      })
+      .update(updateData)
       .eq('id', params.id)
 
     if (error) {

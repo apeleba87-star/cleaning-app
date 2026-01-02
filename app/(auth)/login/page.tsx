@@ -58,7 +58,7 @@ export default function LoginPage() {
         // 승인 상태 확인
         const { data: userData, error: userError } = await supabase
           .from('users')
-          .select('approval_status, rejection_reason')
+          .select('approval_status, rejection_reason, role')
           .eq('id', data.session.user.id)
           .single()
 
@@ -84,6 +84,68 @@ export default function LoginPage() {
             setError(reasonMessage)
             setLoading(false)
             return
+          }
+
+          // 동시 접속 제한 확인 (프렌차이즈 관리자, 업체관리자, 점주만)
+          const restrictedRoles = ['franchise_manager', 'business_owner', 'store_manager']
+          if (restrictedRoles.includes(userData.role)) {
+            try {
+              // 세션 생성 (동시 접속 제한 확인 포함)
+              // 세션 ID는 고유하게 생성 (user_id + timestamp + random)
+              const sessionId = `${data.session.user.id}_${Date.now()}_${Math.random().toString(36).substring(2, 15)}`
+              
+              // 세션 ID를 localStorage에 저장 (나중에 세션 갱신 시 사용)
+              if (typeof window !== 'undefined') {
+                localStorage.setItem('session_id', sessionId)
+              }
+              
+              // IP 주소 가져오기 (선택사항, 실패해도 계속 진행)
+              let ipAddress = null
+              try {
+                const ipResponse = await fetch('https://api.ipify.org?format=json', { 
+                  signal: AbortSignal.timeout(3000) // 3초 타임아웃
+                })
+                if (ipResponse.ok) {
+                  const ipData = await ipResponse.json()
+                  ipAddress = ipData.ip
+                }
+              } catch (ipError) {
+                // IP 주소 가져오기 실패는 무시
+              }
+              
+              const userAgent = navigator.userAgent
+
+              const sessionResponse = await fetch('/api/auth/sessions', {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                  session_id: sessionId,
+                  ip_address: ipAddress,
+                  user_agent: userAgent,
+                }),
+              })
+
+              const sessionResult = await sessionResponse.json()
+
+              if (!sessionResponse.ok || !sessionResult.success) {
+                // 동시 접속 제한 초과
+                await supabase.auth.signOut()
+                if (typeof window !== 'undefined') {
+                  localStorage.removeItem('session_id')
+                }
+                const limitMessage = sessionResult.limit 
+                  ? `동시 접속 제한에 도달했습니다. (최대 ${sessionResult.limit}명)`
+                  : '동시 접속 제한에 도달했습니다.'
+                setError(sessionResult.error || limitMessage)
+                setLoading(false)
+                return
+              }
+            } catch (sessionError: any) {
+              console.error('Session creation error:', sessionError)
+              // 세션 생성 실패해도 로그인은 진행 (오류 로그만 남김)
+            }
           }
         }
 

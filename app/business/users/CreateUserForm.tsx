@@ -32,6 +32,7 @@ export default function CreateUserForm({ stores, franchises, companyId, currentU
   const [selectedFranchiseId, setSelectedFranchiseId] = useState<string>('')
   const [phone, setPhone] = useState('')
   const [selectedStoreIds, setSelectedStoreIds] = useState<string[]>([])
+  const [storeSearchTerm, setStoreSearchTerm] = useState('')
   const [employmentContractDate, setEmploymentContractDate] = useState('')
   const [salaryDate, setSalaryDate] = useState('')
   const [salaryAmount, setSalaryAmount] = useState('')
@@ -370,30 +371,53 @@ export default function CreateUserForm({ stores, franchises, companyId, currentU
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            배정 매장
-          </label>
+          <div className="flex items-center justify-between mb-2">
+            <label className="block text-sm font-medium text-gray-700">
+              배정 매장
+            </label>
+            <div className="flex-1 max-w-xs ml-4">
+              <input
+                type="text"
+                value={storeSearchTerm}
+                onChange={(e) => setStoreSearchTerm(e.target.value)}
+                placeholder="매장명으로 검색..."
+                className="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+          </div>
           <div className="border border-gray-300 rounded-md p-4 max-h-60 overflow-y-auto">
-            {stores.length === 0 ? (
-              <p className="text-gray-500 text-sm">등록된 매장이 없습니다.</p>
-            ) : (
-              <div className="space-y-2">
-                {stores.map((store) => (
-                  <label
-                    key={store.id}
-                    className="flex items-center space-x-2 cursor-pointer hover:bg-gray-50 p-2 rounded"
-                  >
-                    <input
-                      type="checkbox"
-                      checked={selectedStoreIds.includes(store.id)}
-                      onChange={() => handleToggleStore(store.id)}
-                      className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                    />
-                    <span className="text-sm text-gray-700">{store.name}</span>
-                  </label>
-                ))}
-              </div>
-            )}
+            {(() => {
+              const filteredStores = stores.filter(store => 
+                !storeSearchTerm || store.name.toLowerCase().includes(storeSearchTerm.toLowerCase())
+              )
+              
+              if (filteredStores.length === 0) {
+                return (
+                  <p className="text-gray-500 text-sm">
+                    {storeSearchTerm ? '검색 결과가 없습니다.' : '등록된 매장이 없습니다.'}
+                  </p>
+                )
+              }
+              
+              return (
+                <div className="space-y-2">
+                  {filteredStores.map((store) => (
+                    <label
+                      key={store.id}
+                      className="flex items-center space-x-2 cursor-pointer hover:bg-gray-50 p-2 rounded"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={selectedStoreIds.includes(store.id)}
+                        onChange={() => handleToggleStore(store.id)}
+                        className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                      />
+                      <span className="text-sm text-gray-700">{store.name}</span>
+                    </label>
+                  ))}
+                </div>
+              )
+            })()}
           </div>
           <p className="mt-2 text-xs text-gray-500">
             {selectedStoreIds.length}개 매장이 선택되었습니다.
