@@ -20,30 +20,50 @@ export async function GET(request: NextRequest) {
     // 오늘 날짜
     const today = getTodayDateKST()
 
-    // 오늘 출근 중인 매장 ID 목록 조회 (퇴근하지 않은 매장)
-    const { data: todayAttendances, error: attendanceError } = await supabase
-      .from('attendance')
+    // 배정된 매장 ID 목록 조회
+    const { data: storeAssignments, error: assignmentError } = await supabase
+      .from('store_assign')
       .select('store_id')
       .eq('user_id', user.id)
-      .eq('work_date', today)
-      .is('clock_out_at', null)
 
-    if (attendanceError) {
-      throw new Error(`Failed to fetch attendance: ${attendanceError.message}`)
+    if (assignmentError) {
+      throw new Error(`Failed to fetch store assignments: ${assignmentError.message}`)
     }
 
-    // 출근 중인 매장 ID 목록
-    const clockedInStoreIds = todayAttendances?.map((a) => a.store_id) || []
+    // 배정된 매장 ID 목록
+    const assignedStoreIds = storeAssignments?.map((a) => a.store_id) || []
 
-    if (clockedInStoreIds.length === 0) {
-      // 출근 중인 매장이 없으면 빈 배열 반환
+    if (assignedStoreIds.length === 0) {
+      // 배정된 매장이 없으면 빈 배열 반환
       return Response.json({
         success: true,
         data: [],
       })
     }
 
-    // 출근 중인 매장의 처리중인 요청란만 조회
+    // 오늘 출근 상태 조회 (출근 중인 매장과 퇴근한 매장 구분용)
+    const { data: todayAttendances, error: attendanceError } = await supabase
+      .from('attendance')
+      .select('store_id, clock_out_at')
+      .eq('user_id', user.id)
+      .eq('work_date', today)
+      .in('store_id', assignedStoreIds)
+
+    if (attendanceError) {
+      throw new Error(`Failed to fetch attendance: ${attendanceError.message}`)
+    }
+
+    // 출근 상태 맵 생성
+    const attendanceMap = new Map<string, 'not_clocked_in' | 'clocked_in' | 'clocked_out'>()
+    todayAttendances?.forEach((attendance: any) => {
+      if (attendance.clock_out_at) {
+        attendanceMap.set(attendance.store_id, 'clocked_out')
+      } else {
+        attendanceMap.set(attendance.store_id, 'clocked_in')
+      }
+    })
+
+    // 배정된 매장의 처리중인 요청란 조회 (출근 여부와 관계없이)
     const { data: requests, error } = await supabase
       .from('requests')
       .select(`
@@ -53,7 +73,7 @@ export async function GET(request: NextRequest) {
           name
         )
       `)
-      .in('store_id', clockedInStoreIds)
+      .in('store_id', assignedStoreIds)
       .eq('status', 'in_progress')
       .order('created_at', { ascending: false })
 
@@ -61,8 +81,17 @@ export async function GET(request: NextRequest) {
       throw new Error(`Failed to fetch requests: ${error.message}`)
     }
 
+    // 각 요청에 출근 상태 정보 추가
+    const requestsWithAttendance = (requests || []).map((request: any) => {
+      const attendanceStatus = attendanceMap.get(request.store_id) || 'not_clocked_in'
+      return {
+        ...request,
+        attendance_status: attendanceStatus,
+      }
+    })
+
     // created_by_user 정보를 별도로 조회
-    const requestsWithUser = await Promise.all((requests || []).map(async (request: any) => {
+    const requestsWithUser = await Promise.all(requestsWithAttendance.map(async (request: any) => {
       if (request.created_by) {
         try {
           console.log(`[API] Fetching user for request ${request.id}, created_by: ${request.created_by}`)

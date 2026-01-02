@@ -110,10 +110,13 @@ export async function GET(request: NextRequest) {
       assignsByStore.get(assign.store_id)!.push(assign.user_id)
     })
 
-    // 배치 쿼리 최적화: 모든 매장의 문제보고, 분실물, 요청란, 물품요청, 체크리스트, 청소사진을 한 번에 조회
+    // 배치 쿼리 최적화: 모든 매장의 문제보고, 분실물, 요청란, 물품요청, 체크리스트, 청소사진, 출근기록, 제품사진을 한 번에 조회
     const thirtyDaysAgo = new Date()
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
     thirtyDaysAgo.setHours(0, 0, 0, 0)
+
+    // 모든 배정된 직원 ID 수집
+    const allAssignedUserIds = Array.from(new Set(Array.from(assignsByStore.values()).flat()))
 
     const [
       { data: allProblemReports, error: allProblemReportsError },
@@ -122,6 +125,8 @@ export async function GET(request: NextRequest) {
       { data: allSupplyRequests, error: allSupplyRequestsError },
       { data: allChecklists, error: allChecklistsError },
       { data: allCleaningPhotos, error: allCleaningPhotosError },
+      { data: allAttendances, error: allAttendancesError },
+      { data: allProductPhotos, error: allProductPhotosError },
     ] = await Promise.all([
       supabase
         .from('problem_reports')
@@ -144,7 +149,7 @@ export async function GET(request: NextRequest) {
         .from('supply_requests')
         .select('id, store_id, status')
         .in('store_id', storeIds)
-        .eq('status', 'manager_in_progress'),
+        .in('status', ['received', 'in_progress', 'manager_in_progress']),
       supabase
         .from('checklist')
         .select('id, store_id, items, updated_at, work_date, assigned_user_id')
@@ -157,7 +162,55 @@ export async function GET(request: NextRequest) {
         .neq('area_category', 'inventory')
         .gte('created_at', todayStart.toISOString())
         .lte('created_at', todayEnd.toISOString()),
+      // 모든 매장의 출근 기록을 한 번에 조회
+      attendanceClient
+        .from('attendance')
+        .select('store_id, user_id, work_date, clock_in_at, clock_out_at')
+        .in('store_id', storeIds)
+        .or(`work_date.eq.${todayDateKST},work_date.eq.${todayDateUTC},clock_in_at.gte.${todayStart.toISOString()},clock_in_at.lte.${todayEnd.toISOString()}`)
+        .order('clock_in_at', { ascending: false }),
+      // 모든 매장의 제품 입고/보관 사진을 한 번에 조회
+      supabase
+        .from('product_photos')
+        .select('id, store_id, type, photo_urls, created_at')
+        .in('store_id', storeIds)
+        .in('type', ['receipt', 'storage'])
+        .gte('created_at', todayStart.toISOString())
+        .lte('created_at', todayEnd.toISOString()),
     ])
+
+    // 출근 기록 에러 처리
+    if (allAttendancesError) {
+      console.error('Error fetching all attendances:', allAttendancesError)
+    }
+
+    // 제품 사진 에러 처리
+    if (allProductPhotosError) {
+      console.error('Error fetching all product photos:', allProductPhotosError)
+    }
+
+    // 모든 출근한 직원의 ID 수집
+    const allUserIds = new Set<string>()
+    allAttendances?.forEach(att => {
+      if (att.user_id) allUserIds.add(att.user_id)
+    })
+
+    // 모든 직원 정보를 한 번에 조회
+    let usersMap = new Map<string, string>()
+    if (allUserIds.size > 0) {
+      const { data: allUsers, error: usersError } = await supabase
+        .from('users')
+        .select('id, name')
+        .in('id', Array.from(allUserIds))
+      
+      if (usersError) {
+        console.error('Error fetching users:', usersError)
+      } else {
+        allUsers?.forEach(user => {
+          usersMap.set(user.id, user.name)
+        })
+      }
+    }
 
     // 메모리에서 매장별로 그룹화
     const problemReportsByStore = new Map<string, typeof allProblemReports>()
@@ -166,6 +219,8 @@ export async function GET(request: NextRequest) {
     const supplyRequestsByStore = new Map<string, typeof allSupplyRequests>()
     const checklistsByStore = new Map<string, typeof allChecklists>()
     const cleaningPhotosByStore = new Map<string, typeof allCleaningPhotos>()
+    const attendancesByStore = new Map<string, typeof allAttendances>()
+    const productPhotosByStore = new Map<string, typeof allProductPhotos>()
 
     allProblemReports?.forEach(pr => {
       if (!problemReportsByStore.has(pr.store_id)) {
@@ -209,6 +264,22 @@ export async function GET(request: NextRequest) {
       cleaningPhotosByStore.get(cp.store_id)!.push(cp)
     })
 
+    // 출근 기록을 매장별로 그룹화
+    allAttendances?.forEach(att => {
+      if (!attendancesByStore.has(att.store_id)) {
+        attendancesByStore.set(att.store_id, [])
+      }
+      attendancesByStore.get(att.store_id)!.push(att)
+    })
+
+    // 제품 사진을 매장별로 그룹화
+    allProductPhotos?.forEach(photo => {
+      if (!productPhotosByStore.has(photo.store_id)) {
+        productPhotosByStore.set(photo.store_id, [])
+      }
+      productPhotosByStore.get(photo.store_id)!.push(photo)
+    })
+
     // 각 매장별 상태 조회
     const storeStatuses = await Promise.all(
       stores.map(async (store) => {
@@ -220,290 +291,55 @@ export async function GET(request: NextRequest) {
 
         // 배치 쿼리에서 가져온 배정된 직원 ID 목록 사용
         const assignedUserIds = assignsByStore.get(store.id) || []
-        console.log(`Store ${store.name}: 배정된 직원 ID 목록:`, assignedUserIds)
 
-        // 해당 매장의 오늘 출근 정보 조회 (store_id만으로 조회하여 배정과 무관하게 실제 출근 기록 확인)
+        // 배치 쿼리에서 가져온 출근 기록 사용
+        const storeAttendances = attendancesByStore.get(store.id) || []
+        
+        // 오늘 날짜의 출근 기록 필터링 (KST와 UTC 둘 다 확인)
+        // 우선순위: 배정된 직원의 user_id로 조회한 결과 > clock_in_at 범위 > work_date
         let todayAttendances: any[] = []
-        try {
-          console.log(`Store ${store.name} (${store.id}): 출근 기록 조회 시작`)
-          console.log(`  - 오늘 날짜 (KST): ${todayDateKST}, (UTC): ${todayDateUTC}`)
-          console.log(`  - clock_in_at 범위 (UTC): ${todayStart.toISOString()} ~ ${todayEnd.toISOString()}`)
-          console.log(`  - 한국 시간 현재: ${koreaTime.toLocaleString('ko-KR')}`)
-          
-          // 먼저 해당 매장의 최근 출근 기록 조회 (배정 여부와 무관하게)
-          // store_id만으로 조회하여 실제로 출근 기록이 있는지 확인
-          // RLS 정책 문제로 인해 서비스 역할 키 사용
-          const { data: recentAttendances, error: recentError } = await attendanceClient
-            .from('attendance')
-            .select('work_date, clock_in_at, clock_out_at, user_id, store_id')
-            .eq('store_id', store.id)
-            .order('clock_in_at', { ascending: false })
-            .limit(10)
-          
-          // RLS 에러인 경우 상세 로그 출력
-          if (recentError) {
-            console.error(`Store ${store.name}: attendance 조회 에러 상세:`, {
-              message: recentError.message,
-              code: recentError.code,
-              details: recentError.details,
-              hint: recentError.hint,
-              usingServiceRole: !!adminSupabase
-            })
-          }
-          
-          // 배정된 직원의 user_id로 모든 출근 기록 조회 (store_id 필터 없이)
-          let allUserAttendances: any[] = []
-          if (assignedUserIds.length > 0) {
-            const { data: userAttendances, error: userAttendanceError } = await attendanceClient
-              .from('attendance')
-              .select('work_date, clock_in_at, clock_out_at, user_id, store_id')
-              .in('user_id', assignedUserIds)
-              .order('clock_in_at', { ascending: false })
-              .limit(20)
-            
-            if (userAttendanceError) {
-              console.error(`Store ${store.name}: 배정된 직원 출근 기록 조회 오류:`, userAttendanceError)
-            } else {
-              allUserAttendances = userAttendances || []
-              console.log(`Store ${store.name}: 배정된 직원(${assignedUserIds[0]})의 모든 출근 기록: ${allUserAttendances.length}건`)
-              if (allUserAttendances.length > 0) {
-                console.log(`Store ${store.name}: 배정된 직원의 모든 출근 기록:`, allUserAttendances.map(a => ({
-                  user_id: a.user_id,
-                  store_id: a.store_id,
-                  expected_store_id: store.id,
-                  store_id_match: a.store_id === store.id,
-                  work_date: a.work_date,
-                  clock_in_at: a.clock_in_at,
-                  clock_out_at: a.clock_out_at
-                })))
-                
-                // 이 매장의 출근 기록만 필터링
-                const thisStoreAttendances = allUserAttendances.filter(a => a.store_id === store.id)
-                console.log(`Store ${store.name}: 이 매장(${store.id})의 출근 기록: ${thisStoreAttendances.length}건`)
-                
-                // 오늘 날짜의 출근 기록 필터링 (KST와 UTC 둘 다 확인)
-                const todayStoreAttendances = thisStoreAttendances.filter(a => 
-                  a.work_date === todayDateKST || a.work_date === todayDateUTC
-                )
-                console.log(`Store ${store.name}: 오늘(${todayDateKST} 또는 ${todayDateUTC}) 이 매장의 출근 기록: ${todayStoreAttendances.length}건`)
-                
-                if (todayStoreAttendances.length > 0) {
-                  // 이 기록들을 todayAttendances에 추가
-                  todayAttendances = todayStoreAttendances
-                  console.log(`Store ${store.name}: 배정된 직원의 오늘 출근 기록 사용:`, todayAttendances.map(a => ({
-                    user_id: a.user_id,
-                    store_id: a.store_id,
-                    work_date: a.work_date,
-                    clock_in_at: a.clock_in_at,
-                    clock_out_at: a.clock_out_at
-                  })))
-                }
-              }
-            }
-          }
-          
-          // 디버깅: store_id로 조회한 결과 확인
-          console.log(`Store ${store.name}: attendance 테이블 조회 조건 - store_id=${store.id}`)
-
-          if (recentError) {
-            console.error(`Store ${store.name}: 최근 출근 기록 조회 오류:`, recentError)
-          } else {
-            console.log(`Store ${store.name}: 최근 출근 기록 조회 결과 - 총 ${recentAttendances?.length || 0}건`)
-            if (recentAttendances && recentAttendances.length > 0) {
-              console.log(`Store ${store.name}: 최근 출근 기록 (전체, 배정 무관):`, recentAttendances.map(a => ({
-                user_id: a.user_id,
-                work_date: a.work_date,
-                work_date_type: typeof a.work_date,
-                clock_in_at: a.clock_in_at,
-                clock_out_at: a.clock_out_at
-              })))
-              
-              // store_id로 조회한 결과에서 오늘 날짜 필터링
-              const todayFromStoreId = recentAttendances.filter(a => {
-                const recordDate = a.work_date
-                return recordDate === todayDateKST || recordDate === todayDateUTC
-              })
-              
-              if (todayFromStoreId.length > 0) {
-                console.log(`Store ${store.name}: store_id 조회 결과에서 오늘 날짜 필터링: ${todayFromStoreId.length}건`)
-                // 이 결과를 todayAttendances에 추가
-                if (todayAttendances.length === 0) {
-                  todayAttendances = todayFromStoreId
-                  console.log(`Store ${store.name}: store_id 조회 결과 사용:`, todayAttendances.map(a => ({
-                    user_id: a.user_id,
-                    work_date: a.work_date,
-                    clock_in_at: a.clock_in_at,
-                    clock_out_at: a.clock_out_at
-                  })))
-                }
-              }
-              
-              // 배정된 직원과 실제 출근한 직원 비교
-              const userIdSet = new Set<string>()
-              recentAttendances.forEach(a => userIdSet.add(a.user_id))
-              const recentUserIds = Array.from(userIdSet)
-              console.log(`Store ${store.name}: 최근 출근한 직원 ID:`, recentUserIds)
-              console.log(`Store ${store.name}: 배정된 직원 ID:`, assignedUserIds)
-              const mismatch = recentUserIds.filter(id => !assignedUserIds.includes(id))
-              if (mismatch.length > 0) {
-                console.warn(`Store ${store.name}: 배정되지 않은 직원이 출근함:`, mismatch)
-              }
-            } else {
-              console.log(`Store ${store.name}: 최근 출근 기록이 없습니다.`)
-            }
-          }
-
-          // 직원 앱과 동일한 방식으로 조회: user_id로 직접 조회
-          // 방법 0: 배정된 직원의 user_id로 직접 조회 (직원 앱과 동일한 방식)
-          let attendancesByUserId: any[] = []
-          if (assignedUserIds.length > 0) {
-            // 먼저 해당 user_id의 최근 출근 기록을 모두 조회하여 work_date 형식 확인
-            const { data: allRecentAttendances, error: allRecentError } = await supabase
-              .from('attendance')
-              .select('clock_in_at, clock_out_at, user_id, work_date, store_id')
-              .in('user_id', assignedUserIds)
-              .order('clock_in_at', { ascending: false })
-              .limit(10)
-            
-            if (allRecentError) {
-              console.error(`Store ${store.name}: 최근 출근 기록 전체 조회 오류:`, allRecentError)
-            } else if (allRecentAttendances && allRecentAttendances.length > 0) {
-              console.log(`Store ${store.name}: 배정된 직원의 최근 출근 기록 (전체, 날짜 무관):`, allRecentAttendances.map(a => ({
-                user_id: a.user_id,
-                store_id: a.store_id,
-                work_date: a.work_date,
-                work_date_type: typeof a.work_date,
-                clock_in_at: a.clock_in_at,
-                clock_out_at: a.clock_out_at
-              })))
-            } else {
-              console.log(`Store ${store.name}: 배정된 직원의 최근 출근 기록이 전혀 없습니다.`)
-            }
-            
-            // 직원 앱과 동일하게: user_id와 work_date로 조회
-            // 직원 앱에서는 `new Date().toISOString().split('T')[0]`를 사용하므로
-            // 브라우저의 로컬 시간대 기준 날짜를 사용합니다 (한국 시간대라면 KST)
-            const { data: attendancesByUser, error: userError } = await attendanceClient
-              .from('attendance')
-              .select('clock_in_at, clock_out_at, user_id, work_date, store_id')
-              .in('user_id', assignedUserIds)
-              .eq('work_date', todayDateKST) // 직원 앱과 동일하게 KST 날짜 사용
-              .order('clock_in_at', { ascending: false })
-            
-            if (userError) {
-              console.error(`Store ${store.name}: user_id 조회 오류:`, userError)
-            } else {
-              attendancesByUserId = (attendancesByUser || []).filter(a => a.store_id === store.id)
-              console.log(`Store ${store.name}: user_id(${assignedUserIds[0]}) + work_date(${todayDateKST}) 조회 결과: ${attendancesByUser?.length || 0}건 (이 매장: ${attendancesByUserId.length}건)`)
-              if (attendancesByUser && attendancesByUser.length > 0) {
-                console.log(`Store ${store.name}: user_id 조회 상세:`, attendancesByUser.map(a => ({
-                  user_id: a.user_id,
-                  store_id: a.store_id,
-                  expected_store_id: store.id,
-                  store_id_match: a.store_id === store.id,
-                  work_date: a.work_date,
-                  clock_in_at: a.clock_in_at,
-                  clock_out_at: a.clock_out_at
-                })))
-              }
-            }
-          }
-          
-          // 오늘 날짜로 정확히 조회 (store_id만으로, 배정 여부와 무관하게)
-          // 방법 1: work_date로 조회 (KST와 UTC 둘 다 확인)
-          const { data: attendancesByWorkDateKST, error: workDateKSTError } = await attendanceClient
-            .from('attendance')
-            .select('clock_in_at, clock_out_at, user_id, work_date')
-            .eq('store_id', store.id)
-            .eq('work_date', todayDateKST)
-            .order('clock_in_at', { ascending: false })
-          
-          const { data: attendancesByWorkDateUTC, error: workDateUTCError } = await attendanceClient
-            .from('attendance')
-            .select('clock_in_at, clock_out_at, user_id, work_date')
-            .eq('store_id', store.id)
-            .eq('work_date', todayDateUTC)
-            .order('clock_in_at', { ascending: false })
-          
-          // 방법 2: clock_in_at 범위로 조회 (가장 신뢰할 수 있는 방법)
-          const { data: attendancesByClockIn, error: clockInError } = await attendanceClient
-          .from('attendance')
-            .select('clock_in_at, clock_out_at, user_id, work_date')
-          .eq('store_id', store.id)
-            .gte('clock_in_at', todayStart.toISOString())
-            .lte('clock_in_at', todayEnd.toISOString())
-          .order('clock_in_at', { ascending: false })
-
-          console.log(`Store ${store.name}: work_date(KST=${todayDateKST}) 조회 결과: ${attendancesByWorkDateKST?.length || 0}건`)
-          if (workDateKSTError) {
-            console.error(`Store ${store.name}: work_date(KST) 조회 오류:`, workDateKSTError)
-          }
-          
-          console.log(`Store ${store.name}: work_date(UTC=${todayDateUTC}) 조회 결과: ${attendancesByWorkDateUTC?.length || 0}건`)
-          if (workDateUTCError) {
-            console.error(`Store ${store.name}: work_date(UTC) 조회 오류:`, workDateUTCError)
-          }
-          
-          console.log(`Store ${store.name}: clock_in_at 범위 조회 결과: ${attendancesByClockIn?.length || 0}건`)
-          if (clockInError) {
-            console.error(`Store ${store.name}: clock_in_at 범위 조회 오류:`, clockInError)
-          }
-          
-          // 우선순위: user_id 조회 > clock_in_at 범위 조회 > work_date 조회
-          if (attendancesByUserId && attendancesByUserId.length > 0) {
-            // 직원 앱과 동일한 방식으로 조회한 결과를 우선 사용
+        
+        // 1. 배정된 직원의 user_id로 조회한 결과 (직원 앱과 동일한 방식)
+        if (assignedUserIds.length > 0) {
+          const attendancesByUserId = storeAttendances.filter(a => 
+            assignedUserIds.includes(a.user_id) && 
+            (a.work_date === todayDateKST || a.work_date === todayDateUTC)
+          )
+          if (attendancesByUserId.length > 0) {
             todayAttendances = attendancesByUserId
-            console.log(`Store ${store.name}: user_id 기준 결과 사용 (${todayAttendances.length}건):`, todayAttendances.map(a => ({
-              user_id: a.user_id,
-              work_date: a.work_date,
-              clock_in_at: a.clock_in_at,
-              clock_out_at: a.clock_out_at
-            })))
-          } else if (attendancesByClockIn && attendancesByClockIn.length > 0) {
-            // clock_in_at 범위 조회가 가장 신뢰할 수 있으므로 우선 사용
-            todayAttendances = attendancesByClockIn
-            console.log(`Store ${store.name}: clock_in_at 기준 결과 사용 (${todayAttendances.length}건):`, todayAttendances.map(a => ({
-              user_id: a.user_id,
-              work_date: a.work_date,
-              clock_in_at: a.clock_in_at,
-              clock_out_at: a.clock_out_at
-            })))
-          } else if (attendancesByWorkDateKST && attendancesByWorkDateKST.length > 0) {
-            todayAttendances = attendancesByWorkDateKST
-            console.log(`Store ${store.name}: work_date(KST) 기준 결과 사용 (${todayAttendances.length}건):`, todayAttendances.map(a => ({
-              user_id: a.user_id,
-              work_date: a.work_date,
-              clock_in_at: a.clock_in_at,
-              clock_out_at: a.clock_out_at
-            })))
-          } else if (attendancesByWorkDateUTC && attendancesByWorkDateUTC.length > 0) {
-            todayAttendances = attendancesByWorkDateUTC
-            console.log(`Store ${store.name}: work_date(UTC) 기준 결과 사용 (${todayAttendances.length}건):`, todayAttendances.map(a => ({
-              user_id: a.user_id,
-              work_date: a.work_date,
-              clock_in_at: a.clock_in_at,
-              clock_out_at: a.clock_out_at
-            })))
-          } else {
-            console.log(`Store ${store.name}: 오늘 출근 기록 없음 (user_id: ${attendancesByUserId?.length || 0}건, work_date KST: ${attendancesByWorkDateKST?.length || 0}건, work_date UTC: ${attendancesByWorkDateUTC?.length || 0}건, clock_in_at: ${attendancesByClockIn?.length || 0}건)`)
-            todayAttendances = []
           }
-        } catch (error) {
-          console.error(`Store ${store.name}: attendance 조회 중 예외 발생:`, error)
-          // 예외 발생 시 빈 배열로 처리하여 계속 진행
-          todayAttendances = []
+        }
+        
+        // 2. clock_in_at 범위로 조회 (가장 신뢰할 수 있는 방법)
+        if (todayAttendances.length === 0) {
+          const attendancesByClockIn = storeAttendances.filter(a => {
+            if (!a.clock_in_at) return false
+            const clockInTime = new Date(a.clock_in_at)
+            return clockInTime >= todayStart && clockInTime <= todayEnd
+          })
+          if (attendancesByClockIn.length > 0) {
+            todayAttendances = attendancesByClockIn
+          }
+        }
+        
+        // 3. work_date로 조회 (KST 우선, UTC 대체)
+        if (todayAttendances.length === 0) {
+          const attendancesByWorkDateKST = storeAttendances.filter(a => a.work_date === todayDateKST)
+          if (attendancesByWorkDateKST.length > 0) {
+            todayAttendances = attendancesByWorkDateKST
+          } else {
+            const attendancesByWorkDateUTC = storeAttendances.filter(a => a.work_date === todayDateUTC)
+            if (attendancesByWorkDateUTC.length > 0) {
+              todayAttendances = attendancesByWorkDateUTC
+            }
+          }
         }
 
-        // 출근한 직원 정보 조회 (가장 최근 출근한 직원) - 배치 쿼리로 최적화 필요하지만 복잡도가 높아 개별 조회 유지
+        // 출근한 직원 정보 조회 (배치 쿼리에서 가져온 usersMap 사용)
         let staffName: string | null = null
         const latestAttendance = todayAttendances.length > 0 ? todayAttendances[0] : null
         if (latestAttendance?.user_id) {
-          const { data: staff } = await supabase
-            .from('users')
-            .select('name')
-            .eq('id', latestAttendance.user_id)
-            .single()
-          staffName = staff?.name || null
+          staffName = usersMap.get(latestAttendance.user_id) || null
         }
 
         // 배치 쿼리에서 가져온 데이터 사용
@@ -652,52 +488,29 @@ export async function GET(request: NextRequest) {
         console.log(`Lost items counts for ${store.name}: unconfirmed=${unconfirmedLostItems}, confirmed=${confirmedLostItems}`)
         console.log(`Lost items status breakdown:`, lostItems?.map((l: any) => ({ id: l.id, status: l.status })))
 
+        // 배치 쿼리에서 가져온 제품 사진 데이터 사용
+        const storeProductPhotos = productPhotosByStore.get(store.id) || []
+        
         // 오늘 제품 입고 사진 (type = 'receipt')
-        // 테이블이 없을 수 있으므로 에러 처리 추가
-        let todayProductInflow: any[] = []
-        try {
-          const { data, error } = await supabase
-            .from('product_photos')
-            .select('id')
-            .eq('store_id', store.id)
-            .eq('type', 'receipt')
-            .gte('created_at', todayStart.toISOString())
-            .lte('created_at', todayEnd.toISOString())
-          
-          if (!error && data) {
-            todayProductInflow = data
-          }
-        } catch (error) {
-          console.error(`Error fetching product inflow for store ${store.id}:`, error)
-          // 테이블이 없거나 오류 발생 시 빈 배열 유지
-        }
+        const todayProductInflow = storeProductPhotos.filter((p: any) => 
+          p.type === 'receipt' &&
+          new Date(p.created_at) >= todayStart &&
+          new Date(p.created_at) <= todayEnd
+        )
 
         // 최근 보관 사진 (type = 'storage') - 최신 사진만 (최대 2개)
-        // 테이블이 없을 수 있으므로 에러 처리 추가
-        let recentStoragePhotos: any[] = []
-        try {
-          const { data: recentStoragePhotosData, error: storageError } = await supabase
-            .from('product_photos')
-            .select('id, photo_urls, created_at')
-            .eq('store_id', store.id)
-            .eq('type', 'storage')
-            .order('created_at', { ascending: false })
-            .limit(1)
-
-          if (!storageError && recentStoragePhotosData && recentStoragePhotosData.length > 0) {
-            // photo_urls 배열에서 첫 번째 사진만 추출
-            recentStoragePhotos = recentStoragePhotosData.flatMap((item: any) => {
-              const urls = Array.isArray(item.photo_urls) ? item.photo_urls : []
-              return urls.slice(0, 2).map((url: string, idx: number) => ({
-                id: `${item.id}-${idx}`,
-                photo_url: url,
-              }))
-            })
-          }
-        } catch (error) {
-          console.error(`Error fetching storage photos for store ${store.id}:`, error)
-          // 테이블이 없거나 오류 발생 시 빈 배열 유지
-        }
+        const storagePhotos = storeProductPhotos
+          .filter((p: any) => p.type === 'storage')
+          .sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+          .slice(0, 1)
+        
+        const recentStoragePhotos = storagePhotos.flatMap((item: any) => {
+          const urls = Array.isArray(item.photo_urls) ? item.photo_urls : []
+          return urls.slice(0, 2).map((url: string, idx: number) => ({
+            id: `${item.id}-${idx}`,
+            photo_url: url,
+          }))
+        })
 
         // 배치 쿼리에서 가져온 데이터 사용
         const recentRequests = requestsByStore.get(store.id) || []

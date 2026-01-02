@@ -20,7 +20,7 @@ export default async function HomePage() {
   }
 
   // 역할별 리다이렉트
-  if (user.role === 'staff') {
+  if (user.role === 'staff' || user.role === 'subcontract_company' || user.role === 'subcontract_individual') {
     redirect('/mobile-dashboard')
   } else if (user.role === 'manager') {
     redirect('/reviews')

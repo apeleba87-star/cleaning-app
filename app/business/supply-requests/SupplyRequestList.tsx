@@ -208,11 +208,11 @@ export default function SupplyRequestList({ initialSupplyRequests, storeMap }: S
                     </div>
                   </td>
                   <td className="px-6 py-4">
-                    <div className={`text-sm font-medium ${request.status === 'completed' ? 'text-gray-500' : 'text-gray-900'}`}>
+                    <div className={`text-base font-medium ${request.status === 'completed' ? 'text-gray-500' : 'text-gray-900'}`}>
                       {request.title}
                     </div>
                     {request.description && (
-                      <div className="text-xs text-gray-400 mt-1 truncate max-w-xs">
+                      <div className="text-sm text-gray-600 mt-2 whitespace-normal break-words max-w-md">
                         {request.description}
                       </div>
                     )}
@@ -305,7 +305,7 @@ export default function SupplyRequestList({ initialSupplyRequests, storeMap }: S
               
               <div className="mb-4">
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  처리 완료 사진 <span className="text-red-500">*</span>
+                  처리 완료 사진 (선택)
                 </label>
                 {completionPhoto && (
                   <div className="mb-2">
@@ -351,18 +351,13 @@ export default function SupplyRequestList({ initialSupplyRequests, storeMap }: S
               </button>
               <button
                 onClick={async () => {
-                  if (!completionPhoto.trim()) {
-                    alert('처리 완료 사진을 업로드해주세요.')
-                    return
-                  }
-
                   try {
                     setCompleting(true)
                     const response = await fetch(`/api/business/supply-requests/${completingRequestId}/complete`, {
                       method: 'POST',
                       headers: { 'Content-Type': 'application/json' },
                       body: JSON.stringify({
-                        completion_photo_url: completionPhoto,
+                        completion_photo_url: completionPhoto.trim() || null,
                         completion_description: completionDescription.trim() || null,
                       }),
                     })

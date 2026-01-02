@@ -13,7 +13,8 @@ export default async function StaffLayout({
     redirect('/login')
   }
 
-  if (user.role !== 'staff') {
+  // 직원, 도급(업체), 도급(개인) 모두 직원 앱 사용
+  if (user.role !== 'staff' && user.role !== 'subcontract_company' && user.role !== 'subcontract_individual') {
     redirect('/')
   }
 

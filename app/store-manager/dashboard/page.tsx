@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import Link from 'next/link'
+import Image from 'next/image'
 import { getTodayDateKST } from '@/lib/utils/date'
 import RequestForm from './RequestForm'
 import { AttendanceCalendar } from '@/components/AttendanceCalendar'
@@ -77,6 +78,24 @@ export default function StoreManagerDashboardPage() {
   const [selectedImage, setSelectedImage] = useState<string | null>(null)
   const [attendanceData, setAttendanceData] = useState<Array<{ date: string; store_id: string; store_name: string; attendance_count: number }>>([])
   const [loadingAttendance, setLoadingAttendance] = useState(false)
+  const [selectedDate, setSelectedDate] = useState<string | null>(null)
+  const [showDailyDetailsModal, setShowDailyDetailsModal] = useState(false)
+  const [dailyDetailsData, setDailyDetailsData] = useState<{
+    cleaning_photos: any[]
+    issues: any[]
+    product_photos: any[]
+  } | null>(null)
+  const [loadingDailyDetails, setLoadingDailyDetails] = useState(false)
+  const [expandedSections, setExpandedSections] = useState<{
+    cleaning_photos: boolean
+    issues: boolean
+    product_photos: boolean
+  }>({
+    cleaning_photos: false,
+    issues: false,
+    product_photos: false,
+  })
+  const [expandedStoresInModal, setExpandedStoresInModal] = useState<Set<string>>(new Set())
 
   // 무한 루프 방지를 위한 ref
   const isInitialLoadRef = useRef(true)
@@ -781,6 +800,45 @@ export default function StoreManagerDashboardPage() {
     }
   }
 
+  // 날짜 선택 핸들러
+  const handleDateSelect = async (date: string) => {
+    // 해당 날짜에 출근 기록이 있는지 확인
+    const dateAttendance = attendanceData.find((a) => a.date === date)
+    if (!dateAttendance || dateAttendance.attendance_count === 0) {
+      // 출근 기록이 없으면 모달을 열지 않음
+      return
+    }
+
+    setSelectedDate(date)
+    setShowDailyDetailsModal(true)
+    setLoadingDailyDetails(true)
+
+    try {
+      const response = await fetch(`/api/store-manager/daily-details?date=${date}`)
+      const data = await response.json()
+
+      if (response.ok && data.success) {
+        setDailyDetailsData(data.data)
+      } else {
+        console.error('Failed to load daily details:', data.error)
+        setDailyDetailsData({
+          cleaning_photos: [],
+          issues: [],
+          product_photos: [],
+        })
+      }
+    } catch (error) {
+      console.error('Error loading daily details:', error)
+      setDailyDetailsData({
+        cleaning_photos: [],
+        issues: [],
+        product_photos: [],
+      })
+    } finally {
+      setLoadingDailyDetails(false)
+    }
+  }
+
   const handleRequestStatusClick = async (status: 'received' | 'in_progress' | 'completed' | 'rejected') => {
     // 점주가 가진 모든 매장의 요청란을 모달로 보여줌
     if (storeStatuses.length === 0) {
@@ -1001,9 +1059,9 @@ export default function StoreManagerDashboardPage() {
 
       </div>
 
-      {/* 1달간 관리 현황 */}
+      {/* 관리현황 */}
       <div className="mb-4 md:mb-6">
-        <h2 className="text-lg md:text-xl font-semibold mb-3">1달간 관리 현황</h2>
+        <h2 className="text-lg md:text-xl font-semibold mb-3">관리현황</h2>
         {loadingAttendance ? (
           <div className="bg-white rounded-lg shadow-md p-4 min-h-[300px] flex items-center justify-center">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
@@ -1012,6 +1070,8 @@ export default function StoreManagerDashboardPage() {
           <AttendanceCalendar
             attendanceData={attendanceData}
             storeStatuses={storeStatuses.map(s => ({ store_id: s.store_id, store_name: s.store_name }))}
+            onDateSelect={handleDateSelect}
+            selectedDate={selectedDate || undefined}
           />
         )}
       </div>
@@ -2289,6 +2349,370 @@ export default function StoreManagerDashboardPage() {
             >
               ×
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* 날짜별 상세 정보 모달 */}
+      {showDailyDetailsModal && selectedDate && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg p-6 max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-semibold">
+                {new Date(selectedDate).toLocaleDateString('ko-KR', {
+                  year: 'numeric',
+                  month: 'long',
+                  day: 'numeric',
+                  weekday: 'long',
+                })} 상세 정보
+              </h3>
+              <button
+                onClick={() => {
+                  setShowDailyDetailsModal(false)
+                  setSelectedDate(null)
+                  setDailyDetailsData(null)
+                  setExpandedStoresInModal(new Set())
+                }}
+                className="text-gray-500 hover:text-gray-700 text-2xl"
+              >
+                ×
+              </button>
+            </div>
+
+            {loadingDailyDetails ? (
+              <div className="flex items-center justify-center py-12">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+              </div>
+            ) : dailyDetailsData ? (
+              <div className="space-y-6">
+                {/* 관리 전후 사진 */}
+                <div className="border-b pb-4">
+                  <button
+                    onClick={() => setExpandedSections(prev => ({ ...prev, cleaning_photos: !prev.cleaning_photos }))}
+                    className="flex items-center justify-between w-full text-left hover:bg-gray-50 -mx-2 px-2 py-2 rounded transition-colors"
+                  >
+                    <h4 className="text-md font-semibold text-gray-800">
+                      관리 전후 사진
+                      {dailyDetailsData.cleaning_photos.length > 0 && (
+                        <span className="ml-2 text-sm font-normal text-gray-500">
+                          ({dailyDetailsData.cleaning_photos.length}건)
+                        </span>
+                      )}
+                    </h4>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm text-gray-500">
+                        {expandedSections.cleaning_photos ? '접기' : '펼치기'}
+                      </span>
+                      <span className="text-gray-500 text-lg">
+                        {expandedSections.cleaning_photos ? '▼' : '▶'}
+                      </span>
+                    </div>
+                  </button>
+                  {expandedSections.cleaning_photos && (
+                    <div className="mt-3">
+                      {dailyDetailsData.cleaning_photos.length === 0 ? (
+                        <p className="text-gray-500 text-sm">관리 전후 사진이 없습니다.</p>
+                      ) : (() => {
+                        // 매장별로 그룹화
+                        const photosByStore = new Map<string, any[]>()
+                        dailyDetailsData.cleaning_photos.forEach((photo: any) => {
+                          const storeId = photo.store_id || 'unknown'
+                          const storeName = photo.stores?.name || '알 수 없는 매장'
+                          const key = `${storeId}_${storeName}`
+                          if (!photosByStore.has(key)) {
+                            photosByStore.set(key, [])
+                          }
+                          photosByStore.get(key)!.push(photo)
+                        })
+
+                        return (
+                          <div className="space-y-4">
+                            {Array.from(photosByStore.entries()).map(([key, photos]) => {
+                              const storeId = photos[0]?.store_id || 'unknown'
+                              const storeName = photos[0]?.stores?.name || '알 수 없는 매장'
+                              const isExpanded = expandedStoresInModal.has(key)
+
+                              return (
+                                <div key={key} className="border rounded-lg p-3 bg-gray-50">
+                                  <button
+                                    onClick={() => {
+                                      setExpandedStoresInModal(prev => {
+                                        const newSet = new Set(prev)
+                                        if (newSet.has(key)) {
+                                          newSet.delete(key)
+                                        } else {
+                                          newSet.add(key)
+                                        }
+                                        return newSet
+                                      })
+                                    }}
+                                    className="flex items-center justify-between w-full text-left hover:bg-gray-100 -mx-2 px-2 py-2 rounded transition-colors"
+                                  >
+                                    <h5 className="text-sm font-semibold text-gray-800">
+                                      {storeName}
+                                      <span className="ml-2 text-xs font-normal text-gray-500">
+                                        ({photos.length}건)
+                                      </span>
+                                    </h5>
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-xs text-gray-500">
+                                        {isExpanded ? '접기' : '펼치기'}
+                                      </span>
+                                      <span className="text-gray-500">
+                                        {isExpanded ? '▼' : '▶'}
+                                      </span>
+                                    </div>
+                                  </button>
+                                  {isExpanded && (
+                                    <div className="mt-3 space-y-4">
+                                      {photos.map((item: any) => {
+                                        // 체크리스트 아이템 타입에 따라 before/after 사진 결정
+                                        let beforePhoto = null
+                                        let afterPhoto = null
+
+                                        if (item.checklist_item_type) {
+                                          // 체크리스트 아이템인 경우
+                                          const itemType = item.checklist_item_type
+                                          if (itemType === 'before_photo') {
+                                            beforePhoto = item.before_photo_url
+                                            afterPhoto = null
+                                          } else if (itemType === 'before_after_photo') {
+                                            beforePhoto = item.before_photo_url
+                                            afterPhoto = item.after_photo_url
+                                          } else if (itemType === 'after_photo') {
+                                            beforePhoto = null
+                                            afterPhoto = item.after_photo_url
+                                          }
+                                        } else {
+                                          // cleaning_photos 테이블에서 온 경우 (이미 그룹화됨)
+                                          beforePhoto = item.before_photo_url
+                                          afterPhoto = item.after_photo_url
+                                        }
+
+                                        return (
+                                          <div key={item.id} className="border rounded-lg p-3 bg-white">
+                                            <div className="text-xs text-gray-600 mb-2 font-medium">
+                                              {item.area_category || '구역'}
+                                            </div>
+                                            <div className="grid grid-cols-2 gap-3">
+                                              {/* 관리 전 사진 */}
+                                              <div className="flex flex-col">
+                                                <div className="text-xs text-gray-500 mb-1 text-center">관리 전</div>
+                                                {beforePhoto ? (
+                                                  <div className="relative w-full h-32 rounded overflow-hidden border-2 border-red-500 cursor-pointer hover:opacity-80 transition-opacity">
+                                                    <Image
+                                                      src={beforePhoto}
+                                                      alt="관리 전 사진"
+                                                      fill
+                                                      className="object-cover"
+                                                      sizes="(max-width: 768px) 50vw, 50vw"
+                                                      loading="lazy"
+                                                      onClick={() => setSelectedImage(beforePhoto)}
+                                                    />
+                                                  </div>
+                                                ) : (
+                                                  <div className="w-full h-32 rounded border-2 border-dashed border-gray-300 flex items-center justify-center bg-gray-50">
+                                                    <span className="text-xs text-gray-400">사진 없음</span>
+                                                  </div>
+                                                )}
+                                              </div>
+                                              {/* 관리 후 사진 */}
+                                              <div className="flex flex-col">
+                                                <div className="text-xs text-gray-500 mb-1 text-center">관리 후</div>
+                                                {afterPhoto ? (
+                                                  <div className="relative w-full h-32 rounded overflow-hidden border-2 border-green-500 cursor-pointer hover:opacity-80 transition-opacity">
+                                                    <Image
+                                                      src={afterPhoto}
+                                                      alt="관리 후 사진"
+                                                      fill
+                                                      className="object-cover"
+                                                      sizes="(max-width: 768px) 50vw, 50vw"
+                                                      loading="lazy"
+                                                      onClick={() => setSelectedImage(afterPhoto)}
+                                                    />
+                                                  </div>
+                                                ) : (
+                                                  <div className="w-full h-32 rounded border-2 border-dashed border-gray-300 flex items-center justify-center bg-gray-50">
+                                                    <span className="text-xs text-gray-400">사진 없음</span>
+                                                  </div>
+                                                )}
+                                              </div>
+                                            </div>
+                                            {item.created_at && (
+                                              <div className="text-xs text-gray-400 mt-2 text-center">
+                                                {new Date(item.created_at).toLocaleTimeString('ko-KR', {
+                                                  hour: '2-digit',
+                                                  minute: '2-digit',
+                                                })}
+                                              </div>
+                                            )}
+                                          </div>
+                                        )
+                                      })}
+                                    </div>
+                                  )}
+                                </div>
+                              )
+                            })}
+                          </div>
+                        )
+                      })()}
+                    </div>
+                  )}
+                </div>
+
+                {/* 매장 문제 */}
+                <div className="border-b pb-4">
+                  <button
+                    onClick={() => setExpandedSections(prev => ({ ...prev, issues: !prev.issues }))}
+                    className="flex items-center justify-between w-full text-left hover:bg-gray-50 -mx-2 px-2 py-2 rounded transition-colors"
+                  >
+                    <h4 className="text-md font-semibold text-gray-800">
+                      매장 문제
+                      {dailyDetailsData.issues.length > 0 && (
+                        <span className="ml-2 text-sm font-normal text-gray-500">
+                          ({dailyDetailsData.issues.length}건)
+                        </span>
+                      )}
+                    </h4>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm text-gray-500">
+                        {expandedSections.issues ? '접기' : '펼치기'}
+                      </span>
+                      <span className="text-gray-500 text-lg">
+                        {expandedSections.issues ? '▼' : '▶'}
+                      </span>
+                    </div>
+                  </button>
+                  {expandedSections.issues && (
+                    <div className="mt-3">
+                      {dailyDetailsData.issues.length === 0 ? (
+                        <p className="text-gray-500 text-sm">매장 문제가 없습니다.</p>
+                      ) : (
+                        <div className="space-y-3">
+                          {dailyDetailsData.issues.map((issue: any) => (
+                            <div key={issue.id} className="border rounded-lg p-3">
+                              <div className="flex items-start justify-between mb-2">
+                                <div className="flex-1">
+                                  <div className="text-sm font-medium text-gray-900">{issue.title}</div>
+                                  {issue.description && (
+                                    <div className="text-xs text-gray-600 mt-1">{issue.description}</div>
+                                  )}
+                                  <div className="text-xs text-gray-400 mt-1">
+                                    {issue.stores?.name || '알 수 없는 매장'} ·{' '}
+                                    {new Date(issue.created_at).toLocaleTimeString('ko-KR', {
+                                      hour: '2-digit',
+                                      minute: '2-digit',
+                                    })}
+                                  </div>
+                                </div>
+                                <span
+                                  className={`px-2 py-1 text-xs font-semibold rounded ${
+                                    issue.status === 'completed'
+                                      ? 'bg-green-100 text-green-800'
+                                      : issue.status === 'rejected'
+                                      ? 'bg-red-100 text-red-800'
+                                      : 'bg-yellow-100 text-yellow-800'
+                                  }`}
+                                >
+                                  {issue.status === 'completed'
+                                    ? '완료'
+                                    : issue.status === 'rejected'
+                                    ? '반려'
+                                    : '처리중'}
+                                </span>
+                              </div>
+                              {issue.photo_url && (
+                                <div className="mt-2 relative w-full h-32 rounded overflow-hidden border border-gray-300 cursor-pointer hover:opacity-80 transition-opacity">
+                                  <Image
+                                    src={issue.photo_url}
+                                    alt="매장 문제 사진"
+                                    fill
+                                    className="object-cover"
+                                    sizes="100vw"
+                                    loading="lazy"
+                                    onClick={() => setSelectedImage(issue.photo_url)}
+                                  />
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                {/* 제품 입고/보관 */}
+                <div>
+                  <button
+                    onClick={() => setExpandedSections(prev => ({ ...prev, product_photos: !prev.product_photos }))}
+                    className="flex items-center justify-between w-full text-left hover:bg-gray-50 -mx-2 px-2 py-2 rounded transition-colors"
+                  >
+                    <h4 className="text-md font-semibold text-gray-800">
+                      제품 입고/보관
+                      {dailyDetailsData.product_photos.length > 0 && (
+                        <span className="ml-2 text-sm font-normal text-gray-500">
+                          ({dailyDetailsData.product_photos.length}건)
+                        </span>
+                      )}
+                    </h4>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm text-gray-500">
+                        {expandedSections.product_photos ? '접기' : '펼치기'}
+                      </span>
+                      <span className="text-gray-500 text-lg">
+                        {expandedSections.product_photos ? '▼' : '▶'}
+                      </span>
+                    </div>
+                  </button>
+                  {expandedSections.product_photos && (
+                    <div className="mt-3">
+                      {dailyDetailsData.product_photos.length === 0 ? (
+                        <p className="text-gray-500 text-sm">제품 입고/보관 사진이 없습니다.</p>
+                      ) : (
+                        <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                          {dailyDetailsData.product_photos.map((photo: any) => (
+                            <div key={photo.id} className="border rounded-lg p-2">
+                              <div className="text-xs text-gray-600 mb-1">
+                                {photo.stores?.name || '알 수 없는 매장'}
+                              </div>
+                              {photo.product_name && (
+                                <div className="text-xs text-gray-500 mb-2">제품: {photo.product_name}</div>
+                              )}
+                              {photo.location && (
+                                <div className="text-xs text-gray-500 mb-2">위치: {photo.location}</div>
+                              )}
+                              {photo.photo_url && (
+                                <div className="relative w-full h-32 rounded overflow-hidden border border-gray-300 cursor-pointer hover:opacity-80 transition-opacity">
+                                  <Image
+                                    src={photo.photo_url}
+                                    alt="제품 사진"
+                                    fill
+                                    className="object-cover"
+                                    sizes="(max-width: 768px) 50vw, 33vw"
+                                    loading="lazy"
+                                    onClick={() => setSelectedImage(photo.photo_url)}
+                                  />
+                                </div>
+                              )}
+                              <div className="text-xs text-gray-400 mt-1">
+                                {new Date(photo.created_at).toLocaleTimeString('ko-KR', {
+                                  hour: '2-digit',
+                                  minute: '2-digit',
+                                })}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+            ) : (
+              <p className="text-gray-500 text-center py-12">데이터를 불러올 수 없습니다.</p>
+            )}
           </div>
         </div>
       )}

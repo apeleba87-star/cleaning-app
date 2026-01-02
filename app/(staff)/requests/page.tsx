@@ -32,6 +32,7 @@ interface RequestWithStore {
     name: string
     role: string
   }
+  attendance_status?: 'not_clocked_in' | 'clocked_in' | 'clocked_out'
 }
 
 export default function RequestsPage() {
@@ -159,16 +160,30 @@ export default function RequestsPage() {
         throw new Error(data.error || '요청란을 불러오는데 실패했습니다.')
       }
 
-      // 출근한 매장이 있으면 해당 매장의 요청란만 필터링
+      // 모든 요청을 가져오되, 출근한 매장이 있으면 해당 매장의 요청만 표시
       let filteredRequests = data.data || []
       console.log('[Client] Before filtering:', filteredRequests.length, 'requests')
       
+      // 관리 시작 시: 해당 매장의 요청만 표시
       if (attendanceStoreId && isClockedIn) {
         filteredRequests = filteredRequests.filter(
           (req: RequestWithStore) => req.store_id === attendanceStoreId
         )
-        console.log('[Client] After filtering:', filteredRequests.length, 'requests')
+        console.log('[Client] After filtering (clocked in):', filteredRequests.length, 'requests')
       }
+      
+      // 정렬: 관리 종료된 매장의 요청은 맨 아래로
+      filteredRequests.sort((a: RequestWithStore, b: RequestWithStore) => {
+        const aStatus = a.attendance_status || 'not_clocked_in'
+        const bStatus = b.attendance_status || 'not_clocked_in'
+        
+        // 관리 종료된 매장의 요청은 맨 아래로
+        if (aStatus === 'clocked_out' && bStatus !== 'clocked_out') return 1
+        if (aStatus !== 'clocked_out' && bStatus === 'clocked_out') return -1
+        
+        // 그 외는 최신순
+        return new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+      })
 
       // created_by_user가 null인 경우 클라이언트에서 직접 조회 시도
       const requestsWithUser = await Promise.all(filteredRequests.map(async (r: RequestWithStore) => {
@@ -445,8 +460,8 @@ export default function RequestsPage() {
       return
     }
 
-    // 출근한 매장인지 확인
-    const attendanceStatus = storeAttendanceMap.get(request.store_id) || 'not_clocked_in'
+    // 출근한 매장인지 확인 (API에서 받은 attendance_status 우선 사용)
+    const attendanceStatus = request.attendance_status || storeAttendanceMap.get(request.store_id) || 'not_clocked_in'
     if (attendanceStatus !== 'clocked_in') {
       alert('관리시작 매장의 요청란만 처리할 수 있습니다.')
       setCompletingRequestId(null)
@@ -490,8 +505,8 @@ export default function RequestsPage() {
     const request = requests.find(r => r.id === requestId)
     if (!request) return
     
-    // 출근한 매장인지 확인
-    const attendanceStatus = storeAttendanceMap.get(request.store_id) || 'not_clocked_in'
+    // 출근한 매장인지 확인 (API에서 받은 attendance_status 우선 사용)
+    const attendanceStatus = request.attendance_status || storeAttendanceMap.get(request.store_id) || 'not_clocked_in'
     if (attendanceStatus !== 'clocked_in') {
       alert('관리시작 매장의 요청란만 처리할 수 있습니다.')
       return
@@ -594,7 +609,7 @@ export default function RequestsPage() {
         <p className="text-gray-600 text-sm">
           {attendanceStoreId && isClockedIn
             ? '관리시작 매장의 요청란만 표시됩니다.'
-            : '배정된 매장의 처리중인 요청란을 확인할 수 있습니다.'}
+            : '배정된 매장의 처리중인 요청란을 확인할 수 있습니다. 관리 시작 전 매장의 요청은 연하게 표시됩니다.'}
         </p>
       </div>
 
@@ -611,43 +626,52 @@ export default function RequestsPage() {
           </div>
         ) : (
           requests.map((request) => {
-            // 해당 매장의 출근 상태 확인
-            const attendanceStatus = storeAttendanceMap.get(request.store_id) || 'not_clocked_in'
+            // 해당 매장의 출근 상태 확인 (API에서 받은 attendance_status 우선 사용)
+            const attendanceStatus = request.attendance_status || storeAttendanceMap.get(request.store_id) || 'not_clocked_in'
             const isNotClockedIn = attendanceStatus === 'not_clocked_in'
+            const isClockedOut = attendanceStatus === 'clocked_out'
             
             return (
               <div
                 key={request.id}
                 className={`bg-white rounded-lg shadow-md p-6 border-l-4 ${
-                  isNotClockedIn ? 'border-gray-400 opacity-60' : 'border-blue-500'
+                  isClockedOut 
+                    ? 'border-gray-400 opacity-60' 
+                    : isNotClockedIn 
+                    ? 'border-gray-400 opacity-60' 
+                    : 'border-blue-500'
                 }`}
               >
                 <div className="flex items-start justify-between mb-3">
                   <div className="flex-1">
                     <div className="flex items-center gap-2 mb-2">
                       <span className={`px-2 py-1 text-xs font-semibold rounded ${
-                        isNotClockedIn 
+                        isClockedOut || isNotClockedIn
                           ? 'bg-gray-100 text-gray-600' 
                           : 'bg-blue-100 text-blue-800'
                       }`}>
                         처리중
                       </span>
                       <span className={`text-sm ${
-                        isNotClockedIn ? 'text-gray-400' : 'text-gray-500'
+                        isClockedOut || isNotClockedIn ? 'text-gray-400' : 'text-gray-500'
                       }`}>
                         {request.stores?.name || '알 수 없는 매장'}
                       </span>
                     </div>
                     <div className="flex items-center gap-2 mb-2">
                       <h3 className={`text-lg font-semibold ${
-                        isNotClockedIn ? 'text-gray-500' : 'text-gray-900'
+                        isClockedOut 
+                          ? 'text-gray-500 line-through' 
+                          : isNotClockedIn 
+                          ? 'text-gray-500' 
+                          : 'text-gray-900'
                       }`}>
                         {request.title}
                       </h3>
                     </div>
                     {request.description && (
                       <p className={`text-sm mb-3 whitespace-pre-wrap ${
-                        isNotClockedIn ? 'text-gray-400' : 'text-gray-600'
+                        isClockedOut || isNotClockedIn ? 'text-gray-400' : 'text-gray-600'
                       }`}>
                         {request.description}
                       </p>
@@ -670,7 +694,7 @@ export default function RequestsPage() {
                       </div>
                     )}
                     <div className={`text-xs ${
-                      isNotClockedIn ? 'text-gray-400' : 'text-gray-500'
+                      isClockedOut || isNotClockedIn ? 'text-gray-400' : 'text-gray-500'
                     }`}>
                       <span>요청일: {formatDate(request.created_at)}</span>
                       {request.created_by_user && (
@@ -684,22 +708,22 @@ export default function RequestsPage() {
                   <button
                     onClick={() => handleRejectClick(request.id)}
                     className={`px-4 py-2 rounded-md text-sm ${
-                      isNotClockedIn
+                      isClockedOut || isNotClockedIn
                         ? 'bg-gray-300 text-gray-600 cursor-not-allowed'
                         : 'bg-red-600 text-white hover:bg-red-700'
                     }`}
-                    disabled={isNotClockedIn}
+                    disabled={isClockedOut || isNotClockedIn}
                   >
                     반려 처리
                   </button>
                   <button
                     onClick={() => handleCompleteClick(request.id)}
                     className={`px-4 py-2 rounded-md text-sm ${
-                      isNotClockedIn
+                      isClockedOut || isNotClockedIn
                         ? 'bg-gray-300 text-gray-600 cursor-not-allowed'
                         : 'bg-green-600 text-white hover:bg-green-700'
                     }`}
-                    disabled={isNotClockedIn}
+                    disabled={isClockedOut || isNotClockedIn}
                   >
                     완료 처리
                   </button>
@@ -715,8 +739,8 @@ export default function RequestsPage() {
         const request = requests.find(r => r.id === completingRequestId)
         if (!request) return null
 
-        // 출근 상태 확인
-        const attendanceStatus = storeAttendanceMap.get(request.store_id) || 'not_clocked_in'
+        // 출근 상태 확인 (API에서 받은 attendance_status 우선 사용)
+        const attendanceStatus = request.attendance_status || storeAttendanceMap.get(request.store_id) || 'not_clocked_in'
         const isNotClockedIn = attendanceStatus !== 'clocked_in'
 
         return (
@@ -870,8 +894,8 @@ export default function RequestsPage() {
         const request = requests.find(r => r.id === rejectingRequestId)
         if (!request) return null
 
-        // 출근 상태 확인
-        const attendanceStatus = storeAttendanceMap.get(request.store_id) || 'not_clocked_in'
+        // 출근 상태 확인 (API에서 받은 attendance_status 우선 사용)
+        const attendanceStatus = request.attendance_status || storeAttendanceMap.get(request.store_id) || 'not_clocked_in'
         const isNotClockedIn = attendanceStatus !== 'clocked_in'
 
         return (

@@ -34,14 +34,10 @@ export default function ReceiptDetailSection({ period, onRefresh }: ReceiptDetai
   const itemsPerPage = 50
 
   useEffect(() => {
-    if (searchTerm) {
-      // 검색어가 있으면 전체 데이터 가져오기 (검색 결과가 제한되지 않도록)
-      loadReceipts(false)
-    } else {
-      // 검색어가 없으면 페이지네이션 적용
-      loadReceipts(true)
-    }
-  }, [period, currentPage, searchTerm])
+    // 검색어는 클라이언트 사이드 필터링만 하므로, period나 currentPage 변경 시에만 API 호출
+    // 검색어가 없으면 페이지네이션 적용
+    loadReceipts(true)
+  }, [period, currentPage])
 
   const loadReceipts = async (usePagination: boolean) => {
     try {

@@ -4,8 +4,8 @@ import { handleApiError, UnauthorizedError, ForbiddenError } from '@/lib/errors'
 import { z } from 'zod'
 
 const completeSchema = z.object({
-  completion_photo_url: z.string().min(1, '처리 완료 사진은 필수입니다.'),
-  completion_description: z.string().optional(),
+  completion_photo_url: z.string().optional().nullable(),
+  completion_description: z.string().optional().nullable(),
 })
 
 export async function POST(
@@ -69,7 +69,7 @@ export async function POST(
       .from('supply_requests')
       .update({ 
         status: 'completed',
-        completion_photo_url: validated.completion_photo_url,
+        completion_photo_url: validated.completion_photo_url || null,
         completion_description: validated.completion_description || null,
         completed_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
