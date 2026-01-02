@@ -44,7 +44,9 @@ function isWorkDay(managementDays: string | null, dayName: string): boolean {
 }
 
 /**
- * 어제 오후 1시 기준으로 매장 출근 현황을 조회합니다.
+ * 어제 미관리 매장 현황을 조회합니다.
+ * - 저장된 집계 결과를 우선 조회
+ * - 없으면 실시간 집계 수행
  * @param includeNightShift - 야간 매장 포함 여부 (기본값: false)
  */
 export async function GET(request: NextRequest) {
@@ -67,13 +69,146 @@ export async function GET(request: NextRequest) {
     const yesterday = getYesterdayDateKST()
     const yesterdayDayName = getYesterdayDayNameKST()
     
-    // 현재 시간 확인 (오전 6시인지 오후 1시인지)
+    // 저장된 집계 결과 조회
+    const { data: generalSummary } = await supabase
+      .from('unmanaged_stores_summary')
+      .select('*')
+      .eq('company_id', user.company_id)
+      .eq('report_date', yesterday)
+      .eq('store_type', 'general')
+      .single()
+
+    const { data: nightSummary } = await supabase
+      .from('unmanaged_stores_summary')
+      .select('*')
+      .eq('company_id', user.company_id)
+      .eq('report_date', yesterday)
+      .eq('store_type', 'night')
+      .single()
+
+    // 저장된 집계 결과가 있으면 사용
+    if (generalSummary || nightSummary) {
+      // 매장 정보 조회
+      const storeIds = new Set<string>()
+      if (generalSummary?.unmanaged_store_ids) {
+        generalSummary.unmanaged_store_ids.forEach((id: string) => storeIds.add(id))
+      }
+      if (nightSummary?.unmanaged_store_ids && includeNightShift) {
+        nightSummary.unmanaged_store_ids.forEach((id: string) => storeIds.add(id))
+      }
+
+      const { data: stores } = await supabase
+        .from('stores')
+        .select('id, name, is_night_shift')
+        .in('id', Array.from(storeIds))
+        .is('deleted_at', null)
+
+      const storeMap = new Map((stores || []).map(s => [s.id, s]))
+
+      // 모든 관련 매장 정보 조회
+      const allStoreIds = new Set<string>()
+      if (generalSummary) {
+        // 일반 매장 전체 조회 (관리 완료 + 미관리)
+        const { data: allGeneralStores } = await supabase
+          .from('stores')
+          .select('id, name, is_night_shift')
+          .eq('company_id', user.company_id)
+          .eq('is_night_shift', false)
+          .is('deleted_at', null)
+        
+        if (allGeneralStores) {
+          allGeneralStores.forEach(s => allStoreIds.add(s.id))
+        }
+      }
+      
+      if (nightSummary && includeNightShift) {
+        // 야간 매장 전체 조회
+        const { data: allNightStores } = await supabase
+          .from('stores')
+          .select('id, name, is_night_shift')
+          .eq('company_id', user.company_id)
+          .eq('is_night_shift', true)
+          .is('deleted_at', null)
+        
+        if (allNightStores) {
+          allNightStores.forEach(s => allStoreIds.add(s.id))
+        }
+      }
+
+      const { data: allStores } = await supabase
+        .from('stores')
+        .select('id, name, is_night_shift')
+        .in('id', Array.from(allStoreIds))
+        .is('deleted_at', null)
+
+      const allStoreMap = new Map((allStores || []).map(s => [s.id, s]))
+      const unmanagedStoreIds = new Set<string>()
+      
+      if (generalSummary?.unmanaged_store_ids) {
+        generalSummary.unmanaged_store_ids.forEach((id: string) => unmanagedStoreIds.add(id))
+      }
+      if (nightSummary?.unmanaged_store_ids && includeNightShift) {
+        nightSummary.unmanaged_store_ids.forEach((id: string) => unmanagedStoreIds.add(id))
+      }
+
+      // 리포트 데이터 구성 (모든 매장 포함)
+      const reportStores: any[] = Array.from(allStoreIds).map(storeId => {
+        const store = allStoreMap.get(storeId)
+        if (!store) return null
+        
+        return {
+          store_id: store.id,
+          store_name: store.name,
+          is_night_shift: store.is_night_shift,
+          has_attendance: !unmanagedStoreIds.has(store.id),
+          is_not_counted: false,
+          clock_in_at: null,
+          user_id: null,
+        }
+      }).filter(Boolean) as any[]
+
+      // 집계 시각 결정
+      let reportTime = '08:00'
+      let aggregatedAt = generalSummary?.aggregated_at || nightSummary?.aggregated_at
+      
+      if (includeNightShift && nightSummary) {
+        reportTime = '12:00'
+        aggregatedAt = nightSummary.aggregated_at
+      } else if (generalSummary) {
+        reportTime = '08:00'
+        aggregatedAt = generalSummary.aggregated_at
+      }
+
+      const totalStores = (generalSummary?.total_stores || 0) + (includeNightShift ? (nightSummary?.total_stores || 0) : 0)
+      const managedCount = (generalSummary?.managed_count || 0) + (includeNightShift ? (nightSummary?.managed_count || 0) : 0)
+      const unmanagedCount = (generalSummary?.unmanaged_count || 0) + (includeNightShift ? (nightSummary?.unmanaged_count || 0) : 0)
+
+      return NextResponse.json({
+        success: true,
+        data: {
+          report_date: yesterday,
+          report_time: reportTime,
+          aggregated_at: aggregatedAt,
+          is_morning_report: reportTime === '08:00',
+          include_night_shift: includeNightShift,
+          total_stores: totalStores,
+          attended_stores: managedCount,
+          not_attended_stores: unmanagedCount,
+          not_counted_stores: 0,
+          total_night_stores: nightSummary?.total_stores || 0,
+          stores: reportStores.sort((a, b) => a.store_name.localeCompare(b.store_name))
+        }
+      })
+    }
+
+    // 저장된 집계 결과가 없으면 실시간 집계 (폴백)
+    // 현재 시간 확인
     const now = new Date()
     const kstOffset = 9 * 60
     const utc = now.getTime() + (now.getTimezoneOffset() * 60 * 1000)
     const kst = new Date(utc + (kstOffset * 60 * 1000))
     const currentHour = kst.getHours()
-    const isMorningReport = currentHour < 13 // 오후 1시 이전이면 오전 리포트
+    const isMorningReport = currentHour < 12 // 낮 12시 이전이면 오전 리포트
 
     // 회사에 속한 매장 조회 (근무일 정보 및 야간 근무 시간 포함)
     let storesQuery = supabase

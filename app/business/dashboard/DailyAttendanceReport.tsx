@@ -15,6 +15,7 @@ interface StoreReport {
 interface AttendanceReport {
   report_date: string
   report_time: string
+  aggregated_at?: string | null // 집계 시각
   is_morning_report?: boolean
   include_night_shift: boolean
   total_stores: number
@@ -115,6 +116,16 @@ export default function DailyAttendanceReport() {
           <h2 className="text-base sm:text-lg font-semibold text-gray-900">어제 매장 관리 현황</h2>
           <p className="text-xs sm:text-sm text-gray-500 mt-1">
             {report.report_date} {report.report_time} 기준
+            {report.aggregated_at && (
+              <span className="ml-1 sm:ml-2 text-gray-400 text-xs">
+                (집계: {new Date(report.aggregated_at).toLocaleString('ko-KR', { 
+                  month: 'numeric', 
+                  day: 'numeric', 
+                  hour: '2-digit', 
+                  minute: '2-digit' 
+                })})
+              </span>
+            )}
             {isAfternoonReport && hasNightStores && (
               <span className="ml-1 sm:ml-2 text-blue-600 font-medium text-xs sm:text-sm">(야간 매장 집계 완료)</span>
             )}
