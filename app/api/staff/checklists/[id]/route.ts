@@ -160,10 +160,11 @@ export async function PATCH(
       // updated_at은 데이터베이스 트리거가 자동으로 현재 시간(UTC)으로 업데이트함
     }
 
-    // 완료되었으면 completed_at 설정
-    if (isCompleted) {
-      updateData.completed_at = new Date().toISOString()
-    }
+    // 완료되었으면 completed_at 설정 (컬럼이 있는 경우에만)
+    // 주의: completed_at 컬럼이 데이터베이스에 없으면 이 부분을 제거해야 함
+    // if (isCompleted) {
+    //   updateData.completed_at = new Date().toISOString()
+    // }
 
     console.log('💾 데이터베이스 업데이트 시작:', {
       checklistId: params.id,
