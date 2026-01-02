@@ -105,13 +105,14 @@ export async function POST(request: NextRequest) {
     }
 
     // 만료된 세션 정리 (30분 이상 비활성)
-    await supabase
-      .from('user_sessions')
-      .delete()
-      .lt('last_activity_at', new Date(Date.now() - 30 * 60 * 1000).toISOString())
-      .catch(() => {
-        // 에러는 무시
-      })
+    try {
+      await supabase
+        .from('user_sessions')
+        .delete()
+        .lt('last_activity_at', new Date(Date.now() - 30 * 60 * 1000).toISOString())
+    } catch (error) {
+      // 에러는 무시
+    }
 
     // 새 세션 생성
     const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000) // 24시간 후 만료
