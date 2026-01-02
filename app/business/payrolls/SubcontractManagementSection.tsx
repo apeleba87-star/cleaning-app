@@ -276,7 +276,7 @@ export default function SubcontractManagementSection({
   // 검색 필터링
   const companySubcontracts = searchTerm
     ? companySubcontractsBase.filter(s => 
-        s.franchises?.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        s.subcontractor?.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         s.contract_period_start?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         s.contract_period_end?.toLowerCase().includes(searchTerm.toLowerCase())
       )
