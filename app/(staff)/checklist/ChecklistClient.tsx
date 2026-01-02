@@ -423,57 +423,103 @@ export default function ChecklistClient() {
     itemsToSave: ChecklistItem[],
     noteToSave: string
   ) => {
-    if (!selectedChecklist) return
-
-    const validItems = itemsToSave.filter((item) => item.area.trim() !== '')
-    
-    const response = await fetch(`/api/staff/checklists/${checklistId}`, {
-      method: 'PATCH',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        items: validItems.map((item) => {
-          if (item.type === 'check') {
-            return {
-              area: item.area.trim(),
-              type: 'check',
-              status: item.status,
-              checked: item.checked || false,
-              comment: item.comment?.trim() || undefined,
-            }
-          } else {
-            // 사진 타입 항목: 실제 타입(before_photo, after_photo, before_after_photo)을 그대로 저장
-            // 타입 정규화: 구버전 'photo' 타입을 before_after_photo로 변환
-            let photoType: string = item.type as any
-            if (photoType === 'photo') {
-              photoType = 'before_after_photo'
-            }
-            
-            return {
-              area: item.area.trim(),
-              type: photoType, // 실제 타입 저장
-              before_photo_url: item.before_photo_url,
-              after_photo_url: item.after_photo_url,
-              comment: item.comment?.trim() || undefined,
-            }
-          }
-        }),
-        before_photo_url: null,
-        after_photo_url: null,
-        note: noteToSave.trim() || null,
-      }),
-    })
-
-    const data = await response.json()
-
-    if (!response.ok) {
-      throw new Error(data.error || '체크리스트 저장에 실패했습니다.')
+    if (!selectedChecklist) {
+      console.error('❌ selectedChecklist가 없습니다.')
+      return
     }
 
-    // 체크리스트 진행률 업데이트를 위해 이벤트 트리거
-    if (typeof window !== 'undefined') {
-      window.dispatchEvent(new Event('checklistUpdated'))
+    const validItems = itemsToSave.filter((item) => item.area && item.area.trim() !== '')
+    
+    console.log('💾 체크리스트 저장 요청:', {
+      checklistId,
+      validItemsCount: validItems.length,
+      totalItemsCount: itemsToSave.length
+    })
+
+    // 저장할 데이터 준비
+    const payload = {
+      items: validItems.map((item) => {
+        if (item.type === 'check') {
+          return {
+            area: item.area.trim(),
+            type: 'check',
+            status: item.status,
+            checked: item.checked || false,
+            comment: item.comment?.trim() || undefined,
+          }
+        } else {
+          // 사진 타입 항목: 실제 타입(before_photo, after_photo, before_after_photo)을 그대로 저장
+          // 타입 정규화: 구버전 'photo' 타입을 before_after_photo로 변환
+          let photoType: string = item.type as any
+          if (photoType === 'photo') {
+            photoType = 'before_after_photo'
+          }
+          
+          const photoItem = {
+            area: item.area.trim(),
+            type: photoType, // 실제 타입 저장
+            before_photo_url: item.before_photo_url || null,
+            after_photo_url: item.after_photo_url || null,
+            comment: item.comment?.trim() || undefined,
+          }
+          
+          // 디버깅: 관리후 사진이 있는 항목 로깅
+          if (item.after_photo_url) {
+            console.log(`📸 관리후 사진 포함 항목: ${item.area}`, {
+              type: photoType,
+              after_photo_url: item.after_photo_url.substring(0, 50) + '...'
+            })
+          }
+          
+          return photoItem
+        }
+      }),
+      before_photo_url: null,
+      after_photo_url: null,
+      note: noteToSave.trim() || null,
+    }
+
+    // 관리후 사진이 있는 항목 확인
+    const afterPhotoItems = payload.items.filter((item: any) => 
+      item.type === 'after_photo' || item.type === 'before_after_photo'
+    ).filter((item: any) => item.after_photo_url)
+    
+    console.log(`📊 저장할 관리후 사진 항목 수: ${afterPhotoItems.length}`)
+    
+    try {
+      const response = await fetch(`/api/staff/checklists/${checklistId}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        console.error('❌ API 응답 오류:', {
+          status: response.status,
+          statusText: response.statusText,
+          error: data.error,
+          details: data.details
+        })
+        throw new Error(data.error || '체크리스트 저장에 실패했습니다.')
+      }
+
+      console.log('✅ 체크리스트 저장 성공')
+      
+      // 체크리스트 진행률 업데이트를 위해 이벤트 트리거
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new Event('checklistUpdated'))
+      }
+    } catch (error: any) {
+      console.error('❌ 체크리스트 저장 중 예외 발생:', {
+        message: error.message,
+        stack: error.stack,
+        checklistId
+      })
+      throw error
     }
   }
 
@@ -737,26 +783,77 @@ export default function ChecklistClient() {
         storeId={selectedChecklist.store_id}
         onComplete={async (updatedItems) => {
           try {
-            // 업데이트된 사진 항목을 전체 items에 반영
+            console.log('📸 사진 촬영 완료 콜백:', {
+              mode: cameraMode,
+              updatedItemsCount: updatedItems.length,
+              currentItemsCount: items.length
+            })
+            
+            // 업데이트된 사진 항목을 전체 items에 반영 (area와 타입 모두 고려)
             const updatedAllItems = items.map(item => {
-              const updated = updatedItems.find(u => u.area === item.area)
+              // area와 타입이 모두 일치하는 항목 찾기
+              const updated = updatedItems.find(u => {
+                if (u.area?.trim() !== item.area?.trim()) {
+                  return false
+                }
+                // 타입도 일치해야 함
+                if (cameraMode === 'before') {
+                  // 관리전: before_photo 또는 before_after_photo 타입
+                  return (u.type === 'before_photo' || u.type === 'before_after_photo') &&
+                         (item.type === 'before_photo' || item.type === 'before_after_photo')
+                } else {
+                  // 관리후: after_photo 또는 before_after_photo 타입
+                  return (u.type === 'after_photo' || u.type === 'before_after_photo') &&
+                         (item.type === 'after_photo' || item.type === 'before_after_photo')
+                }
+              })
+              
               if (updated) {
                 if (cameraMode === 'before') {
                   // 관리전 사진이 촬영되면 자동으로 체크 (checked 상태 추가)
-                  return { ...item, before_photo_url: updated.before_photo_url, checked: true }
+                  const merged = { 
+                    ...item, 
+                    before_photo_url: updated.before_photo_url || item.before_photo_url,
+                    checked: true 
+                  }
+                  console.log(`✅ 관리전 사진 반영: ${item.area}`, merged.before_photo_url ? '있음' : '없음')
+                  return merged
                 } else {
-                  return { ...item, after_photo_url: updated.after_photo_url }
+                  const merged = { 
+                    ...item, 
+                  }
+                  // 관리후 사진 URL 업데이트 (기존 before_photo_url은 유지)
+                  if (updated.after_photo_url) {
+                    merged.after_photo_url = updated.after_photo_url
+                  }
+                  console.log(`✅ 관리후 사진 반영: ${item.area}`, merged.after_photo_url ? '있음' : '없음')
+                  return merged
                 }
               }
               return item
             })
+            
+            // 업데이트된 항목 확인
+            const updatedCount = updatedAllItems.filter((item, idx) => {
+              const original = items[idx]
+              if (cameraMode === 'before') {
+                return item.before_photo_url !== original.before_photo_url
+              } else {
+                return item.after_photo_url !== original.after_photo_url
+              }
+            }).length
+            
+            console.log(`📊 업데이트된 항목 수: ${updatedCount}/${updatedAllItems.length}`)
+            
             setItems(updatedAllItems)
             // items 변경을 통해 진행률 자동 업데이트
             
             // 관리전/관리후 사진 촬영 완료 시 자동 저장
             if (selectedChecklist) {
               try {
+                console.log('💾 체크리스트 저장 시작...')
                 await saveChecklistProgress(selectedChecklist.id, updatedAllItems, note)
+                console.log('✅ 체크리스트 저장 완료')
                 
                 // 사파리 호환성을 위해 setTimeout으로 alert 지연
                 setTimeout(() => {
@@ -779,7 +876,13 @@ export default function ChecklistClient() {
                   }
                 }, 100)
               } catch (error: any) {
-                console.error('자동 저장 실패:', error)
+                console.error('❌ 자동 저장 실패:', error)
+                console.error('에러 상세:', {
+                  message: error.message,
+                  stack: error.stack,
+                  checklistId: selectedChecklist.id,
+                  itemsCount: updatedAllItems.length
+                })
                 const errorMessage = error instanceof Error ? error.message : '알 수 없는 오류'
                 setTimeout(() => {
                   alert('저장 중 오류가 발생했습니다: ' + errorMessage)
@@ -789,7 +892,11 @@ export default function ChecklistClient() {
             
             setCameraMode(null)
           } catch (error: any) {
-            console.error('사진 처리 중 오류:', error)
+            console.error('❌ 사진 처리 중 오류:', error)
+            console.error('에러 상세:', {
+              message: error.message,
+              stack: error.stack
+            })
             const errorMessage = error instanceof Error ? error.message : '알 수 없는 오류'
             setTimeout(() => {
               alert('사진 처리 중 오류가 발생했습니다: ' + errorMessage)

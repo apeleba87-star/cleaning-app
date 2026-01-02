@@ -244,8 +244,23 @@ export function ChecklistCamera({ items, mode, storeId, onComplete, onCancel }: 
           const url = await uploadPhotoFile(i, tempPhotos[i])
           if (url) {
             successCount++
-            // area로 매칭하여 해당 아이템 찾기 (photoItems는 이미 필터링된 사진 아이템들)
-            const itemToUpdate = updatedItems.find(item => item.area === photoItems[i].area && (item.type === 'before_photo' || item.type === 'after_photo' || item.type === 'before_after_photo'))
+            // area와 타입을 모두 고려하여 정확히 매칭
+            const currentPhotoItem = photoItems[i]
+            const itemToUpdate = updatedItems.find(item => {
+              // area가 정확히 일치하고
+              if (item.area?.trim() !== currentPhotoItem.area?.trim()) {
+                return false
+              }
+              // 타입도 일치해야 함
+              if (mode === 'before') {
+                // 관리전: before_photo 또는 before_after_photo 타입
+                return item.type === 'before_photo' || item.type === 'before_after_photo'
+              } else {
+                // 관리후: after_photo 또는 before_after_photo 타입
+                return item.type === 'after_photo' || item.type === 'before_after_photo'
+              }
+            })
+            
             if (itemToUpdate) {
               const itemIndex = updatedItems.indexOf(itemToUpdate)
               if (mode === 'before') {
@@ -253,12 +268,17 @@ export function ChecklistCamera({ items, mode, storeId, onComplete, onCancel }: 
                   ...updatedItems[itemIndex],
                   before_photo_url: url
                 }
+                console.log(`✅ 관리전 사진 업로드 완료: ${currentPhotoItem.area}`, url)
               } else {
                 updatedItems[itemIndex] = {
                   ...updatedItems[itemIndex],
                   after_photo_url: url
                 }
+                console.log(`✅ 관리후 사진 업로드 완료: ${currentPhotoItem.area}`, url)
               }
+            } else {
+              console.error(`❌ 매칭되는 아이템을 찾을 수 없음: area=${currentPhotoItem.area}, type=${currentPhotoItem.type}, mode=${mode}`)
+              failCount++
             }
           } else {
             failCount++

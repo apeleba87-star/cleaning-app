@@ -18,8 +18,33 @@ export async function PATCH(
     const { items, before_photo_url, after_photo_url, note } = body
 
     if (!Array.isArray(items) || items.length === 0) {
+      console.error('❌ Invalid items:', { items, isArray: Array.isArray(items), length: items?.length })
       return NextResponse.json({ error: 'items는 필수입니다.' }, { status: 400 })
     }
+
+    // items 배열 검증 강화
+    const invalidItems = items.filter((item: any, index: number) => {
+      if (!item || typeof item !== 'object') {
+        console.error(`❌ Invalid item at index ${index}:`, item)
+        return true
+      }
+      if (!item.area || typeof item.area !== 'string' || !item.area.trim()) {
+        console.error(`❌ Item at index ${index} missing area:`, item)
+        return true
+      }
+      return false
+    })
+
+    if (invalidItems.length > 0) {
+      console.error('❌ Invalid items found:', invalidItems.length)
+      return NextResponse.json({ error: '유효하지 않은 items 항목이 있습니다.' }, { status: 400 })
+    }
+
+    console.log('📝 체크리스트 업데이트 요청:', {
+      checklistId: params.id,
+      itemsCount: items.length,
+      userId: user.id
+    })
 
     const supabase = await createServerSupabaseClient()
 
@@ -140,15 +165,39 @@ export async function PATCH(
       updateData.completed_at = new Date().toISOString()
     }
 
-    const { error } = await supabase
+    console.log('💾 데이터베이스 업데이트 시작:', {
+      checklistId: params.id,
+      itemsCount: items.length,
+      isCompleted,
+      hasBeforePhoto: items.some((item: any) => item.before_photo_url),
+      hasAfterPhoto: items.some((item: any) => item.after_photo_url)
+    })
+
+    const { error, data } = await supabase
       .from('checklist')
       .update(updateData)
       .eq('id', params.id)
+      .select()
 
     if (error) {
-      console.error('Error updating checklist:', error)
-      return NextResponse.json({ error: '체크리스트 업데이트에 실패했습니다.' }, { status: 500 })
+      console.error('❌ 체크리스트 업데이트 실패:', {
+        error: error.message,
+        code: error.code,
+        details: error.details,
+        hint: error.hint,
+        checklistId: params.id,
+        itemsCount: items.length
+      })
+      return NextResponse.json({ 
+        error: '체크리스트 업데이트에 실패했습니다.',
+        details: error.message 
+      }, { status: 500 })
     }
+
+    console.log('✅ 체크리스트 업데이트 성공:', {
+      checklistId: params.id,
+      updatedAt: data?.[0]?.updated_at
+    })
 
     return NextResponse.json({ success: true })
   } catch (error: any) {
