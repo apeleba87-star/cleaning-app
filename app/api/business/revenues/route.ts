@@ -23,6 +23,9 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url)
     const storeId = searchParams.get('store_id')
     const period = searchParams.get('period')
+    const page = parseInt(searchParams.get('page') || '1')
+    const limit = parseInt(searchParams.get('limit') || '1000') // 기본값 1000 (페이지네이션 없을 때)
+    const offset = (page - 1) * limit
 
     let query = supabase
       .from('revenues')
@@ -32,7 +35,7 @@ export async function GET(request: NextRequest) {
           id,
           name
         )
-      `)
+      `, { count: 'exact' })
       .eq('company_id', user.company_id)
       .is('deleted_at', null)
 
@@ -44,7 +47,13 @@ export async function GET(request: NextRequest) {
       query = query.eq('service_period', period)
     }
 
-    const { data: revenues, error } = await query.order('created_at', { ascending: false })
+    // 페이지네이션 적용
+    query = query.order('created_at', { ascending: false })
+    if (limit < 1000) {
+      query = query.range(offset, offset + limit - 1)
+    }
+
+    const { data: revenues, error, count } = await query
 
     if (error) {
       throw new Error(`Failed to fetch revenues: ${error.message}`)
@@ -53,6 +62,12 @@ export async function GET(request: NextRequest) {
     return Response.json({
       success: true,
       data: revenues || [],
+      pagination: limit < 1000 ? {
+        page,
+        limit,
+        total: count || 0,
+        totalPages: Math.ceil((count || 0) / limit)
+      } : undefined
     })
   } catch (error: any) {
     return handleApiError(error)

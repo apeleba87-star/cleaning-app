@@ -24,6 +24,9 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url)
     const userId = searchParams.get('user_id')
     const period = searchParams.get('period')
+    const page = parseInt(searchParams.get('page') || '1')
+    const limit = parseInt(searchParams.get('limit') || '1000') // 기본값 1000 (페이지네이션 없을 때)
+    const offset = (page - 1) * limit
 
     // user_id가 null인 경우도 조회할 수 있도록 left join 사용
     let query = supabase
@@ -34,7 +37,7 @@ export async function GET(request: NextRequest) {
           id,
           name
         )
-      `)
+      `, { count: 'exact' })
       .eq('company_id', user.company_id)
       .is('deleted_at', null)
       .order('pay_period', { ascending: false })
@@ -48,7 +51,12 @@ export async function GET(request: NextRequest) {
       query = query.eq('pay_period', period)
     }
 
-    const { data: payrolls, error } = await query
+    // 페이지네이션 적용
+    if (limit < 1000) {
+      query = query.range(offset, offset + limit - 1)
+    }
+
+    const { data: payrolls, error, count } = await query
 
     if (error) {
       throw new Error(`Failed to fetch payrolls: ${error.message}`)
@@ -184,9 +192,21 @@ export async function GET(request: NextRequest) {
       return dateB.localeCompare(dateA)
     })
 
+    // 페이지네이션 적용 (클라이언트 사이드)
+    const totalCount = allData.length
+    const paginatedData = limit < 1000 
+      ? allData.slice(offset, offset + limit)
+      : allData
+
     return Response.json({
       success: true,
-      data: allData,
+      data: paginatedData,
+      pagination: limit < 1000 ? {
+        page,
+        limit,
+        total: totalCount,
+        totalPages: Math.ceil(totalCount / limit)
+      } : undefined
     })
   } catch (error: any) {
     return handleApiError(error)

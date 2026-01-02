@@ -22,6 +22,10 @@ export async function GET(request: NextRequest) {
     const supabase = await createServerSupabaseClient()
     const { searchParams } = new URL(request.url)
     const revenueId = searchParams.get('revenue_id')
+    const period = searchParams.get('period') // YYYY-MM 형식
+    const page = parseInt(searchParams.get('page') || '1')
+    const limit = parseInt(searchParams.get('limit') || '1000') // 기본값 1000 (페이지네이션 없을 때)
+    const offset = (page - 1) * limit
 
     let query = supabase
       .from('receipts')
@@ -37,15 +41,49 @@ export async function GET(request: NextRequest) {
             name
           )
         )
-      `)
+      `, { count: 'exact' })
       .eq('company_id', user.company_id)
       .is('deleted_at', null)
 
     if (revenueId) {
+      // 기존 로직: revenue_id로 필터링
       query = query.eq('revenue_id', revenueId)
+    } else if (period) {
+      // 새로운 로직: period로 필터링 (해당 기간의 revenue에 연결된 수금만 조회)
+      // 먼저 해당 기간의 revenue_id 목록 가져오기
+      const { data: revenues } = await supabase
+        .from('revenues')
+        .select('id')
+        .eq('company_id', user.company_id)
+        .eq('service_period', period)
+        .is('deleted_at', null)
+      
+      const revenueIds = revenues?.map(r => r.id) || []
+      
+      if (revenueIds.length > 0) {
+        query = query.in('revenue_id', revenueIds)
+      } else {
+        // 해당 기간에 revenue가 없으면 빈 배열 반환
+        return Response.json({
+          success: true,
+          data: [],
+          pagination: {
+            page: 1,
+            limit,
+            total: 0,
+            totalPages: 0
+          }
+        })
+      }
     }
 
-    const { data: receipts, error } = await query.order('received_at', { ascending: false })
+    // 페이지네이션 적용
+    query = query.order('received_at', { ascending: false })
+    if (limit < 1000) {
+      query = query.range(offset, offset + limit - 1)
+    }
+
+    const { data: receipts, error, count } = await query
 
     if (error) {
       throw new Error(`Failed to fetch receipts: ${error.message}`)
@@ -54,6 +92,12 @@ export async function GET(request: NextRequest) {
     return Response.json({
       success: true,
       data: receipts || [],
+      pagination: limit < 1000 ? {
+        page,
+        limit,
+        total: count || 0,
+        totalPages: Math.ceil((count || 0) / limit)
+      } : undefined
     })
   } catch (error: any) {
     return handleApiError(error)

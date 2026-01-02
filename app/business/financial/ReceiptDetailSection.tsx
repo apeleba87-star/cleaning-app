@@ -29,46 +29,39 @@ export default function ReceiptDetailSection({ period, onRefresh }: ReceiptDetai
   const [receipts, setReceipts] = useState<Receipt[]>([])
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
+  const [currentPage, setCurrentPage] = useState(1)
+  const [totalPages, setTotalPages] = useState(1)
+  const itemsPerPage = 50
 
   useEffect(() => {
-    loadReceipts()
-  }, [period])
+    if (searchTerm) {
+      // 검색어가 있으면 전체 데이터 가져오기 (검색 결과가 제한되지 않도록)
+      loadReceipts(false)
+    } else {
+      // 검색어가 없으면 페이지네이션 적용
+      loadReceipts(true)
+    }
+  }, [period, currentPage, searchTerm])
 
-  const loadReceipts = async () => {
+  const loadReceipts = async (usePagination: boolean) => {
     try {
       setLoading(true)
-      // 먼저 해당 기간의 revenue_id 목록 가져오기
-      const revenueResponse = await fetch(`/api/business/revenues?period=${period}`)
-      if (!revenueResponse.ok) {
-        throw new Error('매출 데이터를 불러올 수 없습니다.')
+      const url = usePagination 
+        ? `/api/business/receipts?period=${period}&page=${currentPage}&limit=${itemsPerPage}`
+        : `/api/business/receipts?period=${period}`
+      const response = await fetch(url)
+      if (!response.ok) {
+        throw new Error('수금 데이터를 불러올 수 없습니다.')
       }
-      const revenueData = await revenueResponse.json()
-      const revenueIds = revenueData.data?.map((r: any) => r.id) || []
-
-      if (revenueIds.length === 0) {
-        setReceipts([])
-        setLoading(false)
-        return
-      }
-
-      // 각 revenue_id에 대한 수금 조회
-      const allReceipts: Receipt[] = []
-      for (const revenueId of revenueIds) {
-        const receiptResponse = await fetch(`/api/business/receipts?revenue_id=${revenueId}`)
-        if (receiptResponse.ok) {
-          const receiptData = await receiptResponse.json()
-          if (receiptData.success && receiptData.data) {
-            allReceipts.push(...receiptData.data)
-          }
+      const data = await response.json()
+      if (data.success) {
+        setReceipts(data.data || [])
+        if (data.pagination) {
+          setTotalPages(data.pagination.totalPages)
+        } else {
+          setTotalPages(1)
         }
       }
-
-      // received_at 기준으로 정렬
-      allReceipts.sort((a, b) => 
-        new Date(b.received_at).getTime() - new Date(a.received_at).getTime()
-      )
-
-      setReceipts(allReceipts)
     } catch (error: any) {
       console.error('Error loading receipts:', error)
     } finally {
@@ -97,6 +90,10 @@ export default function ReceiptDetailSection({ period, onRefresh }: ReceiptDetai
 
   const totalAmount = filteredReceipts.reduce((sum, r) => sum + (r.amount || 0), 0)
 
+  // 페이지네이션 계산 (검색어가 없을 때만)
+  const displayReceipts = searchTerm ? filteredReceipts : filteredReceipts
+  const displayTotalPages = searchTerm ? 1 : totalPages
+
   if (loading) {
     return (
       <div className="text-center py-8">
@@ -114,7 +111,10 @@ export default function ReceiptDetailSection({ period, onRefresh }: ReceiptDetai
           type="text"
           placeholder="매장명 검색..."
           value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
+          onChange={(e) => {
+            setSearchTerm(e.target.value)
+            setCurrentPage(1) // 검색 시 첫 페이지로
+          }}
           className="px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
         />
       </div>
@@ -149,14 +149,14 @@ export default function ReceiptDetailSection({ period, onRefresh }: ReceiptDetai
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
-            {filteredReceipts.length === 0 ? (
+            {displayReceipts.length === 0 ? (
               <tr>
                 <td colSpan={4} className="px-4 py-8 text-center text-gray-500">
                   수금 데이터가 없습니다.
                 </td>
               </tr>
             ) : (
-              filteredReceipts.map((receipt) => (
+              displayReceipts.map((receipt) => (
                 <tr key={receipt.id} className="hover:bg-gray-50">
                   <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
                     {receipt.revenues?.stores?.name || '-'}
@@ -175,6 +175,44 @@ export default function ReceiptDetailSection({ period, onRefresh }: ReceiptDetai
             )}
           </tbody>
         </table>
+        
+        {/* 페이지네이션 */}
+        {!searchTerm && displayTotalPages > 1 && (
+          <div className="bg-gray-50 px-4 py-4 border-t border-gray-200 flex items-center justify-between">
+            <div className="text-sm text-gray-700">
+              페이지 {currentPage} / {displayTotalPages}
+            </div>
+            <div className="flex space-x-2">
+              <button
+                onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                disabled={currentPage === 1}
+                className="px-3 py-1 border border-gray-300 rounded-md text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-100"
+              >
+                이전
+              </button>
+              {Array.from({ length: Math.min(displayTotalPages, 10) }, (_, i) => i + 1).map((page) => (
+                <button
+                  key={page}
+                  onClick={() => setCurrentPage(page)}
+                  className={`px-3 py-1 border border-gray-300 rounded-md text-sm ${
+                    currentPage === page
+                      ? 'bg-green-600 text-white border-green-600'
+                      : 'hover:bg-gray-100'
+                  }`}
+                >
+                  {page}
+                </button>
+              ))}
+              <button
+                onClick={() => setCurrentPage(prev => Math.min(displayTotalPages, prev + 1))}
+                disabled={currentPage === displayTotalPages}
+                className="px-3 py-1 border border-gray-300 rounded-md text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-100"
+              >
+                다음
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   )

@@ -25,6 +25,9 @@ export async function GET(request: NextRequest) {
     const startDate = searchParams.get('start_date')
     const endDate = searchParams.get('end_date')
     const period = searchParams.get('period') // YYYY-MM 형식
+    const page = parseInt(searchParams.get('page') || '1')
+    const limit = parseInt(searchParams.get('limit') || '1000') // 기본값 1000 (페이지네이션 없을 때)
+    const offset = (page - 1) * limit
 
     let query = supabase
       .from('expenses')
@@ -34,7 +37,7 @@ export async function GET(request: NextRequest) {
           id,
           name
         )
-      `)
+      `, { count: 'exact' })
       .eq('company_id', user.company_id)
       .is('deleted_at', null)
 
@@ -59,7 +62,13 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    const { data: expenses, error } = await query.order('date', { ascending: false })
+    // 페이지네이션 적용
+    query = query.order('date', { ascending: false })
+    if (limit < 1000) {
+      query = query.range(offset, offset + limit - 1)
+    }
+
+    const { data: expenses, error, count } = await query
 
     if (error) {
       throw new Error(`Failed to fetch expenses: ${error.message}`)
@@ -68,6 +77,12 @@ export async function GET(request: NextRequest) {
     return Response.json({
       success: true,
       data: expenses || [],
+      pagination: limit < 1000 ? {
+        page,
+        limit,
+        total: count || 0,
+        totalPages: Math.ceil((count || 0) / limit)
+      } : undefined
     })
   } catch (error: any) {
     return handleApiError(error)

@@ -242,6 +242,8 @@ export default function BusinessStoresStatusPage() {
     category: '',
     description: '',
   })
+  const [selectedRequestIds, setSelectedRequestIds] = useState<Set<string>>(new Set())
+  const [isBulkConfirming, setIsBulkConfirming] = useState(false)
   const [now, setNow] = useState<string>(() =>
     new Date().toLocaleString('ko-KR', { dateStyle: 'long', timeStyle: 'medium' })
   )
@@ -1210,7 +1212,7 @@ export default function BusinessStoresStatusPage() {
     return {
       total: storeStatuses.length,
       operating: storeStatuses.filter((s) => s.is_work_day).length,
-      completed: storeStatuses.filter((s) => s.attendance_status === 'clocked_out').length,
+      completed: storeStatuses.filter((s) => s.attendance_status === 'clocked_in' || s.attendance_status === 'clocked_out').length,
       problem: problemCount,
       notifications: notificationCount,
       received: receivedCount,
@@ -4778,14 +4780,99 @@ export default function BusinessStoresStatusPage() {
 
       {/* 접수 확인 모달 */}
       {showReceivedRequestsModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50" onClick={() => setShowReceivedRequestsModal(false)}>
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50" onClick={() => {
+          setShowReceivedRequestsModal(false)
+          setSelectedRequestIds(new Set())
+        }}>
           <div className="bg-white rounded-lg p-6 max-w-4xl w-full mx-4 max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <div className="flex justify-between items-center mb-4">
               <h2 className="text-xl font-semibold">접수 확인</h2>
-              <button onClick={() => setShowReceivedRequestsModal(false)} className="text-gray-500 hover:text-gray-700 text-2xl">
+              <button onClick={() => {
+                setShowReceivedRequestsModal(false)
+                setSelectedRequestIds(new Set())
+              }} className="text-gray-500 hover:text-gray-700 text-2xl">
                 ×
               </button>
             </div>
+
+            {/* 다중 선택 컨트롤 */}
+            {receivedRequests.length > 0 && (
+              <div className="mb-4 flex items-center justify-between p-3 bg-blue-50 rounded-lg border border-blue-200">
+                <div className="flex items-center gap-3">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={selectedRequestIds.size === receivedRequests.length && receivedRequests.length > 0}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          setSelectedRequestIds(new Set(receivedRequests.map(r => r.id)))
+                        } else {
+                          setSelectedRequestIds(new Set())
+                        }
+                      }}
+                      className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
+                    />
+                    <span className="text-sm font-medium text-gray-700">
+                      전체 선택 ({selectedRequestIds.size}/{receivedRequests.length})
+                    </span>
+                  </label>
+                </div>
+                <button
+                  onClick={async () => {
+                    if (selectedRequestIds.size === 0) {
+                      alert('선택된 항목이 없습니다.')
+                      return
+                    }
+                    setIsBulkConfirming(true)
+                    try {
+                      const ids = Array.from(selectedRequestIds)
+                      const results = await Promise.allSettled(
+                        ids.map(id => 
+                          fetch(`/api/business/requests/${id}/status`, {
+                            method: 'PATCH',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ status: 'in_progress' }),
+                          })
+                        )
+                      )
+                      
+                      const successCount = results.filter(r => r.status === 'fulfilled' && r.value.ok).length
+                      const failedCount = results.length - successCount
+                      
+                      if (successCount > 0) {
+                        // 성공한 항목들을 로컬 상태에서 제거
+                        setReceivedRequests(prev => prev.filter(r => !selectedRequestIds.has(r.id)))
+                        setSelectedRequestIds(new Set())
+                        
+                        // 통계 업데이트를 위해 대시보드 새로고침 (백그라운드)
+                        loadStoreStatuses()
+                        
+                        if (failedCount > 0) {
+                          alert(`${successCount}개 접수가 확인되었습니다. ${failedCount}개 처리 중 오류가 발생했습니다.`)
+                        } else {
+                          alert(`${successCount}개 접수가 확인되었습니다.`)
+                        }
+                      } else {
+                        alert('접수 확인 중 오류가 발생했습니다.')
+                      }
+                    } catch (error) {
+                      console.error('Error bulk confirming requests:', error)
+                      alert('접수 확인 중 오류가 발생했습니다.')
+                    } finally {
+                      setIsBulkConfirming(false)
+                    }
+                  }}
+                  disabled={selectedRequestIds.size === 0 || isBulkConfirming}
+                  className={`px-4 py-2 rounded-md text-sm font-medium ${
+                    selectedRequestIds.size === 0 || isBulkConfirming
+                      ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                      : 'bg-blue-600 text-white hover:bg-blue-700'
+                  }`}
+                >
+                  {isBulkConfirming ? '처리 중...' : `선택한 ${selectedRequestIds.size}개 확인`}
+                </button>
+              </div>
+            )}
 
             <div className="space-y-4">
               {receivedRequests.length === 0 ? (
@@ -4797,8 +4884,10 @@ export default function BusinessStoresStatusPage() {
                   const isEditing = editingReceivedRequest === request.id
                   const photos = request.photo_url ? (typeof request.photo_url === 'string' ? JSON.parse(request.photo_url) : request.photo_url) : []
                   
+                  const isSelected = selectedRequestIds.has(request.id)
+                  
                   return (
-                    <div key={request.id} className="border rounded-lg p-4">
+                    <div key={request.id} className={`border rounded-lg p-4 ${isSelected ? 'bg-blue-50 border-blue-300' : ''}`}>
                       {isEditing ? (
                         <div className="space-y-3">
                           <div>
@@ -4875,7 +4964,24 @@ export default function BusinessStoresStatusPage() {
                         </div>
                       ) : (
                         <>
-                          <div className="flex items-start justify-between mb-2">
+                          <div className="flex items-start gap-3 mb-2">
+                            <label className="flex items-center pt-1 cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={isSelected}
+                                onChange={(e) => {
+                                  const newSet = new Set(selectedRequestIds)
+                                  if (e.target.checked) {
+                                    newSet.add(request.id)
+                                  } else {
+                                    newSet.delete(request.id)
+                                  }
+                                  setSelectedRequestIds(newSet)
+                                }}
+                                onClick={(e) => e.stopPropagation()}
+                                className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
+                              />
+                            </label>
                             <div className="flex-1">
                               {request.store_name && (
                                 <div className="text-xs text-gray-500 mb-1">
@@ -4937,16 +5043,13 @@ export default function BusinessStoresStatusPage() {
                                   if (response.ok) {
                                     const data = await response.json()
                                     if (data.success) {
-                                      alert('접수가 확인되었습니다. 처리중으로 변경되었습니다.')
-                                      // 목록 새로고침
-                                      if (request.store_id) {
-                                        await handleViewReceivedRequests(request.store_id)
-                                      } else {
-                                        // 전체 접수 목록인 경우
-                                        await loadAllReceivedRequests()
-                                      }
-                                      // 대시보드 새로고침
+                                      // 새로고침 없이 로컬 상태만 업데이트
+                                      setReceivedRequests(prev => prev.filter(r => r.id !== request.id))
+                                      
+                                      // 통계 업데이트를 위해 대시보드 새로고침 (백그라운드)
                                       loadStoreStatuses()
+                                      
+                                      alert('접수가 확인되었습니다. 처리중으로 변경되었습니다.')
                                     }
                                   } else {
                                     const errorData = await response.json()

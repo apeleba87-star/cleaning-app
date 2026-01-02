@@ -203,7 +203,13 @@ export default function UserList({ initialUsers, stores, franchises, userStoreMa
 
   const handleFormSuccess = (user: User) => {
     if (editingUser) {
-      setUsers(users.map((u) => (u.id === user.id ? user : u)))
+      // 기존 사용자의 이메일 정보 유지
+      const existingUser = users.find((u) => u.id === user.id)
+      const updatedUser = {
+        ...user,
+        email: (existingUser as any)?.email || (user as any)?.email || null,
+      }
+      setUsers(users.map((u) => (u.id === user.id ? updatedUser : u)))
     } else {
       setUsers([user, ...users])
     }

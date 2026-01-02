@@ -16,6 +16,7 @@ export default function PayrollsPage() {
   const [selectedPeriod, setSelectedPeriod] = useState<string>('')
   const [generatingRegular, setGeneratingRegular] = useState(false)
   const [activeTab, setActiveTab] = useState<TabType>('regular')
+  const [pendingCount, setPendingCount] = useState<number | null>(null)
   
   // 대량 등록용 상태
   const [bulkEntries, setBulkEntries] = useState<Array<{
@@ -51,6 +52,28 @@ export default function PayrollsPage() {
     loadData()
   }, [])
 
+  // 기간 변경 시 미생성 직원 수 조회
+  useEffect(() => {
+    if (selectedPeriod && activeTab === 'regular') {
+      loadPendingCount()
+    }
+  }, [selectedPeriod, activeTab])
+
+  const loadPendingCount = async () => {
+    try {
+      const response = await fetch(`/api/business/payrolls/pending-count?period=${selectedPeriod}`)
+      if (response.ok) {
+        const data = await response.json()
+        if (data.success) {
+          setPendingCount(data.count)
+        }
+      }
+    } catch (error) {
+      console.error('Error loading pending count:', error)
+      setPendingCount(null)
+    }
+  }
+
   // 현재 기간의 정규 직원 인건비가 없으면 자동 생성 제안 (한 번만 실행)
   const [hasCheckedAutoGenerate, setHasCheckedAutoGenerate] = useState(false)
   
@@ -85,6 +108,10 @@ export default function PayrollsPage() {
       const result = await response.json()
       if (result.success) {
         setPayrolls(result.data || [])
+      }
+      // 미생성 직원 수 갱신
+      if (selectedPeriod && activeTab === 'regular') {
+        loadPendingCount()
       }
     } catch (err: any) {
       setError(err.message)
@@ -174,6 +201,7 @@ export default function PayrollsPage() {
       const result = await response.json()
       alert(`정규 직원 인건비 ${result.count}건이 생성되었습니다.`)
       loadData()
+      loadPendingCount() // 미생성 직원 수 갱신
     } catch (err: any) {
       setError(err.message)
     } finally {
@@ -1008,7 +1036,14 @@ export default function PayrollsPage() {
         <>
           {/* 정규 직원 인건비 자동 생성 버튼 */}
           <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-            <div className="flex justify-end">
+            <div className="flex justify-end items-center gap-3">
+              {pendingCount !== null && pendingCount > 0 && (
+                <div className="flex items-center gap-2 text-sm text-gray-600">
+                  <span className="px-3 py-1 bg-orange-100 text-orange-700 rounded-full font-medium">
+                    {pendingCount}명 미생성
+                  </span>
+                </div>
+              )}
               <button
                 onClick={handleGenerateRegularPayrolls}
                 disabled={generatingRegular || !selectedPeriod}

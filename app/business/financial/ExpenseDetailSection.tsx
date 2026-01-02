@@ -120,16 +120,38 @@ export default function ExpenseDetailSection({ period, onRefresh }: ExpenseDetai
     }
   }
 
-  const loadExpenses = async () => {
+  const [currentPage, setCurrentPage] = useState(1)
+  const [totalPages, setTotalPages] = useState(1)
+  const itemsPerPage = 50
+
+  useEffect(() => {
+    if (searchTerm || categoryFilter !== 'all' || recurringFilter !== 'all') {
+      // 검색어나 필터가 있으면 전체 데이터 가져오기
+      loadExpenses(false)
+    } else {
+      // 검색어/필터가 없으면 페이지네이션 적용
+      loadExpenses(true)
+    }
+  }, [period, currentPage, searchTerm, categoryFilter, recurringFilter])
+
+  const loadExpenses = async (usePagination: boolean) => {
     try {
       setLoading(true)
-      const response = await fetch(`/api/business/expenses?period=${period}`)
+      const url = usePagination 
+        ? `/api/business/expenses?period=${period}&page=${currentPage}&limit=${itemsPerPage}`
+        : `/api/business/expenses?period=${period}`
+      const response = await fetch(url)
       if (!response.ok) {
         throw new Error('지출 데이터를 불러올 수 없습니다.')
       }
       const data = await response.json()
       if (data.success) {
         setExpenses(data.data || [])
+        if (data.pagination) {
+          setTotalPages(data.pagination.totalPages)
+        } else {
+          setTotalPages(1)
+        }
       }
     } catch (error: any) {
       console.error('Error loading expenses:', error)
@@ -139,10 +161,9 @@ export default function ExpenseDetailSection({ period, onRefresh }: ExpenseDetai
   }
 
   useEffect(() => {
-    loadExpenses()
     loadStores()
     loadRecurringExpenses()
-  }, [period])
+  }, [])
 
   const handleQuickSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -181,7 +202,8 @@ export default function ExpenseDetailSection({ period, onRefresh }: ExpenseDetai
         }
 
         await loadRecurringExpenses()
-        await loadExpenses()
+        const hasFilters = searchTerm || categoryFilter !== 'all' || recurringFilter !== 'all'
+        await loadExpenses(!hasFilters)
         onRefresh()
         alert('고정비가 등록되었습니다. 이번 달 지출도 함께 생성되었습니다.')
         
@@ -230,7 +252,8 @@ export default function ExpenseDetailSection({ period, onRefresh }: ExpenseDetai
       setQuickStoreCustom('')
       setQuickIsRecurring(false)
 
-      loadExpenses()
+      const hasFilters = searchTerm || categoryFilter !== 'all' || recurringFilter !== 'all'
+      loadExpenses(!hasFilters)
       onRefresh()
       alert('지출이 등록되었습니다.')
     } catch (err: any) {
@@ -308,7 +331,8 @@ export default function ExpenseDetailSection({ period, onRefresh }: ExpenseDetai
       setSelectedExpense(null)
       setEditStoreId('')
       setEditStoreCustom('')
-      loadExpenses()
+      const hasFilters = searchTerm || categoryFilter !== 'all' || recurringFilter !== 'all'
+      loadExpenses(!hasFilters)
       onRefresh()
       alert('지출이 수정되었습니다.')
     } catch (err: any) {
@@ -334,7 +358,8 @@ export default function ExpenseDetailSection({ period, onRefresh }: ExpenseDetai
         throw new Error(errorData.error || '지출 삭제 실패')
       }
 
-      loadExpenses()
+      const hasFilters = searchTerm || categoryFilter !== 'all' || recurringFilter !== 'all'
+      loadExpenses(!hasFilters)
       onRefresh()
       alert('지출이 삭제되었습니다.')
     } catch (err: any) {
@@ -367,7 +392,8 @@ export default function ExpenseDetailSection({ period, onRefresh }: ExpenseDetai
 
       const data = await response.json()
       if (data.success) {
-        await loadExpenses()
+        const hasFilters = searchTerm || categoryFilter !== 'all' || recurringFilter !== 'all'
+        await loadExpenses(!hasFilters)
         onRefresh()
         alert(`${data.data.generated_count}개의 고정비 지출이 생성되었습니다.`)
       }
@@ -976,12 +1002,18 @@ export default function ExpenseDetailSection({ period, onRefresh }: ExpenseDetai
             type="text"
             placeholder="검색 (메모, 매장, 카테고리)..."
             value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
+            onChange={(e) => {
+              setSearchTerm(e.target.value)
+              setCurrentPage(1) // 검색 시 첫 페이지로
+            }}
             className="px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500 text-sm"
           />
           <select
             value={categoryFilter}
-            onChange={(e) => setCategoryFilter(e.target.value)}
+            onChange={(e) => {
+              setCategoryFilter(e.target.value)
+              setCurrentPage(1) // 필터 변경 시 첫 페이지로
+            }}
             className="px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500 text-sm"
           >
             <option value="all">전체 카테고리</option>
@@ -993,7 +1025,10 @@ export default function ExpenseDetailSection({ period, onRefresh }: ExpenseDetai
           </select>
           <select
             value={recurringFilter}
-            onChange={(e) => setRecurringFilter(e.target.value as 'all' | 'recurring' | 'regular')}
+            onChange={(e) => {
+              setRecurringFilter(e.target.value as 'all' | 'recurring' | 'regular')
+              setCurrentPage(1) // 필터 변경 시 첫 페이지로
+            }}
             className="px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500 text-sm"
           >
             <option value="all">전체</option>
@@ -1113,6 +1148,44 @@ export default function ExpenseDetailSection({ period, onRefresh }: ExpenseDetai
             )}
           </tbody>
         </table>
+        
+        {/* 페이지네이션 */}
+        {!searchTerm && categoryFilter === 'all' && recurringFilter === 'all' && totalPages > 1 && (
+          <div className="bg-gray-50 px-4 py-4 border-t border-gray-200 flex items-center justify-between">
+            <div className="text-sm text-gray-700">
+              페이지 {currentPage} / {totalPages}
+            </div>
+            <div className="flex space-x-2">
+              <button
+                onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                disabled={currentPage === 1}
+                className="px-3 py-1 border border-gray-300 rounded-md text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-100"
+              >
+                이전
+              </button>
+              {Array.from({ length: Math.min(totalPages, 10) }, (_, i) => i + 1).map((page) => (
+                <button
+                  key={page}
+                  onClick={() => setCurrentPage(page)}
+                  className={`px-3 py-1 border border-gray-300 rounded-md text-sm ${
+                    currentPage === page
+                      ? 'bg-orange-600 text-white border-orange-600'
+                      : 'hover:bg-gray-100'
+                  }`}
+                >
+                  {page}
+                </button>
+              ))}
+              <button
+                onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                disabled={currentPage === totalPages}
+                className="px-3 py-1 border border-gray-300 rounded-md text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-100"
+              >
+                다음
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* 수정 모달 */}

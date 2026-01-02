@@ -38,20 +38,38 @@ export default function PayrollDetailSection({ period, onRefresh }: PayrollDetai
   const [editMemo, setEditMemo] = useState('')
   const [submitting, setSubmitting] = useState(false)
 
-  useEffect(() => {
-    loadPayrolls()
-  }, [period])
+  const [currentPage, setCurrentPage] = useState(1)
+  const [totalPages, setTotalPages] = useState(1)
+  const itemsPerPage = 50
 
-  const loadPayrolls = async () => {
+  useEffect(() => {
+    if (searchTerm || statusFilter !== 'all') {
+      // 검색어나 필터가 있으면 전체 데이터 가져오기
+      loadPayrolls(false)
+    } else {
+      // 검색어/필터가 없으면 페이지네이션 적용
+      loadPayrolls(true)
+    }
+  }, [period, currentPage, searchTerm, statusFilter])
+
+  const loadPayrolls = async (usePagination: boolean) => {
     try {
       setLoading(true)
-      const response = await fetch(`/api/business/payrolls?period=${period}`)
+      const url = usePagination 
+        ? `/api/business/payrolls?period=${period}&page=${currentPage}&limit=${itemsPerPage}`
+        : `/api/business/payrolls?period=${period}`
+      const response = await fetch(url)
       if (!response.ok) {
         throw new Error('인건비 데이터를 불러올 수 없습니다.')
       }
       const data = await response.json()
       if (data.success) {
         setPayrolls(data.data || [])
+        if (data.pagination) {
+          setTotalPages(data.pagination.totalPages)
+        } else {
+          setTotalPages(1)
+        }
       }
     } catch (error: any) {
       console.error('Error loading payrolls:', error)
@@ -259,12 +277,18 @@ export default function PayrollDetailSection({ period, onRefresh }: PayrollDetai
             type="text"
             placeholder="직원명 검색..."
             value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
+            onChange={(e) => {
+              setSearchTerm(e.target.value)
+              setCurrentPage(1) // 검색 시 첫 페이지로
+            }}
             className="px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
           />
           <select
             value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
+            onChange={(e) => {
+              setStatusFilter(e.target.value)
+              setCurrentPage(1) // 필터 변경 시 첫 페이지로
+            }}
             className="px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
           >
             <option value="all">전체</option>
@@ -397,6 +421,44 @@ export default function PayrollDetailSection({ period, onRefresh }: PayrollDetai
             )}
           </tbody>
         </table>
+        
+        {/* 페이지네이션 */}
+        {!searchTerm && statusFilter === 'all' && totalPages > 1 && (
+          <div className="bg-gray-50 px-4 py-4 border-t border-gray-200 flex items-center justify-between">
+            <div className="text-sm text-gray-700">
+              페이지 {currentPage} / {totalPages}
+            </div>
+            <div className="flex space-x-2">
+              <button
+                onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                disabled={currentPage === 1}
+                className="px-3 py-1 border border-gray-300 rounded-md text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-100"
+              >
+                이전
+              </button>
+              {Array.from({ length: Math.min(totalPages, 10) }, (_, i) => i + 1).map((page) => (
+                <button
+                  key={page}
+                  onClick={() => setCurrentPage(page)}
+                  className={`px-3 py-1 border border-gray-300 rounded-md text-sm ${
+                    currentPage === page
+                      ? 'bg-purple-600 text-white border-purple-600'
+                      : 'hover:bg-gray-100'
+                  }`}
+                >
+                  {page}
+                </button>
+              ))}
+              <button
+                onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                disabled={currentPage === totalPages}
+                className="px-3 py-1 border border-gray-300 rounded-md text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-100"
+              >
+                다음
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* 상세 모달 */}

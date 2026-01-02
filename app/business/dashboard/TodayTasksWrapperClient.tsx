@@ -3,10 +3,13 @@
 import { useState, useEffect } from 'react'
 import TodayTasksSection from './TodayTasksSection'
 import { useFinancialData } from './FinancialDataContext'
+import { useToast } from '@/components/Toast'
 
 export default function TodayTasksWrapperClient({ companyId }: { companyId: string }) {
-  const { financialData, loadFinancialData } = useFinancialData()
+  const { financialData, loadFinancialData, setFinancialData } = useFinancialData()
   const [loading, setLoading] = useState(!financialData)
+  const { showToast, ToastContainer } = useToast()
+  const [errorStates, setErrorStates] = useState<Record<string, string>>({})
 
   useEffect(() => {
     // Context에 데이터가 없을 때만 로드 (FinancialSummarySection이 먼저 로드되므로 일반적으로는 필요 없음)
@@ -30,6 +33,26 @@ export default function TodayTasksWrapperClient({ companyId }: { companyId: stri
       return
     }
 
+    // Optimistic Update: 즉시 UI 업데이트
+    if (financialData) {
+      const updatedUsers = financialData.today_salary_users.map(user => 
+        user.payroll_id === payrollId 
+          ? { ...user, payroll_status: 'paid' as const }
+          : user
+      )
+      setFinancialData({
+        ...financialData,
+        today_salary_users: updatedUsers
+      })
+    }
+
+    // 에러 상태 초기화
+    setErrorStates(prev => {
+      const newState = { ...prev }
+      delete newState[payrollId]
+      return newState
+    })
+
     try {
       const response = await fetch(`/api/business/payrolls/${payrollId}`, {
         method: 'PATCH',
@@ -45,10 +68,34 @@ export default function TodayTasksWrapperClient({ companyId }: { companyId: stri
         throw new Error(errorData.error || '지급 완료 처리 실패')
       }
 
-      alert('지급 완료 처리되었습니다.')
-      loadFinancialData()
+      // 성공: Toast 메시지 표시
+      showToast('지급 완료 처리되었습니다.', 'success')
+      
+      // 백그라운드에서 데이터 동기화
+      loadFinancialData().catch(err => {
+        console.error('Failed to sync financial data:', err)
+      })
     } catch (err: any) {
-      alert(err.message || '지급 완료 처리 중 오류가 발생했습니다.')
+      // 실패: 상태 롤백
+      if (financialData) {
+        const rolledBackUsers = financialData.today_salary_users.map(user => 
+          user.payroll_id === payrollId 
+            ? { ...user, payroll_status: 'scheduled' as const }
+            : user
+        )
+        setFinancialData({
+          ...financialData,
+          today_salary_users: rolledBackUsers
+        })
+      }
+
+      // 에러 메시지 표시
+      const errorMessage = err.message || '지급 완료 처리 중 오류가 발생했습니다.'
+      showToast(errorMessage, 'error')
+      setErrorStates(prev => ({
+        ...prev,
+        [payrollId]: errorMessage
+      }))
     }
   }
 
@@ -141,6 +188,26 @@ export default function TodayTasksWrapperClient({ companyId }: { companyId: stri
       return
     }
 
+    // Optimistic Update: 즉시 UI 업데이트
+    if (financialData) {
+      const updatedUsers = financialData.today_salary_users.map(user => 
+        user.payment_id === paymentId 
+          ? { ...user, payroll_status: 'paid' as const }
+          : user
+      )
+      setFinancialData({
+        ...financialData,
+        today_salary_users: updatedUsers
+      })
+    }
+
+    // 에러 상태 초기화
+    setErrorStates(prev => {
+      const newState = { ...prev }
+      delete newState[paymentId]
+      return newState
+    })
+
     try {
       const response = await fetch(`/api/business/subcontracts/payments/${paymentId}`, {
         method: 'PATCH',
@@ -156,10 +223,34 @@ export default function TodayTasksWrapperClient({ companyId }: { companyId: stri
         throw new Error(errorData.error || '지급 완료 처리 실패')
       }
 
-      alert('지급 완료 처리되었습니다.')
-      loadFinancialData()
+      // 성공: Toast 메시지 표시
+      showToast('지급 완료 처리되었습니다.', 'success')
+      
+      // 백그라운드에서 데이터 동기화
+      loadFinancialData().catch(err => {
+        console.error('Failed to sync financial data:', err)
+      })
     } catch (err: any) {
-      alert(err.message || '지급 완료 처리 중 오류가 발생했습니다.')
+      // 실패: 상태 롤백
+      if (financialData) {
+        const rolledBackUsers = financialData.today_salary_users.map(user => 
+          user.payment_id === paymentId 
+            ? { ...user, payroll_status: 'scheduled' as const }
+            : user
+        )
+        setFinancialData({
+          ...financialData,
+          today_salary_users: rolledBackUsers
+        })
+      }
+
+      // 에러 메시지 표시
+      const errorMessage = err.message || '지급 완료 처리 중 오류가 발생했습니다.'
+      showToast(errorMessage, 'error')
+      setErrorStates(prev => ({
+        ...prev,
+        [paymentId]: errorMessage
+      }))
     }
   }
 
@@ -167,6 +258,26 @@ export default function TodayTasksWrapperClient({ companyId }: { companyId: stri
     if (!confirm(`${workerName}의 일당을 지급 완료 처리하시겠습니까?`)) {
       return
     }
+
+    // Optimistic Update: 즉시 UI 업데이트
+    if (financialData && financialData.today_daily_payrolls) {
+      const updatedPayrolls = financialData.today_daily_payrolls.map(payroll => 
+        payroll.id === payrollId 
+          ? { ...payroll, status: 'paid' as const }
+          : payroll
+      )
+      setFinancialData({
+        ...financialData,
+        today_daily_payrolls: updatedPayrolls
+      })
+    }
+
+    // 에러 상태 초기화
+    setErrorStates(prev => {
+      const newState = { ...prev }
+      delete newState[payrollId]
+      return newState
+    })
 
     try {
       const response = await fetch(`/api/business/payrolls/${payrollId}`, {
@@ -183,27 +294,55 @@ export default function TodayTasksWrapperClient({ companyId }: { companyId: stri
         throw new Error(errorData.error || '지급 완료 처리 실패')
       }
 
-      alert('지급 완료 처리되었습니다.')
-      loadFinancialData()
+      // 성공: Toast 메시지 표시
+      showToast('지급 완료 처리되었습니다.', 'success')
+      
+      // 백그라운드에서 데이터 동기화
+      loadFinancialData().catch(err => {
+        console.error('Failed to sync financial data:', err)
+      })
     } catch (err: any) {
-      alert(err.message || '지급 완료 처리 중 오류가 발생했습니다.')
+      // 실패: 상태 롤백
+      if (financialData && financialData.today_daily_payrolls) {
+        const rolledBackPayrolls = financialData.today_daily_payrolls.map(payroll => 
+          payroll.id === payrollId 
+            ? { ...payroll, status: 'scheduled' as const }
+            : payroll
+        )
+        setFinancialData({
+          ...financialData,
+          today_daily_payrolls: rolledBackPayrolls
+        })
+      }
+
+      // 에러 메시지 표시
+      const errorMessage = err.message || '지급 완료 처리 중 오류가 발생했습니다.'
+      showToast(errorMessage, 'error')
+      setErrorStates(prev => ({
+        ...prev,
+        [payrollId]: errorMessage
+      }))
     }
   }
 
   return (
-    <TodayTasksSection
-      todaySalaryUsers={financialData.today_salary_users || []}
-      todayDailyPayrolls={financialData.today_daily_payrolls || []}
-      todayPaymentStores={financialData.today_payment_stores || []}
-      totalUnpaid={financialData.total_unpaid || 0}
-      unpaidCount={financialData.unpaid_count || 0}
-      formatCurrency={formatCurrency}
-      onMarkPayrollAsPaid={handleMarkPayrollAsPaid}
-      onMarkSubcontractAsPaid={handleMarkSubcontractAsPaid}
-      onMarkDailyPayrollAsPaid={handleMarkDailyPayrollAsPaid}
-      onPartialPayment={handlePartialPayment}
-      onFullPayment={handleFullPayment}
-    />
+    <>
+      <ToastContainer />
+      <TodayTasksSection
+        todaySalaryUsers={financialData.today_salary_users || []}
+        todayDailyPayrolls={financialData.today_daily_payrolls || []}
+        todayPaymentStores={financialData.today_payment_stores || []}
+        totalUnpaid={financialData.total_unpaid || 0}
+        unpaidCount={financialData.unpaid_count || 0}
+        formatCurrency={formatCurrency}
+        onMarkPayrollAsPaid={handleMarkPayrollAsPaid}
+        onMarkSubcontractAsPaid={handleMarkSubcontractAsPaid}
+        onMarkDailyPayrollAsPaid={handleMarkDailyPayrollAsPaid}
+        onPartialPayment={handlePartialPayment}
+        onFullPayment={handleFullPayment}
+        errorStates={errorStates}
+      />
+    </>
   )
 }
 

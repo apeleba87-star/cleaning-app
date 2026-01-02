@@ -366,6 +366,23 @@ export default function UserForm({ user, stores, assignedStoreIds = [], onSucces
         </div>
 
         <div>
+          <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
+            이메일
+          </label>
+          <input
+            id="email"
+            type="email"
+            value={(user as any).email || ''}
+            disabled
+            className="w-full px-4 py-2 border border-gray-300 rounded-md bg-gray-100 text-gray-600 cursor-not-allowed"
+            placeholder="이메일 주소"
+          />
+          <p className="mt-1 text-xs text-gray-500">
+            이메일은 변경할 수 없습니다.
+          </p>
+        </div>
+
+        <div>
           <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-1">
             이름 <span className="text-red-500">*</span>
           </label>

@@ -30,7 +30,7 @@ export default function RevenueDetailSection({ period, onRefresh }: RevenueDetai
   const [sortColumn, setSortColumn] = useState<string | null>(null)
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc')
   const [currentPage, setCurrentPage] = useState(1)
-  const itemsPerPage = 30
+  const itemsPerPage = 50
 
   useEffect(() => {
     loadRevenues()
@@ -44,6 +44,7 @@ export default function RevenueDetailSection({ period, onRefresh }: RevenueDetai
   const loadRevenues = async () => {
     try {
       setLoading(true)
+      // 검색/필터링이 클라이언트 사이드이므로 전체 데이터 가져오기 (limit 없음)
       const response = await fetch(`/api/business/revenues?period=${period}`)
       if (!response.ok) {
         throw new Error('매출 데이터를 불러올 수 없습니다.')

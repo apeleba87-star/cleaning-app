@@ -86,22 +86,42 @@ export function NavRoleSwitch({ userRole, userName, onRefresh, isRefreshing }: N
 
   // 외부 클릭 시 드롭다운 닫기
   useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
+    const handleClickOutside = (event: MouseEvent | TouchEvent) => {
+      const target = event.target as HTMLElement
+      
+      // 하위 메뉴 버튼 클릭은 완전히 무시
+      if (target.closest('button[type="button"]') && target.closest('.bg-gradient-to-b.from-gray-50.to-white')) {
+        return
+      }
+      
       if (openDropdown) {
         const ref = dropdownRef.current[openDropdown]
-        if (ref && !ref.contains(event.target as Node)) {
+        if (ref && !ref.contains(target as Node)) {
           setOpenDropdown(null)
         }
       }
+      
       // 모바일 메뉴 외부 클릭 시 닫기
-      if (isMobileMenuOpen && mobileMenuRef.current && !mobileMenuRef.current.contains(event.target as Node)) {
+      if (isMobileMenuOpen && mobileMenuRef.current) {
+        // 모바일 메뉴 내부 클릭은 완전히 무시
+        if (mobileMenuRef.current.contains(target as Node)) {
+          // 하위 메뉴 버튼 클릭도 명시적으로 무시
+          if (target.closest('button[type="button"]') && target.closest('.bg-gradient-to-b.from-gray-50.to-white')) {
+            return
+          }
+          return
+        }
+        // 외부 클릭만 메뉴 닫기
         setIsMobileMenuOpen(false)
       }
     }
 
-    document.addEventListener('mousedown', handleClickOutside)
+    // 캡처 단계가 아닌 버블링 단계에서만 처리
+    document.addEventListener('mousedown', handleClickOutside, false)
+    document.addEventListener('touchstart', handleClickOutside, false)
     return () => {
-      document.removeEventListener('mousedown', handleClickOutside)
+      document.removeEventListener('mousedown', handleClickOutside, false)
+      document.removeEventListener('touchstart', handleClickOutside, false)
     }
   }, [openDropdown, isMobileMenuOpen])
 
@@ -116,6 +136,7 @@ export function NavRoleSwitch({ userRole, userName, onRefresh, isRefreshing }: N
       document.body.style.overflow = ''
     }
   }, [isMobileMenuOpen])
+
 
   const staffNav = [
     { href: '/attendance', label: '관리시작/종료' },
@@ -341,9 +362,15 @@ export function NavRoleSwitch({ userRole, userName, onRefresh, isRefreshing }: N
     if (isMobile) {
       // 모바일에서는 아코디언 형태로 표시
       return (
-        <div key={`group-${index}`} className="border-b border-gray-200/50">
+        <div 
+          key={`group-${index}`} 
+          className="border-b border-gray-200/50"
+        >
           <button
-            onClick={() => setOpenDropdown(isOpen ? null : `dropdown-${index}`)}
+            onClick={(e) => {
+              e.stopPropagation()
+              setOpenDropdown(isOpen ? null : `dropdown-${index}`)
+            }}
             className={`w-full px-4 py-3 text-base font-medium transition-all duration-200 flex items-center justify-between ${
               isActiveGroup
                 ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md'
@@ -361,22 +388,53 @@ export function NavRoleSwitch({ userRole, userName, onRefresh, isRefreshing }: N
             </svg>
           </button>
           {isOpen && group.items && (
-            <div className="bg-gradient-to-b from-gray-50 to-white">
-              {group.items.map((subItem) => (
-                <Link
-                  key={subItem.href}
-                  href={subItem.href}
-                  onClick={() => {
-                    setOpenDropdown(null)
-                    setIsMobileMenuOpen(false)
-                  }}
-                  className={`block px-8 py-2.5 text-sm text-gray-700 hover:bg-gradient-to-r hover:from-blue-50 hover:to-indigo-50 transition-all duration-200 ${
-                    isActive(subItem.href) ? 'bg-gradient-to-r from-blue-100 to-indigo-100 text-blue-700 font-semibold border-l-4 border-blue-600' : ''
-                  }`}
-                >
-                  {subItem.label}
-                </Link>
-              ))}
+            <div 
+              className="bg-gradient-to-b from-gray-50 to-white" 
+              style={{ position: 'relative', zIndex: 1000 }}
+              onClick={(e) => e.stopPropagation()}
+              onMouseDown={(e) => e.stopPropagation()}
+              onTouchStart={(e) => e.stopPropagation()}
+            >
+              {group.items.map((subItem) => {
+                const handleSubMenuClick = (e: React.MouseEvent<HTMLButtonElement> | React.TouchEvent<HTMLButtonElement>) => {
+                  e.preventDefault()
+                  e.stopPropagation()
+                  if (e.nativeEvent) {
+                    e.nativeEvent.stopImmediatePropagation()
+                  }
+                  
+                  // 메뉴 닫기
+                  setOpenDropdown(null)
+                  setIsMobileMenuOpen(false)
+                  
+                  // 페이지 이동 (window.location 사용으로 확실한 이동)
+                  if (typeof window !== 'undefined') {
+                    window.location.href = subItem.href
+                  }
+                }
+                
+                return (
+                  <button
+                    key={subItem.href}
+                    type="button"
+                    onClick={handleSubMenuClick}
+                    onMouseDown={handleSubMenuClick}
+                    onTouchStart={handleSubMenuClick}
+                    className={`w-full text-left block px-8 py-2.5 text-sm text-gray-700 hover:bg-gradient-to-r hover:from-blue-50 hover:to-indigo-50 transition-all duration-200 ${
+                      isActive(subItem.href) ? 'bg-gradient-to-r from-blue-100 to-indigo-100 text-blue-700 font-semibold border-l-4 border-blue-600' : ''
+                    }`}
+                    style={{ 
+                      pointerEvents: 'auto',
+                      position: 'relative',
+                      zIndex: 1001,
+                      touchAction: 'manipulation',
+                      WebkitTapHighlightColor: 'transparent'
+                    }}
+                  >
+                    {subItem.label}
+                  </button>
+                )
+              })}
             </div>
           )}
         </div>
@@ -546,7 +604,18 @@ export function NavRoleSwitch({ userRole, userName, onRefresh, isRefreshing }: N
         className={`fixed inset-0 bg-black/60 backdrop-blur-sm z-[100] md:hidden transition-opacity duration-300 ${
           isMobileMenuOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'
         }`}
-        onClick={() => setIsMobileMenuOpen(false)}
+        style={{
+          pointerEvents: isMobileMenuOpen ? 'auto' : 'none'
+        }}
+        onClick={(e) => {
+          // 사이드바 내부 클릭은 완전히 무시
+          const target = e.target as HTMLElement
+          if (mobileMenuRef.current && mobileMenuRef.current.contains(target)) {
+            return
+          }
+          // 외부 클릭만 메뉴 닫기
+          setIsMobileMenuOpen(false)
+        }}
       />
       {/* 사이드바 (왼쪽에서 슬라이드) */}
       <div

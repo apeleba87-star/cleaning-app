@@ -41,6 +41,7 @@ interface TodayTasksSectionProps {
   onMarkDailyPayrollAsPaid?: (payrollId: string, workerName: string) => void
   onPartialPayment?: (storeId: string, storeName: string) => void
   onFullPayment?: (storeId: string, storeName: string) => void
+  errorStates?: Record<string, string>
 }
 
 export default function TodayTasksSection({
@@ -55,6 +56,7 @@ export default function TodayTasksSection({
   onMarkDailyPayrollAsPaid,
   onPartialPayment,
   onFullPayment,
+  errorStates = {},
 }: TodayTasksSectionProps) {
   const [payrollSubmitting, setPayrollSubmitting] = useState<string | null>(null)
   const [subcontractSubmitting, setSubcontractSubmitting] = useState<string | null>(null)
@@ -159,7 +161,7 @@ export default function TodayTasksSection({
                   key={user.id}
                   className={`bg-white rounded p-3 flex items-center justify-between ${isPaid ? 'opacity-60' : ''}`}
                 >
-                  <div>
+                  <div className="flex-1">
                     <div className="flex items-center gap-2">
                       <p className={`font-medium ${isPaid ? 'text-gray-500' : 'text-gray-900'}`}>{user.name}</p>
                       {roleLabel && (
@@ -170,6 +172,12 @@ export default function TodayTasksSection({
                     </div>
                     {displayAmount !== null && displayAmount !== undefined && (
                       <p className={`text-xs ${isPaid ? 'text-gray-400' : 'text-gray-500'}`}>{formatCurrency(displayAmount)}</p>
+                    )}
+                    {/* 에러 메시지 표시 */}
+                    {(errorStates[user.payroll_id || ''] || errorStates[user.payment_id || '']) && (
+                      <p className="text-xs text-red-600 mt-1">
+                        {(errorStates[user.payroll_id || ''] || errorStates[user.payment_id || ''])}
+                      </p>
                     )}
                   </div>
                   <div className="flex items-center gap-2">
@@ -191,7 +199,7 @@ export default function TodayTasksSection({
                             disabled={subcontractSubmitting === user.payment_id}
                             className="px-3 py-1.5 text-xs bg-green-500 text-white rounded hover:bg-green-600 disabled:opacity-50 disabled:cursor-not-allowed"
                           >
-                            지급 완료
+                            {subcontractSubmitting === user.payment_id ? '처리 중...' : '지급 완료'}
                           </button>
                         ) : user.payroll_id && onMarkPayrollAsPaid ? (
                           <button
@@ -199,7 +207,7 @@ export default function TodayTasksSection({
                             disabled={payrollSubmitting === user.payroll_id}
                             className="px-3 py-1.5 text-xs bg-green-500 text-white rounded hover:bg-green-600 disabled:opacity-50 disabled:cursor-not-allowed"
                           >
-                            지급 완료
+                            {payrollSubmitting === user.payroll_id ? '처리 중...' : '지급 완료'}
                           </button>
                         ) : null}
                       </>
@@ -239,9 +247,15 @@ export default function TodayTasksSection({
                   key={payroll.id}
                   className={`bg-white rounded p-3 flex items-center justify-between ${isPaid ? 'opacity-60' : ''}`}
                 >
-                  <div>
+                  <div className="flex-1">
                     <p className={`font-medium ${isPaid ? 'text-gray-500' : 'text-gray-900'}`}>{payroll.worker_name}</p>
                     <p className={`text-xs ${isPaid ? 'text-gray-400' : 'text-gray-500'}`}>{formatCurrency(payroll.amount)}</p>
+                    {/* 에러 메시지 표시 */}
+                    {errorStates[payroll.id] && (
+                      <p className="text-xs text-red-600 mt-1">
+                        {errorStates[payroll.id]}
+                      </p>
+                    )}
                   </div>
                   <div className="flex items-center gap-2">
                     {isPaid ? (
@@ -261,7 +275,7 @@ export default function TodayTasksSection({
                           disabled={dailyPayrollSubmitting === payroll.id}
                           className="px-3 py-1.5 text-xs bg-green-500 text-white rounded hover:bg-green-600 disabled:opacity-50 disabled:cursor-not-allowed"
                         >
-                          지급 완료
+                          {dailyPayrollSubmitting === payroll.id ? '처리 중...' : '지급 완료'}
                         </button>
                       )
                     )}
