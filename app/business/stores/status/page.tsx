@@ -312,14 +312,17 @@ export default function BusinessStoresStatusPage() {
     return () => clearInterval(timer)
   }, [])
 
-  // 매장 상태가 로드되면 처리완료 및 반려처리 요청 목록도 로드
+  // 매장 상태가 로드되면 처리완료 및 반려처리 요청 목록도 배치로 로드
   useEffect(() => {
     if (storeStatuses.length > 0) {
-      storeStatuses.forEach((status) => {
-        if (status.completed_request_count > 0 || status.rejected_request_count > 0) {
-          loadStoreCompletedRequests(status.store_id)
-        }
-      })
+      // completed/rejected 요청이 있는 매장 ID만 수집
+      const storeIdsWithRequests = storeStatuses
+        .filter((status) => status.completed_request_count > 0 || status.rejected_request_count > 0)
+        .map((status) => status.store_id)
+
+      if (storeIdsWithRequests.length > 0) {
+        loadStoreCompletedRequestsBatch(storeIdsWithRequests)
+      }
     }
   }, [storeStatuses])
 
@@ -665,7 +668,30 @@ export default function BusinessStoresStatusPage() {
     }
   }
 
-  // 매장별 처리완료 및 반려처리 요청 목록 로드
+  // 배치 API로 여러 매장의 처리완료 및 반려처리 요청 목록 로드
+  const loadStoreCompletedRequestsBatch = async (storeIds: string[]) => {
+    try {
+      const storeIdsParam = storeIds.join(',')
+      const response = await fetch(`/api/business/stores/requests/batch?store_ids=${storeIdsParam}`)
+      const data = await response.json()
+      
+      if (response.ok && data.data) {
+        setStoreCompletedRequests((prev) => {
+          const newMap = new Map(prev)
+          // 각 매장별로 completed와 rejected를 합쳐서 저장
+          Object.entries(data.data).forEach(([storeId, requestsData]: [string, any]) => {
+            const allRequests = [...(requestsData.completed || []), ...(requestsData.rejected || [])]
+            newMap.set(storeId, allRequests)
+          })
+          return newMap
+        })
+      }
+    } catch (error) {
+      console.error('Error loading completed/rejected requests batch:', error)
+    }
+  }
+
+  // 단일 매장의 처리완료 및 반려처리 요청 목록 로드 (기존 함수 유지 - 필요시 사용)
   const loadStoreCompletedRequests = async (storeId: string) => {
     try {
       const response = await fetch(`/api/business/stores/${storeId}/requests`)
@@ -1489,8 +1515,9 @@ export default function BusinessStoresStatusPage() {
           <div className="flex items-center justify-between mb-2">
             <div className="text-sm text-gray-600">접수</div>
             <Link
-              href="/business/supply-requests"
+              href="/business/requests"
               className="text-xs bg-purple-500 text-white px-3 py-1.5 rounded hover:bg-purple-600 transition-colors"
+              onClick={(e) => e.stopPropagation()}
             >
               전부보기
             </Link>
@@ -2139,6 +2166,31 @@ export default function BusinessStoresStatusPage() {
                               {getStatusLabel(status)}
                             </span>
                           </div>
+                          {/* 퇴근 완료 시 출근/퇴근 시간 표시 */}
+                          {status.attendance_status === 'clocked_out' && status.clock_in_time && status.clock_out_time && (
+                            <div className="flex flex-col gap-1 text-xs">
+                              <div className="flex items-center gap-1">
+                                <span className="text-gray-500">출근 시간</span>
+                                <span className="font-medium text-blue-600">
+                                  {new Date(status.clock_in_time).toLocaleTimeString('ko-KR', { 
+                                    hour: '2-digit', 
+                                    minute: '2-digit',
+                                    hour12: false 
+                                  })}
+                                </span>
+                              </div>
+                              <div className="flex items-center gap-1">
+                                <span className="text-gray-500">퇴근 시간</span>
+                                <span className="font-medium text-green-600">
+                                  {new Date(status.clock_out_time).toLocaleTimeString('ko-KR', { 
+                                    hour: '2-digit', 
+                                    minute: '2-digit',
+                                    hour12: false 
+                                  })}
+                                </span>
+                              </div>
+                            </div>
+                          )}
                           {/* 매장상황 건수 */}
                           <div className="flex items-center gap-2">
                             <span className="text-xs text-gray-600">매장상황:</span>

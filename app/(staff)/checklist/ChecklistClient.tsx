@@ -18,7 +18,7 @@ const ChecklistCalendar = dynamic(
   }
 )
 import { calculateChecklistProgress } from '@/lib/utils/checklist'
-import { getTodayDateKST } from '@/lib/utils/date'
+import { getTodayDateKST, getYesterdayDateKST } from '@/lib/utils/date'
 
 // ChecklistCamera 컴포넌트를 Dynamic Import로 로드 (카메라 기능이 필요할 때만 로드)
 const ChecklistCamera = dynamic(

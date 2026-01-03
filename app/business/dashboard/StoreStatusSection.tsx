@@ -196,7 +196,7 @@ export default function StoreStatusSection() {
           <div className="flex items-center justify-between mb-3">
             <p className="text-sm text-gray-600">접수</p>
             <Link
-              href="/business/supply-requests"
+              href="/business/requests"
               className="text-xs bg-purple-500 text-white px-3 py-1.5 rounded-md hover:bg-purple-600 transition-colors"
               onClick={(e) => e.stopPropagation()}
             >

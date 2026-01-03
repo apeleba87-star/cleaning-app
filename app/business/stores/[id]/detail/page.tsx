@@ -81,6 +81,13 @@ interface Request {
   } | null
 }
 
+interface AttendanceInfo {
+  work_date: string
+  clock_in_at: string | null
+  clock_out_at: string | null
+  user_name: string | null
+}
+
 interface StoreDetailData {
   before_after_photos: BeforeAfterPhoto[]
   product_inflow_photos: ProductInflowPhoto[]
@@ -88,6 +95,7 @@ interface StoreDetailData {
   problem_reports: ProblemReport[]
   lost_items: LostItem[]
   requests: Request[]
+  attendance_by_date?: { [date: string]: AttendanceInfo[] }
 }
 
 export default function StoreDetailPage() {
@@ -107,6 +115,7 @@ export default function StoreDetailPage() {
     problem_reports: [],
     lost_items: [],
     requests: [],
+    attendance_by_date: {},
   })
   const [selectedImage, setSelectedImage] = useState<string | null>(null)
   const [selectedImageInfo, setSelectedImageInfo] = useState<{
@@ -118,18 +127,31 @@ export default function StoreDetailPage() {
   } | null>(null)
   const [expandedDates, setExpandedDates] = useState<Set<string>>(new Set())
 
+  // 병렬 로딩: 매장 정보와 상세 데이터를 동시에 로드
   useEffect(() => {
-    loadStoreInfo()
-  }, [storeId])
-
-  useEffect(() => {
-    if (activeTab === 'custom' && (!customStartDate || !customEndDate)) {
-      setLoading(false)
-      return
+    const loadData = async () => {
+      if (activeTab === 'custom' && (!customStartDate || !customEndDate)) {
+        setLoading(false)
+        return
+      }
+      
+      setLoading(true)
+      try {
+        // 병렬 실행
+        await Promise.all([
+          loadStoreInfo(),
+          loadDetailData(),
+        ])
+        // 탭 변경 시 확장된 날짜 목록 초기화
+        setExpandedDates(new Set())
+      } catch (err) {
+        console.error('Error loading data:', err)
+      } finally {
+        setLoading(false)
+      }
     }
-    loadDetailData()
-    // 탭 변경 시 확장된 날짜 목록 초기화
-    setExpandedDates(new Set())
+    loadData()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [storeId, activeTab, customStartDate, customEndDate])
 
   const loadStoreInfo = async () => {
@@ -143,6 +165,15 @@ export default function StoreDetailPage() {
     } catch (err) {
       console.error('Error loading store info:', err)
     }
+  }
+
+  const formatTime = (timeString: string | null) => {
+    if (!timeString) return ''
+    return new Date(timeString).toLocaleTimeString('ko-KR', {
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+    })
   }
 
   const getDateRange = () => {
@@ -196,7 +227,6 @@ export default function StoreDetailPage() {
 
   const loadDetailData = async () => {
     try {
-      setLoading(true)
       const { startDate, endDate } = getDateRange()
 
       const response = await fetch(
@@ -215,12 +245,12 @@ export default function StoreDetailPage() {
         problem_reports: [],
         lost_items: [],
         requests: [],
+        attendance_by_date: {},
       })
       setError(null)
     } catch (err: any) {
       setError(err.message)
-    } finally {
-      setLoading(false)
+      throw err // 상위에서 처리할 수 있도록 에러 재던지기
     }
   }
 
@@ -288,6 +318,7 @@ export default function StoreDetailPage() {
         problem_reports: ProblemReport[]
         lost_items: LostItem[]
         requests: Request[]
+        attendance: AttendanceInfo[]
       }
     } = {}
 
@@ -306,6 +337,7 @@ export default function StoreDetailPage() {
           problem_reports: [],
           lost_items: [],
           requests: [],
+          attendance: [],
         }
       }
       grouped[dateKey].before_after_photos.push(photo)
@@ -322,6 +354,7 @@ export default function StoreDetailPage() {
           problem_reports: [],
           lost_items: [],
           requests: [],
+          attendance: [],
         }
       }
       grouped[dateKey].product_inflow_photos.push(photo)
@@ -338,6 +371,7 @@ export default function StoreDetailPage() {
           problem_reports: [],
           lost_items: [],
           requests: [],
+          attendance: [],
         }
       }
       grouped[dateKey].storage_photos.push(photo)
@@ -354,6 +388,7 @@ export default function StoreDetailPage() {
           problem_reports: [],
           lost_items: [],
           requests: [],
+          attendance: [],
         }
       }
       grouped[dateKey].problem_reports.push(problem)
@@ -370,6 +405,7 @@ export default function StoreDetailPage() {
           problem_reports: [],
           lost_items: [],
           requests: [],
+          attendance: [],
         }
       }
       grouped[dateKey].lost_items.push(item)
@@ -386,10 +422,29 @@ export default function StoreDetailPage() {
           problem_reports: [],
           lost_items: [],
           requests: [],
+          attendance: [],
         }
       }
       grouped[dateKey].requests.push(request)
     })
+
+    // 출퇴근 기록 추가
+    if (detailData.attendance_by_date) {
+      Object.keys(detailData.attendance_by_date).forEach((dateKey) => {
+        if (!grouped[dateKey]) {
+          grouped[dateKey] = {
+            before_after_photos: [],
+            product_inflow_photos: [],
+            storage_photos: [],
+            problem_reports: [],
+            lost_items: [],
+            requests: [],
+            attendance: [],
+          }
+        }
+        grouped[dateKey].attendance = detailData.attendance_by_date[dateKey] || []
+      })
+    }
 
     // 날짜순으로 정렬 (최신순)
     return Object.entries(grouped).sort((a, b) => b[0].localeCompare(a[0]))
@@ -413,14 +468,16 @@ export default function StoreDetailPage() {
   return (
     <div className="max-w-7xl mx-auto p-6">
       <div className="flex justify-between items-center mb-6">
-        <div>
+        <div className="flex-1">
           <h1 className="text-2xl font-bold">{storeName || '매장 상세'}</h1>
-          <Link
-            href="/business/stores/status"
-            className="text-blue-600 hover:text-blue-800 text-sm"
-          >
-            ← 매장 상태로
-          </Link>
+          <div className="flex items-center gap-4 mt-2">
+            <Link
+              href="/business/stores/status"
+              className="text-blue-600 hover:text-blue-800 text-sm"
+            >
+              ← 매장 상태로
+            </Link>
+          </div>
         </div>
       </div>
 
@@ -566,8 +623,30 @@ export default function StoreDetailPage() {
                     onClick={() => toggleDateExpansion(date)}
                     className="w-full px-6 py-4 flex items-center justify-between hover:bg-gray-50 transition-colors"
                   >
-                    <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-3 flex-wrap">
                       <span className="text-lg font-semibold text-gray-900">{formatDate(date)}</span>
+                      {/* 출퇴근 시간 표시 */}
+                      {data.attendance && data.attendance.length > 0 && (
+                        <div className="flex items-center gap-2 text-xs">
+                          {data.attendance.map((att, idx) => (
+                            <div key={idx} className="flex items-center gap-1">
+                              {att.clock_in_at && (
+                                <span className="text-gray-600">
+                                  출근 <span className="font-medium text-blue-600">{formatTime(att.clock_in_at)}</span>
+                                </span>
+                              )}
+                              {att.clock_out_at && (
+                                <span className="text-gray-600 ml-1">
+                                  퇴근 <span className="font-medium text-green-600">{formatTime(att.clock_out_at)}</span>
+                                </span>
+                              )}
+                              {att.user_name && (
+                                <span className="text-gray-400 ml-1">({att.user_name})</span>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      )}
                       <span className="text-sm text-gray-500">
                         (관리전후 {data.before_after_photos.length}건, 
                         제품입고 {data.product_inflow_photos.length}건, 
