@@ -183,7 +183,7 @@ export default function AttendancePage() {
       .eq('work_date', today)
       .order('clock_in_at', { ascending: false })
 
-    // 어제 날짜의 미퇴근 기록도 조회 (날짜 경계를 넘는 야간 근무 고려)
+    // 어제 날짜의 출근 기록도 조회 (날짜 경계를 넘는 야간 근무 고려, 퇴근 완료 포함)
     const { data: yesterdayData, error: yesterdayError } = await supabase
       .from('attendance')
       .select(`
@@ -211,8 +211,8 @@ export default function AttendancePage() {
       `)
       .eq('user_id', session.user.id)
       .eq('work_date', yesterday)
-      .is('clock_out_at', null)
       .order('clock_in_at', { ascending: false })
+      .limit(10) // 최근 10개만 조회 (성능 최적화)
 
     const queryError = todayError || yesterdayError
     const data = [...(todayData || []), ...(yesterdayData || [])]
