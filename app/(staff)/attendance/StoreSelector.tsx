@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { Store } from '@/types/db'
+import { getCurrentHourKST } from '@/lib/utils/date'
 
 interface StoreSelectorProps {
   selectedStoreId: string
@@ -13,7 +14,7 @@ interface StoreSelectorProps {
 }
 
 // StoreSelector에서 사용하는 최소 필드 타입
-type StoreSelectorStore = Pick<Store, 'id' | 'name' | 'company_id' | 'deleted_at' | 'management_days'>
+type StoreSelectorStore = Pick<Store, 'id' | 'name' | 'company_id' | 'deleted_at' | 'management_days' | 'is_night_shift' | 'work_start_hour' | 'work_end_hour'>
 
 export default function StoreSelector({ selectedStoreId: propSelectedStoreId, onSelectStore, disabled = false, excludeStoreIds = [], showOnlyTodayManagement = true }: StoreSelectorProps) {
   const [stores, setStores] = useState<StoreSelectorStore[]>([])
@@ -78,7 +79,7 @@ export default function StoreSelector({ selectedStoreId: propSelectedStoreId, on
     
     const { data: storesData, error: storesError } = await supabase
       .from('stores')
-      .select('id, name, company_id, deleted_at, management_days')
+      .select('id, name, company_id, deleted_at, management_days, is_night_shift, work_start_hour, work_end_hour')
       .in('id', storeIds)
       .is('deleted_at', null)
 
@@ -112,6 +113,15 @@ export default function StoreSelector({ selectedStoreId: propSelectedStoreId, on
     const dayNames = ['일', '월', '화', '수', '목', '금', '토']
     const todayDayName = dayNames[dayOfWeek]
     
+    // 어제의 요일 확인 (야간 매장 날짜 경계 처리용)
+    const yesterday = new Date(today)
+    yesterday.setDate(yesterday.getDate() - 1)
+    const yesterdayDayOfWeek = yesterday.getDay()
+    const yesterdayDayName = dayNames[yesterdayDayOfWeek]
+    
+    // 현재 시간 (KST)
+    const currentHour = getCurrentHourKST()
+    
     // showOnlyTodayManagement에 따라 필터링
     const filteredStores = (storesData || []).filter((store) => {
       // management_days가 없으면 모든 요일 허용 (기존 매장 호환성)
@@ -120,26 +130,38 @@ export default function StoreSelector({ selectedStoreId: propSelectedStoreId, on
         return showOnlyTodayManagement === false
       }
       
-      // management_days에서 오늘 요일이 포함되어 있는지 확인
+      // 야간 매장인 경우 날짜 경계 처리
+      let checkDayName = todayDayName
+      if (store.is_night_shift && store.work_start_hour !== null && store.work_start_hour !== undefined) {
+        // 현재 시간이 work_start_hour 이전이면 어제 날짜 확인
+        if (currentHour < store.work_start_hour) {
+          checkDayName = yesterdayDayName
+          console.log(`🌙 야간 매장 ${store.name}: 현재 시간(${currentHour}시) < work_start_hour(${store.work_start_hour}시) → 어제(${yesterdayDayName}요일) 확인`)
+        } else {
+          console.log(`🌙 야간 매장 ${store.name}: 현재 시간(${currentHour}시) >= work_start_hour(${store.work_start_hour}시) → 오늘(${todayDayName}요일) 확인`)
+        }
+      }
+      
+      // management_days에서 확인할 요일이 포함되어 있는지 확인
       // 형식: "월,수,금" 또는 "월수금" 둘 다 처리
       const managementDays = store.management_days.replace(/\s/g, '') // 공백 제거
       const dayList = managementDays.split(',').map(d => d.trim())
       
       // 쉼표로 구분된 경우와 그렇지 않은 경우 모두 처리
-      let isTodayManagement = false
+      let isManagementDay = false
       if (dayList.length > 1) {
         // "월,수,금" 형식
-        isTodayManagement = dayList.includes(todayDayName)
+        isManagementDay = dayList.includes(checkDayName)
       } else {
         // "월수금" 형식 - 각 요일 글자 하나씩 확인
-        isTodayManagement = managementDays.includes(todayDayName)
+        isManagementDay = managementDays.includes(checkDayName)
       }
       
       // showOnlyTodayManagement에 따라 반환
       if (showOnlyTodayManagement === true) {
-        return isTodayManagement // 오늘 관리 요일인 매장만
+        return isManagementDay // 확인한 날짜가 관리 요일인 매장만
       } else if (showOnlyTodayManagement === false) {
-        return !isTodayManagement // 오늘 관리 요일이 아닌 매장만
+        return !isManagementDay // 확인한 날짜가 관리 요일이 아닌 매장만
       } else {
         return true // 모든 매장
       }
