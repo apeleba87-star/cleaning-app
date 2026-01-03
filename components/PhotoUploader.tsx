@@ -5,7 +5,7 @@ import { uploadPhoto } from '@/lib/supabase/upload'
 
 interface PhotoUploaderProps {
   storeId: string
-  entity: 'cleaning' | 'issue' | 'supply' | 'selfie' | 'checklist' | 'checklist_before' | 'checklist_after'
+  entity: 'cleaning' | 'issue' | 'supply' | 'selfie' | 'checklist' | 'checklist_before' | 'checklist_after' | 'request'
   onUploadComplete: (url: string) => void
   onUploadError?: (error: string) => void
   className?: string

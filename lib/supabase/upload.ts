@@ -7,7 +7,7 @@ import { resizeImageToFile } from '@/lib/utils/image-resize'
 export async function uploadPhoto(
   file: File,
   storeId: string,
-  entity: 'cleaning' | 'issue' | 'supply' | 'selfie' | 'checklist' | 'checklist_before' | 'checklist_after' | 'product',
+  entity: 'cleaning' | 'issue' | 'supply' | 'selfie' | 'checklist' | 'checklist_before' | 'checklist_after' | 'product' | 'request',
   userId?: string
 ): Promise<string> {
   const supabase = createClient()
