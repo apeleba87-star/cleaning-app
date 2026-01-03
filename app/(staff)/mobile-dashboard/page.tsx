@@ -8,7 +8,7 @@ import { calculateChecklistProgress } from '@/lib/utils/checklist'
 import { GeoGuard } from '@/components/GeoGuard'
 import { clockInAction, clockOutAction } from '../attendance/actions'
 import { GPSLocation } from '@/types/db'
-import { getTodayDateKST, getYesterdayDateKST } from '@/lib/utils/date'
+import { getTodayDateKST, getYesterdayDateKST, getCurrentHourKST } from '@/lib/utils/date'
 import QuickStartGuide from '@/components/staff/QuickStartGuide'
 
 interface StoreWithAssignment {
@@ -18,7 +18,10 @@ interface StoreWithAssignment {
   isWorkDay: boolean
   attendanceStatus: 'not_clocked_in' | 'clocked_in' | 'clocked_out'
   attendanceWorkDate: string | null
-  attendanceType?: string | null // 출근 유형 (regular, rescheduled, emergency)
+  attendanceType?: string | null
+  is_night_shift?: boolean
+  work_start_hour?: number | null
+  work_end_hour?: number | null
 }
 
 interface Request {
@@ -118,11 +121,29 @@ export default function MobileDashboardPage() {
   const todayDayIndex = useMemo(() => currentTime.getDay(), [currentTime])
   const todayDayName = useMemo(() => getKoreanDayName(todayDayIndex), [getKoreanDayName, todayDayIndex])
 
-  const isTodayWorkDay = useCallback((managementDays: string | null): boolean => {
+  const isTodayWorkDay = useCallback((managementDays: string | null, checkDate?: string | null, isNightShift?: boolean, workStartHour?: number | null): boolean => {
     if (!managementDays) return false
+    
+    // 출근 기록의 work_date가 있으면 해당 날짜 기준으로 체크
+    let dayNameToCheck = todayDayName
+    if (checkDate) {
+      const checkDateObj = new Date(checkDate + 'T00:00:00')
+      const checkDayIndex = checkDateObj.getDay()
+      dayNameToCheck = getKoreanDayName(checkDayIndex)
+    } else if (isNightShift && workStartHour !== null && workStartHour !== undefined) {
+      // 출근 기록이 없고 야간 매장인 경우, 날짜 경계 고려
+      const currentHour = getCurrentHourKST()
+      if (currentHour < workStartHour) {
+        // 현재 시간이 work_start_hour 이전이면 어제 날짜 확인
+        const yesterday = new Date()
+        yesterday.setDate(yesterday.getDate() - 1)
+        dayNameToCheck = getKoreanDayName(yesterday.getDay())
+      }
+    }
+    
     const days = managementDays.split(',').map(d => d.trim())
-    return days.includes(todayDayName)
-  }, [todayDayName])
+    return days.includes(dayNameToCheck)
+  }, [todayDayName, getKoreanDayName])
 
   const formatDate = useCallback((date: Date): string => {
     const year = date.getFullYear()
@@ -315,7 +336,10 @@ export default function MobileDashboardPage() {
             stores:store_id (
               id,
               name,
-              management_days
+              management_days,
+              is_night_shift,
+              work_start_hour,
+              work_end_hour
             )
           `)
           .eq('user_id', session.user.id)
@@ -391,14 +415,25 @@ export default function MobileDashboardPage() {
             // 출근일 변경으로 출근한 경우, isWorkDay가 false여도 출근 상태로 처리
             const isRescheduledAttendance = attendanceType === 'rescheduled' && attendanceStatus === 'clocked_in'
             
+            // 출근 기록이 있는 경우 work_date 기준으로 체크, 없는 경우 야간 매장 날짜 경계 고려
+            const calculatedIsWorkDay = isTodayWorkDay(
+              store.management_days,
+              attendanceWorkDate, // 출근 기록의 work_date
+              store.is_night_shift,
+              store.work_start_hour
+            ) || isRescheduledAttendance // 출근일 변경 출근도 근무일로 처리
+            
             return {
               id: store.id,
               name: store.name,
               management_days: store.management_days,
-              isWorkDay: isTodayWorkDay(store.management_days) || isRescheduledAttendance, // 출근일 변경 출근도 근무일로 처리
+              isWorkDay: calculatedIsWorkDay,
               attendanceStatus,
               attendanceWorkDate,
               attendanceType,
+              is_night_shift: store.is_night_shift,
+              work_start_hour: store.work_start_hour,
+              work_end_hour: store.work_end_hour,
             }
           })
           .filter((s: any): s is StoreWithAssignment => s !== null)
@@ -1373,6 +1408,15 @@ export default function MobileDashboardPage() {
                       // 출근 상태를 즉시 업데이트 (출근 기록의 work_date 사용)
                       const attendanceData = result.data as { work_date?: string }
                       const workDate = attendanceData.work_date || getTodayDateKST()
+                      
+                      // 출근 기록의 work_date 기준으로 isWorkDay 재계산
+                      const updatedIsWorkDay = isTodayWorkDay(
+                        store.management_days,
+                        workDate, // 출근 기록의 work_date
+                        store.is_night_shift,
+                        store.work_start_hour
+                      )
+                      
                       setStores((prevStores) =>
                         prevStores.map((s) =>
                           s.id === store.id
@@ -1380,6 +1424,7 @@ export default function MobileDashboardPage() {
                                 ...s,
                                 attendanceStatus: 'clocked_in' as const,
                                 attendanceWorkDate: workDate,
+                                isWorkDay: updatedIsWorkDay, // work_date 기준으로 재계산
                               }
                             : s
                         )
