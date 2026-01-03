@@ -18,6 +18,7 @@ import { Attendance } from '@/types/db'
 import StoreSelector from './StoreSelector'
 import { getTodayDateKST, getYesterdayDateKST } from '@/lib/utils/date'
 import { useTodayAttendance } from '@/contexts/AttendanceContext'
+import { calculateChecklistProgress } from '@/lib/utils/checklist'
 
 interface AttendanceWithStore extends Attendance {
   stores?: { name: string }
@@ -100,25 +101,15 @@ export default function AttendancePage() {
     const progress: Record<string, { completed: number; total: number; percentage: number }> = {}
     
     checklists?.forEach((checklist) => {
-      const validItems = (checklist.items as any[]).filter((item: any) => item.area?.trim())
-      const total = validItems.length
-      const completed = validItems.filter((item: any) => {
-        if (item.type === 'check') {
-          if (!item.checked) return false
-          if (item.status === 'bad' && !item.comment?.trim()) return false
-          return true
-        } else if (item.type === 'photo') {
-          return !!(item.before_photo_url && item.after_photo_url)
-        }
-        return false
-      }).length
-
+      // calculateChecklistProgress 함수 사용 (모든 항목 타입 올바르게 처리)
+      const checklistProgress = calculateChecklistProgress(checklist)
+      
       const storeId = checklist.store_id
       if (!progress[storeId]) {
         progress[storeId] = { completed: 0, total: 0, percentage: 0 }
       }
-      progress[storeId].completed += completed
-      progress[storeId].total += total
+      progress[storeId].completed += checklistProgress.completedItems
+      progress[storeId].total += checklistProgress.totalItems
     })
 
     // 각 매장별로 퍼센트 계산
