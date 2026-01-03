@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient, getServerUser } from '@/lib/supabase/server'
-import { getTodayDateKST } from '@/lib/utils/date'
+import { getTodayDateKST, getYesterdayDateKST } from '@/lib/utils/date'
 
 // PATCH: 스태프가 배정된 체크리스트를 수행 완료 (전후 사진, 비고 포함)
 export async function PATCH(
@@ -86,11 +86,12 @@ export async function PATCH(
     // work_date는 출근 시 이미 설정되었으므로 변경하지 않음
     // 직원은 출근한 날에만 체크리스트를 수행할 수 있음
     const today = getTodayDateKST() // 한국 시간 기준 오늘 날짜
+    const yesterday = getYesterdayDateKST()
     
-    // 체크리스트의 work_date가 오늘인지 확인
+    // 체크리스트의 work_date 확인
     const { data: checklistCheck, error: checkError } = await supabase
       .from('checklist')
-      .select('work_date')
+      .select('work_date, store_id')
       .eq('id', params.id)
       .single()
 
@@ -98,7 +99,30 @@ export async function PATCH(
       return NextResponse.json({ error: '체크리스트를 찾을 수 없습니다.' }, { status: 404 })
     }
 
-    if (checklistCheck.work_date !== today) {
+    // 해당 매장의 출근 기록 조회 (오늘 또는 어제 날짜)
+    const { data: attendance, error: attendanceError } = await supabase
+      .from('attendance')
+      .select('work_date')
+      .eq('user_id', user.id)
+      .eq('store_id', checklistCheck.store_id)
+      .is('clock_out_at', null) // 미퇴근 기록만
+      .or(`work_date.eq.${today},work_date.eq.${yesterday}`)
+      .order('clock_in_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+
+    if (attendanceError) {
+      console.error('Error checking attendance:', attendanceError)
+      return NextResponse.json({ error: '출근 기록을 확인할 수 없습니다.' }, { status: 500 })
+    }
+
+    // 출근 기록이 없으면 오류
+    if (!attendance) {
+      return NextResponse.json({ error: '출근한 날에만 체크리스트를 수행할 수 있습니다.' }, { status: 403 })
+    }
+
+    // 체크리스트의 work_date가 출근 기록의 work_date와 일치하는지 확인
+    if (checklistCheck.work_date !== attendance.work_date) {
       return NextResponse.json({ error: '출근한 날에만 체크리스트를 수행할 수 있습니다.' }, { status: 403 })
     }
 
