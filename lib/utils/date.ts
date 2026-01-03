@@ -82,9 +82,46 @@ export function isTodayPaymentDay(paymentDay: number | null): boolean {
   return day === adjustedDay
 }
 
+/**
+ * 야간 매장의 경우 출근 시간에 따라 work_date를 결정합니다.
+ * 야간 매장이 아닌 경우 항상 오늘 날짜를 반환합니다.
+ * 
+ * @param isNightShift 야간 매장 여부
+ * @param workStartHour 근무 시작 시간 (0-23)
+ * @param currentHour 현재 시간 (0-23, KST)
+ * @returns work_date (YYYY-MM-DD 형식)
+ */
+export function calculateWorkDate(
+  isNightShift: boolean,
+  workStartHour: number,
+  currentHour: number
+): string {
+  // 일반 매장인 경우 항상 오늘 날짜
+  if (!isNightShift) {
+    return getTodayDateKST()
+  }
 
+  // 야간 매장인 경우
+  // 현재 시간이 work_start_hour 이전이면 어제 날짜 (날짜 경계를 넘은 경우)
+  // 현재 시간이 work_start_hour 이후면 오늘 날짜
+  if (currentHour < workStartHour) {
+    return getYesterdayDateKST()
+  } else {
+    return getTodayDateKST()
+  }
+}
 
-
+/**
+ * 한국 시간대(KST) 기준으로 현재 시간(0-23)을 반환합니다.
+ */
+export function getCurrentHourKST(): number {
+  const now = new Date()
+  const kstOffset = 9 * 60 // 분 단위
+  const utc = now.getTime() + (now.getTimezoneOffset() * 60 * 1000)
+  const kst = new Date(utc + (kstOffset * 60 * 1000))
+  
+  return kst.getHours()
+}
 
 
 

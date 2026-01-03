@@ -29,15 +29,17 @@ export async function POST(request: NextRequest) {
     const today = getTodayDateKST()
     const yesterday = getYesterdayDateKST()
     
+    // 오늘 날짜로 먼저 검색
     let attendance = await supabase
       .from('attendance')
       .select('id, clock_out_at, store_id, work_date')
       .eq('user_id', user.id)
       .eq('store_id', store_id)
       .eq('work_date', today)
+      .is('clock_out_at', null) // 미퇴근 기록만
       .maybeSingle()
 
-    // 없으면 어제 날짜의 미퇴근 기록도 확인 (날짜 경계를 넘는 야간 근무 고려)
+    // 없으면 어제 날짜의 미퇴근 기록 확인 (날짜 경계를 넘는 야간 근무 고려)
     if (!attendance.data) {
       attendance = await supabase
         .from('attendance')
@@ -45,7 +47,20 @@ export async function POST(request: NextRequest) {
         .eq('user_id', user.id)
         .eq('store_id', store_id)
         .eq('work_date', yesterday)
-        .is('clock_out_at', null)
+        .is('clock_out_at', null) // 미퇴근 기록만
+        .maybeSingle()
+    }
+    
+    // 여전히 없으면 work_date와 관계없이 해당 매장의 미퇴근 기록 확인 (야간 매장 고려)
+    if (!attendance.data) {
+      attendance = await supabase
+        .from('attendance')
+        .select('id, clock_out_at, store_id, work_date')
+        .eq('user_id', user.id)
+        .eq('store_id', store_id)
+        .is('clock_out_at', null) // 미퇴근 기록만
+        .order('clock_in_at', { ascending: false }) // 최신 출근 기록 우선
+        .limit(1)
         .maybeSingle()
     }
 

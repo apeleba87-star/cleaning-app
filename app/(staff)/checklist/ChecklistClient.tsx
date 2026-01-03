@@ -78,18 +78,35 @@ export default function ChecklistClient() {
     console.log('Attendance Loading:', attendanceLoading)
 
     // 출근한 매장이 있으면 해당 매장들의 체크리스트만 조회
-    // work_date는 출근 날짜(오늘)로 자동 설정되므로 오늘 날짜의 체크리스트만 조회
     const today = getTodayDateKST() // 한국 시간대 기준 오늘 날짜
+    const yesterday = getYesterdayDateKST()
     
     console.log('Today (YYYY-MM-DD, KST):', today)
     console.log('Current time:', new Date().toISOString())
     
-    // 출근 중인 매장 목록 가져오기
+    // 출근 중인 매장 목록 및 work_date 가져오기
     let storeIdsToCheck: string[] = []
+    const storeWorkDates: Record<string, string> = {} // 매장별 work_date 매핑
     
     if (activeStoreIds && activeStoreIds.length > 0 && isClockedIn) {
-      storeIdsToCheck = activeStoreIds
+      // 출근 기록에서 각 매장의 work_date 조회
+      const { data: attendances } = await supabase
+        .from('attendance')
+        .select('store_id, work_date')
+        .eq('user_id', session.user.id)
+        .in('store_id', activeStoreIds)
+        .is('clock_out_at', null)
+        .or(`work_date.eq.${today},work_date.eq.${yesterday}`) // 오늘 또는 어제 날짜
+      
+      if (attendances) {
+        attendances.forEach((att: any) => {
+          storeIdsToCheck.push(att.store_id)
+          storeWorkDates[att.store_id] = att.work_date
+        })
+      }
+      
       console.log('✅ Using active store IDs:', storeIdsToCheck)
+      console.log('✅ Store work dates:', storeWorkDates)
     } else if (isClockedIn) {
       // 출근 중이지만 activeStoreIds가 없는 경우 - 모든 배정 매장 확인
       const { data: storeAssignments } = await supabase
@@ -98,6 +115,24 @@ export default function ChecklistClient() {
         .eq('user_id', session.user.id)
       
       storeIdsToCheck = storeAssignments?.map(sa => sa.store_id) || []
+      
+      // 출근 기록에서 work_date 조회
+      if (storeIdsToCheck.length > 0) {
+        const { data: attendances } = await supabase
+          .from('attendance')
+          .select('store_id, work_date')
+          .eq('user_id', session.user.id)
+          .in('store_id', storeIdsToCheck)
+          .is('clock_out_at', null)
+          .or(`work_date.eq.${today},work_date.eq.${yesterday}`)
+        
+        if (attendances) {
+          attendances.forEach((att: any) => {
+            storeWorkDates[att.store_id] = att.work_date
+          })
+        }
+      }
+      
       console.log('⚠️ Clocked in but no active stores - checking assigned stores:', storeIdsToCheck)
     } else {
       console.log('❌ Not clocked in - cannot load checklists')
@@ -131,12 +166,13 @@ export default function ChecklistClient() {
 
           console.log(`📋 Found ${templateChecklists.length} template(s) for store ${storeId}`)
 
-          // 2. 오늘 날짜로 이미 생성된 체크리스트 확인
+          // 2. 출근 기록의 work_date로 이미 생성된 체크리스트 확인
+          const workDateForStore = storeWorkDates[storeId] || today // 출근 기록의 work_date 사용, 없으면 today
           const { data: existingChecklists } = await supabase
             .from('checklist')
             .select('id, user_id, store_id')
             .eq('store_id', storeId)
-            .eq('work_date', today)
+            .eq('work_date', workDateForStore) // 출근 기록의 work_date 사용
             .eq('assigned_user_id', session.user.id)
 
           // clockInAction과 동일한 방식으로 중복 체크
@@ -144,7 +180,7 @@ export default function ChecklistClient() {
             (existingChecklists || []).map((c: any) => c.user_id + '_' + c.store_id)
           )
 
-          // 3. 오늘 날짜로 체크리스트 생성 (템플릿 기반, 중복 체크)
+          // 3. 출근 기록의 work_date로 체크리스트 생성 (템플릿 기반, 중복 체크)
           const checklistsToCreate = templateChecklists
             .filter((template: any) => {
               const templateKey = template.user_id + '_' + template.store_id
@@ -165,7 +201,7 @@ export default function ChecklistClient() {
               note: template.note,
               requires_photos: template.requires_photos || false,
               review_status: 'pending' as const,
-              work_date: today, // 오늘 날짜로 설정
+              work_date: workDateForStore, // 출근 기록의 work_date 사용 (야간 매장 고려)
             }))
 
           console.log(`📝 Checklists to create for store ${storeId}:`, checklistsToCreate.length)
@@ -203,7 +239,7 @@ export default function ChecklistClient() {
       }
     }
 
-    // 오늘 날짜의 체크리스트 로드
+    // 출근 기록의 work_date에 해당하는 체크리스트 로드
     let todayQuery = supabase
       .from('checklist')
       .select(`
@@ -215,11 +251,22 @@ export default function ChecklistClient() {
       `)
 
     if (storeIdsToCheck.length > 0) {
-      todayQuery = todayQuery
-        .in('store_id', storeIdsToCheck)
-        .eq('work_date', today) // 오늘 날짜의 체크리스트만
-        .eq('assigned_user_id', session.user.id) // 본인에게 배정된 체크리스트만
-      console.log('✅ Filtering by store IDs and today:', storeIdsToCheck, today)
+      // 각 매장의 work_date에 해당하는 체크리스트 조회
+      const workDates = Object.values(storeWorkDates).filter((date, index, self) => self.indexOf(date) === index)
+      if (workDates.length > 0) {
+        todayQuery = todayQuery
+          .in('store_id', storeIdsToCheck)
+          .in('work_date', workDates) // 출근 기록의 work_date들
+          .eq('assigned_user_id', session.user.id) // 본인에게 배정된 체크리스트만
+        console.log('✅ Filtering by store IDs and work dates:', storeIdsToCheck, workDates)
+      } else {
+        // work_date가 없는 경우 오늘/어제 날짜로 조회 (하위 호환성)
+        todayQuery = todayQuery
+          .in('store_id', storeIdsToCheck)
+          .or(`work_date.eq.${today},work_date.eq.${yesterday}`)
+          .eq('assigned_user_id', session.user.id)
+        console.log('✅ Filtering by store IDs and today/yesterday (fallback):', storeIdsToCheck)
+      }
     }
 
     const { data: todayData, error: todayError } = await todayQuery.order('created_at', { ascending: false })
