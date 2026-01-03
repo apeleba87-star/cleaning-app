@@ -358,13 +358,14 @@ export default function MobileDashboardPage() {
             .eq('user_id', session.user.id)
           .eq('work_date', today)
 
-        // 어제 날짜의 미퇴근 기록도 조회 (날짜 경계를 넘는 야간 근무 고려)
+        // 어제 날짜의 출근 기록도 조회 (날짜 경계를 넘는 야간 근무 고려, 퇴근 완료 포함)
         const { data: yesterdayAttendance, error: yesterdayAttendanceError } = await supabase
             .from('attendance')
             .select('store_id, clock_out_at, work_date, attendance_type')
             .eq('user_id', session.user.id)
           .eq('work_date', yesterday)
-          .is('clock_out_at', null)
+          .order('clock_in_at', { ascending: false })
+          .limit(10) // 최근 10개만 조회 (성능 최적화)
 
         if (todayAttendanceError || yesterdayAttendanceError) {
           console.error('Error loading attendance:', todayAttendanceError || yesterdayAttendanceError)
@@ -385,12 +386,18 @@ export default function MobileDashboardPage() {
           })
         }
         
-        // 어제 날짜의 미퇴근 기록 처리 (오늘 출근 기록이 없는 경우에만)
+        // 어제 날짜의 출근 기록 처리 (오늘 출근 기록이 없는 경우에만)
         if (yesterdayAttendance) {
           yesterdayAttendance.forEach((attendance: any) => {
-            // 오늘 날짜로 이미 처리된 매장이 아니고, 미퇴근인 경우만 처리
-            if (!attendanceMap.has(attendance.store_id) && !attendance.clock_out_at) {
-              attendanceMap.set(attendance.store_id, { status: 'clocked_in', workDate: attendance.work_date, attendanceType: attendance.attendance_type || null })
+            // 오늘 날짜로 이미 처리된 매장이 아니면 처리
+            if (!attendanceMap.has(attendance.store_id)) {
+              if (attendance.clock_out_at) {
+                // 퇴근 완료된 기록
+                attendanceMap.set(attendance.store_id, { status: 'clocked_out', workDate: attendance.work_date, attendanceType: attendance.attendance_type || null })
+              } else {
+                // 미퇴근 기록
+                attendanceMap.set(attendance.store_id, { status: 'clocked_in', workDate: attendance.work_date, attendanceType: attendance.attendance_type || null })
+              }
             }
           })
         }
