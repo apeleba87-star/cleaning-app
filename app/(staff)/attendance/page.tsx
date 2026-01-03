@@ -215,11 +215,26 @@ export default function AttendancePage() {
       .limit(10) // 최근 10개만 조회 (성능 최적화)
 
     const queryError = todayError || yesterdayError
-    const data = [...(todayData || []), ...(yesterdayData || [])]
+    const allData = [...(todayData || []), ...(yesterdayData || [])]
 
     if (queryError) {
       console.error('Error loading attendance:', queryError)
     }
+
+    // 중복 제거: 같은 id를 가진 기록은 하나만 유지 (최신 데이터 우선)
+    const uniqueDataMap = new Map<string, any>()
+    allData.forEach((item: any) => {
+      if (!uniqueDataMap.has(item.id)) {
+        uniqueDataMap.set(item.id, item)
+      } else {
+        // 이미 있는 경우, updated_at이 더 최신인 것으로 교체
+        const existing = uniqueDataMap.get(item.id)
+        if (item.updated_at > existing.updated_at) {
+          uniqueDataMap.set(item.id, item)
+        }
+      }
+    })
+    const data = Array.from(uniqueDataMap.values())
 
     // 타입 변환: stores가 배열이면 첫 번째 요소 사용
     const transformedData: AttendanceWithStore[] = (data || []).map((item: any): AttendanceWithStore => {
@@ -329,7 +344,10 @@ export default function AttendancePage() {
       console.log('Clock-out successful:', result.data)
       setError(null)
       
-      // 즉시 로컬 상태 업데이트 (새로고침 없이 UI 반영)
+      // 퇴근 정보 다시 로드 (최신 데이터로 동기화) - 먼저 로드하여 정확한 데이터 반영
+      await loadTodayAttendance()
+      
+      // 추가로 로컬 상태 업데이트 (이중 확인)
       const clockOutTime = (result.data as any)?.clock_out_at || new Date().toISOString()
       setTodayAttendances(prev => 
         prev.map(attendance => 
@@ -338,9 +356,6 @@ export default function AttendancePage() {
             : attendance
         )
       )
-      
-      // 퇴근 정보 다시 로드 (최신 데이터로 동기화)
-      await loadTodayAttendance()
       // Context도 refresh하여 다른 페이지들이 최신 데이터를 받도록 함
       refreshAttendanceContext()
       
