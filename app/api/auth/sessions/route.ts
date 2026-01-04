@@ -65,6 +65,7 @@ export async function POST(request: NextRequest) {
 
     // 역할별 제한 확인
     const limit = ROLE_SESSION_LIMITS[user.role]
+    let sessionReplaced = false
     if (limit !== undefined) {
       // 현재 활성 세션 수 조회
       const { data: activeSessions, error: countError } = await supabase
@@ -94,6 +95,7 @@ export async function POST(request: NextRequest) {
             .from('user_sessions')
             .delete()
             .eq('id', oldestSessions[0].id)
+          sessionReplaced = true // 기존 세션 삭제됨
         } else {
           return NextResponse.json({
             error: `동시 접속 제한에 도달했습니다. (최대 ${limit}명)`,
@@ -153,6 +155,7 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({
           success: true,
           data: updatedSession,
+          sessionReplaced: false, // 업데이트된 경우는 기존 세션 삭제 없음
         })
       }
       throw new Error(`세션 생성 실패: ${insertError.message}`)
@@ -161,6 +164,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       success: true,
       data: newSession,
+      sessionReplaced, // 기존 세션이 삭제되었는지 여부
     })
   } catch (error: any) {
     return handleApiError(error)

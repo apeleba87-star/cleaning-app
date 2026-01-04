@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import { getTodayDateKST } from '@/lib/utils/date'
+import { getTodayDateKST, getYesterdayDateKST } from '@/lib/utils/date'
 import Link from 'next/link'
 
 export type MissionId = 
@@ -177,28 +177,33 @@ export default function QuickStartGuide({ userId }: QuickStartGuideProps) {
 
     const supabase = createClient()
     const today = getTodayDateKST()
+    const yesterday = getYesterdayDateKST()
+
+    // 활성 출근 기록 조회 (야간 매장 대응)
+    const { data: activeAttendances } = await supabase
+      .from('attendance')
+      .select('id, work_date')
+      .eq('user_id', userId)
+      .in('work_date', [today, yesterday])
+      .is('clock_out_at', null)
 
     // 1. 관리시작 확인 - clock_in_at이 존재하면 관리시작 완료
-    const { data: attendance } = await supabase
-      .from('attendance')
-      .select('id')
-      .eq('user_id', userId)
-      .eq('work_date', today)
-      .not('clock_in_at', 'is', null)
-      .maybeSingle()
-
-    if (attendance) {
+    if (activeAttendances && activeAttendances.length > 0) {
       saveMissionCompletion('start_management', true)
     }
+
+    // 활성 출근 기록의 work_date 목록 (체크리스트 조회용)
+    const activeWorkDates = activeAttendances?.map(a => a.work_date) || []
+    // 활성 출근 기록이 없으면 today와 yesterday 모두 확인
+    const workDatesToCheck = activeWorkDates.length > 0 ? activeWorkDates : [today, yesterday]
 
     // 2. 체크리스트 확인 - 체크리스트 완료 확인
     // completed_at이 있거나, 모든 항목이 완료된 체크리스트가 있는지 확인
     const { data: checklists } = await supabase
       .from('checklist')
-      .select('id, items, completed_at')
+      .select('id, items, completed_at, work_date')
       .eq('assigned_user_id', userId)
-      .eq('work_date', today)
-      .limit(10)
+      .in('work_date', workDatesToCheck)
 
     if (checklists && checklists.length > 0) {
       // completed_at이 있는 체크리스트가 있으면 완료
@@ -216,10 +221,7 @@ export default function QuickStartGuide({ userId }: QuickStartGuideProps) {
           let completedItems = 0
 
           cl.items.forEach((item: any) => {
-            if (!item.area || !item.area.trim()) {
-              return
-            }
-
+            // area가 없어도 카운트 (area는 선택사항일 수 있음)
             const itemType = item.type || 'check'
 
             if (itemType === 'check') {
@@ -248,6 +250,8 @@ export default function QuickStartGuide({ userId }: QuickStartGuideProps) {
             }
           })
 
+          // totalItems가 0이면 체크리스트가 비어있는 것으로 간주하고 완료로 처리하지 않음
+          // 하지만 체크리스트가 존재하고 items 배열이 있으면 완료 여부 확인
           return totalItems > 0 && completedItems === totalItems
         })
       }
@@ -260,12 +264,17 @@ export default function QuickStartGuide({ userId }: QuickStartGuideProps) {
     // 3. 요청란 확인 - supplies 페이지 방문은 pathname으로 체크
     // (페이지 방문은 별도로 처리)
 
-    // 4. 제품 입고 사진 확인
+    // 4. 제품 입고 사진 확인 (활성 출근 기록이 있으면 해당 날짜부터, 없으면 오늘부터)
+    // 가장 이른 work_date 찾기
+    const earliestWorkDate = activeWorkDates.length > 0 
+      ? activeWorkDates.sort()[0]  // 날짜 문자열은 정렬 가능 (YYYY-MM-DD 형식)
+      : today
+    const productPhotoStartDate = `${earliestWorkDate}T00:00:00`
     const { data: productPhoto } = await supabase
       .from('product_photos')
       .select('id')
       .eq('user_id', userId)
-      .gte('created_at', `${today}T00:00:00`)
+      .gte('created_at', productPhotoStartDate)
       .limit(1)
       .maybeSingle()
 
@@ -273,12 +282,13 @@ export default function QuickStartGuide({ userId }: QuickStartGuideProps) {
       saveMissionCompletion('product_photos', true)
     }
 
-    // 5. 매장 문제 보고 확인
+    // 5. 매장 문제 보고 확인 (활성 출근 기록이 있으면 해당 날짜부터, 없으면 오늘부터)
+    const issueStartDate = `${earliestWorkDate}T00:00:00`
     const { data: issue } = await supabase
       .from('issues')
       .select('id')
       .eq('user_id', userId)
-      .gte('created_at', `${today}T00:00:00`)
+      .gte('created_at', issueStartDate)
       .limit(1)
       .maybeSingle()
 
@@ -286,12 +296,13 @@ export default function QuickStartGuide({ userId }: QuickStartGuideProps) {
       saveMissionCompletion('store_issues', true)
     }
 
-    // 6. 물품 요청 확인
+    // 6. 물품 요청 확인 (활성 출근 기록이 있으면 해당 날짜부터, 없으면 오늘부터)
+    const supplyRequestStartDate = `${earliestWorkDate}T00:00:00`
     const { data: supplyRequest } = await supabase
       .from('supply_requests')
       .select('id')
       .eq('user_id', userId)
-      .gte('created_at', `${today}T00:00:00`)
+      .gte('created_at', supplyRequestStartDate)
       .limit(1)
       .maybeSingle()
 

@@ -10,6 +10,7 @@ import { clockInAction, clockOutAction } from '../attendance/actions'
 import { GPSLocation } from '@/types/db'
 import { getTodayDateKST, getYesterdayDateKST, getCurrentHourKST } from '@/lib/utils/date'
 import QuickStartGuide from '@/components/staff/QuickStartGuide'
+import { useToast } from '@/components/Toast'
 
 interface StoreWithAssignment {
   id: string
@@ -58,6 +59,7 @@ type WorkHistoryTab = 'today' | 'weekly'
 
 export default function MobileDashboardPage() {
   const router = useRouter()
+  const { showToast, ToastContainer } = useToast()
   const [user, setUser] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [currentTime, setCurrentTime] = useState(new Date())
@@ -112,6 +114,17 @@ export default function MobileDashboardPage() {
     }, 1000)
     return () => clearInterval(timer)
   }, [])
+
+  // 세션 교체 알림 확인
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const sessionReplaced = localStorage.getItem('sessionReplaced')
+      if (sessionReplaced === 'true') {
+        showToast('동시 접속 제한으로 인해 기존 세션이 종료되었습니다. 다른 기기에서 로그인하셨다면 해당 기기에서 로그아웃되었습니다.', 'info', 5000)
+        localStorage.removeItem('sessionReplaced')
+      }
+    }
+  }, [showToast])
 
   const getKoreanDayName = useCallback((dayIndex: number): string => {
     const days = ['일', '월', '화', '수', '목', '금', '토']
@@ -1273,7 +1286,9 @@ export default function MobileDashboardPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 pb-16 md:pb-0">
+    <>
+      <ToastContainer />
+      <div className="min-h-screen bg-gray-50 pb-16 md:pb-0">
       {/* 헤더 - 반응형 */}
       <div className="bg-white border-b border-gray-200 px-3 sm:px-4 py-3">
         <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2">
@@ -2296,5 +2311,6 @@ export default function MobileDashboardPage() {
         </div>
       )}
     </div>
+    </>
   )
 }

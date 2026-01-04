@@ -3,8 +3,10 @@
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { CleaningPhoto, Checklist } from '@/types/db'
+import { useToast } from '@/components/Toast'
 
 export default function ReviewsPage() {
+  const { showToast, ToastContainer } = useToast()
   const [activeTab, setActiveTab] = useState<'photos' | 'checklists'>('photos')
   const [photos, setPhotos] = useState<CleaningPhoto[]>([])
   const [checklists, setChecklists] = useState<Checklist[]>([])
@@ -18,6 +20,17 @@ export default function ReviewsPage() {
     read_at: string | null
   }>>([])
   const [showAnnouncementModal, setShowAnnouncementModal] = useState<string | null>(null)
+
+  // 세션 교체 알림 확인
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const sessionReplaced = localStorage.getItem('sessionReplaced')
+      if (sessionReplaced === 'true') {
+        showToast('동시 접속 제한으로 인해 기존 세션이 종료되었습니다. 다른 기기에서 로그인하셨다면 해당 기기에서 로그아웃되었습니다.', 'info', 5000)
+        localStorage.removeItem('sessionReplaced')
+      }
+    }
+  }, [showToast])
 
   useEffect(() => {
     loadAnnouncements()
@@ -330,6 +343,7 @@ export default function ReviewsPage() {
           </div>
         </div>
       )}
+      <ToastContainer />
     </div>
   )
 }

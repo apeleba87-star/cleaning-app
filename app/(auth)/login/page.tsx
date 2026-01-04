@@ -142,6 +142,13 @@ export default function LoginPage() {
                 setLoading(false)
                 return
               }
+
+              // 기존 세션이 삭제된 경우 URL 파라미터로 전달
+              if (sessionResult.sessionReplaced) {
+                if (typeof window !== 'undefined') {
+                  localStorage.setItem('sessionReplaced', 'true')
+                }
+              }
             } catch (sessionError: any) {
               console.error('Session creation error:', sessionError)
               // 세션 생성 실패해도 로그인은 진행 (오류 로그만 남김)

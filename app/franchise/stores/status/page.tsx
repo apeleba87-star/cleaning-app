@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import Link from 'next/link'
 import { uploadPhoto } from '@/lib/supabase/upload'
 import { getTodayDateKST } from '@/lib/utils/date'
+import { useToast } from '@/components/Toast'
 
 interface StoreStatus {
   store_id: string
@@ -105,6 +106,7 @@ interface InventoryPhoto {
 }
 
 export default function FranchiseStoresStatusPage() {
+  const { showToast, ToastContainer } = useToast()
   const [storeStatuses, setStoreStatuses] = useState<StoreStatus[]>([])
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState<Set<string>>(new Set())
@@ -249,6 +251,17 @@ export default function FranchiseStoresStatusPage() {
     const hour = now.getHours()
     return hour >= 8 && hour < 23
   }
+
+  // 세션 교체 알림 확인
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const sessionReplaced = localStorage.getItem('sessionReplaced')
+      if (sessionReplaced === 'true') {
+        showToast('동시 접속 제한으로 인해 기존 세션이 종료되었습니다. 다른 기기에서 로그인하셨다면 해당 기기에서 로그아웃되었습니다.', 'info', 5000)
+        localStorage.removeItem('sessionReplaced')
+      }
+    }
+  }, [showToast])
 
   useEffect(() => {
     // 초기 로드 시 로컬 스토리지에서 확인된 요청 로드
@@ -4771,6 +4784,7 @@ export default function FranchiseStoresStatusPage() {
           </div>
         </div>
       )}
+      <ToastContainer />
     </div>
   )
 }

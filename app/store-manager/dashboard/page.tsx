@@ -6,6 +6,7 @@ import Image from 'next/image'
 import { getTodayDateKST } from '@/lib/utils/date'
 import RequestForm from './RequestForm'
 import { AttendanceCalendar } from '@/components/AttendanceCalendar'
+import { useToast } from '@/components/Toast'
 
 interface StoreStatus {
   store_id: string
@@ -46,6 +47,7 @@ interface PhotoData {
 }
 
 export default function StoreManagerDashboardPage() {
+  const { showToast, ToastContainer } = useToast()
   const [storeStatuses, setStoreStatuses] = useState<StoreStatus[]>([])
   const [loading, setLoading] = useState(true)
   const [loadingPhotoData, setLoadingPhotoData] = useState(false)
@@ -2716,6 +2718,7 @@ export default function StoreManagerDashboardPage() {
           </div>
         </div>
       )}
+      <ToastContainer />
     </div>
   )
 }
