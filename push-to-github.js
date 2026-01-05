@@ -13,22 +13,16 @@ try {
   console.log('✅ 완료\n');
 
   console.log('[3/4] 커밋 생성...');
-  const commitMessage = `feat: 미관리 매장 확인 기능 개선 및 모바일 최적화
+  const commitMessage = `feat: 야간매장 관리일 로직 개선 및 UI 개선
 
-- 네비게이션 라벨을 '미관리 매장 확인'으로 변경 및 대시보드 옆으로 이동
-- 페이지 제목 및 설명 문구 개선
-- 야간 매장 집계 완료 시 '야간 매장 집계 완료' 텍스트 표시
-- API에 total_night_stores 필드 추가
-- 대시보드 섹션 텍스트 변경
-- 모바일/태블릿 반응형 UI 최적화
-- 모바일 햄버거 메뉴 구현 (왼쪽 슬라이드)
-- 2025년 최신 UI 트렌드 적용 (그라데이션, Glassmorphism, 부드러운 애니메이션)
-- product-search 페이지 타입 에러 수정
-- financial-summary API 타입 에러 수정 (todaySalaryUsersWithStatus 사용)
-- stores/status API 타입 에러 수정 (problemReportsError 제거)
-- TodayTasksWrapperClient 타입 에러 수정 (loadFinancialData 함수 추가)
-- FinancialDataContext 타입 정의 업데이트 (subcontract_amount, payment_id, role 필드 추가)
-- Vercel Cron Jobs 통합: 2개의 Cron Job을 1개로 통합하여 플랜 제한 해결`;
+- 야간매장 관리일 범위 판단 함수 추가 (isWithinManagementPeriod, calculateWorkDateForNightShift, isManagementDay)
+- calculateWorkDate 함수에 workEndHour 파라미터 추가
+- 직원앱에서 야간매장 관리일 표시 개선 (관리일 범위 밖이어도 오늘이 관리일이면 표시)
+- 야간매장 관리시작 시간 이전 클릭 시 확인 모달 추가
+- 요일 표시를 월요일 기준으로 정렬
+- 빠른 지출 등록 시 금액 저장 오류 수정 (천 단위 구분 쉼표 처리)
+- 업체관리자 대시보드 야간매장 상태 표시 로직 추가
+- 직원앱에 야간매장 배지 및 관리 시작 시간 표시 추가`;
   execSync(`git commit -m "${commitMessage}"`, { stdio: 'inherit' });
   console.log('✅ 완료\n');
 

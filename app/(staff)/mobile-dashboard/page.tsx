@@ -86,6 +86,8 @@ export default function MobileDashboardPage() {
   const [clockingOut, setClockingOut] = useState<string | null>(null)
   // 경고 메시지
   const [warningMessage, setWarningMessage] = useState<{ storeId: string; message: string; checklistCount: number; requestCount: number } | null>(null)
+  // 야간매장 관리시작 확인 모달
+  const [showNightShiftConfirmModal, setShowNightShiftConfirmModal] = useState<{ storeId: string; storeName: string; workStartHour: number } | null>(null)
   // 공지사항
   const [announcements, setAnnouncements] = useState<Array<{
     id: string
@@ -1451,14 +1453,13 @@ export default function MobileDashboardPage() {
                     boxTextColor = 'text-blue-700'
                   }
 
-                  const handleClockIn = async (e: React.MouseEvent) => {
-                    e.preventDefault()
-                    e.stopPropagation()
+                  // 실제 출근 처리 함수
+                  const performClockIn = async (targetStore: StoreWithAssignment) => {
                     if (!location) {
                       alert('위치 정보를 가져올 수 없습니다.')
                       return
                     }
-                    const result = await clockInAction(store.id, location)
+                    const result = await clockInAction(targetStore.id, location)
                     if (result.success && result.data) {
                       // 출근 상태를 즉시 업데이트 (출근 기록의 work_date 사용)
                       const attendanceData = result.data as { work_date?: string }
@@ -1466,16 +1467,16 @@ export default function MobileDashboardPage() {
                       
                       // 출근 기록의 work_date 기준으로 isWorkDay 재계산
                       const updatedIsWorkDay = isTodayWorkDay(
-                        store.management_days,
+                        targetStore.management_days,
                         workDate, // 출근 기록의 work_date
-                        store.is_night_shift,
-                        store.work_start_hour,
-                        store.work_end_hour
+                        targetStore.is_night_shift,
+                        targetStore.work_start_hour,
+                        targetStore.work_end_hour
                       )
                       
                       setStores((prevStores) =>
                         prevStores.map((s) =>
-                          s.id === store.id
+                          s.id === targetStore.id
                             ? {
                                 ...s,
                                 attendanceStatus: 'clocked_in' as const,
@@ -1490,12 +1491,40 @@ export default function MobileDashboardPage() {
                       supabase.auth.getSession().then(({ data: { session } }) => {
                         if (session) {
                           // 체크리스트 진행율 다시 로드 (출근일 기준)
-                          loadChecklistProgressForStore(store.id, workDate, session.user.id)
+                          loadChecklistProgressForStore(targetStore.id, workDate, session.user.id)
                         }
                       })
                     } else {
                       alert(result.error || '관리시작 처리에 실패했습니다.')
                     }
+                  }
+
+                  const handleClockIn = async (e: React.MouseEvent) => {
+                    e.preventDefault()
+                    e.stopPropagation()
+                    if (!location) {
+                      alert('위치 정보를 가져올 수 없습니다.')
+                      return
+                    }
+                    
+                    // 야간매장이고 work_start_hour 이전인지 확인
+                    if (store.is_night_shift && 
+                        store.work_start_hour !== null && 
+                        store.work_start_hour !== undefined) {
+                      const currentHour = getCurrentHourKST()
+                      if (currentHour < store.work_start_hour) {
+                        // 확인 모달 표시
+                        setShowNightShiftConfirmModal({
+                          storeId: store.id,
+                          storeName: store.name,
+                          workStartHour: store.work_start_hour
+                        })
+                        return
+                      }
+                    }
+                    
+                    // 일반 매장이거나 관리 시작 시간 이후면 바로 출근 처리
+                    await performClockIn(store)
                   }
 
                   const handleClockOut = async (e: React.MouseEvent) => {
@@ -1577,6 +1606,11 @@ export default function MobileDashboardPage() {
                             }`}
                           ></div>
                           <span className={`font-medium text-sm sm:text-base truncate ${boxTextColor}`}>{store.name}</span>
+                          {store.is_night_shift && (
+                            <span className="px-1.5 py-0.5 text-xs font-medium bg-purple-100 text-purple-700 rounded flex-shrink-0">
+                              야간
+                            </span>
+                          )}
                         </div>
                         {store.management_days && (() => {
                           // 요일을 월요일 기준으로 정렬
@@ -1587,9 +1621,19 @@ export default function MobileDashboardPage() {
                             const bIndex = dayOrder.findIndex(day => b.includes(day))
                             return aIndex - bIndex
                           })
+                          // 야간매장 관리 시작 시간 표시
+                          const timeDisplay = store.is_night_shift && store.work_start_hour !== null && store.work_start_hour !== undefined
+                            ? `🕐 ${store.work_start_hour < 12 
+                                ? `오전 ${store.work_start_hour === 0 ? 12 : store.work_start_hour}시`
+                                : `오후 ${store.work_start_hour === 12 ? 12 : store.work_start_hour - 12}시`} 시작`
+                            : null
                           return (
-                            <div className={`text-xs ml-4 ${boxTextColor}`}>
-                              {sortedDays.join(',')}
+                            <div className={`text-xs ml-4 ${boxTextColor} flex items-center gap-2 flex-wrap`}>
+                              {timeDisplay && (
+                                <span className="text-purple-600 font-medium">{timeDisplay}</span>
+                              )}
+                              {timeDisplay && <span className="text-gray-400">|</span>}
+                              <span>{sortedDays.join(',')}</span>
                             </div>
                           )
                         })()}
@@ -2351,6 +2395,89 @@ export default function MobileDashboardPage() {
                   )}
                 </div>
               ))}
+          </div>
+        </div>
+      )}
+
+      {/* 야간매장 관리시작 확인 모달 */}
+      {showNightShiftConfirmModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full">
+            <h2 className="text-lg font-bold mb-4 text-gray-900">관리 시작 시간 안내</h2>
+            <p className="text-gray-700 mb-6">
+              관리 시작 시간은 {showNightShiftConfirmModal.workStartHour < 12 
+                ? `오전 ${showNightShiftConfirmModal.workStartHour === 0 ? 12 : showNightShiftConfirmModal.workStartHour}시`
+                : `오후 ${showNightShiftConfirmModal.workStartHour === 12 ? 12 : showNightShiftConfirmModal.workStartHour - 12}시`}입니다.
+              <br />
+              지금 관리를 시작하시겠습니까?
+            </p>
+            <div className="flex gap-3 justify-end">
+              <button
+                onClick={() => {
+                  setShowNightShiftConfirmModal(null)
+                }}
+                className="px-4 py-2 bg-gray-300 text-gray-700 rounded-md hover:bg-gray-400 transition-colors font-medium"
+              >
+                돌아가기
+              </button>
+              <button
+                onClick={async () => {
+                  const storeId = showNightShiftConfirmModal.storeId
+                  const targetStore = stores.find(s => s.id === storeId)
+                  if (!targetStore) {
+                    alert('매장 정보를 찾을 수 없습니다.')
+                    setShowNightShiftConfirmModal(null)
+                    return
+                  }
+                  setShowNightShiftConfirmModal(null)
+                  if (!location) {
+                    alert('위치 정보를 가져올 수 없습니다.')
+                    return
+                  }
+                  const result = await clockInAction(targetStore.id, location)
+                  if (result.success && result.data) {
+                    // 출근 상태를 즉시 업데이트 (출근 기록의 work_date 사용)
+                    const attendanceData = result.data as { work_date?: string }
+                    const workDate = attendanceData.work_date || getTodayDateKST()
+                    
+                    // 출근 기록의 work_date 기준으로 isWorkDay 재계산
+                    const updatedIsWorkDay = isTodayWorkDay(
+                      targetStore.management_days,
+                      workDate, // 출근 기록의 work_date
+                      targetStore.is_night_shift,
+                      targetStore.work_start_hour,
+                      targetStore.work_end_hour
+                    )
+                    
+                    setStores((prevStores) =>
+                      prevStores.map((s) =>
+                        s.id === targetStore.id
+                          ? {
+                              ...s,
+                              attendanceStatus: 'clocked_in' as const,
+                              attendanceWorkDate: workDate,
+                              isWorkDay: updatedIsWorkDay, // work_date 기준으로 재계산
+                            }
+                          : s
+                      )
+                    )
+                    // 출근 후 체크리스트 진행율 등 데이터 다시 로드
+                    const supabase = createClient()
+                    supabase.auth.getSession().then(({ data: { session } }) => {
+                      if (session) {
+                        // 체크리스트 진행율 다시 로드 (출근일 기준)
+                        loadChecklistProgressForStore(targetStore.id, workDate, session.user.id)
+                      }
+                    })
+                  } else {
+                    alert(result.error || '관리시작 처리에 실패했습니다.')
+                  }
+                }}
+                className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors font-medium"
+              >
+                관리시작
+              </button>
+            </div>
           </div>
         </div>
       )}
