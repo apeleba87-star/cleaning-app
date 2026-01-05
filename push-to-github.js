@@ -13,16 +13,15 @@ try {
   console.log('✅ 완료\n');
 
   console.log('[3/4] 커밋 생성...');
-  const commitMessage = `feat: 야간매장 관리일 로직 개선 및 UI 개선
+  const commitMessage = `feat: 재무 관리 페이지 모바일 최적화 및 UI 개선
 
-- 야간매장 관리일 범위 판단 함수 추가 (isWithinManagementPeriod, calculateWorkDateForNightShift, isManagementDay)
-- calculateWorkDate 함수에 workEndHour 파라미터 추가
-- 직원앱에서 야간매장 관리일 표시 개선 (관리일 범위 밖이어도 오늘이 관리일이면 표시)
-- 야간매장 관리시작 시간 이전 클릭 시 확인 모달 추가
-- 요일 표시를 월요일 기준으로 정렬
-- 빠른 지출 등록 시 금액 저장 오류 수정 (천 단위 구분 쉼표 처리)
-- 업체관리자 대시보드 야간매장 상태 표시 로직 추가
-- 직원앱에 야간매장 배지 및 관리 시작 시간 표시 추가`;
+- 수금/미수금 관리 페이지 모바일 UI 최적화 (테이블 → 카드 뷰)
+- 재무현황 페이지 모바일 UI 최적화 및 2025년 디자인 적용
+- 재무현황 상세 섹션 제목 가로 표시 수정 (세로 텍스트 문제 해결)
+- 수금/미수금 관리 버튼 설명 텍스트 추가 (모바일/데스크톱 반응형)
+- Glassmorphism 및 그라데이션 효과 적용
+- 야간매장 관리일 로직 개선 및 UI 개선
+- 직원앱 야간매장 배지 및 관리 시작 시간 표시 추가`;
   execSync(`git commit -m "${commitMessage}"`, { stdio: 'inherit' });
   console.log('✅ 완료\n');
 

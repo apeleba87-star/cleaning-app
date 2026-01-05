@@ -808,12 +808,18 @@ export default function ReceivablesPage() {
   }
 
   return (
-    <div className="max-w-6xl mx-auto">
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-bold">수금/미수금 관리</h1>
+    <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+      {/* 헤더 - 모바일 최적화 */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6 pt-4 sm:pt-6">
+        <div>
+          <h1 className="text-2xl sm:text-3xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+            수금/미수금 관리
+          </h1>
+          <p className="text-sm text-gray-500 mt-1 hidden sm:block">매장별 매출(청구) 및 수금 관리</p>
+        </div>
         <a
           href="/business/dashboard"
-          className="text-blue-600 hover:text-blue-800 text-sm"
+          className="text-blue-600 hover:text-blue-800 text-sm font-medium transition-colors flex items-center gap-1"
         >
           ← 대시보드로
         </a>
@@ -825,29 +831,32 @@ export default function ReceivablesPage() {
         </div>
       )}
 
-      <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-        <div className="flex justify-between items-center mb-4">
-          <div className="flex items-center space-x-4">
-            <label className="text-sm font-medium text-gray-700">
+      {/* 기간 선택 및 액션 버튼 - 모바일 최적화 */}
+      <div className="bg-gradient-to-br from-white via-blue-50/30 to-purple-50/30 backdrop-blur-sm rounded-2xl shadow-lg border border-white/20 p-4 sm:p-6 mb-6">
+        <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-4">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 w-full lg:w-auto">
+            <label className="text-sm font-semibold text-gray-700 whitespace-nowrap">
               기간 선택:
             </label>
             <input
               type="month"
               value={selectedPeriod}
               onChange={(e) => setSelectedPeriod(e.target.value)}
-              className="px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="px-4 py-2.5 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all bg-white/80 backdrop-blur-sm"
             />
           </div>
-          <div className="flex space-x-4">
+          <div className="flex flex-col sm:flex-row gap-4 w-full lg:w-auto">
             <div className="flex flex-col items-center">
               <button
                 onClick={handleAutoAddStores}
-                className="px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700"
+                className="w-full sm:w-auto px-4 py-3 bg-gradient-to-r from-purple-600 to-purple-700 text-white rounded-xl hover:from-purple-700 hover:to-purple-800 shadow-lg hover:shadow-xl transition-all duration-200 font-medium text-sm sm:text-base flex items-center justify-center gap-2 min-h-[48px]"
               >
-                + 매장 매출 자동 추가
+                <span className="text-lg">+</span>
+                <span className="hidden sm:inline">매장 매출 자동 추가</span>
+                <span className="sm:hidden">자동 추가</span>
               </button>
-              <span className="mt-1 text-xs text-gray-600 text-center max-w-[180px]">
-                매장별 청구금액과 납기일을<br />자동으로 계산하여 일괄 등록
+              <span className="mt-1.5 text-xs text-gray-600 text-center max-w-[200px] sm:max-w-none">
+                매장별 청구금액과 납기일을<br className="hidden sm:block" />자동으로 계산하여 일괄 등록
               </span>
             </div>
             <div className="flex flex-col items-center">
@@ -856,12 +865,14 @@ export default function ReceivablesPage() {
                   setShowRevenueForm(true)
                   resetRevenueForm()
                 }}
-                className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+                className="w-full sm:w-auto px-4 py-3 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-xl hover:from-blue-700 hover:to-blue-800 shadow-lg hover:shadow-xl transition-all duration-200 font-medium text-sm sm:text-base flex items-center justify-center gap-2 min-h-[48px]"
               >
-                + 신규 매출(청구) 등록
+                <span className="text-lg">+</span>
+                <span className="hidden sm:inline">신규 매출(청구) 등록</span>
+                <span className="sm:hidden">매출 등록</span>
               </button>
-              <span className="mt-1 text-xs text-gray-600 text-center max-w-[180px]">
-                개별 매장의 매출(청구)을<br />수동으로 등록
+              <span className="mt-1.5 text-xs text-gray-600 text-center max-w-[200px] sm:max-w-none">
+                개별 매장의 매출(청구)을<br className="hidden sm:block" />수동으로 등록
               </span>
             </div>
             <div className="flex flex-col items-center">
@@ -869,12 +880,13 @@ export default function ReceivablesPage() {
                 onClick={() => {
                   setShowReceiptForm(true)
                 }}
-                className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700"
+                className="w-full sm:w-auto px-4 py-3 bg-gradient-to-r from-green-600 to-green-700 text-white rounded-xl hover:from-green-700 hover:to-green-800 shadow-lg hover:shadow-xl transition-all duration-200 font-medium text-sm sm:text-base flex items-center justify-center gap-2 min-h-[48px]"
               >
-                + 수금 등록
+                <span className="text-lg">+</span>
+                <span>수금 등록</span>
               </button>
-              <span className="mt-1 text-xs text-gray-600 text-center max-w-[180px]">
-                등록된 매출에 대한<br />수금 내역을 등록
+              <span className="mt-1.5 text-xs text-gray-600 text-center max-w-[200px] sm:max-w-none">
+                등록된 매출에 대한<br className="hidden sm:block" />수금 내역을 등록
               </span>
             </div>
           </div>
@@ -1293,9 +1305,11 @@ export default function ReceivablesPage() {
         </div>
       )}
 
-      {/* 매장별 수금/미수금 현황 테이블 */}
-      <div className="bg-white rounded-lg shadow-md overflow-hidden">
-        <table className="min-w-full divide-y divide-gray-200">
+      {/* 매장별 수금/미수금 현황 - 모바일 카드, 데스크톱 테이블 */}
+      <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-lg border border-white/20 overflow-hidden">
+        {/* 데스크톱 테이블 */}
+        <div className="hidden lg:block overflow-x-auto">
+          <table className="min-w-full divide-y divide-gray-200">
           <thead className="bg-gray-50">
             <tr>
               <th 
@@ -1542,12 +1556,177 @@ export default function ReceivablesPage() {
             )}
           </tbody>
         </table>
+        </div>
+
+        {/* 모바일 카드 뷰 */}
+        <div className="lg:hidden p-4 space-y-4">
+          {receivables.length === 0 ? (
+            <div className="text-center py-8 text-gray-500">
+              {selectedPeriod ? `${selectedPeriod} 기간의 데이터가 없습니다.` : '데이터가 없습니다.'}
+            </div>
+          ) : (
+            sortedReceivables.map((receivable) => {
+              const isExpanded = expandedStores.has(receivable.store_id)
+              
+              let status: 'unregistered' | 'unpaid' | 'partial' | 'paid' | 'no_revenue'
+              if (receivable.total_revenue === 0) {
+                status = 'no_revenue'
+              } else if (receivable.total_received === 0) {
+                status = 'unregistered'
+              } else if (receivable.unpaid_amount === 0) {
+                status = 'paid'
+              } else {
+                status = 'partial'
+              }
+
+              return (
+                <div
+                  key={receivable.store_id}
+                  className={`bg-white rounded-xl shadow-md border-2 p-4 transition-all duration-200 ${
+                    status === 'unregistered' ? 'border-orange-200 bg-orange-50/50' :
+                    status === 'partial' ? 'border-yellow-200 bg-yellow-50/50' :
+                    status === 'paid' ? 'border-green-200 bg-green-50/50' :
+                    'border-gray-200'
+                  }`}
+                >
+                  <div className="flex items-start justify-between mb-3">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-1">
+                        <button
+                          onClick={() => {
+                            const newExpanded = new Set(expandedStores)
+                            if (isExpanded) {
+                              newExpanded.delete(receivable.store_id)
+                            } else {
+                              newExpanded.add(receivable.store_id)
+                            }
+                            setExpandedStores(newExpanded)
+                          }}
+                          className="text-gray-500 hover:text-gray-700 text-lg"
+                        >
+                          {isExpanded ? '▼' : '▶'}
+                        </button>
+                        <h3 className="font-semibold text-gray-900">{receivable.store_name}</h3>
+                      </div>
+                      {!receivable.unpaid_tracking_enabled && (
+                        <p className="text-xs text-gray-500 ml-6">(미수금 추적 비활성화)</p>
+                      )}
+                    </div>
+                    <div className="ml-2">
+                      {getStatusBadge(status)}
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3 ml-6">
+                    <div className="bg-blue-50/50 rounded-lg p-2">
+                      <p className="text-xs text-gray-600 mb-1">청구 건수</p>
+                      <p className="text-sm font-semibold text-gray-900">{receivable.revenue_count}건</p>
+                    </div>
+                    <div className="bg-purple-50/50 rounded-lg p-2">
+                      <p className="text-xs text-gray-600 mb-1">총 청구액</p>
+                      <p className="text-sm font-semibold text-gray-900">{formatCurrency(receivable.total_revenue)}</p>
+                    </div>
+                    <div className="bg-green-50/50 rounded-lg p-2">
+                      <p className="text-xs text-gray-600 mb-1">총 수금액</p>
+                      <p className="text-sm font-semibold text-gray-900">{formatCurrency(receivable.total_received)}</p>
+                    </div>
+                    <div className={`rounded-lg p-2 ${receivable.unpaid_amount > 0 ? 'bg-red-50/50' : 'bg-gray-50/50'}`}>
+                      <p className="text-xs text-gray-600 mb-1">미수금</p>
+                      <p className={`text-sm font-semibold ${receivable.unpaid_amount > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                        {formatCurrency(receivable.unpaid_amount)}
+                      </p>
+                    </div>
+                  </div>
+
+                  {isExpanded && receivable.revenues.length > 0 && (
+                    <div className="mt-4 pt-4 border-t border-gray-200 space-y-3">
+                      <h4 className="text-sm font-semibold text-gray-700 mb-2 ml-6">
+                        {receivable.store_name} - 매출 상세
+                      </h4>
+                      {receivable.revenues.map((revenue) => {
+                        const fullRevenue = revenues.find(r => r.id === revenue.id)
+                        let revenueStatus: 'unregistered' | 'unpaid' | 'partial' | 'paid' | 'no_revenue'
+                        if (revenue.amount === 0) {
+                          revenueStatus = 'no_revenue'
+                        } else if (revenue.received === 0) {
+                          revenueStatus = 'unregistered'
+                        } else if (revenue.unpaid === 0) {
+                          revenueStatus = 'paid'
+                        } else {
+                          revenueStatus = 'partial'
+                        }
+                        
+                        return (
+                          <div
+                            key={revenue.id}
+                            className={`ml-6 bg-white rounded-lg p-3 border ${
+                              revenueStatus === 'unregistered' ? 'border-orange-200 bg-orange-50/30' :
+                              revenueStatus === 'partial' ? 'border-yellow-200 bg-yellow-50/30' :
+                              revenueStatus === 'paid' ? 'border-green-200 bg-green-50/30' :
+                              'border-gray-200'
+                            }`}
+                          >
+                            <div className="flex items-center justify-between mb-2">
+                              <span className="text-sm font-medium text-gray-900">{revenue.service_period}</span>
+                              {getStatusBadge(revenueStatus)}
+                            </div>
+                            <div className="grid grid-cols-2 gap-2 text-xs">
+                              <div>
+                                <span className="text-gray-600">청구:</span>
+                                <span className="ml-1 font-semibold">{formatCurrency(revenue.amount)}</span>
+                              </div>
+                              <div>
+                                <span className="text-gray-600">수금:</span>
+                                <span className="ml-1 font-semibold">{formatCurrency(revenue.received)}</span>
+                              </div>
+                              <div>
+                                <span className="text-gray-600">납기일:</span>
+                                <span className="ml-1">{revenue.due_date ? revenue.due_date.split('T')[0] : (fullRevenue ? fullRevenue.due_date.split('T')[0] : '-')}</span>
+                              </div>
+                              <div>
+                                <span className="text-gray-600">미수:</span>
+                                <span className={`ml-1 font-semibold ${revenue.unpaid > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                                  {formatCurrency(revenue.unpaid)}
+                                </span>
+                              </div>
+                            </div>
+                            {fullRevenue && (
+                              <div className="flex gap-2 mt-3">
+                                <button
+                                  onClick={() => handleEditRevenue(fullRevenue)}
+                                  className="flex-1 px-3 py-1.5 bg-blue-500 text-white text-xs rounded-lg hover:bg-blue-600 transition-colors"
+                                >
+                                  수정
+                                </button>
+                                <button
+                                  onClick={() => handleDeleteRevenue(fullRevenue.id)}
+                                  className="flex-1 px-3 py-1.5 bg-red-500 text-white text-xs rounded-lg hover:bg-red-600 transition-colors"
+                                >
+                                  삭제
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )}
+                </div>
+              )
+            })
+          )}
+        </div>
       </div>
 
-      {/* 매출 목록 테이블 */}
-      <div className="bg-white rounded-lg shadow-md overflow-hidden mt-6">
-        <h2 className="text-lg font-semibold p-6 border-b border-gray-200">매출 목록</h2>
-        <table className="min-w-full divide-y divide-gray-200">
+      {/* 매출 목록 - 모바일 카드, 데스크톱 테이블 */}
+      <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-lg border border-white/20 overflow-hidden mt-6">
+        <h2 className="text-lg sm:text-xl font-semibold p-4 sm:p-6 border-b border-gray-200 bg-gradient-to-r from-blue-50 to-purple-50">
+          매출 목록
+        </h2>
+        
+        {/* 데스크톱 테이블 */}
+        <div className="hidden lg:block overflow-x-auto">
+          <table className="min-w-full divide-y divide-gray-200">
           <thead className="bg-gray-50">
             <tr>
               <th 
@@ -1724,6 +1903,108 @@ export default function ReceivablesPage() {
             </div>
           </div>
         )}
+        </div>
+
+        {/* 모바일 카드 뷰 */}
+        <div className="lg:hidden p-4 space-y-3">
+          {sortedRevenues.length === 0 ? (
+            <div className="text-center py-8 text-gray-500">
+              {selectedPeriod ? `${selectedPeriod} 기간의 매출 데이터가 없습니다.` : '매출 데이터가 없습니다.'}
+            </div>
+          ) : (
+            paginatedRevenues.map((revenue) => {
+              const revenueReceipts = receipts.filter(r => r.revenue_id === revenue.id)
+              const totalReceived = revenueReceipts.reduce((sum, r) => sum + r.amount, 0)
+              const unpaid = revenue.amount - totalReceived
+              
+              let revenueStatus: 'unregistered' | 'unpaid' | 'partial' | 'paid' | 'no_revenue'
+              if (revenue.amount === 0) {
+                revenueStatus = 'no_revenue'
+              } else if (totalReceived === 0) {
+                revenueStatus = 'unregistered'
+              } else if (unpaid === 0) {
+                revenueStatus = 'paid'
+              } else {
+                revenueStatus = 'partial'
+              }
+
+              return (
+                <div
+                  key={revenue.id}
+                  className={`bg-white rounded-xl shadow-md border-2 p-4 transition-all duration-200 ${
+                    revenueStatus === 'unregistered' ? 'border-orange-200 bg-orange-50/50' :
+                    revenueStatus === 'partial' ? 'border-yellow-200 bg-yellow-50/50' :
+                    revenueStatus === 'paid' ? 'border-green-200 bg-green-50/50' :
+                    'border-gray-200'
+                  }`}
+                >
+                  <div className="flex items-start justify-between mb-3">
+                    <div className="flex-1">
+                      <h3 className="font-semibold text-gray-900 mb-1">
+                        {(revenue as any).stores?.name || '-'}
+                      </h3>
+                      <p className="text-sm text-gray-600">{revenue.service_period}</p>
+                    </div>
+                    <div className="ml-2">
+                      {getStatusBadge(revenueStatus)}
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3 mb-3">
+                    <div className="bg-blue-50/50 rounded-lg p-2">
+                      <p className="text-xs text-gray-600 mb-1">청구 금액</p>
+                      <p className="text-sm font-semibold text-gray-900">{formatCurrency(revenue.amount)}</p>
+                    </div>
+                    <div className="bg-gray-50/50 rounded-lg p-2">
+                      <p className="text-xs text-gray-600 mb-1">납기일</p>
+                      <p className="text-sm font-semibold text-gray-900">{revenue.due_date.split('T')[0]}</p>
+                    </div>
+                  </div>
+
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => handleEditRevenue(revenue)}
+                      className="flex-1 px-3 py-2 bg-blue-500 text-white text-sm rounded-lg hover:bg-blue-600 transition-colors font-medium"
+                    >
+                      수정
+                    </button>
+                    <button
+                      onClick={() => handleDeleteRevenue(revenue.id)}
+                      className="flex-1 px-3 py-2 bg-red-500 text-white text-sm rounded-lg hover:bg-red-600 transition-colors font-medium"
+                    >
+                      삭제
+                    </button>
+                  </div>
+                </div>
+              )
+            })
+          )}
+
+          {/* 모바일 페이지네이션 */}
+          {revenueTotalPages > 1 && (
+            <div className="flex items-center justify-between pt-4 border-t border-gray-200">
+              <div className="text-sm text-gray-700">
+                {revenueStartIndex + 1} - {Math.min(revenueEndIndex, sortedRevenues.length)} / {sortedRevenues.length}건
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setRevenueCurrentPage(prev => Math.max(1, prev - 1))}
+                  disabled={revenueCurrentPage === 1}
+                  className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-100 transition-colors"
+                >
+                  이전
+                </button>
+                <button
+                  onClick={() => setRevenueCurrentPage(prev => Math.min(revenueTotalPages, prev + 1))}
+                  disabled={revenueCurrentPage === revenueTotalPages}
+                  className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-100 transition-colors"
+                >
+                  다음
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   )

@@ -996,7 +996,9 @@ export default function ExpenseDetailSection({ period, onRefresh }: ExpenseDetai
 
       {/* 필터 및 검색 */}
       <div className="flex justify-between items-center mb-4 flex-wrap gap-4">
-        <h2 className="text-xl font-semibold">지출 목록</h2>
+        <h2 className="text-xl sm:text-2xl font-semibold bg-gradient-to-r from-orange-600 to-red-600 bg-clip-text text-transparent">
+          지출 목록
+        </h2>
         <div className="flex gap-4 flex-wrap">
           <input
             type="text"

@@ -170,8 +170,10 @@ export default function RevenueDetailSection({ period, onRefresh }: RevenueDetai
 
   return (
     <div>
-      <div className="flex justify-between items-center mb-6">
-        <h2 className="text-xl font-semibold">매출 상세</h2>
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
+        <h2 className="text-xl sm:text-2xl font-semibold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+          매출 상세
+        </h2>
         <div className="flex gap-4">
           <input
             type="text"

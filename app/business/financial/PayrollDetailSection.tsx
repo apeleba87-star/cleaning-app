@@ -273,8 +273,10 @@ export default function PayrollDetailSection({ period, onRefresh }: PayrollDetai
 
   return (
     <div>
-      <div className="flex justify-between items-center mb-6">
-        <h2 className="text-xl font-semibold">인건비 상세</h2>
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
+        <h2 className="text-xl sm:text-2xl font-semibold bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">
+          인건비 상세
+        </h2>
         <div className="flex gap-4">
           <input
             type="text"

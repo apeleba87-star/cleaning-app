@@ -101,8 +101,10 @@ export default function ReceiptDetailSection({ period, onRefresh }: ReceiptDetai
 
   return (
     <div>
-      <div className="flex justify-between items-center mb-6">
-        <h2 className="text-xl font-semibold">수금 상세</h2>
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
+        <h2 className="text-xl sm:text-2xl font-semibold bg-gradient-to-r from-green-600 to-emerald-600 bg-clip-text text-transparent">
+          수금 상세
+        </h2>
         <input
           type="text"
           placeholder="매장명 검색..."
