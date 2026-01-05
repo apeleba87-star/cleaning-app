@@ -8,7 +8,7 @@ import { calculateChecklistProgress } from '@/lib/utils/checklist'
 import { GeoGuard } from '@/components/GeoGuard'
 import { clockInAction, clockOutAction } from '../attendance/actions'
 import { GPSLocation } from '@/types/db'
-import { getTodayDateKST, getYesterdayDateKST, getCurrentHourKST } from '@/lib/utils/date'
+import { getTodayDateKST, getYesterdayDateKST, getCurrentHourKST, isWithinManagementPeriod, calculateWorkDateForNightShift } from '@/lib/utils/date'
 import QuickStartGuide from '@/components/staff/QuickStartGuide'
 import { useToast } from '@/components/Toast'
 
@@ -134,28 +134,60 @@ export default function MobileDashboardPage() {
   const todayDayIndex = useMemo(() => currentTime.getDay(), [currentTime])
   const todayDayName = useMemo(() => getKoreanDayName(todayDayIndex), [getKoreanDayName, todayDayIndex])
 
-  const isTodayWorkDay = useCallback((managementDays: string | null, checkDate?: string | null, isNightShift?: boolean, workStartHour?: number | null): boolean => {
+  const isTodayWorkDay = useCallback((managementDays: string | null, checkDate?: string | null, isNightShift?: boolean, workStartHour?: number | null, workEndHour?: number | null): boolean => {
     if (!managementDays) return false
     
     // 출근 기록의 work_date가 있으면 해당 날짜 기준으로 체크
-    let dayNameToCheck = todayDayName
     if (checkDate) {
-      const checkDateObj = new Date(checkDate + 'T00:00:00')
+      const checkDateObj = new Date(checkDate + 'T00:00:00+09:00')
       const checkDayIndex = checkDateObj.getDay()
-      dayNameToCheck = getKoreanDayName(checkDayIndex)
-    } else if (isNightShift && workStartHour !== null && workStartHour !== undefined) {
-      // 출근 기록이 없고 야간 매장인 경우, 날짜 경계 고려
+      const dayNameToCheck = getKoreanDayName(checkDayIndex)
+      const days = managementDays.split(',').map(d => d.trim())
+      return days.includes(dayNameToCheck)
+    }
+    
+    // 출근 기록이 없는 경우
+    if (isNightShift && 
+        workStartHour !== null && workStartHour !== undefined && 
+        workEndHour !== null && workEndHour !== undefined) {
+      // 관리일 범위 내인지 확인
       const currentHour = getCurrentHourKST()
-      if (currentHour < workStartHour) {
-        // 현재 시간이 work_start_hour 이전이면 어제 날짜 확인
-        const yesterday = new Date()
-        yesterday.setDate(yesterday.getDate() - 1)
-        dayNameToCheck = getKoreanDayName(yesterday.getDay())
+      const isWithinPeriod = isWithinManagementPeriod(
+        true,
+        workStartHour,
+        workEndHour,
+        currentHour
+      )
+      
+      if (isWithinPeriod) {
+        // 관리일 범위 내: work_date 계산
+        const workDate = calculateWorkDateForNightShift(
+          true,
+          workStartHour,
+          workEndHour,
+          currentHour
+        )
+        const workDateObj = new Date(workDate + 'T00:00:00+09:00')
+        const dayNameToCheck = getKoreanDayName(workDateObj.getDay())
+        const days = managementDays.split(',').map(d => d.trim())
+        return days.includes(dayNameToCheck)
+      } else {
+        // 관리일 범위 밖: 오늘이 관리일인지만 확인
+        // work_start_hour 이전이면 오늘 날짜 기준으로 확인
+        if (currentHour < workStartHour) {
+          const days = managementDays.split(',').map(d => d.trim())
+          return days.includes(todayDayName)
+        } else {
+          // work_end_hour 이후: 다음 관리일 예정 여부 확인
+          const days = managementDays.split(',').map(d => d.trim())
+          return days.includes(todayDayName)
+        }
       }
     }
     
+    // 일반 매장 또는 야간매장 정보가 없는 경우
     const days = managementDays.split(',').map(d => d.trim())
-    return days.includes(dayNameToCheck)
+    return days.includes(todayDayName)
   }, [todayDayName, getKoreanDayName])
 
   const formatDate = useCallback((date: Date): string => {
@@ -440,7 +472,8 @@ export default function MobileDashboardPage() {
               store.management_days,
               attendanceWorkDate, // 출근 기록의 work_date
               store.is_night_shift,
-              store.work_start_hour
+              store.work_start_hour,
+              store.work_end_hour
             ) || isRescheduledAttendance // 출근일 변경 출근도 근무일로 처리
             
             return {
@@ -1436,7 +1469,8 @@ export default function MobileDashboardPage() {
                         store.management_days,
                         workDate, // 출근 기록의 work_date
                         store.is_night_shift,
-                        store.work_start_hour
+                        store.work_start_hour,
+                        store.work_end_hour
                       )
                       
                       setStores((prevStores) =>
@@ -1544,11 +1578,21 @@ export default function MobileDashboardPage() {
                           ></div>
                           <span className={`font-medium text-sm sm:text-base truncate ${boxTextColor}`}>{store.name}</span>
                         </div>
-                        {store.management_days && (
-                          <div className={`text-xs ml-4 ${boxTextColor}`}>
-                            {store.management_days}
-                          </div>
-                        )}
+                        {store.management_days && (() => {
+                          // 요일을 월요일 기준으로 정렬
+                          const dayOrder = ['월', '화', '수', '목', '금', '토', '일']
+                          const days = store.management_days.split(',').map(d => d.trim())
+                          const sortedDays = days.sort((a, b) => {
+                            const aIndex = dayOrder.findIndex(day => a.includes(day))
+                            const bIndex = dayOrder.findIndex(day => b.includes(day))
+                            return aIndex - bIndex
+                          })
+                          return (
+                            <div className={`text-xs ml-4 ${boxTextColor}`}>
+                              {sortedDays.join(',')}
+                            </div>
+                          )
+                        })()}
                           {/* 체크리스트 진행율 표시 (관리 중인 경우만) */}
                           {store.attendanceStatus === 'clocked_in' && checklistProgress[store.id] && (
                             <div className="mt-2 ml-4">

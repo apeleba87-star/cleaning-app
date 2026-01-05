@@ -232,7 +232,7 @@ export default function ExpenseDetailSection({ period, onRefresh }: ExpenseDetai
         body: JSON.stringify({
           date: quickDate,
           category: quickCategory,
-          amount: parseFloat(quickAmount),
+          amount: parseFloat(getNumericValue(quickAmount)),
           memo: finalMemo || null,
           store_id: quickStoreId || null, // 직접 입력 시에는 null
         }),

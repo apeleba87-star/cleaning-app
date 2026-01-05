@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { Store } from '@/types/db'
-import { getCurrentHourKST } from '@/lib/utils/date'
+import { getCurrentHourKST, isWithinManagementPeriod, calculateWorkDateForNightShift } from '@/lib/utils/date'
 
 interface StoreSelectorProps {
   selectedStoreId: string
@@ -132,13 +132,40 @@ export default function StoreSelector({ selectedStoreId: propSelectedStoreId, on
       
       // 야간 매장인 경우 날짜 경계 처리
       let checkDayName = todayDayName
-      if (store.is_night_shift && store.work_start_hour !== null && store.work_start_hour !== undefined) {
-        // 현재 시간이 work_start_hour 이전이면 어제 날짜 확인
-        if (currentHour < store.work_start_hour) {
-          checkDayName = yesterdayDayName
-          console.log(`🌙 야간 매장 ${store.name}: 현재 시간(${currentHour}시) < work_start_hour(${store.work_start_hour}시) → 어제(${yesterdayDayName}요일) 확인`)
+      let isManagementDay = false
+      
+      if (store.is_night_shift && 
+          store.work_start_hour !== null && store.work_start_hour !== undefined &&
+          store.work_end_hour !== null && store.work_end_hour !== undefined) {
+        // 관리일 범위 내인지 확인
+        const isWithinPeriod = isWithinManagementPeriod(
+          true,
+          store.work_start_hour,
+          store.work_end_hour,
+          currentHour
+        )
+        
+        if (isWithinPeriod) {
+          // 관리일 범위 내: work_date 계산
+          const workDate = calculateWorkDateForNightShift(
+            true,
+            store.work_start_hour,
+            store.work_end_hour,
+            currentHour
+          )
+          const workDateObj = new Date(workDate + 'T00:00:00+09:00')
+          checkDayName = dayNames[workDateObj.getDay()]
+          console.log(`🌙 야간 매장 ${store.name}: 관리일 범위 내 → work_date(${workDate}, ${checkDayName}요일) 확인`)
         } else {
-          console.log(`🌙 야간 매장 ${store.name}: 현재 시간(${currentHour}시) >= work_start_hour(${store.work_start_hour}시) → 오늘(${todayDayName}요일) 확인`)
+          // 관리일 범위 밖: 관리일 아님
+          console.log(`🌙 야간 매장 ${store.name}: 관리일 범위 밖 → 관리일 아님`)
+          if (showOnlyTodayManagement === true) {
+            return false // 필터링에서 제외
+          } else if (showOnlyTodayManagement === false) {
+            return true // 관리일이 아닌 매장으로 포함
+          } else {
+            return true // 모든 매장
+          }
         }
       }
       
@@ -148,7 +175,6 @@ export default function StoreSelector({ selectedStoreId: propSelectedStoreId, on
       const dayList = managementDays.split(',').map(d => d.trim())
       
       // 쉼표로 구분된 경우와 그렇지 않은 경우 모두 처리
-      let isManagementDay = false
       if (dayList.length > 1) {
         // "월,수,금" 형식
         isManagementDay = dayList.includes(checkDayName)

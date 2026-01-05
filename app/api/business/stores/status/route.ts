@@ -3,7 +3,7 @@ import { createServerSupabaseClient, getServerUser } from '@/lib/supabase/server
 import { handleApiError, UnauthorizedError, ForbiddenError } from '@/lib/errors'
 import { calculateChecklistProgress } from '@/lib/utils/checklist'
 import { createClient } from '@supabase/supabase-js'
-import { getTodayDateKST } from '@/lib/utils/date'
+import { getTodayDateKST, getCurrentHourKST, isWithinManagementPeriod, calculateWorkDateForNightShift, isManagementDay } from '@/lib/utils/date'
 
 export async function GET(request: NextRequest) {
   try {
@@ -45,7 +45,7 @@ export async function GET(request: NextRequest) {
     // 회사에 속한 모든 매장 조회
     const { data: stores, error: storesError } = await supabase
       .from('stores')
-      .select('id, name, address, management_days, updated_at')
+      .select('id, name, address, management_days, is_night_shift, work_start_hour, work_end_hour, updated_at')
       .eq('company_id', user.company_id)
       .is('deleted_at', null)
 
@@ -284,10 +284,66 @@ export async function GET(request: NextRequest) {
     const storeStatuses = await Promise.all(
       stores.map(async (store) => {
         try {
-        // 오늘이 출근일인지 확인
-        const isWorkDay = store.management_days
-          ? store.management_days.split(',').map((d) => d.trim()).includes(todayDayName)
-          : false
+        // 오늘이 출근일인지 확인 (야간매장 고려)
+        let isWorkDay = false
+        if (store.is_night_shift && 
+            store.work_start_hour !== null && 
+            store.work_end_hour !== null) {
+          const currentHour = getCurrentHourKST()
+          const isWithinPeriod = isWithinManagementPeriod(
+            true,
+            store.work_start_hour,
+            store.work_end_hour,
+            currentHour
+          )
+          
+          if (isWithinPeriod) {
+            // 관리일 범위 내: work_date 기준으로 요일 확인
+            const workDate = calculateWorkDateForNightShift(
+              true,
+              store.work_start_hour,
+              store.work_end_hour,
+              currentHour
+            )
+            isWorkDay = isManagementDay(
+              store.management_days,
+              true,
+              store.work_start_hour,
+              store.work_end_hour,
+              workDate
+            )
+          } else {
+            // 관리일 범위 밖
+            // work_end_hour 이후: 다음 관리일 예정 여부 확인
+            if (currentHour >= store.work_end_hour) {
+              // 오늘 날짜 기준으로 관리일인지 확인
+              isWorkDay = isManagementDay(
+                store.management_days,
+                true,
+                store.work_start_hour,
+                store.work_end_hour,
+                getTodayDateKST()
+              )
+            } else {
+              // work_start_hour 이전: 어제 날짜 기준으로 확인
+              const yesterday = new Date(koreaTime)
+              yesterday.setDate(yesterday.getDate() - 1)
+              const yesterdayDateKST = `${yesterday.getFullYear()}-${String(yesterday.getMonth() + 1).padStart(2, '0')}-${String(yesterday.getDate()).padStart(2, '0')}`
+              isWorkDay = isManagementDay(
+                store.management_days,
+                true,
+                store.work_start_hour,
+                store.work_end_hour,
+                yesterdayDateKST
+              )
+            }
+          }
+        } else {
+          // 일반 매장
+          isWorkDay = store.management_days
+            ? store.management_days.split(',').map((d) => d.trim()).includes(todayDayName)
+            : false
+        }
 
         // 배치 쿼리에서 가져온 배정된 직원 ID 목록 사용
         const assignedUserIds = assignsByStore.get(store.id) || []
@@ -680,6 +736,33 @@ export async function GET(request: NextRequest) {
 
         const hasProblem = storeProblemCount > 0 || vendingProblemCount > 0 || lostItemCount > 0
 
+        // 야간매장 상태 메시지 생성
+        let statusLabel = ''
+        if (store.is_night_shift && 
+            store.work_start_hour !== null && 
+            store.work_end_hour !== null) {
+          const currentHour = getCurrentHourKST()
+          const isWithinPeriod = isWithinManagementPeriod(
+            true,
+            store.work_start_hour,
+            store.work_end_hour,
+            currentHour
+          )
+          
+          if (isWithinPeriod && isWorkDay) {
+            statusLabel = '관리일 (관리 가능)'
+          } else if (!isWithinPeriod && currentHour < store.work_start_hour && isWorkDay) {
+            statusLabel = '오늘 오후부터 관리 시작 예정'
+          } else if (!isWithinPeriod && currentHour >= store.work_end_hour) {
+            // 관리 완료된 경우
+            if (attendanceStatus === 'clocked_out') {
+              statusLabel = '관리완료'
+            } else if (isWorkDay) {
+              statusLabel = '오늘이 관리일, 오후부터 시작'
+            }
+          }
+        }
+
         return {
           store_id: store.id,
           store_name: store.name,
@@ -687,6 +770,7 @@ export async function GET(request: NextRequest) {
           management_days: store.management_days,
           work_day: store.management_days, // 정렬을 위해 추가
           is_work_day: isWorkDay,
+          status_label: statusLabel, // 야간매장 상태 메시지
           attendance_status: attendanceStatus,
           clock_in_time: clockInTime,
           clock_out_time: clockOutTime,

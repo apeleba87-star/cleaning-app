@@ -12,6 +12,7 @@ interface StoreStatus {
   work_day: string | null
   is_work_day: boolean
   attendance_status: 'not_clocked_in' | 'clocked_in' | 'clocked_out'
+  status_label?: string | null // 야간매장 상태 메시지
   clock_in_time: string | null
   clock_out_time: string | null
   staff_name: string | null
@@ -345,6 +346,11 @@ export default function BusinessStoresStatusPage() {
         
         // getStatusLabel 함수를 먼저 정의해야 함
         const getStatusLabelForLog = (store: any): string => {
+          // 야간매장 상태 메시지가 있으면 우선 사용
+          if (store.status_label) {
+            return store.status_label
+          }
+          // 기존 로직
           if (!store.is_work_day) return '휴무'
           if (store.attendance_status === 'clocked_out') return '퇴근완료'
           if (store.attendance_status === 'clocked_in') return '출근중'
@@ -354,6 +360,7 @@ export default function BusinessStoresStatusPage() {
         data.data?.forEach((store: any) => {
           console.log(`\nStore: ${store.store_name} (${store.store_id})`)
           console.log('  - attendance_status:', store.attendance_status, `[${getStatusLabelForLog(store)}]`)
+          console.log('  - status_label:', store.status_label || '(없음)')
           console.log('  - is_work_day:', store.is_work_day)
           console.log('  - clock_in_time:', store.clock_in_time)
           console.log('  - clock_out_time:', store.clock_out_time)
@@ -1263,6 +1270,11 @@ export default function BusinessStoresStatusPage() {
   }
 
   const getStatusLabel = (status: StoreStatus): string => {
+    // 야간매장 상태 메시지가 있으면 우선 사용
+    if (status.status_label) {
+      return status.status_label
+    }
+    // 기존 로직 (일반 매장)
     if (!status.is_work_day) return '휴무'
     if (status.attendance_status === 'clocked_out') return '퇴근완료'
     if (status.attendance_status === 'clocked_in') return '출근중'

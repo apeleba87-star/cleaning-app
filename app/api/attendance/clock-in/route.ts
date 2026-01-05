@@ -41,7 +41,8 @@ export async function POST(request: NextRequest) {
     const workDate = calculateWorkDate(
       store.is_night_shift || false,
       store.work_start_hour || 0,
-      currentHour
+      currentHour,
+      store.work_end_hour || 10 // work_end_hour 추가
     )
 
     console.log('📅 Work date calculation:', {
