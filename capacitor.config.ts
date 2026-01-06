@@ -18,9 +18,9 @@ const config: CapacitorConfig = {
         // 개발 환경: 로컬 서버 사용
         // 에뮬레이터: 10.0.2.2 사용
         // 실제 기기: PC의 실제 IP 주소 사용 (터미널에서 확인 가능)
-        // url: 'http://10.0.2.2:3000', // Android 에뮬레이터용
-        // url: 'http://192.168.219.41:3000', // 실제 기기용
-        androidScheme: 'https',
+        // url: 'http://10.0.2.2:3000', // Android 에뮬레이터용 (방화벽 문제 시 주석 처리)
+        url: 'http://192.168.219.41:3000', // 실제 기기 IP (방화벽 우회)
+        cleartext: true,
       },
   plugins: {
     SplashScreen: {
