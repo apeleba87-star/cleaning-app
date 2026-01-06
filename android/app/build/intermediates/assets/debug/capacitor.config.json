@@ -1,0 +1,19 @@
+{
+	"appId": "com.mupl.cleaningapp",
+	"appName": "무플(MUPL)",
+	"webDir": "public",
+	"server": {
+		"url": "http://192.168.219.41:3000",
+		"cleartext": true
+	},
+	"plugins": {
+		"SplashScreen": {
+			"launchShowDuration": 2000,
+			"launchAutoHide": true,
+			"backgroundColor": "#2563eb",
+			"androidSplashResourceName": "splash",
+			"androidScaleType": "CENTER_CROP",
+			"showSpinner": false
+		}
+	}
+}
