@@ -1,7 +1,7 @@
 'use client'
 
 import { createClient } from '@/lib/supabase/client'
-import { getStorageBucket, generateFilePath } from './storage'
+import { getStorageBucket, generateFilePath, isBucketPublic } from './storage'
 import { resizeImageToFile } from '@/lib/utils/image-resize'
 
 export async function uploadPhoto(
@@ -53,7 +53,7 @@ export async function uploadPhoto(
   const { data, error } = await supabase.storage
     .from(bucket)
     .upload(filePath, fileToUpload, {
-      cacheControl: '3600',
+      cacheControl: '31536000', // 1년 (초) - 이미지 캐싱 최적화
       upsert: false,
     })
 
@@ -69,10 +69,8 @@ export async function uploadPhoto(
 
   // bucket이 private인 경우 signed URL 사용, public인 경우 public URL 사용
   try {
-    // 먼저 bucket이 public인지 확인
-    const { data: buckets } = await supabase.storage.listBuckets()
-    const bucketInfo = buckets?.find(b => b.id === bucket)
-    const isPublicBucket = bucketInfo?.public || false
+    // 버킷 public 여부 확인 (설정 파일에서 조회 - API 호출 없음)
+    const isPublicBucket = isBucketPublic(bucket)
 
     console.log('Bucket info:', { bucket, isPublic: isPublicBucket })
 

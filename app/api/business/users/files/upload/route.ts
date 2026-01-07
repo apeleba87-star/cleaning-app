@@ -89,7 +89,7 @@ export async function POST(request: NextRequest) {
     const { data: uploadData, error: uploadError } = await adminSupabase.storage
       .from(bucket)
       .upload(filePath, file, {
-        cacheControl: '3600',
+        cacheControl: '31536000', // 1년 (초) - 이미지 캐싱 최적화
         upsert: false,
       })
 
