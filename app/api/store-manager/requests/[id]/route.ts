@@ -6,12 +6,11 @@ import { z } from 'zod'
 const updateSchema = z.object({
   title: z.string().min(1).max(200).optional(),
   description: z.string().nullable().optional(),
-  category: z.string().max(50).nullable().optional(),
   photo_url: z.string().nullable().optional(),
   original_updated_at: z.string(), // 충돌 감지용
 })
 
-// 점주가 접수 중인 요청 수정
+// 점주가 접수 중인 요청란 수정
 export async function PATCH(
   request: NextRequest,
   { params }: { params: { id: string } }
@@ -23,7 +22,7 @@ export async function PATCH(
     }
 
     if (user.role !== 'store_owner' && user.role !== 'store_manager') {
-      throw new ForbiddenError('Only store owners/managers can update supply requests')
+      throw new ForbiddenError('Only store owners/managers can update requests')
     }
 
     const body = await request.json()
@@ -76,7 +75,7 @@ export async function PATCH(
 
     // 현재 요청 상태 확인
     const { data: currentRequest, error: fetchError } = await supabase
-      .from('supply_requests')
+      .from('requests')
       .select('*')
       .eq('id', requestId)
       .in('store_id', storeIds)
@@ -84,7 +83,7 @@ export async function PATCH(
 
     if (fetchError || !currentRequest) {
       return NextResponse.json(
-        { error: '물품 요청을 찾을 수 없습니다.' },
+        { error: '요청란을 찾을 수 없습니다.' },
         { status: 404 }
       )
     }
@@ -93,7 +92,7 @@ export async function PATCH(
     if (currentRequest.status !== 'received') {
       return NextResponse.json(
         {
-          error: '접수 상태인 요청만 수정할 수 있습니다.',
+          error: '접수 상태인 요청란만 수정할 수 있습니다.',
           currentStatus: currentRequest.status,
           conflict: true
         },
@@ -105,14 +104,14 @@ export async function PATCH(
     if (currentRequest.updated_at !== validated.original_updated_at) {
       // 최신 데이터 다시 조회
       const { data: latestRequest } = await supabase
-        .from('supply_requests')
+        .from('requests')
         .select('*')
         .eq('id', requestId)
         .single()
 
       return NextResponse.json(
         {
-          error: '다른 사용자가 요청을 수정했습니다. 최신 정보를 확인해주세요.',
+          error: '다른 사용자가 요청란을 수정했습니다. 최신 정보를 확인해주세요.',
           currentStatus: latestRequest?.status,
           conflict: true,
           latestData: latestRequest
@@ -128,12 +127,11 @@ export async function PATCH(
 
     if (validated.title !== undefined) updateData.title = validated.title
     if (validated.description !== undefined) updateData.description = validated.description
-    if (validated.category !== undefined) updateData.category = validated.category
     if (validated.photo_url !== undefined) updateData.photo_url = validated.photo_url
 
     // 조건부 업데이트 (원자적 연산)
     const { data: updatedRequest, error: updateError } = await supabase
-      .from('supply_requests')
+      .from('requests')
       .update(updateData)
       .eq('id', requestId)
       .eq('status', 'received') // 상태가 여전히 'received'인지 확인
@@ -144,14 +142,14 @@ export async function PATCH(
     if (updateError || !updatedRequest) {
       // 충돌 발생 - 최신 데이터 다시 조회
       const { data: latestRequest } = await supabase
-        .from('supply_requests')
+        .from('requests')
         .select('*')
         .eq('id', requestId)
         .single()
 
       return NextResponse.json(
         {
-          error: '요청 상태가 변경되어 수정할 수 없습니다. 최신 정보를 확인해주세요.',
+          error: '요청란 상태가 변경되어 수정할 수 없습니다. 최신 정보를 확인해주세요.',
           currentStatus: latestRequest?.status,
           conflict: true,
           latestData: latestRequest
@@ -172,7 +170,7 @@ export async function PATCH(
   }
 }
 
-// 점주가 접수 중인 요청 취소
+// 점주가 접수 중인 요청란 접수 취소
 export async function DELETE(
   request: NextRequest,
   { params }: { params: { id: string } }
@@ -184,7 +182,7 @@ export async function DELETE(
     }
 
     if (user.role !== 'store_owner' && user.role !== 'store_manager') {
-      throw new ForbiddenError('Only store owners/managers can cancel supply requests')
+      throw new ForbiddenError('Only store owners/managers can cancel requests')
     }
 
     const requestId = params.id
@@ -234,7 +232,7 @@ export async function DELETE(
 
     // 현재 요청 상태 확인
     const { data: currentRequest, error: fetchError } = await supabase
-      .from('supply_requests')
+      .from('requests')
       .select('*')
       .eq('id', requestId)
       .in('store_id', storeIds)
@@ -242,16 +240,16 @@ export async function DELETE(
 
     if (fetchError || !currentRequest) {
       return NextResponse.json(
-        { error: '물품 요청을 찾을 수 없습니다.' },
+        { error: '요청란을 찾을 수 없습니다.' },
         { status: 404 }
       )
     }
 
-    // 접수 상태만 취소 가능
+    // 접수 상태만 접수 취소 가능
     if (currentRequest.status !== 'received') {
       return NextResponse.json(
         {
-          error: '접수 상태인 요청만 취소할 수 있습니다.',
+          error: '접수 상태인 요청란만 접수 취소할 수 있습니다.',
           currentStatus: currentRequest.status,
           conflict: true
         },
@@ -261,15 +259,15 @@ export async function DELETE(
 
     // 조건부 삭제 (원자적 연산)
     const { error: deleteError } = await supabase
-      .from('supply_requests')
+      .from('requests')
       .delete()
       .eq('id', requestId)
       .eq('status', 'received') // 상태가 여전히 'received'인지 확인
 
     if (deleteError) {
-      console.error('Error deleting supply request:', deleteError)
+      console.error('Error deleting request:', deleteError)
       return NextResponse.json(
-        { error: '요청 취소에 실패했습니다.' },
+        { error: '요청란 접수 취소에 실패했습니다.' },
         { status: 500 }
       )
     }
@@ -277,7 +275,7 @@ export async function DELETE(
     // 삭제된 행이 없는 경우 (이미 상태가 변경됨)
     // Supabase는 삭제된 행 수를 반환하지 않으므로, 다시 조회하여 확인
     const { data: checkRequest } = await supabase
-      .from('supply_requests')
+      .from('requests')
       .select('*')
       .eq('id', requestId)
       .single()
@@ -285,7 +283,7 @@ export async function DELETE(
     if (checkRequest) {
       return NextResponse.json(
         {
-          error: '요청 상태가 변경되어 취소할 수 없습니다.',
+          error: '요청란 상태가 변경되어 접수 취소할 수 없습니다.',
           currentStatus: checkRequest.status,
           conflict: true
         },

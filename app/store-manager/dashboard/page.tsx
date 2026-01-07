@@ -78,6 +78,11 @@ export default function StoreManagerDashboardPage() {
   })
   const [loadingRequestStatusModal, setLoadingRequestStatusModal] = useState(false)
   const [selectedImage, setSelectedImage] = useState<string | null>(null)
+  // 요청란 수정 관련 상태
+  const [editingRequestId, setEditingRequestId] = useState<string | null>(null)
+  const [editingRequest, setEditingRequest] = useState<any>(null)
+  const [savingRequest, setSavingRequest] = useState(false)
+  const [cancellingRequestId, setCancellingRequestId] = useState<string | null>(null)
   const [attendanceData, setAttendanceData] = useState<Array<{ date: string; store_id: string; store_name: string; attendance_count: number }>>([])
   const [loadingAttendance, setLoadingAttendance] = useState(false)
   const [selectedDate, setSelectedDate] = useState<string | null>(null)
@@ -952,6 +957,134 @@ export default function StoreManagerDashboardPage() {
       alert('요청란을 불러오는 중 오류가 발생했습니다.')
     } finally {
       setLoadingRequestStatusModal(false)
+    }
+  }
+
+  const handleEditRequest = (request: any) => {
+    if (request.status !== 'received') {
+      alert('접수 상태인 요청란만 수정할 수 있습니다.')
+      return
+    }
+    setEditingRequestId(request.id)
+    setEditingRequest({ ...request })
+  }
+
+  const handleCancelEditRequest = () => {
+    setEditingRequestId(null)
+    setEditingRequest(null)
+  }
+
+  const handleSaveRequest = async () => {
+    if (!editingRequestId || !editingRequest) {
+      return
+    }
+
+    if (!editingRequest.title?.trim()) {
+      alert('제목을 입력해주세요.')
+      return
+    }
+
+    try {
+      setSavingRequest(true)
+      const originalRequest = requestStatusModalData.received.find((r: any) => r.id === editingRequestId)
+      if (!originalRequest) {
+        alert('요청란을 찾을 수 없습니다.')
+        return
+      }
+
+      const response = await fetch(`/api/store-manager/requests/${editingRequestId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: editingRequest.title,
+          description: editingRequest.description || null,
+          photo_url: editingRequest.photo_url || null,
+          original_updated_at: originalRequest.updated_at,
+        }),
+      })
+
+      if (response.ok) {
+        alert('요청란이 수정되었습니다.')
+        setEditingRequestId(null)
+        setEditingRequest(null)
+        // 요청란 목록 다시 로드
+        if (selectedRequestStatus === 'received' || !selectedRequestStatus) {
+          handleRequestStatusClick('received')
+        } else {
+          handleRequestStatusClick(selectedRequestStatus)
+        }
+      } else {
+        const data = await response.json()
+        if (response.status === 409 && data.conflict) {
+          alert(data.error || '다른 사용자가 요청란을 수정했습니다.')
+          if (data.latestData) {
+            // 최신 데이터로 업데이트
+            setRequestStatusModalData(prev => ({
+              ...prev,
+              received: prev.received.map((r: any) => 
+                r.id === editingRequestId ? data.latestData : r
+              )
+            }))
+          }
+          setEditingRequestId(null)
+          setEditingRequest(null)
+          // 요청란 목록 다시 로드
+          if (selectedRequestStatus === 'received' || !selectedRequestStatus) {
+            handleRequestStatusClick('received')
+          } else {
+            handleRequestStatusClick(selectedRequestStatus)
+          }
+        } else {
+          alert(data.error || '수정에 실패했습니다.')
+        }
+      }
+    } catch (error: any) {
+      console.error('Error updating request:', error)
+      alert('수정 중 오류가 발생했습니다.')
+    } finally {
+      setSavingRequest(false)
+    }
+  }
+
+  const handleCancelRequest = async (requestId: string) => {
+    if (!confirm('정말로 이 요청란을 접수 취소하시겠습니까?')) {
+      return
+    }
+
+    try {
+      setCancellingRequestId(requestId)
+      const response = await fetch(`/api/store-manager/requests/${requestId}`, {
+        method: 'DELETE',
+      })
+
+      if (response.ok) {
+        alert('요청란이 접수 취소되었습니다.')
+        setCancellingRequestId(null)
+        // 요청란 목록 다시 로드
+        if (selectedRequestStatus === 'received' || !selectedRequestStatus) {
+          handleRequestStatusClick('received')
+        } else {
+          handleRequestStatusClick(selectedRequestStatus)
+        }
+      } else {
+        const data = await response.json()
+        if (response.status === 409 && data.conflict) {
+          alert(data.error || '요청란 상태가 변경되어 접수 취소할 수 없습니다.')
+          // 요청란 목록 다시 로드
+          if (selectedRequestStatus === 'received' || !selectedRequestStatus) {
+            handleRequestStatusClick('received')
+          } else {
+            handleRequestStatusClick(selectedRequestStatus)
+          }
+        } else {
+          alert(data.error || '접수 취소에 실패했습니다.')
+        }
+      }
+    } catch (error: any) {
+      console.error('Error cancelling request:', error)
+      alert('접수 취소 중 오류가 발생했습니다.')
+    } finally {
+      setCancellingRequestId(null)
     }
   }
 
@@ -1952,35 +2085,96 @@ export default function StoreManagerDashboardPage() {
                         <div className="space-y-4">
                           {requestStatusModalData.received.map((request) => {
                             const photos = getPhotoUrls(request.photo_url)
+                            const isEditing = editingRequestId === request.id
                             return (
                               <div key={request.id} className="border rounded-lg p-4">
-                                <div className="flex items-center gap-2 mb-1">
-                                  <h4 className="font-medium">{request.title}</h4>
-                                </div>
-                                {request.description && (
-                                  <p className="text-sm text-gray-600 mt-1">{request.description}</p>
-                                )}
-                                {photos.length > 0 && (
-                                  <div className="mt-2">
-                                    <div className="flex flex-wrap gap-2">
-                                      {photos.map((url, idx) => (
-                                        <img
-                                          key={idx}
-                                          src={url}
-                                          alt={`${request.title} 사진 ${idx + 1}`}
-                                          className="w-32 h-32 object-cover rounded cursor-pointer"
-                                          onClick={() => setSelectedImage(url)}
-                                          onError={(e) => {
-                                            e.currentTarget.style.display = 'none'
-                                          }}
-                                        />
-                                      ))}
+                                {isEditing ? (
+                                  <div className="space-y-3">
+                                    <div>
+                                      <label className="block text-sm font-medium text-gray-700 mb-1">제목</label>
+                                      <input
+                                        type="text"
+                                        value={editingRequest?.title || ''}
+                                        onChange={(e) => setEditingRequest({ ...editingRequest, title: e.target.value })}
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+                                        placeholder="제목"
+                                      />
+                                    </div>
+                                    <div>
+                                      <label className="block text-sm font-medium text-gray-700 mb-1">설명</label>
+                                      <textarea
+                                        value={editingRequest?.description || ''}
+                                        onChange={(e) => setEditingRequest({ ...editingRequest, description: e.target.value })}
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+                                        placeholder="설명"
+                                        rows={3}
+                                      />
+                                    </div>
+                                    <div className="flex gap-2">
+                                      <button
+                                        onClick={handleSaveRequest}
+                                        disabled={savingRequest}
+                                        className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-md text-sm font-medium hover:bg-blue-700 disabled:opacity-50"
+                                      >
+                                        {savingRequest ? '저장 중...' : '저장'}
+                                      </button>
+                                      <button
+                                        onClick={handleCancelEditRequest}
+                                        disabled={savingRequest}
+                                        className="flex-1 px-4 py-2 bg-gray-200 text-gray-700 rounded-md text-sm font-medium hover:bg-gray-300 disabled:opacity-50"
+                                      >
+                                        취소
+                                      </button>
                                     </div>
                                   </div>
+                                ) : (
+                                  <>
+                                    <div className="flex items-center gap-2 mb-1">
+                                      <h4 className="font-medium">{request.title}</h4>
+                                    </div>
+                                    {request.description && (
+                                      <p className="text-sm text-gray-600 mt-1">{request.description}</p>
+                                    )}
+                                    {photos.length > 0 && (
+                                      <div className="mt-2">
+                                        <div className="flex flex-wrap gap-2">
+                                          {photos.map((url, idx) => (
+                                            <img
+                                              key={idx}
+                                              src={url}
+                                              alt={`${request.title} 사진 ${idx + 1}`}
+                                              className="w-32 h-32 object-cover rounded cursor-pointer"
+                                              onClick={() => setSelectedImage(url)}
+                                              onError={(e) => {
+                                                e.currentTarget.style.display = 'none'
+                                              }}
+                                            />
+                                          ))}
+                                        </div>
+                                      </div>
+                                    )}
+                                    <div className="flex items-center justify-between mt-3">
+                                      <p className="text-xs text-gray-400">
+                                        {new Date(request.created_at).toLocaleString('ko-KR')}
+                                      </p>
+                                      <div className="flex gap-2">
+                                        <button
+                                          onClick={() => handleEditRequest(request)}
+                                          className="px-3 py-1.5 bg-blue-600 text-white text-sm rounded hover:bg-blue-700"
+                                        >
+                                          수정
+                                        </button>
+                                        <button
+                                          onClick={() => handleCancelRequest(request.id)}
+                                          disabled={cancellingRequestId === request.id}
+                                          className="px-3 py-1.5 bg-red-600 text-white text-sm rounded hover:bg-red-700 disabled:opacity-50"
+                                        >
+                                          {cancellingRequestId === request.id ? '취소 중...' : '접수 취소'}
+                                        </button>
+                                      </div>
+                                    </div>
+                                  </>
                                 )}
-                                <p className="text-xs text-gray-400 mt-1">
-                                  {new Date(request.created_at).toLocaleString('ko-KR')}
-                                </p>
                               </div>
                             )
                           })}
