@@ -212,7 +212,7 @@ export default function SupplyRequestList({ initialSupplyRequests, storeMap }: S
                       {request.title}
                     </div>
                     {request.description && (
-                      <div className="text-sm text-gray-600 mt-2 whitespace-normal break-words max-w-md">
+                      <div className="text-sm text-gray-600 mt-2 whitespace-pre-wrap break-words max-w-md">
                         {request.description}
                       </div>
                     )}

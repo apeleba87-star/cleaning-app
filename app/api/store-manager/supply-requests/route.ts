@@ -55,13 +55,13 @@ export async function GET(request: NextRequest) {
       throw new ForbiddenError('Store ID is required')
     }
 
-    // 점주의 매장 물품 요청 조회 (점주 처리중 상태 + 완료된 것은 14일 이내만)
+    // 점주의 매장 물품 요청 조회 (접수, 처리중, 점주 처리중, 완료된 것은 14일 이내만)
     const fourteenDaysAgo = new Date()
     fourteenDaysAgo.setDate(fourteenDaysAgo.getDate() - 14)
     const fourteenDaysAgoISO = fourteenDaysAgo.toISOString().split('T')[0] // YYYY-MM-DD 형식
     
-    // manager_in_progress 상태인 요청 조회
-    const { data: inProgressRequests, error: inProgressError } = await supabase
+    // received, in_progress, manager_in_progress 상태인 요청 조회
+    const { data: activeRequests, error: activeError } = await supabase
       .from('supply_requests')
       .select(`
         *,
@@ -75,7 +75,7 @@ export async function GET(request: NextRequest) {
         )
       `)
       .in('store_id', storeIds)
-      .eq('status', 'manager_in_progress')
+      .in('status', ['received', 'in_progress', 'manager_in_progress'])
       .order('created_at', { ascending: false })
 
     // completed 상태인 요청 중 14일 이내만 조회
@@ -97,8 +97,8 @@ export async function GET(request: NextRequest) {
       .gte('completed_at', fourteenDaysAgoISO)
       .order('created_at', { ascending: false })
 
-    const error = inProgressError || completedError
-    const supplyRequests = [...(inProgressRequests || []), ...(completedRequests || [])]
+    const error = activeError || completedError
+    const supplyRequests = [...(activeRequests || []), ...(completedRequests || [])]
 
     if (error) {
       console.error('Error fetching supply requests:', error)

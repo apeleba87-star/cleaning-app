@@ -86,10 +86,10 @@ export async function POST(
       )
     }
 
-    // 점주 처리중 상태만 완료 가능
-    if (supplyRequest.status !== 'manager_in_progress') {
+    // 점주 처리중 또는 처리중 상태만 완료 가능
+    if (supplyRequest.status !== 'manager_in_progress' && supplyRequest.status !== 'in_progress') {
       return NextResponse.json(
-        { error: '점주 처리중인 요청만 완료할 수 있습니다.' },
+        { error: '처리중 상태인 요청만 완료할 수 있습니다.' },
         { status: 400 }
       )
     }
