@@ -2,16 +2,18 @@
 
 import { useState, useRef, useEffect } from 'react'
 import { ChecklistItem } from '@/types/db'
+import { Capacitor } from '@capacitor/core'
 
 interface ChecklistCameraProps {
   items: ChecklistItem[]
   mode: 'before' | 'after'
   storeId: string
+  checklistId: string // localStorage 키 생성을 위해 필요
   onComplete: (updatedItems: ChecklistItem[]) => void
   onCancel: () => void
 }
 
-export function ChecklistCamera({ items, mode, storeId, onComplete, onCancel }: ChecklistCameraProps) {
+export function ChecklistCamera({ items, mode, storeId, checklistId, onComplete, onCancel }: ChecklistCameraProps) {
   const [currentIndex, setCurrentIndex] = useState(0)
   const [tempPhotos, setTempPhotos] = useState<Record<number, string>>({})
   const [stream, setStream] = useState<MediaStream | null>(null)
@@ -29,7 +31,8 @@ export function ChecklistCamera({ items, mode, storeId, onComplete, onCancel }: 
     let isMounted = true
     let cameraRequested = false
 
-    // 카메라 접근 (한 번만 시도)
+    // 모든 환경에서 getUserMedia 시도 (웹뷰에서도 지원)
+    // 네이티브 앱의 웹뷰에서도 getUserMedia를 사용하여 연속 촬영 가능
     const initCamera = async () => {
       if (cameraRequested || !isMounted) return
       cameraRequested = true
@@ -96,9 +99,16 @@ export function ChecklistCamera({ items, mode, storeId, onComplete, onCancel }: 
         let errorMessage = ''
         let errorDetails = ''
         
+        // Android 앱 환경인지 확인
+        const isNative = Capacitor.isNativePlatform()
+        
         if (error.name === 'NotAllowedError') {
           errorMessage = '카메라 접근 권한이 거부되었습니다.'
-          errorDetails = '이 사이트에 대한 카메라 권한을 허용해야 합니다.'
+          if (isNative) {
+            errorDetails = '앱 설정에서 카메라 권한을 허용해주세요. (설정 > 앱 > 무플(MUPL) > 권한 > 카메라)'
+          } else {
+            errorDetails = '이 사이트에 대한 카메라 권한을 허용해야 합니다.'
+          }
         } else if (error.name === 'NotFoundError') {
           errorMessage = '카메라를 찾을 수 없습니다.'
           errorDetails = '기기에 카메라가 연결되어 있는지 확인하세요.'
@@ -110,14 +120,18 @@ export function ChecklistCamera({ items, mode, storeId, onComplete, onCancel }: 
           errorDetails = '요청한 카메라 설정을 지원하지 않습니다.'
         } else {
           errorMessage = '카메라 접근에 실패했습니다.'
-          errorDetails = '브라우저 설정에서 이 사이트의 카메라 권한을 확인하세요.'
+          if (isNative) {
+            errorDetails = '앱 설정에서 카메라 권한을 확인하거나 앱을 재시작해주세요.'
+          } else {
+            errorDetails = '브라우저 설정에서 이 사이트의 카메라 권한을 확인하세요.'
+          }
         }
         
         setCameraError(`${errorMessage} ${errorDetails}`)
       }
     }
 
-      initCamera()
+    initCamera()
 
     // 브라우저 히스토리에 엔트리 추가 (뒤로가기 감지용)
     window.history.pushState({ cameraMode: mode }, '')
@@ -145,7 +159,30 @@ export function ChecklistCamera({ items, mode, storeId, onComplete, onCancel }: 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  // localStorage에서 사진 복원 (앱 재시작 시)
+  useEffect(() => {
+    const restoredPhotos: Record<number, string> = {}
+    
+    for (let i = 0; i < photoItems.length; i++) {
+      const photoKey = `checklist_photo_${checklistId}_${mode}_${i}`
+      const savedPhoto = localStorage.getItem(photoKey)
+      
+      if (savedPhoto) {
+        restoredPhotos[i] = savedPhoto
+        console.log(`📸 복원된 사진: ${photoItems[i]?.area} (인덱스 ${i})`)
+      }
+    }
+    
+    if (Object.keys(restoredPhotos).length > 0) {
+      setTempPhotos(restoredPhotos)
+      console.log(`✅ ${Object.keys(restoredPhotos).length}개의 사진이 복원되었습니다.`)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [checklistId, mode]) // 컴포넌트 마운트 시 한 번만 실행
+
   const capturePhoto = () => {
+    // 모든 환경에서 비디오 스트림을 사용한 연속 촬영
+    // 네이티브 앱의 웹뷰에서도 getUserMedia를 사용하므로 동일한 방식으로 작동
     if (!videoRef.current || !canvasRef.current) return
 
     const video = videoRef.current
@@ -160,15 +197,69 @@ export function ChecklistCamera({ items, mode, storeId, onComplete, onCancel }: 
     
     // 임시 저장 (base64로 저장)
     const dataURL = canvas.toDataURL('image/jpeg', 0.8)
+    
+    // 1. React 상태에 저장 (UI 즉시 반영)
     setTempPhotos(prev => ({
       ...prev,
       [currentIndex]: dataURL
     }))
+    
+    // 2. localStorage에 백업 저장 (앱 꺼져도 유지, 서버 요청 없음)
+    const photoKey = `checklist_photo_${checklistId}_${mode}_${currentIndex}`
+    try {
+      localStorage.setItem(photoKey, dataURL)
+      console.log(`💾 사진 로컬 저장: ${photoItems[currentIndex]?.area} (인덱스 ${currentIndex})`)
+    } catch (error) {
+      console.error('localStorage 저장 실패:', error)
+      // localStorage 용량 초과 시 오래된 사진 정리
+      cleanupOldPhotos()
+      // 재시도
+      try {
+        localStorage.setItem(photoKey, dataURL)
+      } catch (retryError) {
+        console.error('localStorage 재시도 실패:', retryError)
+      }
+    }
 
     // 자동으로 다음 항목으로 이동
     const nextIndex = currentIndex + 1
     if (nextIndex < photoItems.length) {
       setCurrentIndex(nextIndex)
+    }
+  }
+  
+  // localStorage 용량 관리: 오래된 사진 정리 (7일 이상)
+  const cleanupOldPhotos = () => {
+    try {
+      const sevenDaysAgo = Date.now() - (7 * 24 * 60 * 60 * 1000)
+      const keysToRemove: string[] = []
+      
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i)
+        if (key?.startsWith('checklist_photo_')) {
+          // 타임스탬프가 없으면 오래된 형식이므로 유지 (호환성)
+          // 새로운 형식은 타임스탬프를 포함하지 않으므로 모든 checklist_photo_ 키를 확인
+          // 대신 현재 체크리스트가 아닌 것만 정리
+          if (key && !key.includes(checklistId)) {
+            keysToRemove.push(key)
+          }
+        }
+      }
+      
+      // 오래된 사진 삭제 (현재 체크리스트가 아닌 것만)
+      keysToRemove.forEach(key => {
+        try {
+          localStorage.removeItem(key)
+        } catch (e) {
+          console.error(`localStorage 삭제 실패: ${key}`, e)
+        }
+      })
+      
+      if (keysToRemove.length > 0) {
+        console.log(`🧹 ${keysToRemove.length}개의 오래된 사진이 정리되었습니다.`)
+      }
+    } catch (error) {
+      console.error('localStorage 정리 실패:', error)
     }
   }
 
@@ -178,6 +269,16 @@ export function ChecklistCamera({ items, mode, storeId, onComplete, onCancel }: 
       delete newPhotos[index]
       return newPhotos
     })
+    
+    // localStorage에서도 삭제
+    const photoKey = `checklist_photo_${checklistId}_${mode}_${index}`
+    try {
+      localStorage.removeItem(photoKey)
+      console.log(`🗑️ 사진 삭제: ${photoItems[index]?.area} (인덱스 ${index})`)
+    } catch (error) {
+      console.error('localStorage 삭제 실패:', error)
+    }
+    
     setCurrentIndex(index)
   }
 
@@ -234,14 +335,32 @@ export function ChecklistCamera({ items, mode, storeId, onComplete, onCancel }: 
         }
       }
 
-      // 모든 사진 업로드 (순차적으로)
+      // localStorage에서 사진 로드 (앱 재시작 후 복원된 사진 포함)
+      const photosToUpload: Record<number, string> = {}
+      
+      for (let i = 0; i < photoItems.length; i++) {
+        const photoKey = `checklist_photo_${checklistId}_${mode}_${i}`
+        const savedPhoto = localStorage.getItem(photoKey)
+        
+        if (savedPhoto) {
+          // localStorage에 저장된 사진 우선 사용
+          photosToUpload[i] = savedPhoto
+        } else if (tempPhotos[i]) {
+          // 메모리에만 있는 경우 (새로 찍은 사진)
+          photosToUpload[i] = tempPhotos[i]
+        }
+      }
+      
+      console.log(`📤 업로드할 사진 수: ${Object.keys(photosToUpload).length}개`)
+      
+      // 모든 사진 업로드 (순차적으로, 배치 처리)
       const updatedItems = [...items]
       let successCount = 0
       let failCount = 0
       
       for (let i = 0; i < photoItems.length; i++) {
-        if (tempPhotos[i]) {
-          const url = await uploadPhotoFile(i, tempPhotos[i])
+        if (photosToUpload[i]) {
+          const url = await uploadPhotoFile(i, photosToUpload[i])
           if (url) {
             successCount++
             // area와 타입을 모두 고려하여 정확히 매칭
@@ -276,12 +395,23 @@ export function ChecklistCamera({ items, mode, storeId, onComplete, onCancel }: 
                 }
                 console.log(`✅ 관리후 사진 업로드 완료: ${currentPhotoItem.area}`, url)
               }
+              
+              // 업로드 성공 시 localStorage에서 삭제
+              const photoKey = `checklist_photo_${checklistId}_${mode}_${i}`
+              try {
+                localStorage.removeItem(photoKey)
+                console.log(`🗑️ 업로드 완료 후 로컬 삭제: ${currentPhotoItem.area}`)
+              } catch (error) {
+                console.error('localStorage 삭제 실패:', error)
+              }
             } else {
               console.error(`❌ 매칭되는 아이템을 찾을 수 없음: area=${currentPhotoItem.area}, type=${currentPhotoItem.type}, mode=${mode}`)
               failCount++
             }
           } else {
             failCount++
+            // 업로드 실패한 사진은 localStorage에 유지 (다음 저장 시도 시 재시도)
+            console.log(`⚠️ 업로드 실패, 로컬에 보관: ${photoItems[i]?.area}`)
           }
         }
       }
@@ -360,23 +490,47 @@ export function ChecklistCamera({ items, mode, storeId, onComplete, onCancel }: 
         <div className="absolute top-20 left-4 right-4 bg-red-600 bg-opacity-95 text-white p-4 rounded-lg z-30 shadow-lg max-h-[80vh] overflow-y-auto">
           <p className="text-sm font-semibold mb-2">{cameraError}</p>
           <div className="text-xs text-red-100 space-y-2">
-            <p className="font-medium mb-2">📱 모바일 해결 방법:</p>
-            <ol className="list-decimal list-inside space-y-1 ml-2">
-              <li>주소창 왼쪽의 <strong>자물쇠/정보 아이콘</strong> 또는 <strong>경고 아이콘</strong> 클릭</li>
-              <li><strong>"사이트 설정"</strong> 또는 <strong>"권한"</strong> 선택</li>
-              <li><strong>"카메라"</strong> 항목 찾기</li>
-              <li><strong>"허용"</strong> 또는 <strong>"항상 허용"</strong> 선택</li>
-              <li>설정 화면을 닫고 페이지를 <strong>새로고침</strong></li>
-            </ol>
-            <div className="mt-3 pt-3 border-t border-red-500">
-              <p className="font-medium mb-1">⚠️ 중요:</p>
-              <ul className="list-disc list-inside space-y-1 ml-2">
-                <li>브라우저의 <strong>일반 카메라 설정</strong>이 아닌 <strong>이 사이트에 대한 권한</strong>을 설정해야 합니다</li>
-                <li>IP 주소로 접속 중이라면 <strong>localhost</strong>로 접속해보세요</li>
-                <li>다른 앱에서 카메라를 사용 중이면 종료하세요</li>
-                <li>브라우저를 완전히 종료하고 다시 실행해보세요</li>
-              </ul>
-            </div>
+            {Capacitor.isNativePlatform() ? (
+              <>
+                <p className="font-medium mb-2">📱 Android 앱 해결 방법:</p>
+                <ol className="list-decimal list-inside space-y-1 ml-2">
+                  <li>Android 설정 앱 열기</li>
+                  <li><strong>"앱"</strong> 또는 <strong>"애플리케이션"</strong> 선택</li>
+                  <li><strong>"무플(MUPL)"</strong> 앱 찾기</li>
+                  <li><strong>"권한"</strong> 또는 <strong>"Permissions"</strong> 선택</li>
+                  <li><strong>"카메라"</strong> 권한을 <strong>"허용"</strong>으로 변경</li>
+                  <li>앱으로 돌아와서 다시 시도</li>
+                </ol>
+                <div className="mt-3 pt-3 border-t border-red-500">
+                  <p className="font-medium mb-1">⚠️ 중요:</p>
+                  <ul className="list-disc list-inside space-y-1 ml-2">
+                    <li>다른 앱에서 카메라를 사용 중이면 종료하세요</li>
+                    <li>앱을 완전히 종료하고 다시 실행해보세요</li>
+                    <li>권한 설정 후 앱을 재시작해야 할 수 있습니다</li>
+                  </ul>
+                </div>
+              </>
+            ) : (
+              <>
+                <p className="font-medium mb-2">📱 모바일 해결 방법:</p>
+                <ol className="list-decimal list-inside space-y-1 ml-2">
+                  <li>주소창 왼쪽의 <strong>자물쇠/정보 아이콘</strong> 또는 <strong>경고 아이콘</strong> 클릭</li>
+                  <li><strong>"사이트 설정"</strong> 또는 <strong>"권한"</strong> 선택</li>
+                  <li><strong>"카메라"</strong> 항목 찾기</li>
+                  <li><strong>"허용"</strong> 또는 <strong>"항상 허용"</strong> 선택</li>
+                  <li>설정 화면을 닫고 페이지를 <strong>새로고침</strong></li>
+                </ol>
+                <div className="mt-3 pt-3 border-t border-red-500">
+                  <p className="font-medium mb-1">⚠️ 중요:</p>
+                  <ul className="list-disc list-inside space-y-1 ml-2">
+                    <li>브라우저의 <strong>일반 카메라 설정</strong>이 아닌 <strong>이 사이트에 대한 권한</strong>을 설정해야 합니다</li>
+                    <li>IP 주소로 접속 중이라면 <strong>localhost</strong>로 접속해보세요</li>
+                    <li>다른 앱에서 카메라를 사용 중이면 종료하세요</li>
+                    <li>브라우저를 완전히 종료하고 다시 실행해보세요</li>
+                  </ul>
+                </div>
+              </>
+            )}
             <button
               onClick={() => {
                 setCameraError(null)
@@ -385,7 +539,7 @@ export function ChecklistCamera({ items, mode, storeId, onComplete, onCancel }: 
               }}
               className="mt-3 w-full px-4 py-2 bg-white bg-opacity-20 hover:bg-opacity-30 text-white rounded-lg font-medium transition-colors"
             >
-              🔄 권한 설정 후 새로고침
+              🔄 {Capacitor.isNativePlatform() ? '앱 재시작 후 다시 시도' : '권한 설정 후 새로고침'}
             </button>
           </div>
         </div>
@@ -402,6 +556,7 @@ export function ChecklistCamera({ items, mode, storeId, onComplete, onCancel }: 
             </div>
           </div>
         ) : (
+          // 모든 환경에서 비디오 스트림 사용 (연속 촬영 가능)
           <>
             <video
               ref={videoRef}

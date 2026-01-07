@@ -25,14 +25,21 @@ export default function SuppliesPage() {
   const { storeId: attendanceStoreId, isClockedIn, loading: attendanceLoading } = useTodayAttendance()
   const [storeName, setStoreName] = useState<string>('')
 
+  // 물품 요청은 AttendanceContext와 독립적으로 즉시 로드 (속도 최적화)
+  useEffect(() => {
+    loadSupplies()
+  }, [])
+
+  // 출근 정보가 확인되면 매장 정보 설정 및 필터링 업데이트
   useEffect(() => {
     if (!attendanceLoading) {
       // 출근한 매장이 있으면 자동으로 설정
       if (attendanceStoreId && isClockedIn) {
         setFormData(prev => ({ ...prev, store_id: attendanceStoreId }))
         loadStoreName(attendanceStoreId)
+        // 출근 정보 확인 후 물품 요청 다시 로드 (필터링 적용)
+        loadSupplies()
       }
-      loadSupplies()
     }
   }, [attendanceLoading, attendanceStoreId, isClockedIn])
 
@@ -59,41 +66,46 @@ export default function SuppliesPage() {
       data: { session },
     } = await supabase.auth.getSession()
 
-    if (!session) return
+    if (!session) {
+      setLoading(false)
+      return
+    }
 
     // 처리 완료된 요청은 1주일 이내만 표시
     const oneWeekAgo = new Date()
     oneWeekAgo.setDate(oneWeekAgo.getDate() - 7)
     const oneWeekAgoISO = oneWeekAgo.toISOString().split('T')[0]
 
-    // 처리 완료가 아닌 요청 조회
+    // 처리 완료가 아닌 요청과 완료된 요청을 병렬로 조회 (속도 최적화)
     let nonCompletedQuery = supabase
       .from('supply_requests')
-      .select('*')
+      .select('id, store_id, user_id, title, description, category, photo_url, status, created_at, completed_at, updated_at')
       .eq('user_id', session.user.id)
       .neq('status', 'completed')
 
-    // 출근한 매장이 있으면 해당 매장의 요청만 조회
-    if (attendanceStoreId && isClockedIn) {
-      nonCompletedQuery = nonCompletedQuery.eq('store_id', attendanceStoreId)
-    }
-
-    const { data: nonCompletedData, error: nonCompletedError } = await nonCompletedQuery
-
-    // 처리 완료된 요청 중 1주일 이내만 조회
     let completedQuery = supabase
       .from('supply_requests')
-      .select('*')
+      .select('id, store_id, user_id, title, description, category, photo_url, status, created_at, completed_at, updated_at')
       .eq('user_id', session.user.id)
       .eq('status', 'completed')
       .gte('completed_at', oneWeekAgoISO)
 
     // 출근한 매장이 있으면 해당 매장의 요청만 조회
     if (attendanceStoreId && isClockedIn) {
+      nonCompletedQuery = nonCompletedQuery.eq('store_id', attendanceStoreId)
       completedQuery = completedQuery.eq('store_id', attendanceStoreId)
     }
 
-    const { data: completedData, error: completedError } = await completedQuery
+    // 병렬 쿼리 실행
+    const [nonCompletedResult, completedResult] = await Promise.all([
+      nonCompletedQuery,
+      completedQuery
+    ])
+
+    const nonCompletedData = nonCompletedResult.data
+    const nonCompletedError = nonCompletedResult.error
+    const completedData = completedResult.data
+    const completedError = completedResult.error
 
     // 두 결과 합치기 및 정렬 (completed는 맨 아래)
     let allData = [...(nonCompletedData || [])]
@@ -175,7 +187,8 @@ export default function SuppliesPage() {
     // 직원은 상태 변경 불가
   }
 
-  if (attendanceLoading || loading) {
+  // 물품 요청 로딩 중일 때만 로딩 표시 (AttendanceContext 대기 제거)
+  if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
@@ -184,7 +197,10 @@ export default function SuppliesPage() {
   }
 
   // 출근하지 않았거나 퇴근한 경우 안내 메시지
-  if (!isClockedIn) {
+  // AttendanceContext가 아직 로딩 중이면 출근 여부를 확인할 수 없으므로 일단 허용
+  // (물품 요청은 이미 로드되었으므로 표시 가능)
+  // 출근 정보가 로딩 완료되었고, 출근하지 않은 경우에만 안내 메시지 표시
+  if (!attendanceLoading && !isClockedIn && supplies.length === 0) {
     return (
       <div className="max-w-4xl mx-auto px-4 py-6 mb-20 md:mb-0">
         <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-6 text-center">
