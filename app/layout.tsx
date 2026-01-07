@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from 'next'
 import { Inter } from 'next/font/google'
 import './globals.css'
+import PWARegister from '@/components/PWARegister'
 
 const inter = Inter({ subsets: ['latin'] })
 
@@ -41,8 +42,8 @@ export default function RootLayout({
   return (
     <html lang="ko">
       <head>
-        {/* 개발 환경에서는 manifest 비활성화 */}
-        {/* <link rel="manifest" href="/manifest.json" /> */}
+        <link rel="manifest" href="/manifest.json" />
+        <link rel="apple-touch-icon" href="/icon-192x192.png" />
         <meta name="theme-color" content="#2563eb" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="default" />
@@ -54,7 +55,10 @@ export default function RootLayout({
         <meta name="twitter:title" content="무플(MUPL) 무인 현장 운영 관리 플랫폼" />
         <meta name="twitter:description" content="무플(MUPL) 무인 현장 운영 관리 플랫폼" />
       </head>
-      <body className={inter.className}>{children}</body>
+      <body className={inter.className}>
+        <PWARegister />
+        {children}
+      </body>
     </html>
   )
 }
