@@ -159,26 +159,58 @@ export function ChecklistCamera({ items, mode, storeId, checklistId, onComplete,
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // localStorage에서 사진 복원 (앱 재시작 시)
+  // localStorage에서 사진 및 현재 인덱스 복원 (앱 재시작 시)
   useEffect(() => {
     const restoredPhotos: Record<number, string> = {}
+    let lastPhotoIndex = -1
     
+    // 저장된 사진 복원
     for (let i = 0; i < photoItems.length; i++) {
       const photoKey = `checklist_photo_${checklistId}_${mode}_${i}`
       const savedPhoto = localStorage.getItem(photoKey)
       
       if (savedPhoto) {
         restoredPhotos[i] = savedPhoto
+        lastPhotoIndex = i // 마지막으로 찍은 사진의 인덱스 추적
         console.log(`📸 복원된 사진: ${photoItems[i]?.area} (인덱스 ${i})`)
       }
     }
     
+    // 저장된 사진이 있으면 복원
     if (Object.keys(restoredPhotos).length > 0) {
       setTempPhotos(restoredPhotos)
       console.log(`✅ ${Object.keys(restoredPhotos).length}개의 사진이 복원되었습니다.`)
+      
+      // 마지막으로 찍은 사진의 다음 인덱스로 시작
+      // 모든 사진을 찍었으면 마지막 인덱스 유지, 아니면 다음 인덱스로
+      const nextIndex = lastPhotoIndex < photoItems.length - 1 ? lastPhotoIndex + 1 : lastPhotoIndex
+      setCurrentIndex(nextIndex)
+      console.log(`📍 현재 인덱스 복원: ${nextIndex} (마지막 사진 인덱스: ${lastPhotoIndex})`)
+    } else {
+      // 저장된 사진이 없으면 저장된 currentIndex 확인
+      const indexKey = `checklist_current_index_${checklistId}_${mode}`
+      const savedIndex = localStorage.getItem(indexKey)
+      if (savedIndex !== null) {
+        const parsedIndex = parseInt(savedIndex, 10)
+        if (!isNaN(parsedIndex) && parsedIndex >= 0 && parsedIndex < photoItems.length) {
+          setCurrentIndex(parsedIndex)
+          console.log(`📍 저장된 인덱스 복원: ${parsedIndex}`)
+        }
+      }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [checklistId, mode]) // 컴포넌트 마운트 시 한 번만 실행
+
+  // currentIndex 변경 시마다 localStorage에 자동 저장
+  useEffect(() => {
+    const indexKey = `checklist_current_index_${checklistId}_${mode}`
+    try {
+      localStorage.setItem(indexKey, currentIndex.toString())
+      console.log(`📍 현재 인덱스 자동 저장: ${currentIndex}`)
+    } catch (error) {
+      console.error('currentIndex localStorage 자동 저장 실패:', error)
+    }
+  }, [currentIndex, checklistId, mode])
 
   const capturePhoto = () => {
     // 모든 환경에서 비디오 스트림을 사용한 연속 촬영
@@ -225,6 +257,11 @@ export function ChecklistCamera({ items, mode, storeId, checklistId, onComplete,
     const nextIndex = currentIndex + 1
     if (nextIndex < photoItems.length) {
       setCurrentIndex(nextIndex)
+      // useEffect에서 자동 저장되므로 여기서는 저장하지 않음
+      console.log(`➡️ 다음 인덱스로 이동: ${nextIndex}`)
+    } else {
+      // 모든 사진을 찍었으면 마지막 인덱스 유지 (useEffect에서 자동 저장됨)
+      console.log(`✅ 모든 사진 촬영 완료 (인덱스 ${currentIndex})`)
     }
   }
   
@@ -280,6 +317,8 @@ export function ChecklistCamera({ items, mode, storeId, checklistId, onComplete,
     }
     
     setCurrentIndex(index)
+    // useEffect에서 자동 저장되므로 여기서는 저장하지 않음
+    console.log(`📍 재촬영을 위해 인덱스로 이동: ${index}`)
   }
 
   const handleSave = async () => {
@@ -430,6 +469,31 @@ export function ChecklistCamera({ items, mode, storeId, checklistId, onComplete,
 
       // 성공한 사진이 하나라도 있으면 onComplete 호출
       if (successCount > 0) {
+        // 모든 사진이 성공적으로 업로드되었는지 확인
+        const totalPhotos = Object.keys(photosToUpload).length
+        const allPhotosUploaded = successCount === totalPhotos && failCount === 0
+        
+        if (allPhotosUploaded) {
+          // 모든 사진 업로드 완료 시 localStorage 정리
+          const indexKey = `checklist_current_index_${checklistId}_${mode}`
+          try {
+            localStorage.removeItem(indexKey)
+            console.log(`🗑️ 모든 사진 저장 완료, 인덱스 삭제`)
+          } catch (error) {
+            console.error('currentIndex localStorage 삭제 실패:', error)
+          }
+          
+          // 남아있는 사진도 정리 (혹시 모를 경우 대비)
+          for (let i = 0; i < photoItems.length; i++) {
+            const photoKey = `checklist_photo_${checklistId}_${mode}_${i}`
+            try {
+              localStorage.removeItem(photoKey)
+            } catch (error) {
+              // 무시
+            }
+          }
+        }
+        
         onComplete(updatedItems)
       } else {
         // 모든 사진 업로드 실패
