@@ -7,6 +7,7 @@ import { getTodayDateKST } from '@/lib/utils/date'
 import RequestForm from './RequestForm'
 import { AttendanceCalendar } from '@/components/AttendanceCalendar'
 import { useToast } from '@/components/Toast'
+import { PhotoUploader } from '@/components/PhotoUploader'
 
 interface StoreStatus {
   store_id: string
@@ -83,6 +84,11 @@ export default function StoreManagerDashboardPage() {
   const [editingRequest, setEditingRequest] = useState<any>(null)
   const [savingRequest, setSavingRequest] = useState(false)
   const [cancellingRequestId, setCancellingRequestId] = useState<string | null>(null)
+  // 요청란 처리 완료 관련 상태
+  const [completingRequestId, setCompletingRequestId] = useState<string | null>(null)
+  const [completionPhoto, setCompletionPhoto] = useState<string>('')
+  const [completionDescription, setCompletionDescription] = useState<string>('')
+  const [completing, setCompleting] = useState(false)
   const [attendanceData, setAttendanceData] = useState<Array<{ date: string; store_id: string; store_name: string; attendance_count: number }>>([])
   const [loadingAttendance, setLoadingAttendance] = useState(false)
   const [selectedDate, setSelectedDate] = useState<string | null>(null)
@@ -1085,6 +1091,45 @@ export default function StoreManagerDashboardPage() {
       alert('접수 취소 중 오류가 발생했습니다.')
     } finally {
       setCancellingRequestId(null)
+    }
+  }
+
+  const handleCompleteRequest = async () => {
+    if (!completingRequestId) {
+      return
+    }
+
+    try {
+      setCompleting(true)
+      const response = await fetch(`/api/store-manager/requests/${completingRequestId}/complete`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          completion_photo_url: completionPhoto.trim() || null,
+          completion_description: completionDescription.trim() || null,
+        }),
+      })
+
+      if (response.ok) {
+        alert('요청란이 처리 완료되었습니다.')
+        setCompletingRequestId(null)
+        setCompletionPhoto('')
+        setCompletionDescription('')
+        // 요청란 목록 다시 로드
+        if (selectedRequestStatus === 'in_progress' || !selectedRequestStatus) {
+          handleRequestStatusClick('in_progress')
+        } else {
+          handleRequestStatusClick(selectedRequestStatus)
+        }
+      } else {
+        const data = await response.json()
+        alert(data.error || '처리 완료에 실패했습니다.')
+      }
+    } catch (error: any) {
+      console.error('Error completing request:', error)
+      alert('처리 완료 중 오류가 발생했습니다.')
+    } finally {
+      setCompleting(false)
     }
   }
 
@@ -2224,9 +2269,21 @@ export default function StoreManagerDashboardPage() {
                                     </div>
                                   </div>
                                 )}
-                                <p className="text-xs text-gray-400 mt-1">
-                                  {new Date(request.created_at).toLocaleString('ko-KR')}
-                                </p>
+                                <div className="flex items-center justify-between mt-3">
+                                  <p className="text-xs text-gray-400">
+                                    {new Date(request.created_at).toLocaleString('ko-KR')}
+                                  </p>
+                                  <button
+                                    onClick={() => {
+                                      setCompletingRequestId(request.id)
+                                      setCompletionPhoto('')
+                                      setCompletionDescription('')
+                                    }}
+                                    className="px-3 py-1.5 bg-green-600 text-white text-sm rounded hover:bg-green-700"
+                                  >
+                                    점주 직접 처리 완료
+                                  </button>
+                                </div>
                               </div>
                             )
                           })}
@@ -2548,6 +2605,74 @@ export default function StoreManagerDashboardPage() {
           </div>
         </div>
       )}
+
+      {/* 요청란 처리 완료 모달 */}
+      {completingRequestId && (() => {
+        const completingRequest = requestStatusModalData.in_progress.find((r: any) => r.id === completingRequestId)
+        if (!completingRequest) return null
+        return (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-lg p-6 max-w-md w-full">
+              <h2 className="text-xl font-bold mb-4">요청란 처리 완료</h2>
+              
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  처리 완료 사진 (선택)
+                </label>
+                {completionPhoto && (
+                  <div className="mb-2">
+                    <img
+                      src={completionPhoto}
+                      alt="처리 완료 사진 미리보기"
+                      className="max-h-48 mx-auto rounded-lg border border-gray-300"
+                    />
+                  </div>
+                )}
+                <PhotoUploader
+                  storeId={completingRequest.store_id}
+                  entity="request"
+                  onUploadComplete={(url) => setCompletionPhoto(url)}
+                  onUploadError={(error) => alert(`사진 업로드 실패: ${error}`)}
+                />
+              </div>
+
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  처리 내용 설명 (선택)
+                </label>
+                <textarea
+                  value={completionDescription}
+                  onChange={(e) => setCompletionDescription(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  rows={4}
+                  placeholder="처리 내용을 입력하세요..."
+                />
+              </div>
+
+              <div className="flex gap-2 justify-end">
+                <button
+                  onClick={() => {
+                    setCompletingRequestId(null)
+                    setCompletionPhoto('')
+                    setCompletionDescription('')
+                  }}
+                  className="px-4 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300"
+                  disabled={completing}
+                >
+                  취소
+                </button>
+                <button
+                  onClick={handleCompleteRequest}
+                  className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700"
+                  disabled={completing}
+                >
+                  {completing ? '처리 중...' : '완료'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )
+      })()}
 
       {/* 날짜별 상세 정보 모달 */}
       {showDailyDetailsModal && selectedDate && (
