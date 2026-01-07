@@ -359,7 +359,7 @@ export default function SupplyRequestList({ initialSupplyRequests, storeMap }: S
                     <span>{new Date(request.created_at).toLocaleDateString('ko-KR')}</span>
                   </div>
                   {request.description && (
-                    <div className={`text-sm text-gray-600 mt-2 whitespace-normal break-words leading-relaxed ${request.status === 'completed' ? 'text-gray-400' : ''}`}>
+                    <div className={`text-sm text-gray-600 mt-2 whitespace-pre-wrap break-words leading-relaxed ${request.status === 'completed' ? 'text-gray-400' : ''}`}>
                       {request.description}
                     </div>
                   )}

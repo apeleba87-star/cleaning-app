@@ -67,7 +67,7 @@ export function SupplyList({ supplies, onStatusChange, userRole = 'staff' }: Sup
                 <div className="text-sm text-gray-600 mt-1">카테고리: {supply.category}</div>
               )}
               {supply.description && (
-                <div className="text-sm text-gray-600 mt-1">{supply.description}</div>
+                <div className="text-sm text-gray-600 mt-1 whitespace-pre-wrap break-words">{supply.description}</div>
               )}
               {supply.quantity !== null && (
                 <div className="text-sm text-gray-600 mt-1">수량: {supply.quantity}</div>
