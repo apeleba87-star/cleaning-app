@@ -79,13 +79,13 @@ export default function SuppliesPage() {
     // 처리 완료가 아닌 요청과 완료된 요청을 병렬로 조회 (속도 최적화)
     let nonCompletedQuery = supabase
       .from('supply_requests')
-      .select('id, store_id, user_id, title, description, category, photo_url, status, created_at, completed_at, updated_at')
+      .select('id, store_id, user_id, category_id, item_name, quantity, title, description, category, photo_url, status, manager_comment, completion_photo_url, completion_description, completed_at, created_at, updated_at')
       .eq('user_id', session.user.id)
       .neq('status', 'completed')
 
     let completedQuery = supabase
       .from('supply_requests')
-      .select('id, store_id, user_id, title, description, category, photo_url, status, created_at, completed_at, updated_at')
+      .select('id, store_id, user_id, category_id, item_name, quantity, title, description, category, photo_url, status, manager_comment, completion_photo_url, completion_description, completed_at, created_at, updated_at')
       .eq('user_id', session.user.id)
       .eq('status', 'completed')
       .gte('completed_at', oneWeekAgoISO)
