@@ -17,33 +17,9 @@ export default function StoreManagerSuppliesPage() {
   const [completionPhoto, setCompletionPhoto] = useState<string>('')
   const [completionDescription, setCompletionDescription] = useState<string>('')
   const [completing, setCompleting] = useState(false)
-  
-  // 수정 관련 상태
-  const [editingRequestId, setEditingRequestId] = useState<string | null>(null)
-  const [editingRequest, setEditingRequest] = useState<Partial<SupplyRequestWithRelations>>({})
-  const [saving, setSaving] = useState(false)
-  const [cancelling, setCancelling] = useState<string | null>(null)
-  
-  // 실시간 동기화를 위한 ref
-  const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null)
-  const editingRequestIdsRef = useRef<Set<string>>(new Set())
 
   useEffect(() => {
     loadSupplyRequests()
-    
-    // 실시간 상태 동기화 (5초마다 polling)
-    pollingIntervalRef.current = setInterval(() => {
-      // 편집 중이 아닌 요청만 자동 새로고침
-      if (editingRequestIdsRef.current.size === 0) {
-        loadSupplyRequests()
-      }
-    }, 5000)
-
-    return () => {
-      if (pollingIntervalRef.current) {
-        clearInterval(pollingIntervalRef.current)
-      }
-    }
   }, [])
 
   const loadSupplyRequests = async () => {
@@ -62,20 +38,6 @@ export default function StoreManagerSuppliesPage() {
           return new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
         })
         setSupplyRequests(sorted)
-        
-        // 편집 중인 요청이 상태가 변경되었는지 확인
-        if (editingRequestId) {
-          const updatedRequest = sorted.find(r => r.id === editingRequestId)
-          if (updatedRequest && updatedRequest.status !== 'received') {
-            alert('요청 상태가 변경되어 수정 모드를 종료합니다.')
-            setEditingRequestId(null)
-            setEditingRequest({})
-            editingRequestIdsRef.current.delete(editingRequestId)
-          } else if (updatedRequest) {
-            // 상태는 같지만 다른 필드가 변경되었을 수 있음
-            setEditingRequest(updatedRequest)
-          }
-        }
       }
     } catch (error: any) {
       console.error('Error loading supply requests:', error)
@@ -85,113 +47,6 @@ export default function StoreManagerSuppliesPage() {
     }
   }
 
-  const handleEdit = (request: SupplyRequestWithRelations) => {
-    if (request.status !== 'received') {
-      alert('접수 상태인 요청만 수정할 수 있습니다.')
-      return
-    }
-    setEditingRequestId(request.id)
-    setEditingRequest({ ...request })
-    editingRequestIdsRef.current.add(request.id)
-  }
-
-  const handleCancelEdit = () => {
-    setEditingRequestId(null)
-    setEditingRequest({})
-    if (editingRequestId) {
-      editingRequestIdsRef.current.delete(editingRequestId)
-    }
-  }
-
-  const handleSave = async () => {
-    if (!editingRequestId || !editingRequest.title?.trim()) {
-      alert('제목을 입력해주세요.')
-      return
-    }
-
-    try {
-      setSaving(true)
-      const originalRequest = supplyRequests.find(r => r.id === editingRequestId)
-      if (!originalRequest) {
-        alert('요청을 찾을 수 없습니다.')
-        return
-      }
-
-      const response = await fetch(`/api/store-manager/supply-requests/${editingRequestId}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          title: editingRequest.title,
-          description: editingRequest.description || null,
-          category: editingRequest.category || null,
-          photo_url: editingRequest.photo_url || null,
-          original_updated_at: originalRequest.updated_at, // 충돌 감지용
-        }),
-      })
-
-      if (response.ok) {
-        alert('요청이 수정되었습니다.')
-        setEditingRequestId(null)
-        setEditingRequest({})
-        editingRequestIdsRef.current.delete(editingRequestId)
-        loadSupplyRequests()
-      } else {
-        const data = await response.json()
-        if (response.status === 409 && data.conflict) {
-          // 충돌 발생
-          alert(data.error || '다른 사용자가 요청을 수정했습니다.')
-          if (data.latestData) {
-            // 최신 데이터로 업데이트
-            setSupplyRequests(prev => prev.map(r => 
-              r.id === editingRequestId ? data.latestData : r
-            ))
-          }
-          setEditingRequestId(null)
-          setEditingRequest({})
-          editingRequestIdsRef.current.delete(editingRequestId)
-          loadSupplyRequests()
-        } else {
-          alert(data.error || '수정에 실패했습니다.')
-        }
-      }
-    } catch (error: any) {
-      console.error('Error updating supply request:', error)
-      alert('수정 중 오류가 발생했습니다.')
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  const handleCancelRequest = async (requestId: string) => {
-    if (!confirm('정말로 이 요청을 취소하시겠습니까?')) {
-      return
-    }
-
-    try {
-      setCancelling(requestId)
-      const response = await fetch(`/api/store-manager/supply-requests/${requestId}`, {
-        method: 'DELETE',
-      })
-
-      if (response.ok) {
-        alert('요청이 취소되었습니다.')
-        loadSupplyRequests()
-      } else {
-        const data = await response.json()
-        if (response.status === 409 && data.conflict) {
-          alert(data.error || '요청 상태가 변경되어 취소할 수 없습니다.')
-          loadSupplyRequests()
-        } else {
-          alert(data.error || '취소에 실패했습니다.')
-        }
-      }
-    } catch (error: any) {
-      console.error('Error cancelling supply request:', error)
-      alert('취소 중 오류가 발생했습니다.')
-    } finally {
-      setCancelling(null)
-    }
-  }
 
   const handleComplete = async (requestId: string) => {
     if (!completionPhoto.trim()) {
@@ -317,50 +172,19 @@ export default function StoreManagerSuppliesPage() {
                   className={request.status === 'completed' ? 'opacity-60' : ''}
                 >
                   <td className="px-6 py-4 whitespace-nowrap">
-                    {editingRequestId === request.id ? (
-                      <div className="space-y-2">
-                        <input
-                          type="text"
-                          value={editingRequest.title || ''}
-                          onChange={(e) => setEditingRequest({ ...editingRequest, title: e.target.value })}
-                          className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
-                          placeholder="제목"
-                        />
-                        <textarea
-                          value={editingRequest.description || ''}
-                          onChange={(e) => setEditingRequest({ ...editingRequest, description: e.target.value })}
-                          className="w-full px-2 py-1 border border-gray-300 rounded text-xs"
-                          placeholder="설명"
-                          rows={2}
-                        />
+                    <div className={`text-sm font-medium ${request.status === 'completed' ? 'text-gray-500' : 'text-gray-900'}`}>
+                      {request.title}
+                    </div>
+                    {request.description && (
+                      <div className="text-xs text-gray-400 mt-1 truncate max-w-xs">
+                        {request.description}
                       </div>
-                    ) : (
-                      <>
-                        <div className={`text-sm font-medium ${request.status === 'completed' ? 'text-gray-500' : 'text-gray-900'}`}>
-                          {request.title}
-                        </div>
-                        {request.description && (
-                          <div className="text-xs text-gray-400 mt-1 truncate max-w-xs">
-                            {request.description}
-                          </div>
-                        )}
-                      </>
                     )}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    {editingRequestId === request.id ? (
-                      <input
-                        type="text"
-                        value={editingRequest.category || ''}
-                        onChange={(e) => setEditingRequest({ ...editingRequest, category: e.target.value as any })}
-                        className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
-                        placeholder="카테고리"
-                      />
-                    ) : (
-                      <div className={`text-sm ${request.status === 'completed' ? 'text-gray-400' : 'text-gray-500'}`}>
-                        {request.category || '-'}
-                      </div>
-                    )}
+                    <div className={`text-sm ${request.status === 'completed' ? 'text-gray-400' : 'text-gray-500'}`}>
+                      {request.category || '-'}
+                    </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className={`text-sm ${request.status === 'completed' ? 'text-gray-400' : 'text-gray-500'}`}>
@@ -381,56 +205,18 @@ export default function StoreManagerSuppliesPage() {
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                     <div className="flex gap-2 items-center">
-                      {editingRequestId === request.id ? (
-                        <>
-                          <button
-                            onClick={handleSave}
-                            disabled={saving}
-                            className="text-green-600 hover:text-green-900 disabled:opacity-50"
-                          >
-                            {saving ? '저장 중...' : '저장'}
-                          </button>
-                          <button
-                            onClick={handleCancelEdit}
-                            disabled={saving}
-                            className="text-gray-600 hover:text-gray-900 disabled:opacity-50"
-                          >
-                            취소
-                          </button>
-                        </>
-                      ) : (
-                        <>
-                          {request.status === 'received' && (
-                            <>
-                              <button
-                                onClick={() => handleEdit(request)}
-                                className="text-blue-600 hover:text-blue-900"
-                              >
-                                수정
-                              </button>
-                              <button
-                                onClick={() => handleCancelRequest(request.id)}
-                                disabled={cancelling === request.id}
-                                className="text-red-600 hover:text-red-900 disabled:opacity-50"
-                              >
-                                {cancelling === request.id ? '취소 중...' : '취소'}
-                              </button>
-                            </>
-                          )}
-                          {(request.status === 'in_progress' || request.status === 'manager_in_progress') && (
-                            <button
-                              onClick={() => setCompletingRequestId(request.id)}
-                              className="text-blue-600 hover:text-blue-900"
-                            >
-                              처리 완료
-                            </button>
-                          )}
-                          {request.status === 'completed' && (
-                            <div>
-                              <span className="text-green-600">완료됨</span>
-                            </div>
-                          )}
-                        </>
+                      {(request.status === 'in_progress' || request.status === 'manager_in_progress') && (
+                        <button
+                          onClick={() => setCompletingRequestId(request.id)}
+                          className="text-blue-600 hover:text-blue-900"
+                        >
+                          처리 완료
+                        </button>
+                      )}
+                      {request.status === 'completed' && (
+                        <div>
+                          <span className="text-green-600">완료됨</span>
+                        </div>
                       )}
                     </div>
                   </td>
@@ -455,34 +241,13 @@ export default function StoreManagerSuppliesPage() {
             >
               <div className="flex items-start justify-between mb-3">
                 <div className="flex-1">
-                  {editingRequestId === request.id ? (
-                    <div className="space-y-2">
-                      <input
-                        type="text"
-                        value={editingRequest.title || ''}
-                        onChange={(e) => setEditingRequest({ ...editingRequest, title: e.target.value })}
-                        className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
-                        placeholder="제목"
-                      />
-                      <textarea
-                        value={editingRequest.description || ''}
-                        onChange={(e) => setEditingRequest({ ...editingRequest, description: e.target.value })}
-                        className="w-full px-2 py-1 border border-gray-300 rounded text-xs"
-                        placeholder="설명"
-                        rows={2}
-                      />
-                    </div>
-                  ) : (
-                    <>
-                      <h3 className={`text-base font-semibold mb-1 ${request.status === 'completed' ? 'text-gray-500' : 'text-gray-900'}`}>
-                        {request.title}
-                      </h3>
-                      {request.description && (
-                        <p className="text-sm text-gray-600 mb-2 line-clamp-2">
-                          {request.description}
-                        </p>
-                      )}
-                    </>
+                  <h3 className={`text-base font-semibold mb-1 ${request.status === 'completed' ? 'text-gray-500' : 'text-gray-900'}`}>
+                    {request.title}
+                  </h3>
+                  {request.description && (
+                    <p className="text-sm text-gray-600 mb-2 line-clamp-2">
+                      {request.description}
+                    </p>
                   )}
                 </div>
                 <span
@@ -495,19 +260,9 @@ export default function StoreManagerSuppliesPage() {
               <div className="space-y-2 mb-3">
                 <div className="flex items-center gap-2 text-sm">
                   <span className="text-gray-500">카테고리:</span>
-                  {editingRequestId === request.id ? (
-                    <input
-                      type="text"
-                      value={editingRequest.category || ''}
-                      onChange={(e) => setEditingRequest({ ...editingRequest, category: e.target.value as any })}
-                      className="flex-1 px-2 py-1 border border-gray-300 rounded text-sm"
-                      placeholder="카테고리"
-                    />
-                  ) : (
-                    <span className={request.status === 'completed' ? 'text-gray-400' : 'text-gray-700'}>
-                      {request.category || '-'}
-                    </span>
-                  )}
+                  <span className={request.status === 'completed' ? 'text-gray-400' : 'text-gray-700'}>
+                    {request.category || '-'}
+                  </span>
                 </div>
                 <div className="flex items-center gap-2 text-sm">
                   <span className="text-gray-500">요청자:</span>
@@ -523,70 +278,32 @@ export default function StoreManagerSuppliesPage() {
                 </div>
               </div>
 
-              {editingRequestId === request.id ? (
-                <div className="flex gap-2">
-                  <button
-                    onClick={handleSave}
-                    disabled={saving}
-                    className="flex-1 px-4 py-2 bg-green-600 text-white rounded-md text-sm font-medium hover:bg-green-700 disabled:opacity-50"
-                  >
-                    {saving ? '저장 중...' : '저장'}
-                  </button>
-                  <button
-                    onClick={handleCancelEdit}
-                    disabled={saving}
-                    className="flex-1 px-4 py-2 bg-gray-200 text-gray-700 rounded-md text-sm font-medium hover:bg-gray-300 disabled:opacity-50"
-                  >
-                    취소
-                  </button>
+              {(request.status === 'in_progress' || request.status === 'manager_in_progress') && (
+                <button
+                  onClick={() => setCompletingRequestId(request.id)}
+                  className="w-full px-4 py-2 bg-blue-600 text-white rounded-md text-sm font-medium hover:bg-blue-700 transition-colors touch-manipulation"
+                >
+                  처리 완료
+                </button>
+              )}
+              {request.status === 'completed' && (
+                <div className="space-y-2">
+                  <div className="text-sm text-green-600 font-medium">완료됨</div>
+                  {request.completion_photo_url && (
+                    <div>
+                      <img
+                        src={request.completion_photo_url}
+                        alt="처리 완료 사진"
+                        className="w-full max-w-xs h-auto object-cover rounded border"
+                      />
+                    </div>
+                  )}
+                  {request.completion_description && (
+                    <p className="text-xs text-gray-500">
+                      {request.completion_description}
+                    </p>
+                  )}
                 </div>
-              ) : (
-                <>
-                  {request.status === 'received' && (
-                    <div className="flex gap-2">
-                      <button
-                        onClick={() => handleEdit(request)}
-                        className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-md text-sm font-medium hover:bg-blue-700 transition-colors touch-manipulation"
-                      >
-                        수정
-                      </button>
-                      <button
-                        onClick={() => handleCancelRequest(request.id)}
-                        disabled={cancelling === request.id}
-                        className="flex-1 px-4 py-2 bg-red-600 text-white rounded-md text-sm font-medium hover:bg-red-700 transition-colors touch-manipulation disabled:opacity-50"
-                      >
-                        {cancelling === request.id ? '취소 중...' : '요청 취소'}
-                      </button>
-                    </div>
-                  )}
-                  {(request.status === 'in_progress' || request.status === 'manager_in_progress') && (
-                    <button
-                      onClick={() => setCompletingRequestId(request.id)}
-                      className="w-full px-4 py-2 bg-blue-600 text-white rounded-md text-sm font-medium hover:bg-blue-700 transition-colors touch-manipulation"
-                    >
-                      처리 완료
-                    </button>
-                  )}
-                  {request.status === 'completed' && (
-                    <div className="space-y-2">
-                      <div className="text-sm text-green-600 font-medium">완료됨</div>
-                      {request.completion_photo_url && (
-                        <div>
-                          <img
-                            src={request.completion_photo_url}
-                            alt="처리 완료 사진"
-                            className="w-full max-w-xs h-auto object-cover rounded border"
-                          />
-                        </div>
-                      )}
-                      {request.completion_description && (
-                        <p className="text-xs text-gray-500">
-                          {request.completion_description}
-                        </p>
-                      )}
-                    </div>
-                  )}
-                </>
               )}
             </div>
           ))
