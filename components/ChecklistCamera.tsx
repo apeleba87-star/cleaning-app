@@ -20,6 +20,10 @@ export function ChecklistCamera({ items, mode, storeId, checklistId, onComplete,
   const [saving, setSaving] = useState(false)
   const videoRef = useRef<HTMLVideoElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
+  const cameraRequestedRef = useRef(false) // 재초기화를 위해 useRef 사용
+  const isMountedRef = useRef(true)
+  const isReinitializingRef = useRef(false) // 재초기화 중인지 추적 (무한 루프 방지)
+  const hasInitializedRef = useRef(false) // 최초 초기화 완료 여부
 
   // 전달받은 항목들이 이미 필터링되어 있음
   const photoItems = items.filter(item => item.area?.trim())
@@ -28,14 +32,21 @@ export function ChecklistCamera({ items, mode, storeId, checklistId, onComplete,
 
   useEffect(() => {
     let currentStream: MediaStream | null = null
-    let isMounted = true
-    let cameraRequested = false
+    isMountedRef.current = true
 
     // 모든 환경에서 getUserMedia 시도 (웹뷰에서도 지원)
     // 네이티브 앱의 웹뷰에서도 getUserMedia를 사용하여 연속 촬영 가능
-    const initCamera = async () => {
-      if (cameraRequested || !isMounted) return
-      cameraRequested = true
+    const initCamera = async (isReinit = false) => {
+      // 재초기화가 아닌 경우에만 플래그 체크
+      if (!isReinit && (cameraRequestedRef.current || !isMountedRef.current)) return
+      
+      // 재초기화인 경우 플래그 리셋
+      if (isReinit) {
+        cameraRequestedRef.current = false
+      }
+      
+      if (cameraRequestedRef.current || !isMountedRef.current) return
+      cameraRequestedRef.current = true
 
       try {
         let mediaStream: MediaStream | null = null
@@ -80,7 +91,7 @@ export function ChecklistCamera({ items, mode, storeId, checklistId, onComplete,
           throw new Error('카메라 스트림을 가져올 수 없습니다.')
         }
 
-        if (!isMounted) {
+        if (!isMountedRef.current) {
           // 컴포넌트가 언마운트된 경우 스트림 정리
           mediaStream.getTracks().forEach((track) => track.stop())
           return
@@ -89,11 +100,13 @@ export function ChecklistCamera({ items, mode, storeId, checklistId, onComplete,
         currentStream = mediaStream
         setStream(mediaStream)
         setCameraError(null)
+        hasInitializedRef.current = true
+        isReinitializingRef.current = false
         if (videoRef.current) {
           videoRef.current.srcObject = mediaStream
         }
       } catch (error: any) {
-        if (!isMounted) return
+        if (!isMountedRef.current) return
         
         console.error('카메라 접근 실패:', error)
         let errorMessage = ''
@@ -128,6 +141,47 @@ export function ChecklistCamera({ items, mode, storeId, checklistId, onComplete,
         }
         
         setCameraError(`${errorMessage} ${errorDetails}`)
+      } finally {
+        // 에러 발생 시에도 플래그 리셋 (재시도 가능하도록)
+        if (!isMountedRef.current) {
+          cameraRequestedRef.current = false
+        }
+      }
+    }
+
+    // 재초기화 함수 (기존 스트림 정리 후 새로 초기화)
+    const reinitCamera = async () => {
+      console.log('🔄 카메라 스트림 재초기화 시작')
+      
+      // 1. 기존 스트림 정리
+      if (currentStream) {
+        currentStream.getTracks().forEach(track => {
+          track.stop()
+          console.log('🛑 기존 스트림 트랙 정지')
+        })
+        currentStream = null
+      }
+      
+      // 2. state의 stream도 정리
+      if (stream) {
+        stream.getTracks().forEach(track => track.stop())
+        setStream(null)
+      }
+      
+      // 3. videoRef 초기화
+      if (videoRef.current) {
+        videoRef.current.srcObject = null
+      }
+      
+      // 4. 에러 상태 초기화
+      setCameraError(null)
+      
+      // 5. 잠시 대기 후 재초기화 (스트림 정리 시간 확보)
+      await new Promise(resolve => setTimeout(resolve, 100))
+      
+      // 6. 새 스트림 요청
+      if (isMountedRef.current) {
+        await initCamera(true) // 재초기화 플래그 전달
       }
     }
 
@@ -141,7 +195,7 @@ export function ChecklistCamera({ items, mode, storeId, checklistId, onComplete,
       if (currentStream) {
         currentStream.getTracks().forEach((track) => track.stop())
       }
-      if (isMounted) {
+      if (isMountedRef.current) {
         onCancel()
       }
     }
@@ -149,7 +203,7 @@ export function ChecklistCamera({ items, mode, storeId, checklistId, onComplete,
     window.addEventListener('popstate', handlePopState)
 
     return () => {
-      isMounted = false
+      isMountedRef.current = false
       // 정리
       if (currentStream) {
         currentStream.getTracks().forEach((track) => track.stop())
@@ -158,6 +212,178 @@ export function ChecklistCamera({ items, mode, storeId, checklistId, onComplete,
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  // 앱 생명주기 이벤트 처리: visibilitychange (백그라운드/포그라운드 전환)
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible' && stream) {
+        // 앱이 포그라운드로 돌아왔을 때 스트림 상태 확인
+        const video = videoRef.current
+        if (!video) return
+
+        // 스트림이 끊어졌는지 확인
+        const isStreamActive = stream.active && 
+          stream.getVideoTracks().some(track => track.readyState === 'live')
+        
+        // 비디오가 재생 중이 아니거나 스트림이 끊어졌는지 확인
+        if (!isStreamActive || 
+            video.readyState === 0 || // HAVE_NOTHING
+            video.readyState === 1 || // HAVE_METADATA
+            stream.getVideoTracks().every(track => track.readyState !== 'live')) {
+          
+          console.log('📱 포그라운드 복귀: 스트림 끊김 감지, 재초기화 필요')
+          // 재초기화는 initCamera 내부에서 처리되므로 여기서는 호출만
+          // reinitCamera는 클로저 내부에 있으므로 직접 호출 불가
+          // 대신 stream state를 null로 설정하여 다른 useEffect에서 감지하도록
+          if (stream) {
+            stream.getTracks().forEach(track => track.stop())
+            setStream(null)
+          }
+        }
+      }
+    }
+
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+    }
+  }, [stream])
+
+  // 스트림 상태 모니터링 및 자동 재초기화
+  useEffect(() => {
+    if (!stream || !videoRef.current) return
+
+    const checkStreamHealth = () => {
+      const video = videoRef.current
+      if (!video || !stream) return
+
+      // 스트림이 끊어졌는지 확인
+      const isStreamActive = stream.active && 
+        stream.getVideoTracks().some(track => track.readyState === 'live')
+      
+      // 비디오가 재생 중이 아니거나 스트림이 끊어졌는지 확인
+      if (!isStreamActive || 
+          video.readyState === 0 || // HAVE_NOTHING
+          video.readyState === 1 || // HAVE_METADATA
+          stream.getVideoTracks().every(track => track.readyState !== 'live')) {
+        
+        console.log('🔍 스트림 상태 체크: 끊김 감지, 재초기화 필요')
+        // 스트림 정리 후 재초기화 트리거
+        stream.getTracks().forEach(track => track.stop())
+        setStream(null)
+      }
+    }
+
+    // 주기적으로 스트림 상태 확인 (10초마다)
+    const interval = setInterval(checkStreamHealth, 10000)
+
+    // 비디오 이벤트로도 확인
+    const video = videoRef.current
+    const handleLoadedMetadata = () => {
+      checkStreamHealth()
+    }
+    const handleError = () => {
+      console.log('❌ 비디오 에러 발생, 재초기화 필요')
+      checkStreamHealth()
+    }
+
+    video.addEventListener('loadedmetadata', handleLoadedMetadata)
+    video.addEventListener('error', handleError)
+
+    return () => {
+      clearInterval(interval)
+      video.removeEventListener('loadedmetadata', handleLoadedMetadata)
+      video.removeEventListener('error', handleError)
+    }
+  }, [stream])
+
+  // stream이 null이 되면 재초기화 (다른 useEffect에서 감지한 경우)
+  useEffect(() => {
+    // 최초 초기화가 완료되었고, 스트림이 없고, 에러도 없고, 재초기화 중이 아니면 재초기화
+    if (!stream && 
+        !cameraError && 
+        isMountedRef.current && 
+        !saving && 
+        hasInitializedRef.current && 
+        !isReinitializingRef.current) {
+      
+      // 스트림이 없고 에러도 없으면 재초기화 필요
+      console.log('🔄 스트림이 null이 되었으므로 재초기화 시작')
+      isReinitializingRef.current = true
+      
+      // 기존 initCamera 로직을 다시 실행
+      const reinit = async () => {
+        cameraRequestedRef.current = false
+        
+        try {
+          let mediaStream: MediaStream | null = null
+          
+          // 후면 카메라 강제 사용
+          try {
+            const exactConstraints: MediaStreamConstraints = {
+              video: {
+                facingMode: { exact: 'environment' },
+                width: { ideal: 1920 },
+                height: { ideal: 1080 }
+              }
+            }
+            mediaStream = await navigator.mediaDevices.getUserMedia(exactConstraints)
+          } catch (exactError) {
+            try {
+              const idealConstraints: MediaStreamConstraints = {
+                video: {
+                  facingMode: { ideal: 'environment' },
+                  width: { ideal: 1920 },
+                  height: { ideal: 1080 }
+                }
+              }
+              mediaStream = await navigator.mediaDevices.getUserMedia(idealConstraints)
+            } catch (idealError) {
+              const fallbackConstraints: MediaStreamConstraints = {
+                video: {
+                  width: { ideal: 1920 },
+                  height: { ideal: 1080 }
+                }
+              }
+              mediaStream = await navigator.mediaDevices.getUserMedia(fallbackConstraints)
+            }
+          }
+          
+          if (mediaStream && isMountedRef.current) {
+            setStream(mediaStream)
+            setCameraError(null)
+            isReinitializingRef.current = false
+            if (videoRef.current) {
+              videoRef.current.srcObject = mediaStream
+            }
+            console.log('✅ 카메라 스트림 재초기화 완료')
+          } else {
+            isReinitializingRef.current = false
+          }
+        } catch (error: any) {
+          console.error('재초기화 실패:', error)
+          isReinitializingRef.current = false
+          // 에러는 기존 initCamera의 에러 처리 로직과 동일하게
+          const isNative = Capacitor.isNativePlatform()
+          let errorMessage = '카메라 접근에 실패했습니다.'
+          let errorDetails = isNative 
+            ? '앱 설정에서 카메라 권한을 확인하거나 앱을 재시작해주세요.'
+            : '브라우저 설정에서 이 사이트의 카메라 권한을 확인하세요.'
+          
+          if (error.name === 'NotAllowedError') {
+            errorMessage = '카메라 접근 권한이 거부되었습니다.'
+          } else if (error.name === 'NotReadableError') {
+            errorMessage = '카메라를 사용할 수 없습니다.'
+            errorDetails = '다른 앱에서 카메라를 사용 중일 수 있습니다.'
+          }
+          
+          setCameraError(`${errorMessage} ${errorDetails}`)
+        }
+      }
+      
+      reinit()
+    }
+  }, [stream, cameraError, saving])
 
   // localStorage에서 사진 및 현재 인덱스 복원 (앱 재시작 시)
   useEffect(() => {
