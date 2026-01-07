@@ -15,21 +15,26 @@ function generateUUID(): string {
   })
 }
 
+// 버킷 정보: 버킷 이름과 public 여부
+const BUCKET_CONFIG: Record<string, { name: string; public: boolean }> = {
+  cleaning: { name: 'cleaning-photos', public: false },
+  issue: { name: 'issue-photos', public: false },
+  supply: { name: 'supply-photos', public: false },
+  selfie: { name: 'selfies', public: false },
+  checklist: { name: 'checklist-photos', public: false },
+  checklist_before: { name: 'checklist-photos', public: false },
+  checklist_after: { name: 'checklist-photos', public: false },
+  product: { name: 'cleaning-photos', public: false }, // 임시로 cleaning-photos 버킷 사용
+  request: { name: 'issue-photos', public: false },
+}
+
 export function getStorageBucket(entity: 'cleaning' | 'issue' | 'supply' | 'selfie' | 'checklist' | 'checklist_before' | 'checklist_after' | 'product' | 'request'): string {
-  const buckets = {
-    cleaning: 'cleaning-photos',
-    issue: 'issue-photos',
-    supply: 'supply-photos',
-    selfie: 'selfies',
-    checklist: 'checklist-photos',
-    checklist_before: 'checklist-photos',
-    checklist_after: 'checklist-photos',
-    // 임시로 cleaning-photos 버킷 사용 (product-photos 버킷이 없을 경우)
-    // TODO: Supabase Storage에 product-photos 버킷 생성 후 변경 필요
-    product: 'cleaning-photos', // 'product-photos' 대신 'cleaning-photos' 사용
-    request: 'issue-photos', // 일반 요청 완료 사진은 issue-photos 버킷 사용
-  }
-  return buckets[entity]
+  return BUCKET_CONFIG[entity].name
+}
+
+export function isBucketPublic(bucketName: string): boolean {
+  const config = Object.values(BUCKET_CONFIG).find(b => b.name === bucketName)
+  return config?.public || false
 }
 
 export function generateFilePath(
