@@ -8,11 +8,16 @@
     "dev:3001": "next dev -p 3001",
     "dev:mobile:3001": "next dev -H 0.0.0.0 -p 3001",
     "dev:bg": "node start-server.js",
+    "android:dev": "node start-android-dev.js",
     "build": "next build",
     "start": "next start",
     "lint": "next lint"
   },
   "dependencies": {
+    "@capacitor/android": "^8.0.0",
+    "@capacitor/camera": "^8.0.0",
+    "@capacitor/cli": "^6.2.1",
+    "@capacitor/core": "^8.0.0",
     "@dnd-kit/core": "^6.3.1",
     "@dnd-kit/sortable": "^8.0.0",
     "@dnd-kit/utilities": "^3.2.2",

@@ -880,6 +880,7 @@ export default function ChecklistClient() {
         items={itemsForCamera}
         mode={cameraMode}
         storeId={selectedChecklist.store_id}
+        checklistId={selectedChecklist.id}
         onComplete={async (updatedItems) => {
           try {
             console.log('📸 사진 촬영 완료 콜백:', {

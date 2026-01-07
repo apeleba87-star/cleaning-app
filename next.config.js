@@ -1,6 +1,8 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  // Capacitor 개발 환경을 위한 CORS 설정
+  allowedDevOrigins: ['192.168.219.41', '10.0.2.2', 'localhost'],
   images: {
     remotePatterns: [
       {

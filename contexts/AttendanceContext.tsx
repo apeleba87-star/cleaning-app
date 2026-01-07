@@ -38,20 +38,27 @@ export function AttendanceProvider({ children }: { children: ReactNode }) {
     const today = getTodayDateKST()
     const yesterday = getYesterdayDateKST()
     
-    // 오늘 출근 기록 조회
-    const { data: todayData, error: todayError } = await supabase
-      .from('attendance')
-      .select('id, user_id, store_id, work_date, clock_in_at, clock_in_latitude, clock_in_longitude, clock_out_at, clock_out_latitude, clock_out_longitude, selfie_url, attendance_type, scheduled_date, problem_report_id, change_reason, created_at, updated_at')
-      .eq('user_id', session.user.id)
-      .eq('work_date', today)
+    // 오늘과 어제 출근 기록을 병렬로 조회 (속도 최적화)
+    const [todayResult, yesterdayResult] = await Promise.all([
+      // 오늘 출근 기록 조회
+      supabase
+        .from('attendance')
+        .select('id, user_id, store_id, work_date, clock_in_at, clock_in_latitude, clock_in_longitude, clock_out_at, clock_out_latitude, clock_out_longitude, selfie_url, attendance_type, scheduled_date, problem_report_id, change_reason, created_at, updated_at')
+        .eq('user_id', session.user.id)
+        .eq('work_date', today),
+      // 어제 날짜의 미퇴근 기록도 조회 (출근일 변경 케이스 및 날짜 경계를 넘는 야간 근무 고려)
+      supabase
+        .from('attendance')
+        .select('id, user_id, store_id, work_date, clock_in_at, clock_in_latitude, clock_in_longitude, clock_out_at, clock_out_latitude, clock_out_longitude, selfie_url, attendance_type, scheduled_date, problem_report_id, change_reason, created_at, updated_at')
+        .eq('user_id', session.user.id)
+        .eq('work_date', yesterday)
+        .is('clock_out_at', null) // 미퇴근 기록만
+    ])
     
-    // 어제 날짜의 미퇴근 기록도 조회 (출근일 변경 케이스 및 날짜 경계를 넘는 야간 근무 고려)
-    const { data: yesterdayData, error: yesterdayError } = await supabase
-      .from('attendance')
-      .select('id, user_id, store_id, work_date, clock_in_at, clock_in_latitude, clock_in_longitude, clock_out_at, clock_out_latitude, clock_out_longitude, selfie_url, attendance_type, scheduled_date, problem_report_id, change_reason, created_at, updated_at')
-      .eq('user_id', session.user.id)
-      .eq('work_date', yesterday)
-      .is('clock_out_at', null) // 미퇴근 기록만
+    const todayData = todayResult.data
+    const todayError = todayResult.error
+    const yesterdayData = yesterdayResult.data
+    const yesterdayError = yesterdayResult.error
     
     // 오늘 기록과 어제 미퇴근 기록 합치기
     const allData = [

@@ -71,76 +71,88 @@ export async function clockInAction(
       calculated_work_date: workDate
     })
 
-    // 출근 중인 매장 확인 (계산된 work_date 기준)
-    let activeAttendance = await supabase
-      .from('attendance')
-      .select('id, store_id, clock_out_at, work_date')
-      .eq('user_id', user.id)
-      .eq('work_date', workDate)
-      .is('clock_out_at', null)
-      .maybeSingle()
-
-    // 없으면 오늘/어제 날짜의 미퇴근 기록도 확인 (야간 근무 고려)
-    if (!activeAttendance.data) {
-      // 오늘 날짜 확인
-      activeAttendance = await supabase
-        .from('attendance')
-        .select('id, store_id, clock_out_at, work_date')
-        .eq('user_id', user.id)
-        .eq('work_date', today)
-        .is('clock_out_at', null)
-        .maybeSingle()
-      
-      // 없으면 어제 날짜 확인
-      if (!activeAttendance.data) {
-        activeAttendance = await supabase
+    // 출근 중인 매장 확인 - 병렬 처리로 최적화
+    const [activeAttendanceResults, existingResults] = await Promise.allSettled([
+      // 출근 중인 매장 확인 (work_date, today, yesterday 병렬 조회)
+      Promise.allSettled([
+        supabase
+          .from('attendance')
+          .select('id, store_id, clock_out_at, work_date')
+          .eq('user_id', user.id)
+          .eq('work_date', workDate)
+          .is('clock_out_at', null)
+          .maybeSingle(),
+        supabase
+          .from('attendance')
+          .select('id, store_id, clock_out_at, work_date')
+          .eq('user_id', user.id)
+          .eq('work_date', today)
+          .is('clock_out_at', null)
+          .maybeSingle(),
+        supabase
           .from('attendance')
           .select('id, store_id, clock_out_at, work_date')
           .eq('user_id', user.id)
           .eq('work_date', yesterday)
           .is('clock_out_at', null)
-          .maybeSingle()
-      }
-    }
-
-    if (activeAttendance.data) {
-      return { success: false, error: '먼저 관리 중인 매장의 관리완료 처리를 완료해주세요.' }
-    }
-
-    // 동일 매장의 중복 출근 확인 (계산된 work_date 기준)
-    let existing = await supabase
-      .from('attendance')
-      .select('id, work_date')
-      .eq('user_id', user.id)
-      .eq('store_id', validated.store_id)
-      .eq('work_date', workDate)
-      .maybeSingle()
-
-    // 없으면 오늘/어제 날짜의 미퇴근 기록도 확인 (야간 근무 고려)
-    if (!existing.data) {
-      // 오늘 날짜 확인
-      existing = await supabase
-        .from('attendance')
-        .select('id, work_date')
-        .eq('user_id', user.id)
-        .eq('store_id', validated.store_id)
-        .eq('work_date', today)
-        .maybeSingle()
-      
-      // 없으면 어제 날짜 확인
-      if (!existing.data) {
-        existing = await supabase
+          .maybeSingle(),
+      ]),
+      // 동일 매장의 중복 출근 확인 (work_date, today, yesterday 병렬 조회)
+      Promise.allSettled([
+        supabase
+          .from('attendance')
+          .select('id, work_date')
+          .eq('user_id', user.id)
+          .eq('store_id', validated.store_id)
+          .eq('work_date', workDate)
+          .maybeSingle(),
+        supabase
+          .from('attendance')
+          .select('id, work_date')
+          .eq('user_id', user.id)
+          .eq('store_id', validated.store_id)
+          .eq('work_date', today)
+          .maybeSingle(),
+        supabase
           .from('attendance')
           .select('id, work_date')
           .eq('user_id', user.id)
           .eq('store_id', validated.store_id)
           .eq('work_date', yesterday)
           .is('clock_out_at', null)
-          .maybeSingle()
+          .maybeSingle(),
+      ]),
+    ])
+
+    // 출근 중인 매장 확인 결과 처리
+    let activeAttendance: any = null
+    if (activeAttendanceResults.status === 'fulfilled') {
+      const results = activeAttendanceResults.value
+      for (const result of results) {
+        if (result.status === 'fulfilled' && result.value.data) {
+          activeAttendance = result.value
+          break
+        }
       }
     }
 
-    if (existing.data) {
+    if (activeAttendance?.data) {
+      return { success: false, error: '먼저 관리 중인 매장의 관리완료 처리를 완료해주세요.' }
+    }
+
+    // 중복 출근 확인 결과 처리
+    let existing: any = null
+    if (existingResults.status === 'fulfilled') {
+      const results = existingResults.value
+      for (const result of results) {
+        if (result.status === 'fulfilled' && result.value.data) {
+          existing = result.value
+          break
+        }
+      }
+    }
+
+    if (existing?.data) {
       return { success: false, error: '이미 해당 매장에 출근하셨습니다.' }
     }
 
@@ -309,39 +321,45 @@ export async function clockOutAction(
     const today = getTodayDateKST()
     const yesterday = getYesterdayDateKST()
 
-    // 특정 매장의 출근 기록 찾기 (오늘 날짜로 먼저 검색)
-    let attendance = await supabase
-      .from('attendance')
-      .select('id, clock_out_at, store_id, work_date')
-      .eq('user_id', user.id)
-      .eq('store_id', store_id)
-      .eq('work_date', today)
-      .is('clock_out_at', null) // 미퇴근 기록만
-      .maybeSingle()
-
-    // 없으면 어제 날짜의 미퇴근 기록 확인 (날짜 경계를 넘는 야간 근무 고려)
-    if (!attendance.data) {
-      attendance = await supabase
+    // 특정 매장의 출근 기록 찾기 - 병렬 처리로 최적화
+    const attendanceResults = await Promise.allSettled([
+      // 오늘 날짜로 먼저 검색
+      supabase
+        .from('attendance')
+        .select('id, clock_out_at, store_id, work_date')
+        .eq('user_id', user.id)
+        .eq('store_id', store_id)
+        .eq('work_date', today)
+        .is('clock_out_at', null)
+        .maybeSingle(),
+      // 어제 날짜의 미퇴근 기록 확인 (날짜 경계를 넘는 야간 근무 고려)
+      supabase
         .from('attendance')
         .select('id, clock_out_at, store_id, work_date')
         .eq('user_id', user.id)
         .eq('store_id', store_id)
         .eq('work_date', yesterday)
-        .is('clock_out_at', null) // 미퇴근 기록만
-        .maybeSingle()
-    }
-    
-    // 여전히 없으면 work_date와 관계없이 해당 매장의 미퇴근 기록 확인 (야간 매장 고려)
-    if (!attendance.data) {
-      attendance = await supabase
+        .is('clock_out_at', null)
+        .maybeSingle(),
+      // work_date와 관계없이 해당 매장의 미퇴근 기록 확인 (야간 매장 고려)
+      supabase
         .from('attendance')
         .select('id, clock_out_at, store_id, work_date')
         .eq('user_id', user.id)
         .eq('store_id', store_id)
-        .is('clock_out_at', null) // 미퇴근 기록만
-        .order('clock_in_at', { ascending: false }) // 최신 출근 기록 우선
+        .is('clock_out_at', null)
+        .order('clock_in_at', { ascending: false })
         .limit(1)
-        .maybeSingle()
+        .maybeSingle(),
+    ])
+
+    // 결과 중 첫 번째로 찾은 데이터 사용
+    let attendance: any = null
+    for (const result of attendanceResults) {
+      if (result.status === 'fulfilled' && result.value.data) {
+        attendance = result.value
+        break
+      }
     }
 
     if (attendance.error || !attendance.data) {

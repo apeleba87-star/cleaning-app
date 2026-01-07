@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>무플(MUPL)</title>
+  <script>
+    // Capacitor가 서버 URL을 사용하는 경우 자동으로 서버의 루트로 로드됨
+    // 리다이렉트가 필요 없음 (Capacitor가 자동 처리)
+    // 로컬 파일로 로드되는 경우에만 리다이렉트
+    if (window.location.protocol === 'file:' || window.location.hostname === '') {
+      window.location.href = '/';
+    }
+  </script>
+</head>
+<body>
+  <div>Loading...</div>
+</body>
+</html>

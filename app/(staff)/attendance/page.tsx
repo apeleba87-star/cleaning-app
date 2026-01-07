@@ -20,6 +20,33 @@ import { getTodayDateKST, getYesterdayDateKST } from '@/lib/utils/date'
 import { useTodayAttendance } from '@/contexts/AttendanceContext'
 import { calculateChecklistProgress } from '@/lib/utils/checklist'
 
+// 네트워크 상태 타입 확장
+interface NavigatorWithConnection extends Navigator {
+  connection?: {
+    effectiveType?: 'slow-2g' | '2g' | '3g' | '4g'
+    addEventListener?: (event: string, handler: () => void) => void
+  }
+  mozConnection?: NavigatorWithConnection['connection']
+  webkitConnection?: NavigatorWithConnection['connection']
+}
+
+// 네트워크 상태 감지 함수
+function getNetworkStatus(): 'online' | 'offline' | 'slow' | 'unknown' {
+  if (typeof window === 'undefined') return 'unknown'
+  if (!navigator.onLine) return 'offline'
+  
+  const nav = navigator as NavigatorWithConnection
+  const connection = nav.connection || nav.mozConnection || nav.webkitConnection
+  
+  if (!connection) return 'unknown'
+  
+  if (connection.effectiveType === 'slow-2g' || connection.effectiveType === '2g') {
+    return 'slow'
+  }
+  
+  return 'online'
+}
+
 interface AttendanceWithStore extends Attendance {
   stores?: { name: string }
 }
@@ -30,7 +57,6 @@ export default function AttendancePage() {
   const [todayAttendances, setTodayAttendances] = useState<AttendanceWithStore[]>([])
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
-  const [clockInLoading, setClockInLoading] = useState(false) // 출근 처리 후 로딩 상태
   const [error, setError] = useState<string | null>(null)
   const [selectedStoreId, setSelectedStoreId] = useState<string>('')
   const [checklistProgress, setChecklistProgress] = useState<Record<string, { completed: number; total: number; percentage: number }>>({})
@@ -42,11 +68,38 @@ export default function AttendancePage() {
   const [scheduledDate, setScheduledDate] = useState<string>('')
   const [problemReportId, setProblemReportId] = useState<string>('')
   const [changeReason, setChangeReason] = useState<string>('')
+  
+  // 네트워크 상태
+  const [networkStatus, setNetworkStatus] = useState<'online' | 'offline' | 'slow' | 'unknown'>(() => getNetworkStatus())
 
   // 출근 유형 변경 시 매장 선택 초기화
   useEffect(() => {
     setSelectedStoreId('')
   }, [attendanceType])
+
+  // 네트워크 상태 모니터링
+  useEffect(() => {
+    const updateNetworkStatus = () => {
+      setNetworkStatus(getNetworkStatus())
+    }
+
+    window.addEventListener('online', updateNetworkStatus)
+    window.addEventListener('offline', updateNetworkStatus)
+    
+    const nav = navigator as NavigatorWithConnection
+    if (nav.connection) {
+      nav.connection.addEventListener?.('change', updateNetworkStatus)
+    } else if (nav.mozConnection) {
+      nav.mozConnection.addEventListener?.('change', updateNetworkStatus)
+    } else if (nav.webkitConnection) {
+      nav.webkitConnection.addEventListener?.('change', updateNetworkStatus)
+    }
+
+    return () => {
+      window.removeEventListener('online', updateNetworkStatus)
+      window.removeEventListener('offline', updateNetworkStatus)
+    }
+  }, [])
 
   // 출근 중인 매장이 있는지 확인 (퇴근하지 않은 매장)
   const hasActiveAttendance = todayAttendances.some(a => !a.clock_out_at)
@@ -284,46 +337,95 @@ export default function AttendancePage() {
     setSubmitting(true)
     setError(null)
 
-    const result = await clockInAction(
-      selectedStoreId,
-      location,
-      undefined, // selfie_url
-      attendanceType,
-      attendanceType === 'rescheduled' ? scheduledDate : null,
-      attendanceType === 'emergency' ? (problemReportId || null) : null,
-      attendanceType === 'rescheduled' ? (changeReason || null) : null
-    )
+    // 낙관적 업데이트: 서버 응답 전에 UI 업데이트
+    const optimisticId = 'temp-' + Date.now()
+    const optimisticAttendance: AttendanceWithStore = {
+      id: optimisticId,
+      user_id: '', // 서버 응답으로 채워짐
+      store_id: selectedStoreId,
+      work_date: getTodayDateKST(), // 임시값, 서버 응답으로 교체됨
+      clock_in_at: new Date().toISOString(),
+      clock_in_latitude: location.lat,
+      clock_in_longitude: location.lng,
+      clock_out_at: null,
+      clock_out_latitude: null,
+      clock_out_longitude: null,
+      selfie_url: null,
+      attendance_type: attendanceType,
+      scheduled_date: attendanceType === 'rescheduled' ? scheduledDate : null,
+      problem_report_id: attendanceType === 'emergency' ? problemReportId : null,
+      change_reason: attendanceType === 'rescheduled' ? changeReason : null,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+      stores: undefined, // 나중에 로드됨
+    }
 
-    if (result.success && result.data) {
-      // 미션 완료 이벤트 발생
-      if (typeof window !== 'undefined') {
-        window.dispatchEvent(new CustomEvent('missionComplete', {
-          detail: { missionId: 'start_management' }
-        }))
+    // 낙관적 업데이트 적용
+    setTodayAttendances(prev => [...prev, optimisticAttendance])
+
+    try {
+      const result = await clockInAction(
+        selectedStoreId,
+        location,
+        undefined, // selfie_url
+        attendanceType,
+        attendanceType === 'rescheduled' ? scheduledDate : null,
+        attendanceType === 'emergency' ? (problemReportId || null) : null,
+        attendanceType === 'rescheduled' ? (changeReason || null) : null
+      )
+
+      if (result.success && result.data) {
+        // 미션 완료 이벤트 발생
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('missionComplete', {
+            detail: { missionId: 'start_management' }
+          }))
+        }
+
+        // 서버 응답 데이터로 낙관적 업데이트 교체
+        const serverData = result.data as any
+        setTodayAttendances(prev =>
+          prev.map(a =>
+            a.id === optimisticId
+              ? { ...serverData, stores: a.stores } // stores는 나중에 로드
+              : a
+          )
+        )
+
+        setSubmitting(false)
+        setSelectedStoreId('') // 매장 선택 초기화
+
+        // 백그라운드에서 최신 데이터 동기화 (에러 무시)
+        Promise.all([
+          loadTodayAttendance().catch(() => {}),
+          refreshAttendanceContext(),
+        ]).then(() => {
+          // 체크리스트 진행률 업데이트 (백그라운드)
+          loadChecklistProgress().catch(() => {})
+        })
+
+        // 네트워크 상태에 따른 리다이렉트 딜레이
+        const isSlowNetwork = networkStatus === 'slow' || networkStatus === 'offline'
+        const redirectDelay = isSlowNetwork ? 500 : 0
+
+        if (redirectDelay > 0) {
+          setTimeout(() => {
+            router.push('/mobile-dashboard')
+          }, redirectDelay)
+        } else {
+          // 빠른 네트워크: 즉시 리다이렉트
+          router.push('/mobile-dashboard')
+        }
+      } else {
+        // 실패 시 롤백
+        setTodayAttendances(prev => prev.filter(a => a.id !== optimisticId))
+        setError(result.error || '관리시작 처리 실패')
+        setSubmitting(false)
       }
-
-      setSubmitting(false)
-      setClockInLoading(true) // 출근 처리 후 로딩 시작
-      
-      // 출근 정보 다시 로드 (매장 정보 포함)
-      await loadTodayAttendance()
-      // Context도 refresh하여 다른 페이지들이 최신 데이터를 받도록 함
-      refreshAttendanceContext()
-      setSelectedStoreId('') // 매장 선택 초기화
-      
-      // 출근 완료 후 체크리스트 진행률 업데이트
-      setTimeout(() => {
-        loadChecklistProgress()
-      }, 500)
-      
-      // 출근 정보 로드 완료 후 약간의 딜레이를 두고 로딩 종료 및 리다이렉트
-      // (퇴근 버튼이 나타나는 것을 확인할 수 있도록)
-      setTimeout(() => {
-        setClockInLoading(false) // 로딩 종료
-        router.push('/mobile-dashboard')
-      }, 1500) // 1.5초 후 리다이렉트 (로딩 스피너 확인 시간 포함)
-    } else {
-      setError(result.error || '관리시작 처리 실패')
+    } catch (error) {
+      // 네트워크 오류 등 예외 발생 시 롤백
+      setTodayAttendances(prev => prev.filter(a => a.id !== optimisticId))
+      setError(error instanceof Error ? error.message : '관리시작 처리 중 오류가 발생했습니다.')
       setSubmitting(false)
     }
   }
@@ -337,33 +439,64 @@ export default function AttendancePage() {
     setSubmitting(true)
     setError(null)
 
-    console.log('Attempting clock-out for store:', storeId, { location })
-    const result = await clockOutAction(storeId, location)
+    // 낙관적 업데이트: 퇴근 시간 즉시 반영
+    const clockOutTime = new Date().toISOString()
+    setTodayAttendances(prev =>
+      prev.map(attendance =>
+        attendance.store_id === storeId && !attendance.clock_out_at
+          ? { ...attendance, clock_out_at: clockOutTime }
+          : attendance
+      )
+    )
 
-    if (result.success && result.data) {
-      console.log('Clock-out successful:', result.data)
-      setError(null)
-      
-      // 퇴근 정보 다시 로드 (최신 데이터로 동기화) - 먼저 로드하여 정확한 데이터 반영
-      await loadTodayAttendance()
-      
-      // 추가로 로컬 상태 업데이트 (이중 확인)
-      const clockOutTime = (result.data as any)?.clock_out_at || new Date().toISOString()
-      setTodayAttendances(prev => 
-        prev.map(attendance => 
-          attendance.store_id === storeId && !attendance.clock_out_at
-            ? { ...attendance, clock_out_at: clockOutTime }
+    try {
+      console.log('Attempting clock-out for store:', storeId, { location })
+      const result = await clockOutAction(storeId, location)
+
+      if (result.success && result.data) {
+        console.log('Clock-out successful:', result.data)
+        setError(null)
+
+        // 서버 응답 데이터로 업데이트
+        const serverData = result.data as any
+        setTodayAttendances(prev =>
+          prev.map(attendance =>
+            attendance.store_id === storeId
+              ? { ...attendance, ...serverData }
+              : attendance
+          )
+        )
+
+        // 백그라운드에서 최신 데이터 동기화
+        Promise.all([
+          loadTodayAttendance().catch(() => {}),
+          refreshAttendanceContext(),
+        ])
+
+        // 체크리스트 진행률 초기화
+        setChecklistProgress({})
+      } else {
+        console.error('Clock-out failed:', result.error)
+        // 실패 시 롤백
+        setTodayAttendances(prev =>
+          prev.map(attendance =>
+            attendance.store_id === storeId && attendance.clock_out_at === clockOutTime
+              ? { ...attendance, clock_out_at: null }
+              : attendance
+          )
+        )
+        setError(result.error || '관리완료 처리 실패')
+      }
+    } catch (error) {
+      // 네트워크 오류 등 예외 발생 시 롤백
+      setTodayAttendances(prev =>
+        prev.map(attendance =>
+          attendance.store_id === storeId && attendance.clock_out_at === clockOutTime
+            ? { ...attendance, clock_out_at: null }
             : attendance
         )
       )
-      // Context도 refresh하여 다른 페이지들이 최신 데이터를 받도록 함
-      refreshAttendanceContext()
-      
-      // 체크리스트 진행률 초기화
-      setChecklistProgress({})
-    } else {
-      console.error('Clock-out failed:', result.error)
-      setError(result.error || '관리완료 처리 실패')
+      setError(error instanceof Error ? error.message : '관리완료 처리 중 오류가 발생했습니다.')
     }
 
     setSubmitting(false)
@@ -394,6 +527,18 @@ export default function AttendancePage() {
         {location && (
           <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-md text-sm">
             위치: {location.lat.toFixed(6)}, {location.lng.toFixed(6)}
+          </div>
+        )}
+
+        {/* 네트워크 상태 표시 */}
+        {networkStatus === 'slow' && (
+          <div className="mb-4 p-3 bg-orange-50 border border-orange-200 rounded-md text-sm text-orange-800">
+            ⚠️ 느린 네트워크가 감지되었습니다. 처리 시간이 다소 걸릴 수 있습니다.
+          </div>
+        )}
+        {networkStatus === 'offline' && (
+          <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-md text-sm text-red-800">
+            ❌ 오프라인 상태입니다. 네트워크 연결을 확인해주세요.
           </div>
         )}
 
@@ -535,17 +680,7 @@ export default function AttendancePage() {
         <div className="space-y-3 md:space-y-4">
           <h2 className="text-base md:text-lg font-semibold">오늘 관리한 매장</h2>
           
-          {/* 관리시작 처리 후 로딩 스피너 */}
-          {clockInLoading && (
-            <div className="p-4 bg-blue-50 rounded-md border border-blue-200 flex items-center justify-center">
-                <div className="flex flex-col items-center gap-3">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-                <p className="text-sm text-blue-700">관리시작 처리가 완료되었습니다. 관리완료 버튼을 불러오는 중...</p>
-              </div>
-            </div>
-          )}
-          
-          {todayAttendances.length === 0 && !clockInLoading ? (
+          {todayAttendances.length === 0 ? (
             <div className="p-4 bg-gray-50 rounded-md text-center text-gray-500">
               아직 관리한 매장이 없습니다.
             </div>
