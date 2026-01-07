@@ -1105,8 +1105,8 @@ export default function StoreManagerDashboardPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          completion_photo_url: completionPhoto.trim() || null,
-          completion_description: completionDescription.trim() || null,
+          completion_photo_url: (completionPhoto || '').trim() || null,
+          completion_description: (completionDescription || '').trim() || null,
         }),
       })
 
@@ -2612,7 +2612,7 @@ export default function StoreManagerDashboardPage() {
         if (!completingRequest) return null
         return (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-lg p-6 max-w-md w-full">
+            <div className="bg-white rounded-lg p-6 max-w-md w-full max-h-[90vh] overflow-y-auto">
               <h2 className="text-xl font-bold mb-4">요청란 처리 완료</h2>
               
               <div className="mb-4">
