@@ -11,6 +11,7 @@ interface StoreStatus {
   store_address: string | null
   work_day: string | null
   is_work_day: boolean
+  is_night_shift?: boolean // 야간매장 여부
   attendance_status: 'not_clocked_in' | 'clocked_in' | 'clocked_out'
   status_label?: string | null // 야간매장 상태 메시지
   clock_in_time: string | null
@@ -1667,7 +1668,9 @@ export default function BusinessStoresStatusPage() {
                   <div
                     key={status.store_id}
                     className={`bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow border-l-4 mb-4 ${
-                      !status.is_work_day
+                      status.is_night_shift
+                        ? 'border-purple-500' // 야간매장은 보라색 테두리
+                        : !status.is_work_day
                         ? 'border-gray-300 opacity-60'
                         : status.has_problem
                         ? 'border-red-500'
@@ -1681,6 +1684,15 @@ export default function BusinessStoresStatusPage() {
                         <div className="flex-1">
                           <div className="flex items-center gap-3 mb-2">
                             <h3 className="text-xl font-bold text-gray-900">{status.store_name}</h3>
+                            {status.is_night_shift && (
+                              <span 
+                                className="px-2 py-0.5 bg-purple-100 text-purple-700 rounded-full text-xs font-semibold flex items-center gap-1"
+                                title="야간 매장"
+                              >
+                                <span>🌙</span>
+                                <span>야간</span>
+                              </span>
+                            )}
                             <span 
                               className={`px-3 py-1 rounded-full text-sm font-semibold ${getStatusColor(status)}`}
                               title={`출근상태: ${status.attendance_status}, 작업일: ${status.is_work_day ? '예' : '아니오'}`}
@@ -2145,7 +2157,9 @@ export default function BusinessStoresStatusPage() {
                     <div
                       key={status.store_id}
                       className={`bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow border-l-4 p-4 ${
-                        !status.is_work_day
+                        status.is_night_shift
+                          ? 'border-purple-500' // 야간매장은 보라색 테두리
+                          : !status.is_work_day
                           ? 'border-gray-300 opacity-60'
                           : status.has_problem
                           ? 'border-red-500'
@@ -2167,9 +2181,20 @@ export default function BusinessStoresStatusPage() {
                       >
                         <div className="flex flex-col gap-2">
                           {/* 매장 이름 */}
-                          <h3 className="text-base font-bold text-gray-900 truncate" title={status.store_name}>
-                            {status.store_name}
-                          </h3>
+                          <div className="flex items-center gap-2">
+                            <h3 className="text-base font-bold text-gray-900 truncate" title={status.store_name}>
+                              {status.store_name}
+                            </h3>
+                            {status.is_night_shift && (
+                              <span 
+                                className="px-2 py-0.5 bg-purple-100 text-purple-700 rounded-full text-xs font-semibold flex items-center gap-1 flex-shrink-0"
+                                title="야간 매장"
+                              >
+                                <span>🌙</span>
+                                <span>야간</span>
+                              </span>
+                            )}
+                          </div>
                           {/* 출근상태 */}
                           <div className="flex items-center gap-2">
                             <span 

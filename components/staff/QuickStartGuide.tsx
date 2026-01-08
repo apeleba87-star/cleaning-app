@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { getTodayDateKST, getYesterdayDateKST } from '@/lib/utils/date'
+import { calculateChecklistProgress } from '@/lib/utils/checklist'
 import Link from 'next/link'
 
 export type MissionId = 
@@ -171,88 +172,69 @@ export default function QuickStartGuide({ userId }: QuickStartGuideProps) {
     }
   }, [userId])
 
-  // 미션 완료 상태 확인
-  const checkMissionCompletion = useCallback(async () => {
+  // 미션 완료 상태 확인 (에러 처리 및 재시도 로직 포함)
+  const checkMissionCompletion = useCallback(async (retryCount = 0) => {
     if (!userId) return
 
-    const supabase = createClient()
-    const today = getTodayDateKST()
-    const yesterday = getYesterdayDateKST()
+    const maxRetries = 2
+    const retryDelay = 1000 // 1초
 
-    // 활성 출근 기록 조회 (야간 매장 대응)
-    const { data: activeAttendances } = await supabase
-      .from('attendance')
-      .select('id, work_date')
-      .eq('user_id', userId)
-      .in('work_date', [today, yesterday])
-      .is('clock_out_at', null)
+    try {
+      const supabase = createClient()
+      const today = getTodayDateKST()
+      const yesterday = getYesterdayDateKST()
 
-    // 1. 관리시작 확인 - clock_in_at이 존재하면 관리시작 완료
-    if (activeAttendances && activeAttendances.length > 0) {
-      saveMissionCompletion('start_management', true)
-    }
+      // 활성 출근 기록 조회 (야간 매장 대응)
+      const { data: activeAttendances, error: attendanceError } = await supabase
+        .from('attendance')
+        .select('id, work_date')
+        .eq('user_id', userId)
+        .in('work_date', [today, yesterday])
+        .is('clock_out_at', null)
 
-    // 활성 출근 기록의 work_date 목록 (체크리스트 조회용)
-    const activeWorkDates = activeAttendances?.map(a => a.work_date) || []
-    // 활성 출근 기록이 없으면 today와 yesterday 모두 확인
-    const workDatesToCheck = activeWorkDates.length > 0 ? activeWorkDates : [today, yesterday]
+      if (attendanceError) {
+        console.error('출근 기록 조회 실패:', attendanceError)
+        // 에러가 발생해도 다른 미션 확인은 계속 진행
+      }
+
+      // 1. 관리시작 확인 - clock_in_at이 존재하면 관리시작 완료
+      if (activeAttendances && activeAttendances.length > 0) {
+        saveMissionCompletion('start_management', true)
+      }
+
+      // 활성 출근 기록의 work_date 목록 (체크리스트 조회용)
+      const activeWorkDates = activeAttendances?.map(a => a.work_date) || []
+      // 활성 출근 기록이 없으면 today와 yesterday 모두 확인 (최근 2일치)
+      const workDatesToCheck = activeWorkDates.length > 0 ? activeWorkDates : [today, yesterday]
 
     // 2. 체크리스트 확인 - 체크리스트 완료 확인
-    // completed_at이 있거나, 모든 항목이 완료된 체크리스트가 있는지 확인
-    const { data: checklists } = await supabase
+    // completed_at이 있거나, calculateChecklistProgress로 완료된 체크리스트가 있는지 확인
+    // 최근 2일치 체크리스트 확인 (야간 매장 대응)
+    const { data: checklists, error: checklistError } = await supabase
       .from('checklist')
       .select('id, items, completed_at, work_date')
       .eq('assigned_user_id', userId)
       .in('work_date', workDatesToCheck)
 
-    if (checklists && checklists.length > 0) {
+    if (checklistError) {
+      console.error('체크리스트 조회 실패:', checklistError)
+      // 에러가 발생해도 다른 미션 확인은 계속 진행
+    } else if (checklists && checklists.length > 0) {
       // completed_at이 있는 체크리스트가 있으면 완료
       const hasCompletedAt = checklists.some((cl: any) => cl.completed_at)
       
-      // 또는 items를 분석하여 완료된 체크리스트가 있는지 확인
+      // 또는 calculateChecklistProgress를 사용하여 완료된 체크리스트가 있는지 확인
       let hasCompletedChecklist = false
       if (!hasCompletedAt) {
         hasCompletedChecklist = checklists.some((cl: any) => {
-          if (!cl.items || !Array.isArray(cl.items) || cl.items.length === 0) {
+          if (!cl.items || !Array.isArray(cl.items)) {
             return false
           }
 
-          let totalItems = 0
-          let completedItems = 0
-
-          cl.items.forEach((item: any) => {
-            // area가 없어도 카운트 (area는 선택사항일 수 있음)
-            const itemType = item.type || 'check'
-
-            if (itemType === 'check') {
-              totalItems++
-              if (item.checked) {
-                completedItems++
-              }
-            } else if (itemType === 'before_photo') {
-              totalItems++
-              if (item.before_photo_url) {
-                completedItems++
-              }
-            } else if (itemType === 'after_photo') {
-              totalItems++
-              if (item.after_photo_url) {
-                completedItems++
-              }
-            } else if (itemType === 'before_after_photo') {
-              totalItems += 2
-              if (item.before_photo_url) {
-                completedItems++
-              }
-              if (item.after_photo_url) {
-                completedItems++
-              }
-            }
-          })
-
-          // totalItems가 0이면 체크리스트가 비어있는 것으로 간주하고 완료로 처리하지 않음
-          // 하지만 체크리스트가 존재하고 items 배열이 있으면 완료 여부 확인
-          return totalItems > 0 && completedItems === totalItems
+          // calculateChecklistProgress 함수 사용 (로직 통일)
+          const progress = calculateChecklistProgress(cl as any)
+          // percentage가 100%이고 totalItems가 0보다 크면 완료
+          return progress.percentage === 100 && progress.totalItems > 0
         })
       }
 
@@ -264,56 +246,79 @@ export default function QuickStartGuide({ userId }: QuickStartGuideProps) {
     // 3. 요청란 확인 - supplies 페이지 방문은 pathname으로 체크
     // (페이지 방문은 별도로 처리)
 
-    // 4. 제품 입고 사진 확인 (활성 출근 기록이 있으면 해당 날짜부터, 없으면 오늘부터)
-    // 가장 이른 work_date 찾기
-    const earliestWorkDate = activeWorkDates.length > 0 
-      ? activeWorkDates.sort()[0]  // 날짜 문자열은 정렬 가능 (YYYY-MM-DD 형식)
-      : today
-    const productPhotoStartDate = `${earliestWorkDate}T00:00:00`
-    const { data: productPhoto } = await supabase
-      .from('product_photos')
-      .select('id')
-      .eq('user_id', userId)
-      .gte('created_at', productPhotoStartDate)
-      .limit(1)
-      .maybeSingle()
+      // 4. 제품 입고 사진 확인 (활성 출근 기록이 있으면 해당 날짜부터, 없으면 오늘부터)
+      // 가장 이른 work_date 찾기
+      const earliestWorkDate = activeWorkDates.length > 0 
+        ? activeWorkDates.sort()[0]  // 날짜 문자열은 정렬 가능 (YYYY-MM-DD 형식)
+        : today
+      const productPhotoStartDate = `${earliestWorkDate}T00:00:00`
+      const { data: productPhoto, error: productPhotoError } = await supabase
+        .from('product_photos')
+        .select('id')
+        .eq('user_id', userId)
+        .gte('created_at', productPhotoStartDate)
+        .limit(1)
+        .maybeSingle()
 
-    if (productPhoto) {
-      saveMissionCompletion('product_photos', true)
+      if (productPhotoError) {
+        console.error('제품 입고 사진 조회 실패:', productPhotoError)
+      } else if (productPhoto) {
+        saveMissionCompletion('product_photos', true)
+      }
+
+      // 5. 매장 문제 보고 확인 (활성 출근 기록이 있으면 해당 날짜부터, 없으면 오늘부터)
+      const issueStartDate = `${earliestWorkDate}T00:00:00`
+      const { data: issue, error: issueError } = await supabase
+        .from('issues')
+        .select('id')
+        .eq('user_id', userId)
+        .gte('created_at', issueStartDate)
+        .limit(1)
+        .maybeSingle()
+
+      if (issueError) {
+        console.error('매장 문제 보고 조회 실패:', issueError)
+      } else if (issue) {
+        saveMissionCompletion('store_issues', true)
+      }
+
+      // 6. 물품 요청 확인 (활성 출근 기록이 있으면 해당 날짜부터, 없으면 오늘부터)
+      const supplyRequestStartDate = `${earliestWorkDate}T00:00:00`
+      const { data: supplyRequest, error: supplyRequestError } = await supabase
+        .from('supply_requests')
+        .select('id')
+        .eq('user_id', userId)
+        .gte('created_at', supplyRequestStartDate)
+        .limit(1)
+        .maybeSingle()
+
+      if (supplyRequestError) {
+        console.error('물품 요청 조회 실패:', supplyRequestError)
+      } else if (supplyRequest) {
+        saveMissionCompletion('supply_request', true)
+      }
+
+      // 7. 바코드 제품 찾기 - product-search 페이지 방문은 pathname으로 체크
+      // (페이지 방문은 별도로 처리)
+
+      setLoading(false)
+    } catch (error: any) {
+      console.error('미션 완료 확인 중 오류 발생:', error)
+      
+      // 재시도 로직
+      if (retryCount < maxRetries) {
+        console.log(`미션 완료 확인 재시도 중... (${retryCount + 1}/${maxRetries})`)
+        setTimeout(() => {
+          checkMissionCompletion(retryCount + 1).catch(err => {
+            console.error('재시도 실패:', err)
+            setLoading(false)
+          })
+        }, retryDelay * (retryCount + 1)) // 지수 백오프
+      } else {
+        console.error('미션 완료 확인 최대 재시도 횟수 초과')
+        setLoading(false)
+      }
     }
-
-    // 5. 매장 문제 보고 확인 (활성 출근 기록이 있으면 해당 날짜부터, 없으면 오늘부터)
-    const issueStartDate = `${earliestWorkDate}T00:00:00`
-    const { data: issue } = await supabase
-      .from('issues')
-      .select('id')
-      .eq('user_id', userId)
-      .gte('created_at', issueStartDate)
-      .limit(1)
-      .maybeSingle()
-
-    if (issue) {
-      saveMissionCompletion('store_issues', true)
-    }
-
-    // 6. 물품 요청 확인 (활성 출근 기록이 있으면 해당 날짜부터, 없으면 오늘부터)
-    const supplyRequestStartDate = `${earliestWorkDate}T00:00:00`
-    const { data: supplyRequest } = await supabase
-      .from('supply_requests')
-      .select('id')
-      .eq('user_id', userId)
-      .gte('created_at', supplyRequestStartDate)
-      .limit(1)
-      .maybeSingle()
-
-    if (supplyRequest) {
-      saveMissionCompletion('supply_request', true)
-    }
-
-    // 7. 바코드 제품 찾기 - product-search 페이지 방문은 pathname으로 체크
-    // (페이지 방문은 별도로 처리)
-
-    setLoading(false)
   }, [userId, saveMissionCompletion])
 
   // 페이지 방문 시 미션 완료 처리
@@ -340,9 +345,26 @@ export default function QuickStartGuide({ userId }: QuickStartGuideProps) {
   useEffect(() => {
     if (!userId) return
 
-    const handleMissionComplete = (event: CustomEvent<{ missionId: MissionId }>) => {
+    const handleMissionComplete = async (event: CustomEvent<{ missionId: MissionId }>) => {
       const { missionId } = event.detail
+      // 즉시 로컬 스토리지에 저장 (낙관적 업데이트)
       saveMissionCompletion(missionId, true)
+      
+      // 체크리스트 미션인 경우 즉시 DB 확인하여 정확성 보장
+      if (missionId === 'checklist') {
+        // 약간의 지연 후 DB 확인 (DB 업데이트 반영 시간 고려)
+        setTimeout(() => {
+          checkMissionCompletion().catch(err => {
+            console.error('체크리스트 완료 확인 실패:', err)
+            // 실패해도 로컬 스토리지 상태는 유지
+          })
+        }, 500)
+      } else {
+        // 다른 미션도 즉시 DB 확인
+        checkMissionCompletion().catch(err => {
+          console.error('미션 완료 확인 실패:', err)
+        })
+      }
     }
 
     window.addEventListener('missionComplete', handleMissionComplete as EventListener)
@@ -350,7 +372,7 @@ export default function QuickStartGuide({ userId }: QuickStartGuideProps) {
     return () => {
       window.removeEventListener('missionComplete', handleMissionComplete as EventListener)
     }
-  }, [userId, saveMissionCompletion])
+  }, [userId, saveMissionCompletion, checkMissionCompletion])
 
   // 초기 로드
   useEffect(() => {
