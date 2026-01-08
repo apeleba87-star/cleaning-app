@@ -284,60 +284,19 @@ export async function GET(request: NextRequest) {
     const storeStatuses = await Promise.all(
       stores.map(async (store) => {
         try {
-        // 오늘이 출근일인지 확인 (야간매장 고려)
+        // 오늘이 출근일인지 확인 (사용자 친화적: 항상 오늘 날짜 기준)
         let isWorkDay = false
         if (store.is_night_shift && 
             store.work_start_hour !== null && 
             store.work_end_hour !== null) {
-          const currentHour = getCurrentHourKST()
-          const isWithinPeriod = isWithinManagementPeriod(
+          // 야간매장: 항상 오늘 날짜 기준으로 관리일 여부 판단 (사용자 이해도 향상)
+          isWorkDay = isManagementDay(
+            store.management_days,
             true,
             store.work_start_hour,
             store.work_end_hour,
-            currentHour
+            getTodayDateKST()
           )
-          
-          if (isWithinPeriod) {
-            // 관리일 범위 내: work_date 기준으로 요일 확인
-            const workDate = calculateWorkDateForNightShift(
-              true,
-              store.work_start_hour,
-              store.work_end_hour,
-              currentHour
-            )
-            isWorkDay = isManagementDay(
-              store.management_days,
-              true,
-              store.work_start_hour,
-              store.work_end_hour,
-              workDate
-            )
-          } else {
-            // 관리일 범위 밖
-            // work_end_hour 이후: 다음 관리일 예정 여부 확인
-            if (currentHour >= store.work_end_hour) {
-              // 오늘 날짜 기준으로 관리일인지 확인
-              isWorkDay = isManagementDay(
-                store.management_days,
-                true,
-                store.work_start_hour,
-                store.work_end_hour,
-                getTodayDateKST()
-              )
-            } else {
-              // work_start_hour 이전: 어제 날짜 기준으로 확인
-              const yesterday = new Date(koreaTime)
-              yesterday.setDate(yesterday.getDate() - 1)
-              const yesterdayDateKST = `${yesterday.getFullYear()}-${String(yesterday.getMonth() + 1).padStart(2, '0')}-${String(yesterday.getDate()).padStart(2, '0')}`
-              isWorkDay = isManagementDay(
-                store.management_days,
-                true,
-                store.work_start_hour,
-                store.work_end_hour,
-                yesterdayDateKST
-              )
-            }
-          }
         } else {
           // 일반 매장
           isWorkDay = store.management_days
@@ -736,7 +695,7 @@ export async function GET(request: NextRequest) {
 
         const hasProblem = storeProblemCount > 0 || vendingProblemCount > 0 || lostItemCount > 0
 
-        // 야간매장 상태 메시지 생성
+        // 야간매장 상태 메시지 생성 (상세 상태 안내)
         let statusLabel = ''
         if (store.is_night_shift && 
             store.work_start_hour !== null && 
@@ -749,16 +708,58 @@ export async function GET(request: NextRequest) {
             currentHour
           )
           
-          if (isWithinPeriod && isWorkDay) {
-            statusLabel = '관리일 (관리 가능)'
-          } else if (!isWithinPeriod && currentHour < store.work_start_hour && isWorkDay) {
-            statusLabel = '오늘 오후부터 관리 시작 예정'
-          } else if (!isWithinPeriod && currentHour >= store.work_end_hour) {
-            // 관리 완료된 경우
-            if (attendanceStatus === 'clocked_out') {
-              statusLabel = '관리완료'
+          if (isWithinPeriod) {
+            // 관리일 범위 내
+            const workDate = calculateWorkDateForNightShift(
+              true,
+              store.work_start_hour,
+              store.work_end_hour,
+              currentHour
+            )
+            const workDateIsManagementDay = isManagementDay(
+              store.management_days,
+              true,
+              store.work_start_hour,
+              store.work_end_hour,
+              workDate
+            )
+            
+            if (workDateIsManagementDay) {
+              // 실제 관리가 진행 중인 날짜가 관리일인 경우
+              statusLabel = '관리일 (관리 가능)'
             } else if (isWorkDay) {
-              statusLabel = '오늘이 관리일, 오후부터 시작'
+              // 오늘이 관리일이지만 실제로는 어제 저녁부터 시작된 관리가 진행 중
+              const yesterday = new Date(koreaTime)
+              yesterday.setDate(yesterday.getDate() - 1)
+              const yesterdayDateKST = `${yesterday.getFullYear()}-${String(yesterday.getMonth() + 1).padStart(2, '0')}-${String(yesterday.getDate()).padStart(2, '0')}`
+              const yesterdayIsManagementDay = isManagementDay(
+                store.management_days,
+                true,
+                store.work_start_hour,
+                store.work_end_hour,
+                yesterdayDateKST
+              )
+              
+              if (yesterdayIsManagementDay) {
+                statusLabel = `어제 저녁 ${store.work_start_hour}시부터 관리 진행 중`
+              } else {
+                statusLabel = '관리 진행 중'
+              }
+            }
+          } else {
+            // 관리일 범위 밖
+            if (currentHour < store.work_start_hour) {
+              // work_start_hour 이전
+              if (isWorkDay) {
+                statusLabel = `오늘 오후 ${store.work_start_hour}시부터 관리 시작 예정`
+              }
+            } else if (currentHour >= store.work_end_hour) {
+              // work_end_hour 이후
+              if (attendanceStatus === 'clocked_out') {
+                statusLabel = '관리완료'
+              } else if (isWorkDay) {
+                statusLabel = `오늘이 관리일, 오후 ${store.work_start_hour}시부터 시작`
+              }
             }
           }
         }
@@ -770,6 +771,7 @@ export async function GET(request: NextRequest) {
           management_days: store.management_days,
           work_day: store.management_days, // 정렬을 위해 추가
           is_work_day: isWorkDay,
+          is_night_shift: store.is_night_shift || false, // 야간매장 여부
           status_label: statusLabel, // 야간매장 상태 메시지
           attendance_status: attendanceStatus,
           clock_in_time: clockInTime,
@@ -821,6 +823,7 @@ export async function GET(request: NextRequest) {
             is_work_day: store.management_days
               ? store.management_days.split(',').map((d: string) => d.trim()).includes(todayDayName)
               : false,
+            is_night_shift: store.is_night_shift || false, // 야간매장 여부
             attendance_status: 'not_clocked_in' as const,
             clock_in_time: null,
             clock_out_time: null,

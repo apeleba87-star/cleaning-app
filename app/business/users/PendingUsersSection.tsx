@@ -144,14 +144,45 @@ export default function PendingUsersSection({ stores, onApprove }: PendingUsersS
 
   return (
     <>
-      <div className="bg-yellow-50 border border-yellow-200 rounded-lg shadow-md p-6 mb-6">
+      <div className="bg-yellow-50 border border-yellow-200 rounded-lg shadow-md p-4 sm:p-6 mb-6">
         <div className="flex justify-between items-center mb-4">
-          <h2 className="text-xl font-semibold text-yellow-900">
+          <h2 className="text-base sm:text-xl font-semibold text-yellow-900">
             승인 대기 ({pendingUsers.length}명)
           </h2>
         </div>
 
-        <div className="overflow-x-auto">
+        {/* 모바일: 카드 형태 */}
+        <div className="block sm:hidden space-y-3 p-4">
+          {pendingUsers.map((user) => (
+            <div key={user.id} className="border border-yellow-200 rounded-lg p-4 bg-yellow-50 space-y-2">
+              <div className="text-base font-semibold text-gray-900">{user.name}</div>
+              <div className="text-xs text-gray-600">{(user as any).email || '-'}</div>
+              <div className="text-xs text-gray-600">{user.phone || '-'}</div>
+              <div className="text-xs text-gray-600">
+                신청일: {user.created_at ? new Date(user.created_at).toLocaleDateString('ko-KR') : '-'}
+              </div>
+              <div className="flex gap-2 pt-2 border-t border-yellow-200">
+                <button
+                  onClick={() => handleApproveClick(user)}
+                  disabled={approvingUserId === user.id}
+                  className="flex-1 px-3 py-2 text-sm bg-green-50 text-green-600 rounded-md hover:bg-green-100 disabled:bg-gray-100 disabled:text-gray-400"
+                >
+                  {approvingUserId === user.id ? '승인 중...' : '승인'}
+                </button>
+                <button
+                  onClick={() => handleRejectClick(user)}
+                  disabled={rejectingUserId === user.id}
+                  className="flex-1 px-3 py-2 text-sm bg-red-50 text-red-600 rounded-md hover:bg-red-100 disabled:bg-gray-100 disabled:text-gray-400"
+                >
+                  {rejectingUserId === user.id ? '거절 중...' : '거절'}
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* 데스크톱: 테이블 형태 */}
+        <div className="hidden sm:block overflow-x-auto">
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-yellow-100">
               <tr>
@@ -214,9 +245,9 @@ export default function PendingUsersSection({ stores, onApprove }: PendingUsersS
 
       {/* 승인 모달 */}
       {showApprovalModal && selectedUser && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
-            <h3 className="text-lg font-semibold mb-4">사용자 승인</h3>
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg p-4 sm:p-6 max-w-md w-full max-h-[90vh] overflow-y-auto">
+            <h3 className="text-base sm:text-lg font-semibold mb-3 sm:mb-4">사용자 승인</h3>
             <div className="space-y-4">
               <div>
                 <p className="text-sm text-gray-600">이름: {selectedUser.name}</p>
@@ -267,20 +298,20 @@ export default function PendingUsersSection({ stores, onApprove }: PendingUsersS
                 </div>
               </div>
 
-              <div className="flex justify-end gap-2 pt-4">
+              <div className="flex flex-col sm:flex-row justify-end gap-2 pt-4">
                 <button
                   onClick={() => {
                     setShowApprovalModal(false)
                     setSelectedUser(null)
                   }}
-                  className="px-4 py-2 border border-gray-300 rounded-md hover:bg-gray-50"
+                  className="px-3 sm:px-4 py-2 text-sm border border-gray-300 rounded-md hover:bg-gray-50"
                 >
                   취소
                 </button>
                 <button
                   onClick={handleApprove}
                   disabled={approvingUserId !== null}
-                  className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:bg-gray-400"
+                  className="px-3 sm:px-4 py-2 text-sm bg-green-600 text-white rounded-md hover:bg-green-700 disabled:bg-gray-400"
                 >
                   {approvingUserId ? '승인 중...' : '승인'}
                 </button>
@@ -292,42 +323,42 @@ export default function PendingUsersSection({ stores, onApprove }: PendingUsersS
 
       {/* 거절 모달 */}
       {showRejectModal && selectedUser && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
-            <h3 className="text-lg font-semibold mb-4">사용자 거절</h3>
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg p-4 sm:p-6 max-w-md w-full max-h-[90vh] overflow-y-auto">
+            <h3 className="text-base sm:text-lg font-semibold mb-3 sm:mb-4">사용자 거절</h3>
             <div className="space-y-4">
               <div>
-                <p className="text-sm text-gray-600">이름: {selectedUser.name}</p>
-                <p className="text-sm text-gray-600">이메일: {(selectedUser as any).email || '-'}</p>
+                <p className="text-xs sm:text-sm text-gray-600">이름: {selectedUser.name}</p>
+                <p className="text-xs sm:text-sm text-gray-600">이메일: {(selectedUser as any).email || '-'}</p>
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">
                   거절 사유 (선택)
                 </label>
                 <textarea
                   value={rejectionReason}
                   onChange={(e) => setRejectionReason(e.target.value)}
                   rows={3}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md"
                   placeholder="거절 사유를 입력하세요"
                 />
               </div>
 
-              <div className="flex justify-end gap-2 pt-4">
+              <div className="flex flex-col sm:flex-row justify-end gap-2 pt-4">
                 <button
                   onClick={() => {
                     setShowRejectModal(false)
                     setSelectedUser(null)
                   }}
-                  className="px-4 py-2 border border-gray-300 rounded-md hover:bg-gray-50"
+                  className="px-3 sm:px-4 py-2 text-sm border border-gray-300 rounded-md hover:bg-gray-50"
                 >
                   취소
                 </button>
                 <button
                   onClick={handleReject}
                   disabled={rejectingUserId !== null}
-                  className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 disabled:bg-gray-400"
+                  className="px-3 sm:px-4 py-2 text-sm bg-red-600 text-white rounded-md hover:bg-red-700 disabled:bg-gray-400"
                 >
                   {rejectingUserId ? '거절 중...' : '거절'}
                 </button>
