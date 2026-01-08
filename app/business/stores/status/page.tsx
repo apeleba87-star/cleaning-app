@@ -1475,24 +1475,24 @@ export default function BusinessStoresStatusPage() {
   }
 
   return (
-    <div className="max-w-7xl mx-auto p-6 bg-gray-50 min-h-screen">
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6 bg-gray-50 min-h-screen">
       {/* 헤더 */}
       <div className="mb-6">
-        <div className="flex justify-between items-center mb-2">
+        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 mb-2">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900">매장 관리 현황</h1>
-            <p className="text-gray-600 mt-1">실시간 매장별 업무 진행 상태를 확인하세요</p>
+            <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-900">매장 관리 현황</h1>
+            <p className="text-sm sm:text-base text-gray-600 mt-1">실시간 매장별 업무 진행 상태를 확인하세요</p>
           </div>
-          <div className="flex gap-2">
+          <div className="flex gap-2 flex-wrap">
             <button
               onClick={() => loadStoreStatuses()}
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+              className="px-3 py-1.5 sm:px-4 sm:py-2 text-sm sm:text-base bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
             >
               전체 새로고침
             </button>
             <Link
               href="/business/dashboard"
-              className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors"
+              className="px-3 py-1.5 sm:px-4 sm:py-2 text-sm sm:text-base bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors"
             >
               대시보드로
             </Link>
@@ -1515,21 +1515,21 @@ export default function BusinessStoresStatusPage() {
       </div>
 
       {/* 요약 카드 */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
-        <div className="bg-white rounded-lg shadow-md p-4 border-l-4 border-blue-500">
-          <div className="text-sm text-gray-600 mb-1">전체 매장</div>
-          <div className="text-2xl font-bold text-gray-900">{stats.total} 곳</div>
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-3 sm:gap-4 mb-6">
+        <div className="bg-white rounded-lg shadow-md p-3 sm:p-4 border-l-4 border-blue-500">
+          <div className="text-xs sm:text-sm text-gray-600 mb-1">전체 매장</div>
+          <div className="text-lg sm:text-xl lg:text-2xl font-bold text-gray-900">{stats.total} 곳</div>
         </div>
-        <div className="bg-white rounded-lg shadow-md p-4 border-l-4 border-green-500">
-          <div className="text-sm text-gray-600 mb-1">금일운영</div>
-          <div className="text-2xl font-bold text-gray-900">{stats.completed} / {stats.operating} 곳</div>
+        <div className="bg-white rounded-lg shadow-md p-3 sm:p-4 border-l-4 border-green-500">
+          <div className="text-xs sm:text-sm text-gray-600 mb-1">금일운영</div>
+          <div className="text-lg sm:text-xl lg:text-2xl font-bold text-gray-900">{stats.completed} / {stats.operating} 곳</div>
         </div>
-        <div className="bg-white rounded-lg shadow-md p-4 border-l-4 border-purple-500">
+        <div className="bg-white rounded-lg shadow-md p-3 sm:p-4 border-l-4 border-purple-500">
           <div className="flex items-center justify-between mb-2">
-            <div className="text-sm text-gray-600">접수</div>
+            <div className="text-xs sm:text-sm text-gray-600">접수</div>
             <Link
               href="/business/requests"
-              className="text-xs bg-purple-500 text-white px-3 py-1.5 rounded hover:bg-purple-600 transition-colors"
+              className="text-xs bg-purple-500 text-white px-2 py-1 sm:px-3 sm:py-1.5 rounded hover:bg-purple-600 transition-colors"
               onClick={(e) => e.stopPropagation()}
             >
               전부보기
@@ -1578,36 +1578,36 @@ export default function BusinessStoresStatusPage() {
             )}
           </div>
         </div>
-        <div className="bg-white rounded-lg shadow-md p-4 border-l-4 border-red-500">
+        <div className="bg-white rounded-lg shadow-md p-3 sm:p-4 border-l-4 border-red-500">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <div className="text-sm text-gray-600 mb-1">문제발생</div>
+              <div className="text-xs sm:text-sm text-gray-600 mb-1">문제발생</div>
               {stats.problem > 0 && <span className="text-red-500">⚠️</span>}
             </div>
             {stats.problem > 0 && (
               <button
                 onClick={() => setShowAllProblemsModal(true)}
-                className="px-3 py-1 bg-red-600 text-white text-xs rounded hover:bg-red-700 transition-colors"
+                className="px-2 py-0.5 sm:px-3 sm:py-1 bg-red-600 text-white text-xs rounded hover:bg-red-700 transition-colors"
               >
                 전부보기
               </button>
             )}
           </div>
-          <div className="text-2xl font-bold text-gray-900">{stats.problem} 곳</div>
+          <div className="text-lg sm:text-xl lg:text-2xl font-bold text-gray-900">{stats.problem} 곳</div>
         </div>
-        <div className="bg-white rounded-lg shadow-md p-4 border-l-4 border-orange-500">
+        <div className="bg-white rounded-lg shadow-md p-3 sm:p-4 border-l-4 border-orange-500">
           <div className="flex items-center justify-between">
-            <div className="text-sm text-gray-600 mb-1">알림</div>
+            <div className="text-xs sm:text-sm text-gray-600 mb-1">알림</div>
             {stats.notifications > 0 && (
               <button
                 onClick={() => setShowAllNotificationsModal(true)}
-                className="px-3 py-1 bg-yellow-600 text-white text-xs rounded hover:bg-yellow-700 transition-colors"
+                className="px-2 py-0.5 sm:px-3 sm:py-1 bg-yellow-600 text-white text-xs rounded hover:bg-yellow-700 transition-colors"
               >
                 전부보기
               </button>
             )}
           </div>
-          <div className="text-2xl font-bold text-gray-900">{stats.notifications} 곳</div>
+          <div className="text-lg sm:text-xl lg:text-2xl font-bold text-gray-900">{stats.notifications} 곳</div>
         </div>
       </div>
 

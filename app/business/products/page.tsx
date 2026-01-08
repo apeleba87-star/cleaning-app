@@ -275,9 +275,9 @@ export default async function ProductsPage() {
   }
 
   return (
-    <div className="max-w-6xl mx-auto">
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-bold">바코드 제품 등록</h1>
+    <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6">
+      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 mb-6">
+        <h1 className="text-xl sm:text-2xl font-bold">바코드 제품 등록</h1>
         <a
           href="/business/dashboard"
           className="text-blue-600 hover:text-blue-800 text-sm"
@@ -287,18 +287,18 @@ export default async function ProductsPage() {
       </div>
 
       {/* 통계 */}
-      <div className="grid grid-cols-3 gap-4 mb-6">
-        <div className="bg-white rounded-lg shadow-md p-4">
-          <div className="text-sm text-gray-600 mb-1">등록된 제품</div>
-          <div className="text-2xl font-bold">{stats.totalProducts}개</div>
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 mb-6">
+        <div className="bg-white rounded-lg shadow-md p-3 sm:p-4">
+          <div className="text-xs sm:text-sm text-gray-600 mb-1">등록된 제품</div>
+          <div className="text-lg sm:text-xl lg:text-2xl font-bold">{stats.totalProducts}개</div>
         </div>
-        <div className="bg-white rounded-lg shadow-md p-4">
-          <div className="text-sm text-gray-600 mb-1">제품 위치 정보</div>
-          <div className="text-2xl font-bold">{stats.totalLocations}개</div>
+        <div className="bg-white rounded-lg shadow-md p-3 sm:p-4">
+          <div className="text-xs sm:text-sm text-gray-600 mb-1">제품 위치 정보</div>
+          <div className="text-lg sm:text-xl lg:text-2xl font-bold">{stats.totalLocations}개</div>
         </div>
-        <div className="bg-white rounded-lg shadow-md p-4">
-          <div className="text-sm text-gray-600 mb-1">제품 등록 매장</div>
-          <div className="text-2xl font-bold">{stats.storesWithProducts}개</div>
+        <div className="bg-white rounded-lg shadow-md p-3 sm:p-4">
+          <div className="text-xs sm:text-sm text-gray-600 mb-1">제품 등록 매장</div>
+          <div className="text-lg sm:text-xl lg:text-2xl font-bold">{stats.storesWithProducts}개</div>
         </div>
       </div>
 

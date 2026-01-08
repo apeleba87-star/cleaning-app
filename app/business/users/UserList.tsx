@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { User, UserRole, Franchise, Store } from '@/types/db'
 import UserForm from './UserForm'
 import UserStoreAssign from './UserStoreAssign'
@@ -30,6 +30,10 @@ export default function UserList({ initialUsers, stores, franchises, userStoreMa
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [searchTerm, setSearchTerm] = useState('')
+  const [mobilePage, setMobilePage] = useState(1)
+  const [desktopPage, setDesktopPage] = useState(1)
+  const MOBILE_ITEMS_PER_PAGE = 20
+  const DESKTOP_ITEMS_PER_PAGE = 30
 
   const handleCreate = () => {
     // 사용자 수정 폼이 열려있으면 경고 메시지 표시
@@ -308,16 +312,34 @@ export default function UserList({ initialUsers, stores, franchises, userStoreMa
       })
     : approvedUsersBase
 
+  // 모바일 페이지네이션 계산
+  const mobileTotalPages = Math.ceil(approvedUsers.length / MOBILE_ITEMS_PER_PAGE)
+  const mobileStartIndex = (mobilePage - 1) * MOBILE_ITEMS_PER_PAGE
+  const mobileEndIndex = mobileStartIndex + MOBILE_ITEMS_PER_PAGE
+  const mobileUsers = approvedUsers.slice(mobileStartIndex, mobileEndIndex)
+
+  // 데스크톱 페이지네이션 계산
+  const desktopTotalPages = Math.ceil(approvedUsers.length / DESKTOP_ITEMS_PER_PAGE)
+  const desktopStartIndex = (desktopPage - 1) * DESKTOP_ITEMS_PER_PAGE
+  const desktopEndIndex = desktopStartIndex + DESKTOP_ITEMS_PER_PAGE
+  const desktopUsers = approvedUsers.slice(desktopStartIndex, desktopEndIndex)
+
+  // 검색어 변경 시 페이지 리셋
+  useEffect(() => {
+    setMobilePage(1)
+    setDesktopPage(1)
+  }, [searchTerm])
+
   return (
     <div>
       {/* 승인 대기 섹션 */}
       <PendingUsersSection stores={stores} onApprove={handleApprovalComplete} />
 
-      <div className="flex justify-between items-center mb-4 gap-4">
+      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center mb-4 gap-3 sm:gap-4">
         <button
           onClick={handleCreate}
           disabled={showForm || showAssign}
-          className={`px-4 py-2 rounded-md transition-colors ${
+          className={`px-3 py-1.5 sm:px-4 sm:py-2 text-sm sm:text-base rounded-md transition-colors ${
             showForm || showAssign
               ? 'bg-gray-400 text-white cursor-not-allowed'
               : 'bg-blue-600 text-white hover:bg-blue-700'
@@ -326,13 +348,13 @@ export default function UserList({ initialUsers, stores, franchises, userStoreMa
         >
           + 새 사용자 초대
         </button>
-        <div className="flex-1 max-w-md">
+        <div className="flex-1 sm:max-w-md">
           <input
             type="text"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             placeholder="이름, 이메일, 전화번호, 역할, 배정 매장으로 검색..."
-            className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full px-3 py-1.5 sm:px-4 sm:py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
         </div>
       </div>
@@ -438,20 +460,20 @@ export default function UserList({ initialUsers, stores, franchises, userStoreMa
       )}
 
       {roleChangingUser && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg shadow-xl p-6 max-w-md w-full mx-4">
-            <h3 className="text-lg font-semibold mb-4">프렌차이즈 선택</h3>
-            <p className="text-sm text-gray-600 mb-4">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-xl p-4 sm:p-6 max-w-md w-full max-h-[90vh] overflow-y-auto">
+            <h3 className="text-base sm:text-lg font-semibold mb-3 sm:mb-4">프렌차이즈 선택</h3>
+            <p className="text-xs sm:text-sm text-gray-600 mb-3 sm:mb-4">
               프렌차이즈 관리자 역할을 부여하려면 프렌차이즈를 선택해야 합니다.
             </p>
             <div className="mb-4">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-2">
                 프렌차이즈 <span className="text-red-500">*</span>
               </label>
               <select
                 value={selectedFranchiseForRole}
                 onChange={(e) => setSelectedFranchiseForRole(e.target.value)}
-                className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 sm:px-4 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
                 <option value="">프렌차이즈 선택</option>
                 {franchises.map((franchise) => (
@@ -461,21 +483,21 @@ export default function UserList({ initialUsers, stores, franchises, userStoreMa
                 ))}
               </select>
             </div>
-            <div className="flex justify-end space-x-3">
+            <div className="flex flex-col sm:flex-row justify-end gap-2 sm:space-x-3 sm:gap-0">
               <button
                 onClick={() => {
                   setRoleChangingUser(null)
                   setSelectedFranchiseForRole('')
                   setError(null)
                 }}
-                className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50"
+                className="px-3 sm:px-4 py-2 text-sm border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50"
               >
                 취소
               </button>
               <button
                 onClick={handleConfirmRoleChange}
                 disabled={!selectedFranchiseForRole || loading}
-                className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
+                className="px-3 sm:px-4 py-2 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
               >
                 확인
               </button>
@@ -485,108 +507,23 @@ export default function UserList({ initialUsers, stores, franchises, userStoreMa
       )}
 
       <div className="bg-white rounded-lg shadow-md overflow-hidden">
-        <table className="w-full">
-          <thead className="bg-gray-50">
-            <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                이름
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                이메일
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                역할
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                전화번호
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                배정 매장
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                근무여부
-              </th>
-              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                작업
-              </th>
-            </tr>
-          </thead>
-          <tbody className="bg-white divide-y divide-gray-200">
-            {approvedUsers.length === 0 ? (
-              <tr>
-                <td colSpan={7} className="px-6 py-4 text-center text-gray-500">
-                  {searchTerm ? '검색 결과가 없습니다.' : '등록된 사용자가 없습니다.'}
-                </td>
-              </tr>
+        {/* 모바일: 카드 형태 */}
+        <div className="block sm:hidden">
+          <div className="space-y-4 p-4">
+            {mobileUsers.length === 0 ? (
+              <div className="text-center text-gray-500 text-sm py-8">
+                {searchTerm ? '검색 결과가 없습니다.' : '등록된 사용자가 없습니다.'}
+              </div>
             ) : (
-              approvedUsers.map((user) => (
-                <tr key={user.id} className="hover:bg-gray-50">
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm font-medium text-gray-900">
-                      {user.name}
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm text-gray-500">
-                      {(user as any).email || '-'}
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="space-y-2">
-                      {user.role === 'business_owner' || user.role === 'platform_admin' ? (
-                        <div className="text-sm font-medium text-gray-900">
-                          {getRoleLabel(user.role)}
-                        </div>
-                      ) : (
-                        <>
-                          <select
-                            value={user.role}
-                            onChange={(e) => handleRoleChange(user.id, e.target.value as UserRole)}
-                            disabled={loading}
-                            className="text-sm border border-gray-300 rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100"
-                          >
-                            <option value="staff">직원</option>
-                            <option value="manager">매니저</option>
-                            <option value="franchise_manager">프렌차이즈관리자</option>
-                            <option value="store_manager">매장관리자(점주)</option>
-                            <option value="subcontract_individual">도급(개인)</option>
-                            <option value="subcontract_company">도급(업체)</option>
-                          </select>
-                          {user.role === 'franchise_manager' && user.franchise_id && (
-                            <div className="text-xs text-gray-500">
-                              {franchises.find(f => f.id === user.franchise_id)?.name || '프렌차이즈 연결됨'}
-                            </div>
-                          )}
-                        </>
-                      )}
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm text-gray-500">
-                      {user.phone || '-'}
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm text-gray-500">
-                      {getUserStores(user.id).length > 0 ? (
-                        <div className="flex flex-wrap gap-1">
-                          {getUserStores(user.id).map((store) => (
-                            <span
-                              key={store.id}
-                              className="inline-block bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded"
-                            >
-                              {store.name}
-                            </span>
-                          ))}
-                        </div>
-                      ) : (
-                        <span className="text-gray-400">배정 없음</span>
-                      )}
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
+              mobileUsers.map((user) => (
+              <div key={user.id} className="border border-gray-200 rounded-lg p-4 space-y-3">
+                <div className="flex items-start justify-between">
+                  <div className="flex-1">
+                    <div className="text-base font-semibold text-gray-900 mb-1">{user.name}</div>
+                    <div className="text-xs text-gray-500 mb-1">{(user as any).email || '-'}</div>
+                    <div className="text-xs text-gray-500 mb-2">{user.phone || '-'}</div>
                     <span
-                      className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                      className={`inline-flex px-2 py-0.5 text-xs font-semibold rounded-full ${
                         user.employment_active
                           ? 'bg-green-100 text-green-800'
                           : 'bg-red-100 text-red-800'
@@ -594,54 +531,361 @@ export default function UserList({ initialUsers, stores, franchises, userStoreMa
                     >
                       {user.employment_active ? '근무중' : '퇴사'}
                     </span>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                    <button
-                      onClick={() => handleEdit(user)}
-                      disabled={showCreateForm || (showForm && editingUser?.id !== user.id) || showAssign}
-                      className={`mr-4 ${
-                        showCreateForm || (showForm && editingUser?.id !== user.id) || showAssign
-                          ? 'text-gray-400 cursor-not-allowed'
-                          : 'text-blue-600 hover:text-blue-900'
-                      }`}
-                      title={
-                        showCreateForm
-                          ? '새 사용자 추가를 완료하거나 취소한 후 수정할 수 있습니다.'
-                          : showForm && editingUser?.id !== user.id
-                          ? `"${editingUser?.name}" 사용자 수정을 완료하거나 취소한 후 수정할 수 있습니다.`
-                          : showAssign
-                          ? '매장 배정을 완료하거나 취소한 후 수정할 수 있습니다.'
-                          : ''
-                      }
-                    >
-                      수정
-                    </button>
-                    <button
-                      onClick={() => handleAssign(user)}
-                      disabled={showCreateForm || showForm || (showAssign && assigningUser?.id !== user.id)}
-                      className={
-                        showCreateForm || showForm || (showAssign && assigningUser?.id !== user.id)
-                          ? 'text-gray-400 cursor-not-allowed'
-                          : 'text-green-600 hover:text-green-900'
-                      }
-                      title={
-                        showCreateForm
-                          ? '새 사용자 추가를 완료하거나 취소한 후 매장 배정할 수 있습니다.'
-                          : showForm
-                          ? `"${editingUser?.name}" 사용자 수정을 완료하거나 취소한 후 매장 배정할 수 있습니다.`
-                          : showAssign && assigningUser?.id !== user.id
-                          ? `"${assigningUser?.name}" 사용자의 매장 배정을 완료하거나 취소한 후 매장 배정할 수 있습니다.`
-                          : ''
-                      }
-                    >
-                      매장 배정
-                    </button>
-                  </td>
-                </tr>
+                  </div>
+                </div>
+                <div>
+                  <div className="text-xs font-medium text-gray-700 mb-1">역할</div>
+                  {user.role === 'business_owner' || user.role === 'platform_admin' ? (
+                    <div className="text-sm text-gray-900">{getRoleLabel(user.role)}</div>
+                  ) : (
+                    <div>
+                      <select
+                        value={user.role}
+                        onChange={(e) => handleRoleChange(user.id, e.target.value as UserRole)}
+                        disabled={loading}
+                        className="w-full text-sm border border-gray-300 rounded px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100"
+                      >
+                        <option value="staff">직원</option>
+                        <option value="manager">매니저</option>
+                        <option value="franchise_manager">프렌차이즈관리자</option>
+                        <option value="store_manager">매장관리자(점주)</option>
+                        <option value="subcontract_individual">도급(개인)</option>
+                        <option value="subcontract_company">도급(업체)</option>
+                      </select>
+                      {user.role === 'franchise_manager' && user.franchise_id && (
+                        <div className="text-xs text-gray-500 mt-1">
+                          {franchises.find(f => f.id === user.franchise_id)?.name || '프렌차이즈 연결됨'}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+                <div>
+                  <div className="text-xs font-medium text-gray-700 mb-1">배정 매장</div>
+                  {getUserStores(user.id).length > 0 ? (
+                    <div className="flex flex-wrap gap-1">
+                      {getUserStores(user.id).map((store) => (
+                        <span
+                          key={store.id}
+                          className="inline-block bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded"
+                        >
+                          {store.name}
+                        </span>
+                      ))}
+                    </div>
+                  ) : (
+                    <span className="text-xs text-gray-400">배정 없음</span>
+                  )}
+                </div>
+                <div className="flex gap-2 pt-2 border-t border-gray-200">
+                  <button
+                    onClick={() => handleEdit(user)}
+                    disabled={showCreateForm || (showForm && editingUser?.id !== user.id) || showAssign}
+                    className={`flex-1 px-3 py-2 text-sm rounded-md transition-colors ${
+                      showCreateForm || (showForm && editingUser?.id !== user.id) || showAssign
+                        ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                        : 'bg-blue-50 text-blue-600 hover:bg-blue-100'
+                    }`}
+                  >
+                    수정
+                  </button>
+                  <button
+                    onClick={() => handleAssign(user)}
+                    disabled={showCreateForm || showForm || (showAssign && assigningUser?.id !== user.id)}
+                    className={`flex-1 px-3 py-2 text-sm rounded-md transition-colors ${
+                      showCreateForm || showForm || (showAssign && assigningUser?.id !== user.id)
+                        ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                        : 'bg-green-50 text-green-600 hover:bg-green-100'
+                    }`}
+                  >
+                    매장 배정
+                  </button>
+                </div>
+              </div>
               ))
             )}
-          </tbody>
-        </table>
+          </div>
+          
+          {/* 모바일 페이지네이션 */}
+          {approvedUsers.length > MOBILE_ITEMS_PER_PAGE && (
+            <div className="border-t border-gray-200 px-4 py-3 flex items-center justify-between">
+              <div className="flex-1 flex justify-between sm:hidden">
+                <button
+                  onClick={() => setMobilePage(prev => Math.max(1, prev - 1))}
+                  disabled={mobilePage === 1}
+                  className={`px-3 py-2 text-sm font-medium rounded-md ${
+                    mobilePage === 1
+                      ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                      : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
+                  }`}
+                >
+                  이전
+                </button>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-gray-700">
+                    {mobilePage} / {mobileTotalPages}
+                  </span>
+                  <span className="text-xs text-gray-500">
+                    (총 {approvedUsers.length}명)
+                  </span>
+                </div>
+                <button
+                  onClick={() => setMobilePage(prev => Math.min(mobileTotalPages, prev + 1))}
+                  disabled={mobilePage === mobileTotalPages}
+                  className={`px-3 py-2 text-sm font-medium rounded-md ${
+                    mobilePage === mobileTotalPages
+                      ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                      : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
+                  }`}
+                >
+                  다음
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* 데스크톱: 테이블 형태 */}
+        <div className="hidden sm:block overflow-x-auto">
+          <table className="min-w-full divide-y divide-gray-200">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  이름
+                </th>
+                <th className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  이메일
+                </th>
+                <th className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  역할
+                </th>
+                <th className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider hidden md:table-cell">
+                  전화번호
+                </th>
+                <th className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  배정 매장
+                </th>
+                <th className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider hidden lg:table-cell">
+                  근무여부
+                </th>
+                <th className="px-4 lg:px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  작업
+                </th>
+              </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-gray-200">
+              {desktopUsers.length === 0 ? (
+                <tr>
+                  <td colSpan={7} className="px-4 lg:px-6 py-4 text-center text-gray-500 text-sm">
+                    {searchTerm ? '검색 결과가 없습니다.' : '등록된 사용자가 없습니다.'}
+                  </td>
+                </tr>
+              ) : (
+                desktopUsers.map((user) => (
+                  <tr key={user.id} className="hover:bg-gray-50">
+                    <td className="px-4 lg:px-6 py-4 whitespace-nowrap">
+                      <div className="text-sm font-medium text-gray-900">
+                        {user.name}
+                      </div>
+                    </td>
+                    <td className="px-4 lg:px-6 py-4 whitespace-nowrap">
+                      <div className="text-sm text-gray-500">
+                        {(user as any).email || '-'}
+                      </div>
+                    </td>
+                    <td className="px-4 lg:px-6 py-4">
+                      <div className="space-y-2">
+                        {user.role === 'business_owner' || user.role === 'platform_admin' ? (
+                          <div className="text-sm font-medium text-gray-900">
+                            {getRoleLabel(user.role)}
+                          </div>
+                        ) : (
+                          <>
+                            <select
+                              value={user.role}
+                              onChange={(e) => handleRoleChange(user.id, e.target.value as UserRole)}
+                              disabled={loading}
+                              className="text-sm border border-gray-300 rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100"
+                            >
+                              <option value="staff">직원</option>
+                              <option value="manager">매니저</option>
+                              <option value="franchise_manager">프렌차이즈관리자</option>
+                              <option value="store_manager">매장관리자(점주)</option>
+                              <option value="subcontract_individual">도급(개인)</option>
+                              <option value="subcontract_company">도급(업체)</option>
+                            </select>
+                            {user.role === 'franchise_manager' && user.franchise_id && (
+                              <div className="text-xs text-gray-500">
+                                {franchises.find(f => f.id === user.franchise_id)?.name || '프렌차이즈 연결됨'}
+                              </div>
+                            )}
+                          </>
+                        )}
+                      </div>
+                    </td>
+                    <td className="px-4 lg:px-6 py-4 whitespace-nowrap hidden md:table-cell">
+                      <div className="text-sm text-gray-500">
+                        {user.phone || '-'}
+                      </div>
+                    </td>
+                    <td className="px-4 lg:px-6 py-4">
+                      <div className="text-sm text-gray-500">
+                        {getUserStores(user.id).length > 0 ? (
+                          <div className="flex flex-wrap gap-1">
+                            {getUserStores(user.id).map((store) => (
+                              <span
+                                key={store.id}
+                                className="inline-block bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded"
+                              >
+                                {store.name}
+                              </span>
+                            ))}
+                          </div>
+                        ) : (
+                          <span className="text-gray-400">배정 없음</span>
+                        )}
+                      </div>
+                    </td>
+                    <td className="px-4 lg:px-6 py-4 whitespace-nowrap hidden lg:table-cell">
+                      <span
+                        className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                          user.employment_active
+                            ? 'bg-green-100 text-green-800'
+                            : 'bg-red-100 text-red-800'
+                        }`}
+                      >
+                        {user.employment_active ? '근무중' : '퇴사'}
+                      </span>
+                    </td>
+                    <td className="px-4 lg:px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                      <div className="flex justify-end gap-4">
+                        <button
+                          onClick={() => handleEdit(user)}
+                          disabled={showCreateForm || (showForm && editingUser?.id !== user.id) || showAssign}
+                          className={`${
+                            showCreateForm || (showForm && editingUser?.id !== user.id) || showAssign
+                              ? 'text-gray-400 cursor-not-allowed'
+                              : 'text-blue-600 hover:text-blue-900'
+                          }`}
+                          title={
+                            showCreateForm
+                              ? '새 사용자 추가를 완료하거나 취소한 후 수정할 수 있습니다.'
+                              : showForm && editingUser?.id !== user.id
+                              ? `"${editingUser?.name}" 사용자 수정을 완료하거나 취소한 후 수정할 수 있습니다.`
+                              : showAssign
+                              ? '매장 배정을 완료하거나 취소한 후 수정할 수 있습니다.'
+                              : ''
+                          }
+                        >
+                          수정
+                        </button>
+                        <button
+                          onClick={() => handleAssign(user)}
+                          disabled={showCreateForm || showForm || (showAssign && assigningUser?.id !== user.id)}
+                          className={`${
+                            showCreateForm || showForm || (showAssign && assigningUser?.id !== user.id)
+                              ? 'text-gray-400 cursor-not-allowed'
+                              : 'text-green-600 hover:text-green-900'
+                          }`}
+                          title={
+                            showCreateForm
+                              ? '새 사용자 추가를 완료하거나 취소한 후 매장 배정할 수 있습니다.'
+                              : showForm
+                              ? `"${editingUser?.name}" 사용자 수정을 완료하거나 취소한 후 매장 배정할 수 있습니다.`
+                              : showAssign && assigningUser?.id !== user.id
+                              ? `"${assigningUser?.name}" 사용자의 매장 배정을 완료하거나 취소한 후 매장 배정할 수 있습니다.`
+                              : ''
+                          }
+                        >
+                          매장 배정
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+        
+        {/* 데스크톱 페이지네이션 */}
+        {approvedUsers.length > DESKTOP_ITEMS_PER_PAGE && (
+          <div className="hidden sm:flex items-center justify-between border-t border-gray-200 bg-white px-4 py-3">
+            <div className="flex flex-1 justify-between sm:hidden">
+              <button
+                onClick={() => setDesktopPage(prev => Math.max(1, prev - 1))}
+                disabled={desktopPage === 1}
+                className={`relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 ${
+                  desktopPage === 1 ? 'cursor-not-allowed opacity-50' : ''
+                }`}
+              >
+                이전
+              </button>
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-gray-700">
+                  {desktopPage} / {desktopTotalPages}
+                </span>
+                <span className="text-xs text-gray-500">
+                  (총 {approvedUsers.length}명)
+                </span>
+              </div>
+              <button
+                onClick={() => setDesktopPage(prev => Math.min(desktopTotalPages, prev + 1))}
+                disabled={desktopPage === desktopTotalPages}
+                className={`relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 ${
+                  desktopPage === desktopTotalPages ? 'cursor-not-allowed opacity-50' : ''
+                }`}
+              >
+                다음
+              </button>
+            </div>
+            <div className="hidden sm:flex sm:flex-1 sm:items-center sm:justify-between">
+              <div>
+                <p className="text-sm text-gray-700">
+                  <span className="font-medium">{(desktopStartIndex + 1)}</span>
+                  {' - '}
+                  <span className="font-medium">{Math.min(desktopEndIndex, approvedUsers.length)}</span>
+                  {' / '}
+                  <span className="font-medium">{approvedUsers.length}</span>
+                  {' 명'}
+                </p>
+              </div>
+              <div>
+                <nav className="isolate inline-flex -space-x-px rounded-md shadow-sm" aria-label="Pagination">
+                  <button
+                    onClick={() => setDesktopPage(prev => Math.max(1, prev - 1))}
+                    disabled={desktopPage === 1}
+                    className={`relative inline-flex items-center rounded-l-md px-2 py-2 text-gray-400 ring-1 ring-inset ring-gray-300 hover:bg-gray-50 focus:z-20 focus:outline-offset-0 ${
+                      desktopPage === 1 ? 'cursor-not-allowed opacity-50' : ''
+                    }`}
+                  >
+                    <span className="sr-only">이전</span>
+                    <svg className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                      <path fillRule="evenodd" d="M12.79 5.23a.75.75 0 01-.02 1.06L8.832 10l3.938 3.71a.75.75 0 11-1.04 1.08l-4.5-4.25a.75.75 0 010-1.08l4.5-4.25a.75.75 0 011.06.02z" clipRule="evenodd" />
+                    </svg>
+                  </button>
+                  <div className="flex items-center px-4">
+                    <span className="text-sm text-gray-700">
+                      페이지 <span className="font-medium">{desktopPage}</span> / <span className="font-medium">{desktopTotalPages}</span>
+                    </span>
+                  </div>
+                  <button
+                    onClick={() => setDesktopPage(prev => Math.min(desktopTotalPages, prev + 1))}
+                    disabled={desktopPage === desktopTotalPages}
+                    className={`relative inline-flex items-center rounded-r-md px-2 py-2 text-gray-400 ring-1 ring-inset ring-gray-300 hover:bg-gray-50 focus:z-20 focus:outline-offset-0 ${
+                      desktopPage === desktopTotalPages ? 'cursor-not-allowed opacity-50' : ''
+                    }`}
+                  >
+                    <span className="sr-only">다음</span>
+                    <svg className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                      <path fillRule="evenodd" d="M7.21 14.77a.75.75 0 01.02-1.06L11.168 10 7.23 6.29a.75.75 0 111.04-1.08l4.5 4.25a.75.75 0 010 1.08l-4.5 4.25a.75.75 0 01-1.06-.02z" clipRule="evenodd" />
+                    </svg>
+                  </button>
+                </nav>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   )

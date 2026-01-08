@@ -96,13 +96,13 @@ export default async function BusinessOwnerDashboardPage() {
   return (
     <>
       <SessionReplacedToast />
-      <div className="max-w-6xl mx-auto">
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold">업체 관리자 대시보드</h1>
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+        <h1 className="text-xl sm:text-2xl font-bold">업체 관리자 대시보드</h1>
         {company && (
-          <div className="text-right">
-            <p className="text-sm text-gray-500">회사명</p>
-            <p className="font-semibold text-gray-900">{company.name}</p>
+          <div className="text-left sm:text-right">
+            <p className="text-xs sm:text-sm text-gray-500">회사명</p>
+            <p className="font-semibold text-sm sm:text-base text-gray-900">{company.name}</p>
           </div>
         )}
       </div>

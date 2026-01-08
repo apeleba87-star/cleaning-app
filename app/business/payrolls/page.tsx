@@ -515,9 +515,9 @@ export default function PayrollsPage() {
   }
 
   return (
-    <div className="max-w-6xl mx-auto">
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-bold">인건비 관리</h1>
+    <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6">
+      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 mb-6">
+        <h1 className="text-xl sm:text-2xl font-bold">인건비 관리</h1>
         <a
           href="/business/dashboard"
           className="text-blue-600 hover:text-blue-800 text-sm"
@@ -533,24 +533,24 @@ export default function PayrollsPage() {
       )}
 
       {/* 기간 선택 */}
-      <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-        <div className="flex items-center space-x-4">
+      <div className="bg-white rounded-lg shadow-md p-4 sm:p-6 mb-6">
+        <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:space-x-4">
           <label className="text-sm font-medium text-gray-700">기간 선택:</label>
           <input
             type="month"
             value={selectedPeriod}
             onChange={(e) => setSelectedPeriod(e.target.value)}
-            className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 w-full sm:w-auto"
           />
         </div>
       </div>
 
       {/* 탭 메뉴 */}
-      <div className="border-b border-gray-200 mb-6">
-        <nav className="flex space-x-4">
+      <div className="border-b border-gray-200 mb-6 overflow-x-auto">
+        <nav className="flex space-x-2 sm:space-x-4 min-w-max">
           <button
             onClick={() => setActiveTab('regular')}
-            className={`py-2 px-4 border-b-2 font-medium text-sm ${
+            className={`py-2 px-3 sm:px-4 border-b-2 font-medium text-xs sm:text-sm whitespace-nowrap ${
               activeTab === 'regular'
                 ? 'border-blue-500 text-blue-600'
                 : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
@@ -560,7 +560,7 @@ export default function PayrollsPage() {
           </button>
           <button
             onClick={() => setActiveTab('daily')}
-            className={`py-2 px-4 border-b-2 font-medium text-sm ${
+            className={`py-2 px-3 sm:px-4 border-b-2 font-medium text-xs sm:text-sm whitespace-nowrap ${
               activeTab === 'daily'
                 ? 'border-green-500 text-green-600'
                 : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
@@ -570,7 +570,7 @@ export default function PayrollsPage() {
           </button>
           <button
             onClick={() => setActiveTab('subcontract')}
-            className={`py-2 px-4 border-b-2 font-medium text-sm ${
+            className={`py-2 px-3 sm:px-4 border-b-2 font-medium text-xs sm:text-sm whitespace-nowrap ${
               activeTab === 'subcontract'
                 ? 'border-purple-500 text-purple-600'
                 : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
@@ -584,7 +584,7 @@ export default function PayrollsPage() {
       {/* 도급 관리 탭 */}
       {activeTab === 'subcontract' && (
         <>
-          <div className="bg-white rounded-lg shadow-md p-6 mb-6">
+          <div className="bg-white rounded-lg shadow-md p-4 sm:p-6 mb-6">
             <div className="flex justify-end items-center">
               <div className="flex-1 max-w-xs">
                 <input
@@ -608,7 +608,7 @@ export default function PayrollsPage() {
       {/* 일당 관리 탭 */}
       {activeTab === 'daily' && (
         <>
-          <div className="bg-white rounded-lg shadow-md p-6 mb-6">
+          <div className="bg-white rounded-lg shadow-md p-4 sm:p-6 mb-6">
             <div className="flex justify-end items-center">
               <div className="flex-1 max-w-xs">
                 <input
@@ -1106,10 +1106,10 @@ export default function PayrollsPage() {
           </div>
 
           {/* 정규 직원 인건비 목록 */}
-          <div className="bg-white rounded-lg shadow-md p-6">
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="text-lg font-semibold">정규 직원 인건비</h2>
-              <div className="flex-1 max-w-xs ml-4">
+          <div className="bg-white rounded-lg shadow-md p-4 sm:p-6">
+            <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 sm:gap-4 mb-4">
+              <h2 className="text-base sm:text-lg font-semibold">정규 직원 인건비</h2>
+              <div className="flex-1 sm:max-w-xs sm:ml-4">
                 <input
                   type="text"
                   value={regularSearchTerm}
@@ -1124,24 +1124,25 @@ export default function PayrollsPage() {
                 {regularSearchTerm ? '검색 결과가 없습니다.' : '등록된 인건비가 없습니다.'}
               </p>
             ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead className="bg-gray-50">
-                    <tr>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">이름</th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">기간</th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">금액</th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">지급일</th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">상태</th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">작업</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-200">
-                    {regularPayrolls.map((payroll) => (
-                      <tr key={payroll.id}>
-                        <td className="px-4 py-3 text-sm">{payroll.users?.name || '-'}</td>
-                        <td className="px-4 py-3 text-sm">{payroll.pay_period}</td>
-                        <td className="px-4 py-3 text-sm">
+              <div className="overflow-x-auto -mx-4 sm:mx-0">
+                <div className="inline-block min-w-full align-middle">
+                  <table className="min-w-full divide-y divide-gray-200">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="px-2 sm:px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">이름</th>
+                        <th className="px-2 sm:px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">기간</th>
+                        <th className="px-2 sm:px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">금액</th>
+                        <th className="px-2 sm:px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">지급일</th>
+                        <th className="px-2 sm:px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">상태</th>
+                        <th className="px-2 sm:px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">작업</th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-200">
+                      {regularPayrolls.map((payroll) => (
+                        <tr key={payroll.id}>
+                          <td className="px-2 sm:px-4 py-3 text-xs sm:text-sm whitespace-nowrap">{payroll.users?.name || '-'}</td>
+                          <td className="px-2 sm:px-4 py-3 text-xs sm:text-sm whitespace-nowrap">{payroll.pay_period}</td>
+                          <td className="px-2 sm:px-4 py-3 text-xs sm:text-sm whitespace-nowrap">
                           {editingPayroll?.id === payroll.id ? (
                             <input
                               type="number"
@@ -1153,13 +1154,13 @@ export default function PayrollsPage() {
                             `${payroll.amount.toLocaleString('ko-KR')}원`
                           )}
                         </td>
-                        <td className="px-4 py-3 text-sm">
+                        <td className="px-2 sm:px-4 py-3 text-xs sm:text-sm whitespace-nowrap">
                           {editingPayroll?.id === payroll.id ? (
                             <input
                               type="date"
                               value={editPaidAt}
                               onChange={(e) => setEditPaidAt(e.target.value)}
-                              className="px-2 py-1 border border-gray-300 rounded text-sm"
+                              className="px-2 py-1 border border-gray-300 rounded text-xs sm:text-sm w-full"
                             />
                           ) : (
                             payroll.paid_at 
@@ -1169,12 +1170,12 @@ export default function PayrollsPage() {
                               : '-'
                           )}
                         </td>
-                        <td className="px-4 py-3 text-sm">
+                        <td className="px-2 sm:px-4 py-3 text-xs sm:text-sm whitespace-nowrap">
                           {editingPayroll?.id === payroll.id ? (
                             <select
                               value={editStatus}
                               onChange={(e) => setEditStatus(e.target.value as 'scheduled' | 'paid')}
-                              className="px-2 py-1 border border-gray-300 rounded text-sm"
+                              className="px-2 py-1 border border-gray-300 rounded text-xs sm:text-sm w-full"
                             >
                               <option value="scheduled">예정</option>
                               <option value="paid">지급완료</option>
@@ -1187,7 +1188,7 @@ export default function PayrollsPage() {
                             </span>
                           )}
                         </td>
-                        <td className="px-4 py-3 text-sm">
+                        <td className="px-2 sm:px-4 py-3 text-xs sm:text-sm whitespace-nowrap">
                           <div className="flex space-x-2">
                             {editingPayroll?.id === payroll.id ? (
                               <>
@@ -1234,6 +1235,7 @@ export default function PayrollsPage() {
                     ))}
                   </tbody>
                 </table>
+                </div>
               </div>
             )}
           </div>

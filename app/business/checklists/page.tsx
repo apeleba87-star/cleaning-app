@@ -40,9 +40,9 @@ export default async function BusinessChecklistsPage() {
   }
 
   return (
-    <div className="max-w-6xl mx-auto">
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-bold">체크리스트 관리</h1>
+    <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6">
+      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 mb-6">
+        <h1 className="text-xl sm:text-2xl font-bold">체크리스트 관리</h1>
         <a
           href="/business/dashboard"
           className="text-blue-600 hover:text-blue-800 text-sm"
