@@ -241,7 +241,23 @@ export function NavRoleSwitch({ userRole, userName, onRefresh, isRefreshing }: N
 
   // 경로가 활성화되어 있는지 확인
   const isActive = (href: string): boolean => {
-    return pathname === href || pathname.startsWith(href + '/')
+    // 정확한 경로 매칭
+    if (pathname === href) {
+      return true
+    }
+    
+    // 하위 경로 매칭 (단, 특정 경로는 제외)
+    // 예: /business/stores는 /business/stores/status와 구분되어야 함
+    if (pathname.startsWith(href + '/')) {
+      // /business/stores는 /business/stores/status와 구분
+      if (href === '/business/stores') {
+        // /business/stores/status는 제외
+        return !pathname.startsWith('/business/stores/status')
+      }
+      return true
+    }
+    
+    return false
   }
 
   // 그룹의 항목 중 하나가 활성화되어 있는지 확인

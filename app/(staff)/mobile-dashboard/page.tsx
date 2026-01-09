@@ -149,42 +149,30 @@ export default function MobileDashboardPage() {
     }
     
     // 출근 기록이 없는 경우
-    if (isNightShift && 
-        workStartHour !== null && workStartHour !== undefined && 
-        workEndHour !== null && workEndHour !== undefined) {
-      // 관리일 범위 내인지 확인
+    if (isNightShift) {
+      // 제안 방식: 09:00 경계만 확인하여 관리일에 속하는 날짜 결정
       const currentHour = getCurrentHourKST()
-      const isWithinPeriod = isWithinManagementPeriod(
-        true,
-        workStartHour,
-        workEndHour,
-        currentHour
-      )
+      let dateToCheck: Date
       
-      if (isWithinPeriod) {
-        // 관리일 범위 내: work_date 계산
-        const workDate = calculateWorkDateForNightShift(
-          true,
-          workStartHour,
-          workEndHour,
-          currentHour
-        )
-        const workDateObj = new Date(workDate + 'T00:00:00+09:00')
-        const dayNameToCheck = getKoreanDayName(workDateObj.getDay())
-        const days = managementDays.split(',').map(d => d.trim())
-        return days.includes(dayNameToCheck)
+      if (currentHour < 9) {
+        // 다음날 09:00 이전 = 전날 관리일 확인
+        const yesterday = new Date()
+        const kstOffset = 9 * 60
+        const utc = yesterday.getTime() + (yesterday.getTimezoneOffset() * 60 * 1000)
+        const kst = new Date(utc + (kstOffset * 60 * 1000))
+        kst.setDate(kst.getDate() - 1)
+        dateToCheck = kst
       } else {
-        // 관리일 범위 밖: 오늘이 관리일인지만 확인
-        // work_start_hour 이전이면 오늘 날짜 기준으로 확인
-        if (currentHour < workStartHour) {
-          const days = managementDays.split(',').map(d => d.trim())
-          return days.includes(todayDayName)
-        } else {
-          // work_end_hour 이후: 다음 관리일 예정 여부 확인
-          const days = managementDays.split(',').map(d => d.trim())
-          return days.includes(todayDayName)
-        }
+        // 당일 관리일 확인
+        const today = new Date()
+        const kstOffset = 9 * 60
+        const utc = today.getTime() + (today.getTimezoneOffset() * 60 * 1000)
+        dateToCheck = new Date(utc + (kstOffset * 60 * 1000))
       }
+      
+      const dayNameToCheck = getKoreanDayName(dateToCheck.getDay())
+      const days = managementDays.split(',').map(d => d.trim())
+      return days.includes(dayNameToCheck)
     }
     
     // 일반 매장 또는 야간매장 정보가 없는 경우

@@ -284,18 +284,18 @@ export async function GET(request: NextRequest) {
     const storeStatuses = await Promise.all(
       stores.map(async (store) => {
         try {
-        // 오늘이 출근일인지 확인 (사용자 친화적: 항상 오늘 날짜 기준)
+        // 오늘이 출근일인지 확인
+        // 제안 방식: 야간 매장은 09:00 경계를 기준으로 관리일에 속하는 날짜 확인
         let isWorkDay = false
-        if (store.is_night_shift && 
-            store.work_start_hour !== null && 
-            store.work_end_hour !== null) {
-          // 야간매장: 항상 오늘 날짜 기준으로 관리일 여부 판단 (사용자 이해도 향상)
+        if (store.is_night_shift) {
+          // 야간매장: 현재 시간 기준으로 관리일에 속하는 날짜 확인 (09:00 경계 기준)
+          // checkDate를 전달하지 않으면 현재 시간 기준으로 자동 계산
           isWorkDay = isManagementDay(
             store.management_days,
             true,
-            store.work_start_hour,
-            store.work_end_hour,
-            getTodayDateKST()
+            store.work_start_hour || 0,
+            store.work_end_hour || 9,
+            undefined // checkDate를 전달하지 않아 현재 시간 기준으로 계산
           )
         } else {
           // 일반 매장
