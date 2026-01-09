@@ -693,13 +693,22 @@ export async function GET(request: NextRequest) {
           console.log(`Store ${store.name}: 출근전 상태 (배정된 직원: ${assignedUserIds.length}명, 오늘 출근 기록 없음)`)
         }
 
+        // 휴무일일 때는 출퇴근 시간을 표시하지 않음
+        if (!isWorkDay) {
+          clockInTime = null
+          clockOutTime = null
+          attendanceStatus = 'not_clocked_in'
+        }
+
         const hasProblem = storeProblemCount > 0 || vendingProblemCount > 0 || lostItemCount > 0
 
         // 야간매장 상태 메시지 생성 (상세 상태 안내)
-        let statusLabel = ''
+        // 휴무일 경우 일반 매장과 동일하게 처리하기 위해 statusLabel을 설정하지 않음
+        let statusLabel: string | null = null
         if (store.is_night_shift && 
             store.work_start_hour !== null && 
-            store.work_end_hour !== null) {
+            store.work_end_hour !== null &&
+            isWorkDay) { // 관리일일 때만 상태 메시지 생성
           const currentHour = getCurrentHourKST()
           const isWithinPeriod = isWithinManagementPeriod(
             true,
@@ -727,7 +736,7 @@ export async function GET(request: NextRequest) {
             if (workDateIsManagementDay) {
               // 실제 관리가 진행 중인 날짜가 관리일인 경우
               statusLabel = '관리일 (관리 가능)'
-            } else if (isWorkDay) {
+            } else {
               // 오늘이 관리일이지만 실제로는 어제 저녁부터 시작된 관리가 진행 중
               const yesterday = new Date(koreaTime)
               yesterday.setDate(yesterday.getDate() - 1)
@@ -750,14 +759,12 @@ export async function GET(request: NextRequest) {
             // 관리일 범위 밖
             if (currentHour < store.work_start_hour) {
               // work_start_hour 이전
-              if (isWorkDay) {
-                statusLabel = `오늘 오후 ${store.work_start_hour}시부터 관리 시작 예정`
-              }
+              statusLabel = `오늘 오후 ${store.work_start_hour}시부터 관리 시작 예정`
             } else if (currentHour >= store.work_end_hour) {
               // work_end_hour 이후
               if (attendanceStatus === 'clocked_out') {
                 statusLabel = '관리완료'
-              } else if (isWorkDay) {
+              } else {
                 statusLabel = `오늘이 관리일, 오후 ${store.work_start_hour}시부터 시작`
               }
             }
