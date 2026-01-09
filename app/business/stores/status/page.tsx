@@ -1271,12 +1271,14 @@ export default function BusinessStoresStatusPage() {
   }
 
   const getStatusLabel = (status: StoreStatus): string => {
-    // 야간매장 상태 메시지가 있으면 우선 사용
+    // 휴무일 경우 야간 매장도 일반 매장과 동일하게 처리
+    if (!status.is_work_day) return '휴무'
+    
+    // 야간매장 상태 메시지가 있으면 우선 사용 (관리일일 때만)
     if (status.status_label) {
       return status.status_label
     }
     // 기존 로직 (일반 매장)
-    if (!status.is_work_day) return '휴무'
     if (status.attendance_status === 'clocked_out') return '퇴근완료'
     if (status.attendance_status === 'clocked_in') return '출근중'
     return '출근전'
@@ -1668,9 +1670,7 @@ export default function BusinessStoresStatusPage() {
                   <div
                     key={status.store_id}
                     className={`bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow border-l-4 mb-4 ${
-                      status.is_night_shift
-                        ? 'border-purple-500' // 야간매장은 보라색 테두리
-                        : !status.is_work_day
+                      !status.is_work_day
                         ? 'border-gray-300 opacity-60'
                         : status.has_problem
                         ? 'border-red-500'
@@ -2157,9 +2157,7 @@ export default function BusinessStoresStatusPage() {
                     <div
                       key={status.store_id}
                       className={`bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow border-l-4 p-4 ${
-                        status.is_night_shift
-                          ? 'border-purple-500' // 야간매장은 보라색 테두리
-                          : !status.is_work_day
+                        !status.is_work_day
                           ? 'border-gray-300 opacity-60'
                           : status.has_problem
                           ? 'border-red-500'
@@ -2203,8 +2201,8 @@ export default function BusinessStoresStatusPage() {
                               {getStatusLabel(status)}
                             </span>
                           </div>
-                          {/* 퇴근 완료 시 출근/퇴근 시간 표시 */}
-                          {status.attendance_status === 'clocked_out' && status.clock_in_time && status.clock_out_time && (
+                          {/* 퇴근 완료 시 출근/퇴근 시간 표시 (관리일일 때만) */}
+                          {status.is_work_day && status.attendance_status === 'clocked_out' && status.clock_in_time && status.clock_out_time && (
                             <div className="flex flex-col gap-1 text-xs">
                               <div className="flex items-center gap-1">
                                 <span className="text-gray-500">출근 시간</span>
