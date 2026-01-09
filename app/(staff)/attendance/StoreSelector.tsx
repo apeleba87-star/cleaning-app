@@ -134,39 +134,28 @@ export default function StoreSelector({ selectedStoreId: propSelectedStoreId, on
       let checkDayName = todayDayName
       let isManagementDay = false
       
-      if (store.is_night_shift && 
-          store.work_start_hour !== null && store.work_start_hour !== undefined &&
-          store.work_end_hour !== null && store.work_end_hour !== undefined) {
-        // 관리일 범위 내인지 확인
-        const isWithinPeriod = isWithinManagementPeriod(
-          true,
-          store.work_start_hour,
-          store.work_end_hour,
-          currentHour
-        )
-        
-        if (isWithinPeriod) {
-          // 관리일 범위 내: work_date 계산
-          const workDate = calculateWorkDateForNightShift(
-            true,
-            store.work_start_hour,
-            store.work_end_hour,
-            currentHour
-          )
-          const workDateObj = new Date(workDate + 'T00:00:00+09:00')
-          checkDayName = dayNames[workDateObj.getDay()]
-          console.log(`🌙 야간 매장 ${store.name}: 관리일 범위 내 → work_date(${workDate}, ${checkDayName}요일) 확인`)
+      if (store.is_night_shift) {
+        // 제안 방식: 09:00 경계만 확인하여 관리일에 속하는 날짜 결정
+        let dateToCheck: Date
+        if (currentHour < 9) {
+          // 다음날 09:00 이전 = 전날 관리일 확인
+          const yesterday = new Date()
+          const kstOffset = 9 * 60
+          const utc = yesterday.getTime() + (yesterday.getTimezoneOffset() * 60 * 1000)
+          const kst = new Date(utc + (kstOffset * 60 * 1000))
+          kst.setDate(kst.getDate() - 1)
+          dateToCheck = kst
         } else {
-          // 관리일 범위 밖: 관리일 아님
-          console.log(`🌙 야간 매장 ${store.name}: 관리일 범위 밖 → 관리일 아님`)
-          if (showOnlyTodayManagement === true) {
-            return false // 필터링에서 제외
-          } else if (showOnlyTodayManagement === false) {
-            return true // 관리일이 아닌 매장으로 포함
-          } else {
-            return true // 모든 매장
-          }
+          // 당일 관리일 확인
+          const today = new Date()
+          const kstOffset = 9 * 60
+          const utc = today.getTime() + (today.getTimezoneOffset() * 60 * 1000)
+          dateToCheck = new Date(utc + (kstOffset * 60 * 1000))
         }
+        
+        checkDayName = dayNames[dateToCheck.getDay()]
+        const workDate = dateToCheck.toISOString().split('T')[0]
+        console.log(`🌙 야간 매장 ${store.name}: 09:00 경계 확인 → work_date(${workDate}, ${checkDayName}요일)`)
       }
       
       // management_days에서 확인할 요일이 포함되어 있는지 확인

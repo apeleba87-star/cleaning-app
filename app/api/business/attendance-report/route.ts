@@ -282,62 +282,29 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // 야간 매장: 전날 work_start_hour ~ 당일 work_end_hour 기준 출근 기록 조회
+    // 야간 매장: 제안 방식 - work_date = yesterday 기준으로 조회
+    // 1일 00:00 ~ 2일 09:00 출근 → work_date = 1일 (yesterday)
     let nightAttendances: any[] = []
     if (nightStoreIds.length > 0 && !isMorningReport) {
       try {
-        // 야간 매장별로 근무 시간대 확인
-        const nightStoreAttendanceQueries = nightStoreIds.map(async (storeId) => {
-          try {
-            const store = workDayStores.find(s => s.id === storeId)
-            if (!store || !store.is_night_shift) return []
+        // 제안 방식: work_date = yesterday인 출근 기록만 조회
+        // 단, clock_in_at 범위 확인 (yesterday 00:00 ~ today 09:00)
+        const yesterdayStartTime = new Date(`${yesterday}T00:00:00+09:00`).toISOString()
+        const todayEndTime = new Date(`${today}T09:00:00+09:00`).toISOString()
 
-            const workStartHour = store.work_start_hour || 18 // 기본값 18시
-            const workEndHour = store.work_end_hour || 8     // 기본값 8시
+        const { data, error } = await supabase
+          .from('attendance')
+          .select('id, store_id, user_id, clock_in_at, work_date')
+          .in('store_id', nightStoreIds)
+          .eq('work_date', yesterday) // work_date = yesterday만 조회
+          .gte('clock_in_at', yesterdayStartTime)
+          .lte('clock_in_at', todayEndTime)
 
-            // 전날 work_start_hour 이후 출근 기록
-            const yesterdayStartTime = new Date(`${yesterday}T${String(workStartHour).padStart(2, '0')}:00:00+09:00`).toISOString()
-            const yesterdayEndTime = new Date(`${yesterday}T23:59:59+09:00`).toISOString()
-            
-            // 당일 work_end_hour 이전 출근 기록
-            const todayStartTime = new Date(`${today}T00:00:00+09:00`).toISOString()
-            const todayEndTime = new Date(`${today}T${String(workEndHour).padStart(2, '0')}:00:00+09:00`).toISOString()
+        if (error) {
+          console.error('Error fetching night store attendances:', error)
+        }
 
-            const [yesterdayData, todayData] = await Promise.all([
-              // 전날 출근 기록
-              supabase
-                .from('attendance')
-                .select('id, store_id, user_id, clock_in_at, work_date')
-                .eq('store_id', storeId)
-                .eq('work_date', yesterday)
-                .gte('clock_in_at', yesterdayStartTime)
-                .lte('clock_in_at', yesterdayEndTime),
-              // 당일 오전 출근 기록
-              supabase
-                .from('attendance')
-                .select('id, store_id, user_id, clock_in_at, work_date')
-                .eq('store_id', storeId)
-                .eq('work_date', today)
-                .gte('clock_in_at', todayStartTime)
-                .lte('clock_in_at', todayEndTime)
-            ])
-
-            if (yesterdayData.error) {
-              console.error(`Error fetching yesterday attendance for store ${storeId}:`, yesterdayData.error)
-            }
-            if (todayData.error) {
-              console.error(`Error fetching today attendance for store ${storeId}:`, todayData.error)
-            }
-
-            return [...(yesterdayData.data || []), ...(todayData.data || [])]
-          } catch (error) {
-            console.error(`Error processing night store ${storeId}:`, error)
-            return []
-          }
-        })
-
-        const nightAttendanceResults = await Promise.all(nightStoreAttendanceQueries)
-        nightAttendances = nightAttendanceResults.flat()
+        nightAttendances = data || []
       } catch (error) {
         console.error('Error fetching night store attendances:', error)
         // 에러가 발생해도 계속 진행 (빈 배열로 처리)
