@@ -282,29 +282,41 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // 야간 매장: 제안 방식 - work_date = yesterday 기준으로 조회
-    // 1일 00:00 ~ 2일 09:00 출근 → work_date = 1일 (yesterday)
+    // 야간 매장: work_end_hour 경계 사용 - work_date = yesterday 기준으로 조회
+    // 각 매장의 work_end_hour에 따라 동적으로 조회
     let nightAttendances: any[] = []
     if (nightStoreIds.length > 0 && !isMorningReport) {
       try {
-        // 제안 방식: work_date = yesterday인 출근 기록만 조회
-        // 단, clock_in_at 범위 확인 (yesterday 00:00 ~ today 09:00)
-        const yesterdayStartTime = new Date(`${yesterday}T00:00:00+09:00`).toISOString()
-        const todayEndTime = new Date(`${today}T09:00:00+09:00`).toISOString()
+        // work_end_hour별로 그룹화
+        const nightStores = workDayStores.filter(s => s.is_night_shift)
+        const storesByEndHour = new Map<number, typeof nightStores>()
+        nightStores.forEach(store => {
+          const endHour = store.work_end_hour ?? 9 // 기본값 9 (하위 호환성)
+          if (!storesByEndHour.has(endHour)) {
+            storesByEndHour.set(endHour, [])
+          }
+          storesByEndHour.get(endHour)!.push(store)
+        })
 
-        const { data, error } = await supabase
-          .from('attendance')
-          .select('id, store_id, user_id, clock_in_at, work_date')
-          .in('store_id', nightStoreIds)
-          .eq('work_date', yesterday) // work_date = yesterday만 조회
-          .gte('clock_in_at', yesterdayStartTime)
-          .lte('clock_in_at', todayEndTime)
+        // 각 work_end_hour별로 조회
+        for (const [endHour, stores] of Array.from(storesByEndHour.entries())) {
+          const yesterdayStartTime = new Date(`${yesterday}T00:00:00+09:00`).toISOString()
+          const todayEndTime = new Date(`${today}T${String(endHour).padStart(2, '0')}:00:00+09:00`).toISOString()
 
-        if (error) {
-          console.error('Error fetching night store attendances:', error)
+          const { data, error } = await supabase
+            .from('attendance')
+            .select('id, store_id, user_id, clock_in_at, work_date')
+            .in('store_id', stores.map(s => s.id))
+            .eq('work_date', yesterday) // work_date = yesterday만 조회
+            .gte('clock_in_at', yesterdayStartTime)
+            .lte('clock_in_at', todayEndTime)
+
+          if (error) {
+            console.error(`Error fetching night store attendances (work_end_hour=${endHour}):`, error)
+          } else if (data) {
+            nightAttendances.push(...data)
+          }
         }
-
-        nightAttendances = data || []
       } catch (error) {
         console.error('Error fetching night store attendances:', error)
         // 에러가 발생해도 계속 진행 (빈 배열로 처리)

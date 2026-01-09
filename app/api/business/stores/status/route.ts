@@ -162,13 +162,23 @@ export async function GET(request: NextRequest) {
         .neq('area_category', 'inventory')
         .gte('created_at', todayStart.toISOString())
         .lte('created_at', todayEnd.toISOString()),
-      // 모든 매장의 출근 기록을 한 번에 조회
-      attendanceClient
-        .from('attendance')
-        .select('store_id, user_id, work_date, clock_in_at, clock_out_at')
-        .in('store_id', storeIds)
-        .or(`work_date.eq.${todayDateKST},work_date.eq.${todayDateUTC},clock_in_at.gte.${todayStart.toISOString()},clock_in_at.lte.${todayEnd.toISOString()}`)
-        .order('clock_in_at', { ascending: false }),
+      // 모든 매장의 출근 기록을 한 번에 조회 (오늘 + 어제, 연속 관리일 체크용)
+      (async () => {
+        const yesterday = new Date(koreaTime)
+        yesterday.setDate(yesterday.getDate() - 1)
+        const yesterdayDateKST = `${yesterday.getFullYear()}-${String(yesterday.getMonth() + 1).padStart(2, '0')}-${String(yesterday.getDate()).padStart(2, '0')}`
+        const yesterdayStart = new Date(yesterday)
+        yesterdayStart.setHours(0, 0, 0, 0)
+        const yesterdayEnd = new Date(yesterday)
+        yesterdayEnd.setHours(23, 59, 59, 999)
+        
+        return attendanceClient
+          .from('attendance')
+          .select('store_id, user_id, work_date, clock_in_at, clock_out_at')
+          .in('store_id', storeIds)
+          .or(`work_date.eq.${todayDateKST},work_date.eq.${todayDateUTC},work_date.eq.${yesterdayDateKST},clock_in_at.gte.${yesterdayStart.toISOString()},clock_in_at.lte.${todayEnd.toISOString()}`)
+          .order('clock_in_at', { ascending: false })
+      })(),
       // 모든 매장의 제품 입고/보관 사진을 한 번에 조회
       supabase
         .from('product_photos')
@@ -285,20 +295,23 @@ export async function GET(request: NextRequest) {
       stores.map(async (store) => {
         try {
         // 오늘이 출근일인지 확인
-        // 제안 방식: 야간 매장은 09:00 경계를 기준으로 관리일에 속하는 날짜 확인
+        // 야간 매장: 실제 날짜 기준으로 확인 (출근 기록이 있으면 work_date 기준)
+        // 일반 매장: 기존 로직 유지
         let isWorkDay = false
         if (store.is_night_shift) {
-          // 야간매장: 현재 시간 기준으로 관리일에 속하는 날짜 확인 (09:00 경계 기준)
-          // checkDate를 전달하지 않으면 현재 시간 기준으로 자동 계산
+          // 야간매장: 실제 날짜(토요일) 기준으로 확인
+          // 출근 기록이 있으면 work_date 기준으로 판단
+          // 출근 기록이 없으면 실제 날짜가 관리일인지 확인
+          const actualDate = getTodayDateKST()
           isWorkDay = isManagementDay(
             store.management_days,
             true,
             store.work_start_hour || 0,
             store.work_end_hour || 9,
-            undefined // checkDate를 전달하지 않아 현재 시간 기준으로 계산
+            actualDate // 실제 날짜 전달
           )
         } else {
-          // 일반 매장
+          // 일반 매장: 기존 로직 유지
           isWorkDay = store.management_days
             ? store.management_days.split(',').map((d) => d.trim()).includes(todayDayName)
             : false
@@ -661,12 +674,22 @@ export async function GET(request: NextRequest) {
           return isToday
         })
         
+        // 어제 출근 기록도 확인 (연속 관리일 체크용)
+        const yesterdayDateKST = (() => {
+          const yesterday = new Date(koreaTime)
+          yesterday.setDate(yesterday.getDate() - 1)
+          return `${yesterday.getFullYear()}-${String(yesterday.getMonth() + 1).padStart(2, '0')}-${String(yesterday.getDate()).padStart(2, '0')}`
+        })()
+        const yesterdayAttendances = todayAttendances.filter(a => a.work_date === yesterdayDateKST)
+        
         let attendanceStatus: 'not_clocked_in' | 'clocked_in' | 'clocked_out' = 'not_clocked_in'
         let clockInTime: string | null = null
         let clockOutTime: string | null = null
+        let attendanceWorkDate: string | null = null
 
-        console.log(`Store ${store.name}: 배정된 직원 수: ${assignedUserIds.length}, 전체 출근 기록 수: ${todayAttendances.length}, 오늘 출근 기록 수: ${todayOnlyAttendances.length}`)
+        console.log(`Store ${store.name}: 배정된 직원 수: ${assignedUserIds.length}, 전체 출근 기록 수: ${todayAttendances.length}, 오늘 출근 기록 수: ${todayOnlyAttendances.length}, 어제 출근 기록 수: ${yesterdayAttendances.length}`)
 
+        // 오늘 출근 기록 우선 확인
         if (todayOnlyAttendances.length > 0) {
           // 출근 중인 직원이 있는지 확인 (출근했지만 퇴근하지 않은 경우)
           const clockedInStaff = todayOnlyAttendances.find(a => !a.clock_out_at)
@@ -675,7 +698,8 @@ export async function GET(request: NextRequest) {
             // 한 명이라도 출근 중이면 "출근중"
             attendanceStatus = 'clocked_in'
             clockInTime = clockedInStaff.clock_in_at
-            console.log(`Store ${store.name}: 출근중 상태 (user_id: ${clockedInStaff.user_id})`)
+            attendanceWorkDate = clockedInStaff.work_date
+            console.log(`Store ${store.name}: 출근중 상태 (user_id: ${clockedInStaff.user_id}, work_date: ${attendanceWorkDate})`)
           } else {
             // 모두 퇴근했으면 "퇴근완료" (가장 최근 퇴근 시간 기준)
             const latestClockOut = todayOnlyAttendances
@@ -686,11 +710,36 @@ export async function GET(request: NextRequest) {
               attendanceStatus = 'clocked_out'
               clockOutTime = latestClockOut.clock_out_at
               clockInTime = latestClockOut.clock_in_at
-              console.log(`Store ${store.name}: 퇴근완료 상태 (user_id: ${latestClockOut.user_id})`)
+              attendanceWorkDate = latestClockOut.work_date
+              console.log(`Store ${store.name}: 퇴근완료 상태 (user_id: ${latestClockOut.user_id}, work_date: ${attendanceWorkDate})`)
+            }
+          }
+        } else if (yesterdayAttendances.length > 0) {
+          // 오늘 출근 기록이 없으면 어제 출근 기록 확인 (연속 관리일 체크용)
+          const clockedInStaff = yesterdayAttendances.find(a => !a.clock_out_at)
+          
+          if (clockedInStaff) {
+            // 어제 출근 중인 직원이 있으면 "출근중"
+            attendanceStatus = 'clocked_in'
+            clockInTime = clockedInStaff.clock_in_at
+            attendanceWorkDate = clockedInStaff.work_date
+            console.log(`Store ${store.name}: 어제 출근중 상태 (user_id: ${clockedInStaff.user_id}, work_date: ${attendanceWorkDate})`)
+          } else {
+            // 어제 모두 퇴근했으면 "퇴근완료"
+            const latestClockOut = yesterdayAttendances
+              .filter(a => a.clock_out_at)
+              .sort((a, b) => new Date(b.clock_out_at).getTime() - new Date(a.clock_out_at).getTime())[0]
+            
+            if (latestClockOut) {
+              attendanceStatus = 'clocked_out'
+              clockOutTime = latestClockOut.clock_out_at
+              clockInTime = latestClockOut.clock_in_at
+              attendanceWorkDate = latestClockOut.work_date
+              console.log(`Store ${store.name}: 어제 퇴근완료 상태 (user_id: ${latestClockOut.user_id}, work_date: ${attendanceWorkDate})`)
             }
           }
         } else {
-          console.log(`Store ${store.name}: 출근전 상태 (배정된 직원: ${assignedUserIds.length}명, 오늘 출근 기록 없음)`)
+          console.log(`Store ${store.name}: 출근전 상태 (배정된 직원: ${assignedUserIds.length}명, 오늘/어제 출근 기록 없음)`)
         }
 
         const hasProblem = storeProblemCount > 0 || vendingProblemCount > 0 || lostItemCount > 0
@@ -708,27 +757,57 @@ export async function GET(request: NextRequest) {
             currentHour
           )
           
+          // 출근 기록의 work_date 확인 (연속 관리일 체크용)
+          // attendanceWorkDate는 위에서 이미 계산됨
+          
+          // 현재 날짜(09:00 경계 기준) 계산
+          const currentWorkDate = calculateWorkDateForNightShift(
+            true,
+            store.work_start_hour,
+            store.work_end_hour,
+            currentHour
+          )
+          
+          // 현재 날짜가 관리일인지 확인
+          const currentWorkDateIsManagementDay = isManagementDay(
+            store.management_days,
+            true,
+            store.work_start_hour,
+            store.work_end_hour,
+            currentWorkDate
+          )
+          
+          // 출근 기록의 work_date가 관리일인지 확인
+          const workDateIsManagementDay = attendanceWorkDate 
+            ? isManagementDay(
+                store.management_days,
+                true,
+                store.work_start_hour,
+                store.work_end_hour,
+                attendanceWorkDate
+              )
+            : false
+          
+          // 연속 관리일 체크: 출근 기록의 work_date와 현재 날짜가 모두 관리일인 경우
+          const isConsecutiveManagementDay = workDateIsManagementDay && currentWorkDateIsManagementDay
+          
+          // 실제 날짜(토요일) 기준으로 관리일 확인
+          const actualDate = getTodayDateKST()
+          const actualDateIsManagementDay = isManagementDay(
+            store.management_days,
+            true,
+            store.work_start_hour,
+            store.work_end_hour,
+            actualDate
+          )
+          
           if (isWithinPeriod) {
             // 관리일 범위 내
-            const workDate = calculateWorkDateForNightShift(
-              true,
-              store.work_start_hour,
-              store.work_end_hour,
-              currentHour
-            )
-            const workDateIsManagementDay = isManagementDay(
-              store.management_days,
-              true,
-              store.work_start_hour,
-              store.work_end_hour,
-              workDate
-            )
-            
             if (workDateIsManagementDay) {
               // 실제 관리가 진행 중인 날짜가 관리일인 경우
               statusLabel = '관리일 (관리 가능)'
-            } else if (isWorkDay) {
-              // 오늘이 관리일이지만 실제로는 어제 저녁부터 시작된 관리가 진행 중
+            } else if (attendanceStatus === 'clocked_in' && attendanceWorkDate) {
+              // 출근 기록이 있지만 work_date가 관리일이 아닌 경우 (출근 중)
               const yesterday = new Date(koreaTime)
               yesterday.setDate(yesterday.getDate() - 1)
               const yesterdayDateKST = `${yesterday.getFullYear()}-${String(yesterday.getMonth() + 1).padStart(2, '0')}-${String(yesterday.getDate()).padStart(2, '0')}`
@@ -740,24 +819,30 @@ export async function GET(request: NextRequest) {
                 yesterdayDateKST
               )
               
-              if (yesterdayIsManagementDay) {
+              if (yesterdayIsManagementDay && attendanceWorkDate === yesterdayDateKST) {
                 statusLabel = `어제 저녁 ${store.work_start_hour}시부터 관리 진행 중`
               } else {
                 statusLabel = '관리 진행 중'
               }
             }
+            // 출근 기록이 없으면 상태 표시하지 않음 (기본값 유지)
           } else {
             // 관리일 범위 밖
             if (currentHour < store.work_start_hour) {
               // work_start_hour 이전
-              if (isWorkDay) {
+              if (actualDateIsManagementDay) {
                 statusLabel = `오늘 오후 ${store.work_start_hour}시부터 관리 시작 예정`
               }
             } else if (currentHour >= store.work_end_hour) {
               // work_end_hour 이후
               if (attendanceStatus === 'clocked_out') {
-                statusLabel = '관리완료'
-              } else if (isWorkDay) {
+                // 연속 관리일이고 work_start_hour 이후면 새로운 관리일 시작 가능
+                if (isConsecutiveManagementDay && currentHour >= store.work_start_hour) {
+                  statusLabel = '관리일 (관리 가능)'
+                } else {
+                  statusLabel = '관리완료'
+                }
+              } else if (actualDateIsManagementDay) {
                 statusLabel = `오늘이 관리일, 오후 ${store.work_start_hour}시부터 시작`
               }
             }
