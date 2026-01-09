@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { Store } from '@/types/db'
-import { getCurrentHourKST, isWithinManagementPeriod, calculateWorkDateForNightShift, getTodayDateKST, getYesterdayDateKST } from '@/lib/utils/date'
+import { getCurrentHourKST, isWithinManagementPeriod, calculateWorkDateForNightShift } from '@/lib/utils/date'
 
 interface StoreSelectorProps {
   selectedStoreId: string
@@ -107,68 +107,20 @@ export default function StoreSelector({ selectedStoreId: propSelectedStoreId, on
 
     console.log('Final stores:', storesData)
 
-    // 출근 기록 조회 (연속 관리일 체크용)
-    const today = getTodayDateKST()
-    const yesterday = getYesterdayDateKST()
-    
-    const { data: todayAttendance } = await supabase
-      .from('attendance')
-      .select('store_id, clock_out_at, work_date')
-      .eq('user_id', session.user.id)
-      .eq('work_date', today)
-
-    const { data: yesterdayAttendance } = await supabase
-      .from('attendance')
-      .select('store_id, clock_out_at, work_date')
-      .eq('user_id', session.user.id)
-      .eq('work_date', yesterday)
-      .order('clock_in_at', { ascending: false })
-      .limit(10)
-
-    // 출근 기록 맵 생성
-    const attendanceMap = new Map<string, { status: 'not_clocked_in' | 'clocked_in' | 'clocked_out', workDate: string | null }>()
-    
-    if (todayAttendance) {
-      todayAttendance.forEach((attendance: any) => {
-        if (attendance.work_date === today) {
-          if (attendance.clock_out_at) {
-            attendanceMap.set(attendance.store_id, { status: 'clocked_out', workDate: attendance.work_date })
-          } else {
-            attendanceMap.set(attendance.store_id, { status: 'clocked_in', workDate: attendance.work_date })
-          }
-        }
-      })
-    }
-    
-    if (yesterdayAttendance) {
-      yesterdayAttendance.forEach((attendance: any) => {
-        if (!attendanceMap.has(attendance.store_id)) {
-          if (attendance.clock_out_at) {
-            attendanceMap.set(attendance.store_id, { status: 'clocked_out', workDate: attendance.work_date })
-          } else {
-            attendanceMap.set(attendance.store_id, { status: 'clocked_in', workDate: attendance.work_date })
-          }
-        }
-      })
-    }
-
     // 오늘의 요일 확인
-    const todayDate = new Date()
-    const dayOfWeek = todayDate.getDay() // 0 = 일요일, 1 = 월요일, ..., 6 = 토요일
+    const today = new Date()
+    const dayOfWeek = today.getDay() // 0 = 일요일, 1 = 월요일, ..., 6 = 토요일
     const dayNames = ['일', '월', '화', '수', '목', '금', '토']
     const todayDayName = dayNames[dayOfWeek]
     
+    // 어제의 요일 확인 (야간 매장 날짜 경계 처리용)
+    const yesterday = new Date(today)
+    yesterday.setDate(yesterday.getDate() - 1)
+    const yesterdayDayOfWeek = yesterday.getDay()
+    const yesterdayDayName = dayNames[yesterdayDayOfWeek]
+    
     // 현재 시간 (KST)
     const currentHour = getCurrentHourKST()
-    
-    // 관리일 확인 헬퍼 함수
-    const checkIfDateIsManagementDay = (dateStr: string, managementDays: string): boolean => {
-      const dateObj = new Date(dateStr + 'T00:00:00+09:00')
-      const dayIndex = dateObj.getDay()
-      const dayName = dayNames[dayIndex]
-      const days = managementDays.split(',').map(d => d.trim())
-      return days.includes(dayName)
-    }
     
     // showOnlyTodayManagement에 따라 필터링
     const filteredStores = (storesData || []).filter((store) => {
@@ -178,84 +130,55 @@ export default function StoreSelector({ selectedStoreId: propSelectedStoreId, on
         return showOnlyTodayManagement === false
       }
       
-      // 출근 기록 확인
-      const attendanceData = attendanceMap.get(store.id)
-      const attendanceWorkDate = attendanceData?.workDate || null
-      const attendanceStatus = attendanceData?.status || 'not_clocked_in'
+      // 야간 매장인 경우 날짜 경계 처리
+      let checkDayName = todayDayName
+      let isManagementDay = false
       
-      // 야간 매장의 경우: 출근 기록이 있으면 work_date 기준으로만 판단 (단순화)
-      if (store.is_night_shift && attendanceWorkDate) {
-        const workDateIsManagementDay = checkIfDateIsManagementDay(attendanceWorkDate, store.management_days)
-        
-        // 출근 완료 상태이고 연속 관리일인 경우: work_start_hour 이후에만 새로운 관리일로 인정
-        if (attendanceStatus === 'clocked_out' && 
-            store.work_start_hour !== null && 
-            store.work_start_hour !== undefined) {
-          const currentDate = getTodayDateKST()
-          const currentDateIsManagementDay = checkIfDateIsManagementDay(currentDate, store.management_days)
-          
-          // 연속 관리일이고 work_start_hour 이후면 새로운 관리일 시작
-          if (workDateIsManagementDay && currentDateIsManagementDay && currentHour >= store.work_start_hour) {
-            const isManagementDay = true  // 새로운 관리일 시작
-            if (showOnlyTodayManagement === true) {
-              return isManagementDay
-            } else if (showOnlyTodayManagement === false) {
-              return !isManagementDay
-            } else {
-              return true
-            }
-          }
+      if (store.is_night_shift) {
+        // 제안 방식: 09:00 경계만 확인하여 관리일에 속하는 날짜 결정
+        let dateToCheck: Date
+        if (currentHour < 9) {
+          // 다음날 09:00 이전 = 전날 관리일 확인
+          const yesterday = new Date()
+          const kstOffset = 9 * 60
+          const utc = yesterday.getTime() + (yesterday.getTimezoneOffset() * 60 * 1000)
+          const kst = new Date(utc + (kstOffset * 60 * 1000))
+          kst.setDate(kst.getDate() - 1)
+          dateToCheck = kst
+        } else {
+          // 당일 관리일 확인
+          const today = new Date()
+          const kstOffset = 9 * 60
+          const utc = today.getTime() + (today.getTimezoneOffset() * 60 * 1000)
+          dateToCheck = new Date(utc + (kstOffset * 60 * 1000))
         }
         
-        // 출근 기록의 work_date 기준으로만 판단
-        const isManagementDay = workDateIsManagementDay
-        if (showOnlyTodayManagement === true) {
-          return isManagementDay
-        } else if (showOnlyTodayManagement === false) {
-          return !isManagementDay
-        } else {
-          return true
-        }
+        checkDayName = dayNames[dateToCheck.getDay()]
+        const workDate = dateToCheck.toISOString().split('T')[0]
+        console.log(`🌙 야간 매장 ${store.name}: 09:00 경계 확인 → work_date(${workDate}, ${checkDayName}요일)`)
       }
       
-      // 출근 기록이 없는 경우 (야간 매장 또는 일반 매장)
-      if (!attendanceWorkDate) {
-        if (store.is_night_shift && store.work_start_hour !== null && store.work_start_hour !== undefined) {
-          // 야간 매장: 현재 날짜가 관리일이고 work_start_hour 이후인지 확인
-          const currentDate = getTodayDateKST()
-          const currentDateIsManagementDay = checkIfDateIsManagementDay(currentDate, store.management_days)
-          const isManagementDay = currentDateIsManagementDay && currentHour >= store.work_start_hour
-          
-          if (showOnlyTodayManagement === true) {
-            return isManagementDay
-          } else if (showOnlyTodayManagement === false) {
-            return !isManagementDay
-          } else {
-            return true
-          }
-        } else {
-          // 일반 매장 또는 work_start_hour가 없는 경우: 현재 날짜가 관리일인지 확인
-          const currentDate = getTodayDateKST()
-          const isManagementDay = checkIfDateIsManagementDay(currentDate, store.management_days)
-          
-          if (showOnlyTodayManagement === true) {
-            return isManagementDay
-          } else if (showOnlyTodayManagement === false) {
-            return !isManagementDay
-          } else {
-            return true
-          }
-        }
-      }
+      // management_days에서 확인할 요일이 포함되어 있는지 확인
+      // 형식: "월,수,금" 또는 "월수금" 둘 다 처리
+      const managementDays = store.management_days.replace(/\s/g, '') // 공백 제거
+      const dayList = managementDays.split(',').map(d => d.trim())
       
-      // 일반 매장의 경우: 출근 기록의 work_date 기준으로 판단
-      const workDateIsManagementDay = checkIfDateIsManagementDay(attendanceWorkDate, store.management_days)
-      if (showOnlyTodayManagement === true) {
-        return workDateIsManagementDay
-      } else if (showOnlyTodayManagement === false) {
-        return !workDateIsManagementDay
+      // 쉼표로 구분된 경우와 그렇지 않은 경우 모두 처리
+      if (dayList.length > 1) {
+        // "월,수,금" 형식
+        isManagementDay = dayList.includes(checkDayName)
       } else {
-        return true
+        // "월수금" 형식 - 각 요일 글자 하나씩 확인
+        isManagementDay = managementDays.includes(checkDayName)
+      }
+      
+      // showOnlyTodayManagement에 따라 반환
+      if (showOnlyTodayManagement === true) {
+        return isManagementDay // 확인한 날짜가 관리 요일인 매장만
+      } else if (showOnlyTodayManagement === false) {
+        return !isManagementDay // 확인한 날짜가 관리 요일이 아닌 매장만
+      } else {
+        return true // 모든 매장
       }
     })
 
