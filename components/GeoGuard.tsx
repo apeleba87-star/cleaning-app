@@ -43,10 +43,10 @@ export function GeoGuard({ onLocationReady, children, className }: GeoGuardProps
         // 위치 권한이 거부되거나 실패한 경우 모의 위치 제공 옵션 표시
         setError(
           err.code === 1
-            ? '위치 권한이 거부되었습니다. 테스트용 모의 위치를 사용할 수 있습니다.'
+            ? '위치 권한이 거부되었습니다. 위치 없이 관리 시작할 수 있습니다.'
             : err.code === 2
-            ? '위치를 가져올 수 없습니다. 테스트용 모의 위치를 사용할 수 있습니다.'
-            : '위치 요청 시간이 초과되었습니다. 테스트용 모의 위치를 사용할 수 있습니다.'
+            ? '위치를 가져올 수 없습니다. 위치 없이 관리 시작할 수 있습니다.'
+            : '위치 요청 시간이 초과되었습니다. 위치 없이 관리 시작할 수 있습니다.'
         )
         setLoading(false)
       },
@@ -88,7 +88,7 @@ export function GeoGuard({ onLocationReady, children, className }: GeoGuardProps
               onClick={handleUseMockLocation}
               className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors text-sm"
             >
-              테스트용 모의 위치 사용
+              관리 시작 즉시 가기
             </button>
             <button
               onClick={() => window.location.reload()}
