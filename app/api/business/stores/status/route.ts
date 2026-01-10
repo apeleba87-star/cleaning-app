@@ -718,43 +718,8 @@ export async function GET(request: NextRequest) {
           )
           
           if (isWithinPeriod) {
-            // 관리일 범위 내
-            const workDate = calculateWorkDateForNightShift(
-              true,
-              store.work_start_hour,
-              store.work_end_hour,
-              currentHour
-            )
-            const workDateIsManagementDay = isManagementDay(
-              store.management_days,
-              true,
-              store.work_start_hour,
-              store.work_end_hour,
-              workDate
-            )
-            
-            if (workDateIsManagementDay) {
-              // 실제 관리가 진행 중인 날짜가 관리일인 경우
-              statusLabel = '관리일 (관리 가능)'
-            } else {
-              // 오늘이 관리일이지만 실제로는 어제 저녁부터 시작된 관리가 진행 중
-              const yesterday = new Date(koreaTime)
-              yesterday.setDate(yesterday.getDate() - 1)
-              const yesterdayDateKST = `${yesterday.getFullYear()}-${String(yesterday.getMonth() + 1).padStart(2, '0')}-${String(yesterday.getDate()).padStart(2, '0')}`
-              const yesterdayIsManagementDay = isManagementDay(
-                store.management_days,
-                true,
-                store.work_start_hour,
-                store.work_end_hour,
-                yesterdayDateKST
-              )
-              
-              if (yesterdayIsManagementDay) {
-                statusLabel = `어제 저녁 ${store.work_start_hour}시부터 관리 진행 중`
-              } else {
-                statusLabel = '관리 진행 중'
-              }
-            }
+            // 관리일 범위 내 - 관리일일 때만 이 분기에 들어오므로 항상 "관리일 (관리 가능)" 표시
+            statusLabel = '관리일 (관리 가능)'
           } else {
             // 관리일 범위 밖
             if (currentHour < store.work_start_hour) {
