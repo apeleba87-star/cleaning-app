@@ -718,8 +718,14 @@ export async function GET(request: NextRequest) {
           )
           
           if (isWithinPeriod) {
-            // 관리일 범위 내 - 관리일일 때만 이 분기에 들어오므로 항상 "관리일 (관리 가능)" 표시
-            statusLabel = '관리일 (관리 가능)'
+            // 관리일 범위 내
+            // 퇴근 완료 상태면 statusLabel을 null로 설정하여 프론트엔드에서 "퇴근완료" 표시
+            if (attendanceStatus === 'clocked_out') {
+              statusLabel = null
+            } else {
+              // 관리일일 때만 이 분기에 들어오므로 "관리일 (관리 가능)" 표시
+              statusLabel = '관리일 (관리 가능)'
+            }
           } else {
             // 관리일 범위 밖
             if (currentHour < store.work_start_hour) {

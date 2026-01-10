@@ -1274,12 +1274,14 @@ export default function BusinessStoresStatusPage() {
     // 휴무일 경우 야간 매장도 일반 매장과 동일하게 처리
     if (!status.is_work_day) return '휴무'
     
-    // 야간매장 상태 메시지가 있으면 우선 사용 (관리일일 때만)
+    // 퇴근 완료 상태는 항상 최우선 표시 (야간 매장 포함)
+    if (status.attendance_status === 'clocked_out') return '퇴근완료'
+    
+    // 야간매장 상태 메시지가 있으면 사용 (관리일일 때만)
     if (status.status_label) {
       return status.status_label
     }
     // 기존 로직 (일반 매장)
-    if (status.attendance_status === 'clocked_out') return '퇴근완료'
     if (status.attendance_status === 'clocked_in') return '출근중'
     return '출근전'
   }
