@@ -1069,13 +1069,20 @@ export default function BusinessStoresStatusPage() {
 
   const handleConfirmProblem = async (problemId: string, storeId?: string) => {
     // Optimistic Update: 즉시 로컬 상태 업데이트
-    const problemToConfirm = storeId
+    // allNotificationsData에서 찾기 (알림 모달용)
+    const problemToConfirmNotification = storeId
       ? allNotificationsData.get(storeId)?.store_problems.find((p: any) => p.id === problemId) ||
         allNotificationsData.get(storeId)?.vending_problems.find((p: any) => p.id === problemId)
       : null
     
-    if (problemToConfirm) {
-      // 즉시 UI에서 제거
+    // allProblemsData에서 찾기 (문제발생 모달용)
+    const problemToConfirmProblem = storeId
+      ? allProblemsData.get(storeId)?.store_problems.find((p: any) => p.id === problemId) ||
+        allProblemsData.get(storeId)?.vending_problems.find((p: any) => p.id === problemId)
+      : null
+    
+    if (problemToConfirmNotification) {
+      // 알림 모달 데이터 즉시 업데이트
       setAllNotificationsData((prev) => {
         const newMap = new Map(prev)
         const storeNotifications = newMap.get(storeId!) || {
@@ -1104,6 +1111,29 @@ export default function BusinessStoresStatusPage() {
       }
     }
     
+    if (problemToConfirmProblem) {
+      // 문제발생 모달 데이터 즉시 업데이트
+      setAllProblemsData((prev) => {
+        const newMap = new Map(prev)
+        const storeProblems = newMap.get(storeId!) || {
+          store_problems: [],
+          vending_problems: [],
+          lost_items: []
+        }
+        
+        newMap.set(storeId!, {
+          ...storeProblems,
+          store_problems: storeProblems.store_problems.map((p: any) =>
+            p.id === problemId ? { ...p, business_confirmed_at: new Date().toISOString() } : p
+          ),
+          vending_problems: storeProblems.vending_problems.map((p: any) =>
+            p.id === problemId ? { ...p, business_confirmed_at: new Date().toISOString() } : p
+          )
+        })
+        return newMap
+      })
+    }
+    
     // 백그라운드에서 API 호출
     try {
       const response = await fetch(`/api/business/problem-reports/${problemId}/confirm`, {
@@ -1120,11 +1150,27 @@ export default function BusinessStoresStatusPage() {
             })
             if (problemResponse.ok) {
               const problemData = await problemResponse.json()
+              // 알림 모달 데이터 동기화
               setAllNotificationsData((prev) => {
                 const newMap = new Map(prev)
                 const current = newMap.get(storeId) || {
                   in_progress_requests: [],
                   completed_requests: [],
+                  store_problems: [],
+                  vending_problems: [],
+                  lost_items: []
+                }
+                newMap.set(storeId, {
+                  ...current,
+                  store_problems: problemData.data?.store_problems || current.store_problems,
+                  vending_problems: problemData.data?.vending_problems || current.vending_problems
+                })
+                return newMap
+              })
+              // 문제발생 모달 데이터 동기화
+              setAllProblemsData((prev) => {
+                const newMap = new Map(prev)
+                const current = newMap.get(storeId) || {
                   store_problems: [],
                   vending_problems: [],
                   lost_items: []
@@ -1142,7 +1188,7 @@ export default function BusinessStoresStatusPage() {
         }
       } else {
         // 실패 시 롤백
-        if (problemToConfirm && storeId) {
+        if (problemToConfirmNotification && storeId) {
           setAllNotificationsData((prev) => {
             const newMap = new Map(prev)
             const storeNotifications = newMap.get(storeId) || {
@@ -1166,12 +1212,33 @@ export default function BusinessStoresStatusPage() {
           })
           updateStoreNotificationCount(storeId)
         }
+        if (problemToConfirmProblem && storeId) {
+          setAllProblemsData((prev) => {
+            const newMap = new Map(prev)
+            const storeProblems = newMap.get(storeId) || {
+              store_problems: [],
+              vending_problems: [],
+              lost_items: []
+            }
+            
+            newMap.set(storeId, {
+              ...storeProblems,
+              store_problems: storeProblems.store_problems.map((p: any) =>
+                p.id === problemId ? { ...p, business_confirmed_at: undefined } : p
+              ),
+              vending_problems: storeProblems.vending_problems.map((p: any) =>
+                p.id === problemId ? { ...p, business_confirmed_at: undefined } : p
+              )
+            })
+            return newMap
+          })
+        }
         const data = await response.json()
         alert(data.error || '확인 처리 중 오류가 발생했습니다.')
       }
     } catch (error) {
       // 네트워크 에러 시 롤백
-      if (problemToConfirm && storeId) {
+      if (problemToConfirmNotification && storeId) {
         setAllNotificationsData((prev) => {
           const newMap = new Map(prev)
           const storeNotifications = newMap.get(storeId) || {
@@ -1195,6 +1262,27 @@ export default function BusinessStoresStatusPage() {
         })
         updateStoreNotificationCount(storeId)
       }
+      if (problemToConfirmProblem && storeId) {
+        setAllProblemsData((prev) => {
+          const newMap = new Map(prev)
+          const storeProblems = newMap.get(storeId) || {
+            store_problems: [],
+            vending_problems: [],
+            lost_items: []
+          }
+          
+          newMap.set(storeId, {
+            ...storeProblems,
+            store_problems: storeProblems.store_problems.map((p: any) =>
+              p.id === problemId ? { ...p, business_confirmed_at: undefined } : p
+            ),
+            vending_problems: storeProblems.vending_problems.map((p: any) =>
+              p.id === problemId ? { ...p, business_confirmed_at: undefined } : p
+            )
+          })
+          return newMap
+        })
+      }
       console.error('Error confirming problem:', error)
       alert('확인 처리 중 오류가 발생했습니다.')
     }
@@ -1202,12 +1290,18 @@ export default function BusinessStoresStatusPage() {
 
   const handleConfirmLostItem = async (lostItemId: string, storeId?: string) => {
     // Optimistic Update: 즉시 로컬 상태 업데이트
-    const lostItemToConfirm = storeId
+    // allNotificationsData에서 찾기 (알림 모달용)
+    const lostItemToConfirmNotification = storeId
       ? allNotificationsData.get(storeId)?.lost_items.find((item: any) => item.id === lostItemId)
       : null
     
-    if (lostItemToConfirm) {
-      // 즉시 UI에서 제거
+    // allProblemsData에서 찾기 (문제발생 모달용)
+    const lostItemToConfirmProblem = storeId
+      ? allProblemsData.get(storeId)?.lost_items.find((item: any) => item.id === lostItemId)
+      : null
+    
+    if (lostItemToConfirmNotification) {
+      // 알림 모달 데이터 즉시 업데이트
       setAllNotificationsData((prev) => {
         const newMap = new Map(prev)
         const storeNotifications = newMap.get(storeId!) || {
@@ -1233,6 +1327,26 @@ export default function BusinessStoresStatusPage() {
       }
     }
     
+    if (lostItemToConfirmProblem) {
+      // 문제발생 모달 데이터 즉시 업데이트
+      setAllProblemsData((prev) => {
+        const newMap = new Map(prev)
+        const storeProblems = newMap.get(storeId!) || {
+          store_problems: [],
+          vending_problems: [],
+          lost_items: []
+        }
+        
+        newMap.set(storeId!, {
+          ...storeProblems,
+          lost_items: storeProblems.lost_items.map((item: any) =>
+            item.id === lostItemId ? { ...item, business_confirmed_at: new Date().toISOString() } : item
+          )
+        })
+        return newMap
+      })
+    }
+    
     // 백그라운드에서 API 호출
     try {
       const response = await fetch(`/api/business/lost-items/${lostItemId}/confirm`, {
@@ -1246,7 +1360,7 @@ export default function BusinessStoresStatusPage() {
 
       if (!response.ok || !data.success) {
         // 실패 시 롤백
-        if (lostItemToConfirm && storeId) {
+        if (lostItemToConfirmNotification && storeId) {
           setAllNotificationsData((prev) => {
             const newMap = new Map(prev)
             const storeNotifications = newMap.get(storeId) || {
@@ -1267,6 +1381,24 @@ export default function BusinessStoresStatusPage() {
           })
           updateStoreNotificationCount(storeId)
         }
+        if (lostItemToConfirmProblem && storeId) {
+          setAllProblemsData((prev) => {
+            const newMap = new Map(prev)
+            const storeProblems = newMap.get(storeId) || {
+              store_problems: [],
+              vending_problems: [],
+              lost_items: []
+            }
+            
+            newMap.set(storeId, {
+              ...storeProblems,
+              lost_items: storeProblems.lost_items.map((item: any) =>
+                item.id === lostItemId ? { ...item, business_confirmed_at: undefined } : item
+              )
+            })
+            return newMap
+          })
+        }
         const errorMessage = data.error || data.message || `확인 처리 중 오류가 발생했습니다. (${response.status})`
         alert(errorMessage)
         return
@@ -1281,11 +1413,26 @@ export default function BusinessStoresStatusPage() {
           })
           if (lostResponse.ok) {
             const lostData = await lostResponse.json()
+            // 알림 모달 데이터 동기화
             setAllNotificationsData((prev) => {
               const newMap = new Map(prev)
               const current = newMap.get(storeId) || {
                 in_progress_requests: [],
                 completed_requests: [],
+                store_problems: [],
+                vending_problems: [],
+                lost_items: []
+              }
+              newMap.set(storeId, {
+                ...current,
+                lost_items: lostData.data || current.lost_items
+              })
+              return newMap
+            })
+            // 문제발생 모달 데이터 동기화
+            setAllProblemsData((prev) => {
+              const newMap = new Map(prev)
+              const current = newMap.get(storeId) || {
                 store_problems: [],
                 vending_problems: [],
                 lost_items: []
@@ -1323,7 +1470,7 @@ export default function BusinessStoresStatusPage() {
       })
     } catch (error) {
       // 네트워크 에러 시 롤백
-      if (lostItemToConfirm && storeId) {
+      if (lostItemToConfirmNotification && storeId) {
         setAllNotificationsData((prev) => {
           const newMap = new Map(prev)
           const storeNotifications = newMap.get(storeId) || {
@@ -1343,6 +1490,24 @@ export default function BusinessStoresStatusPage() {
           return newMap
         })
         updateStoreNotificationCount(storeId)
+      }
+      if (lostItemToConfirmProblem && storeId) {
+        setAllProblemsData((prev) => {
+          const newMap = new Map(prev)
+          const storeProblems = newMap.get(storeId) || {
+            store_problems: [],
+            vending_problems: [],
+            lost_items: []
+          }
+          
+          newMap.set(storeId, {
+            ...storeProblems,
+            lost_items: storeProblems.lost_items.map((item: any) =>
+              item.id === lostItemId ? { ...item, business_confirmed_at: undefined } : item
+            )
+          })
+          return newMap
+        })
       }
       console.error('Error confirming lost item:', error)
       alert('확인 처리 중 오류가 발생했습니다.')
@@ -1616,15 +1781,18 @@ export default function BusinessStoresStatusPage() {
     }
   }
 
-  // 모달이 열릴 때 데이터 로드
+  // 모달이 열릴 때 데이터 로드 (모달이 열릴 때만 실행, storeStatuses 변경 시 재실행 안 함)
   useEffect(() => {
     if (showAllProblemsModal) {
       const loadData = async () => {
         setLoadingAllProblems(true)
         const newData = new Map<string, { store_problems: any[]; vending_problems: any[]; lost_items: any[] }>()
         
+        // 현재 storeStatuses 상태를 한 번만 읽어서 사용 (의존성 배열에서 제거했으므로 클로저로 캡처)
+        const currentStoreStatuses = storeStatuses
+        
         // 미확인 문제가 있는 매장만 필터링
-        const problemStores = storeStatuses.filter((store) => {
+        const problemStores = currentStoreStatuses.filter((store) => {
           return store.has_problem && 
                  ((store.unprocessed_store_problems || 0) > 0 || 
                   (store.unconfirmed_vending_problems || 0) > 0 || 
@@ -1665,7 +1833,8 @@ export default function BusinessStoresStatusPage() {
       }
       loadData()
     }
-  }, [showAllProblemsModal, storeStatuses])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showAllProblemsModal]) // storeStatuses 의존성 제거 - 모달이 열릴 때만 실행
 
   // 알림 모달이 열릴 때 데이터 로드 (모달이 열릴 때만 실행, storeStatuses 변경 시 재실행 안 함)
   useEffect(() => {
@@ -4214,28 +4383,25 @@ export default function BusinessStoresStatusPage() {
               </div>
             ) : (
               <div className="space-y-6">
-                {storeStatuses
-                  .filter((store) => {
-                    // 미확인 문제가 있는 매장만 표시
-                    return store.has_problem && 
-                           ((store.unprocessed_store_problems || 0) > 0 || 
-                            (store.unconfirmed_vending_problems || 0) > 0 || 
-                            (store.unconfirmed_lost_items || 0) > 0)
-                  })
-                  .map((store) => {
-                    const storeProblems = allProblemsData.get(store.store_id)?.store_problems || []
-                    const vendingProblems = allProblemsData.get(store.store_id)?.vending_problems || []
-                    const lostItems = allProblemsData.get(store.store_id)?.lost_items || []
+                {Array.from(allProblemsData.entries())
+                  .map(([storeId, problemsData]) => {
+                    // 해당 매장 정보 찾기 (storeStatuses에서)
+                    const store = storeStatuses.find(s => s.store_id === storeId)
+                    if (!store) return null
                     
-                    // 미처리/미확인 항목만 필터링 (확인 처리된 항목 제외)
+                    const storeProblems = problemsData.store_problems || []
+                    const vendingProblems = problemsData.vending_problems || []
+                    const lostItems = problemsData.lost_items || []
+                    
+                    // 미처리/미확인 항목만 필터링 (백엔드 business_confirmed_at 우선 사용)
                     const unprocessedStoreProblems = storeProblems.filter((p: any) => 
-                      p.status !== 'completed' && !confirmedProblemIds.has(p.id)
+                      p.status !== 'completed' && !p.business_confirmed_at
                     )
                     const unconfirmedVendingProblems = vendingProblems.filter((p: any) => 
-                      p.status !== 'completed' && !confirmedProblemIds.has(p.id)
+                      p.status !== 'completed' && !p.business_confirmed_at
                     )
                     const unconfirmedLostItems = lostItems.filter((item: any) => 
-                      item.status !== 'completed' && !confirmedLostItemIds.has(item.id)
+                      item.status !== 'completed' && !item.business_confirmed_at
                     )
                     
                     const totalUnresolved = unprocessedStoreProblems.length + unconfirmedVendingProblems.length + unconfirmedLostItems.length
@@ -4243,7 +4409,7 @@ export default function BusinessStoresStatusPage() {
                     if (totalUnresolved === 0) return null
                     
                     return (
-                      <div key={store.store_id} className="border-2 border-red-200 rounded-lg p-4 bg-red-50">
+                      <div key={storeId} className="border-2 border-red-200 rounded-lg p-4 bg-red-50">
                         <div className="flex items-center justify-between mb-4">
                           <h3 className="text-lg font-semibold text-red-800">{store.store_name}</h3>
                           <span className="px-3 py-1 bg-red-600 text-white text-sm rounded-full font-semibold">
@@ -4299,10 +4465,11 @@ export default function BusinessStoresStatusPage() {
                                           </p>
                                         </div>
                                         <button
-                                          onClick={() => {
+                                          onClick={async () => {
                                             setSelectedStore(store)
-                                            setShowProblemModal(true)
                                             setShowAllProblemsModal(false)
+                                            // 문제 모달 열기 (처리 완료는 모달 내에서 수행)
+                                            await handleOpenProblemModal(store)
                                           }}
                                           className="ml-4 px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-md hover:bg-blue-700"
                                         >
@@ -4364,40 +4531,7 @@ export default function BusinessStoresStatusPage() {
                                           </p>
                                         </div>
                                         <button
-                                          onClick={async () => {
-                                            try {
-                                              const response = await fetch(`/api/business/problem-reports/${problem.id}/confirm`, {
-                                                method: 'PATCH',
-                                              })
-                                              if (response.ok) {
-                                                // 데이터 다시 로드
-                                                const timestamp = new Date().getTime()
-                                                const [problemResponse, lostResponse] = await Promise.all([
-                                                  fetch(`/api/business/stores/${store.store_id}/problem-reports?t=${timestamp}`, {
-                                                    cache: 'no-store',
-                                                  }),
-                                                  fetch(`/api/business/stores/${store.store_id}/lost-items?t=${timestamp}`, {
-                                                    cache: 'no-store',
-                                                  })
-                                                ])
-                                                const problemData = await problemResponse.json()
-                                                const lostData = await lostResponse.json()
-                                                if (problemResponse.ok && problemData.data) {
-                                                  setAllProblemsData((prev) => {
-                                                    const newMap = new Map(prev)
-                                                    newMap.set(store.store_id, {
-                                                      store_problems: problemData.data.store_problems || [],
-                                                      vending_problems: problemData.data.vending_problems || [],
-                                                      lost_items: lostData.data || []
-                                                    })
-                                                    return newMap
-                                                  })
-                                                }
-                                              }
-                                            } catch (error) {
-                                              console.error('Error confirming problem:', error)
-                                            }
-                                          }}
+                                          onClick={() => handleConfirmProblem(problem.id, store.store_id)}
                                           className="ml-4 px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-md hover:bg-blue-700"
                                         >
                                           확인
@@ -4462,40 +4596,7 @@ export default function BusinessStoresStatusPage() {
                                           </p>
                                         </div>
                                         <button
-                                          onClick={async () => {
-                                            try {
-                                              const response = await fetch(`/api/business/lost-items/${item.id}/confirm`, {
-                                                method: 'PATCH',
-                                              })
-                                              if (response.ok) {
-                                                // 데이터 다시 로드
-                                                const timestamp = new Date().getTime()
-                                                const [problemResponse, lostResponse] = await Promise.all([
-                                                  fetch(`/api/business/stores/${store.store_id}/problem-reports?t=${timestamp}`, {
-                                                    cache: 'no-store',
-                                                  }),
-                                                  fetch(`/api/business/stores/${store.store_id}/lost-items?t=${timestamp}`, {
-                                                    cache: 'no-store',
-                                                  })
-                                                ])
-                                                const problemData = await problemResponse.json()
-                                                const lostData = await lostResponse.json()
-                                                if (problemResponse.ok && problemData.data) {
-                                                  setAllProblemsData((prev) => {
-                                                    const newMap = new Map(prev)
-                                                    newMap.set(store.store_id, {
-                                                      store_problems: problemData.data.store_problems || [],
-                                                      vending_problems: problemData.data.vending_problems || [],
-                                                      lost_items: lostData.data || []
-                                                    })
-                                                    return newMap
-                                                  })
-                                                }
-                                              }
-                                            } catch (error) {
-                                              console.error('Error confirming lost item:', error)
-                                            }
-                                          }}
+                                          onClick={() => handleConfirmLostItem(item.id, store.store_id)}
                                           className="ml-4 px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-md hover:bg-blue-700"
                                         >
                                           확인
@@ -4511,7 +4612,7 @@ export default function BusinessStoresStatusPage() {
                       </div>
                     )
                   })}
-                {storeStatuses.filter((store) => store.has_problem).length === 0 && (
+                {allProblemsData.size === 0 && (
                   <div className="text-center py-12 text-gray-500">
                     문제가 발생한 매장이 없습니다.
                   </div>
