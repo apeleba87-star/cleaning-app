@@ -1402,8 +1402,8 @@ export default function MobileDashboardPage() {
           </div>
         )}
 
-        {/* 빠른 시작 가이드 */}
-        {user && <QuickStartGuide userId={user.id} />}
+        {/* 빠른 시작 가이드 - 임시 숨김 처리 */}
+        {/* {user && <QuickStartGuide userId={user.id} />} */}
 
         {/* 매장 관리 현황 - 반응형 */}
         <GeoGuard onLocationReady={setLocation}>
