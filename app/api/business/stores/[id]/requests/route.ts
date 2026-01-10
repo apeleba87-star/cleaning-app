@@ -42,6 +42,8 @@ export async function GET(
         status, 
         created_at, 
         updated_at,
+        business_confirmed_at,
+        business_confirmed_by,
         created_by_user:created_by (
           id,
           name,

@@ -36,6 +36,25 @@ export async function PATCH(
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
+    // 이미 확인 처리된 경우
+    const { data: currentLostItem, error: fetchCurrentError } = await supabase
+      .from('lost_items')
+      .select('business_confirmed_at')
+      .eq('id', params.id)
+      .single()
+
+    if (fetchCurrentError) {
+      console.error('Error fetching current lost item:', fetchCurrentError)
+    }
+
+    if (currentLostItem?.business_confirmed_at) {
+      return NextResponse.json({ 
+        success: true, 
+        message: 'Already confirmed',
+        data: lostItem
+      })
+    }
+
     // Service Role Key를 사용하여 RLS 우회 (업데이트가 실패할 경우를 대비)
     let adminSupabase: ReturnType<typeof createClient> | null = null
     const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
@@ -70,7 +89,7 @@ export async function PATCH(
       updated_at: updatedAt 
     })
 
-    // 'completed' 상태로 업데이트 시도 (일반 클라이언트로 먼저 시도)
+    // 'completed' 상태와 business_confirmed_at 업데이트 시도 (일반 클라이언트로 먼저 시도)
     let updateError: any = null
     let updateData: any = null
     
@@ -78,10 +97,12 @@ export async function PATCH(
       .from('lost_items')
       .update({ 
         status: 'completed',
+        business_confirmed_at: updatedAt,
+        business_confirmed_by: user.id,
         updated_at: updatedAt,
       })
       .eq('id', params.id)
-      .select('id, status, updated_at, store_id')
+      .select('id, status, updated_at, store_id, business_confirmed_at, business_confirmed_by')
 
     updateError = updateResult.error
     updateData = updateResult.data
@@ -102,10 +123,12 @@ export async function PATCH(
         .from('lost_items')
         .update({ 
           status: 'completed',
+          business_confirmed_at: updatedAt,
+          business_confirmed_by: user.id,
           updated_at: updatedAt,
         })
         .eq('id', params.id)
-        .select('id, status, updated_at, store_id')
+        .select('id, status, updated_at, store_id, business_confirmed_at, business_confirmed_by')
       
       console.log('Service Role Key update result:', {
         error: adminUpdateResult.error,
@@ -172,10 +195,12 @@ export async function PATCH(
           .from('lost_items')
           .update({ 
             status: 'completed',
+            business_confirmed_at: updatedAt,
+            business_confirmed_by: user.id,
             updated_at: updatedAt,
           })
           .eq('id', params.id)
-          .select('id, status, updated_at, store_id')
+          .select('id, status, updated_at, store_id, business_confirmed_at, business_confirmed_by')
         
         if (retryError) {
           console.error('Retry with Service Role Key also failed:', retryError)
@@ -192,7 +217,7 @@ export async function PATCH(
         const fetchClient = adminSupabase || supabase
         const { data: finalItem } = await fetchClient
           .from('lost_items')
-          .select('id, status, updated_at, store_id')
+          .select('id, status, updated_at, store_id, business_confirmed_at, business_confirmed_by')
           .eq('id', params.id)
           .single()
         
@@ -227,7 +252,7 @@ export async function PATCH(
     const fetchClient = adminSupabase || supabase
     const { data: updatedItem, error: fetchUpdatedError } = await fetchClient
       .from('lost_items')
-      .select('id, status, updated_at, store_id')
+      .select('id, status, updated_at, store_id, business_confirmed_at, business_confirmed_by')
       .eq('id', params.id)
       .single()
 
@@ -279,14 +304,17 @@ export async function PATCH(
         // lost_items 테이블은 issue_status enum을 사용하므로 'completed'만 허용됨
         // 'completed' 상태로 다시 시도 (Service Role Key 사용)
         console.log('Trying status: "completed" with Service Role Key')
+        const completedUpdatedAt = new Date().toISOString()
         const { error: completedError, data: completedData } = await updateClient
           .from('lost_items')
           .update({ 
             status: 'completed',
-            updated_at: new Date().toISOString(),
+            business_confirmed_at: completedUpdatedAt,
+            business_confirmed_by: user.id,
+            updated_at: completedUpdatedAt,
           })
           .eq('id', params.id)
-          .select('id, status, updated_at, store_id')
+          .select('id, status, updated_at, store_id, business_confirmed_at, business_confirmed_by')
         
         console.log(`Status "completed" result:`, {
           error: completedError ? {

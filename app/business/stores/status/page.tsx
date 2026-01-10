@@ -4289,22 +4289,12 @@ export default function BusinessStoresStatusPage() {
                       lost_items: []
                     }
                     
-                    // 확인 처리되지 않은 항목만 필터링
-                    const unconfirmedCompletedRequests = notifications.completed_requests.filter((r: any) => {
-                      const confirmedDate = confirmedRequestDates.get(r.id)
-                      if (!confirmedDate) return !confirmedRequestIds.has(r.id)
-                      return isToday(confirmedDate)
-                    })
-                    const unconfirmedRejectedRequests = notifications.in_progress_requests.filter((r: any) => r.status === 'rejected').filter((r: any) => {
-                      const confirmedDate = confirmedRequestDates.get(r.id)
-                      if (!confirmedDate) return !confirmedRequestIds.has(r.id)
-                      return isToday(confirmedDate)
-                    })
-                    const unconfirmedStoreProblems = notifications.store_problems.filter((p: any) => p.status !== 'completed' && !confirmedProblemIds.has(p.id))
-                    const unconfirmedVendingProblems = notifications.vending_problems.filter((p: any) => p.status !== 'completed' && !confirmedProblemIds.has(p.id))
-                    const unconfirmedLostItems = notifications.lost_items.filter((item: any) => 
-                      item.status !== 'completed' && !confirmedLostItemIds.has(item.id)
-                    )
+                    // 확인 처리되지 않은 항목만 필터링 (백엔드 business_confirmed_at 우선 사용)
+                    const unconfirmedCompletedRequests = notifications.completed_requests.filter((r: any) => !r.business_confirmed_at)
+                    const unconfirmedRejectedRequests = notifications.in_progress_requests.filter((r: any) => r.status === 'rejected' && !r.business_confirmed_at)
+                    const unconfirmedStoreProblems = notifications.store_problems.filter((p: any) => p.status !== 'completed' && !p.business_confirmed_at)
+                    const unconfirmedVendingProblems = notifications.vending_problems.filter((p: any) => p.status !== 'completed' && !p.business_confirmed_at)
+                    const unconfirmedLostItems = notifications.lost_items.filter((item: any) => !item.business_confirmed_at)
                     
                     const totalNotifications = notifications.in_progress_requests.filter((r: any) => r.status !== 'rejected').length + 
                       unconfirmedCompletedRequests.length + 
@@ -4388,18 +4378,18 @@ export default function BusinessStoresStatusPage() {
                               </div>
                               <div className="space-y-3">
                                 {unconfirmedCompletedRequests.map((request: any) => {
-                                    const confirmedDate = confirmedRequestDates.get(request.id)
-                                    const isConfirmedToday = confirmedDate && isToday(confirmedDate)
+                                    // 백엔드 business_confirmed_at 우선 사용
+                                    const isConfirmed = !!request.business_confirmed_at
                                     const photos = request.photo_url ? getPhotoUrls(request.photo_url) : []
                                     return (
-                                      <div key={request.id} className={`border-2 border-green-300 bg-white rounded-lg p-4 shadow-sm ${isConfirmedToday ? 'opacity-60' : ''}`}>
+                                      <div key={request.id} className={`border-2 border-green-300 bg-white rounded-lg p-4 shadow-sm ${isConfirmed ? 'opacity-60' : ''}`}>
                                         <div className="flex justify-between items-start mb-3">
                                           <div className="flex-1">
                                             <div className="mb-2">
                                               <span className="inline-block px-3 py-1 bg-green-600 text-white text-sm font-semibold rounded-md">
                                                 {request.title || '요청'}
                                               </span>
-                                              {isConfirmedToday && (
+                                              {isConfirmed && (
                                                 <span className="ml-2 text-xs bg-gray-200 text-gray-600 px-2 py-1 rounded">확인 완료</span>
                                               )}
                                             </div>
@@ -4427,10 +4417,12 @@ export default function BusinessStoresStatusPage() {
                                               {new Date(request.created_at).toLocaleString('ko-KR')}
                                             </p>
                                           </div>
-                                          {!isConfirmedToday && (
+                                          {!isConfirmed && (
                                             <button
                                               onClick={async () => {
                                                 await handleConfirmRequest(request.id)
+                                                // 매장 상태 다시 로드 (알림 카운트 갱신)
+                                                await loadStoreStatuses()
                                                 // 데이터 다시 로드
                                                 const timestamp = new Date().getTime()
                                                 const [requestResponse, problemResponse, lostResponse] = await Promise.all([

@@ -32,24 +32,52 @@ export async function PATCH(
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
-    // status를 'completed'로 업데이트 (confirmed는 유효한 상태 값이 아님)
-    const { error: updateError } = await supabase
+    // 이미 확인 처리된 경우
+    const { data: currentProblem, error: fetchCurrentError } = await supabase
       .from('problem_reports')
-      .update({ 
-        status: 'completed',
-        updated_at: new Date().toISOString(),
-      })
+      .select('business_confirmed_at')
       .eq('id', params.id)
+      .single()
 
-    if (updateError) {
-      console.error('Error updating status:', updateError)
+    if (fetchCurrentError) {
+      console.error('Error fetching current problem:', fetchCurrentError)
       return NextResponse.json(
-        { error: 'Failed to update status' },
+        { error: 'Failed to fetch problem' },
         { status: 500 }
       )
     }
 
-    return NextResponse.json({ success: true })
+    if (currentProblem?.business_confirmed_at) {
+      return NextResponse.json({ 
+        success: true, 
+        message: 'Already confirmed'
+      })
+    }
+
+    // business_confirmed_at과 business_confirmed_by 업데이트
+    const { data: updatedProblem, error: updateError } = await supabase
+      .from('problem_reports')
+      .update({ 
+        business_confirmed_at: new Date().toISOString(),
+        business_confirmed_by: user.id,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', params.id)
+      .select()
+      .single()
+
+    if (updateError) {
+      console.error('Error updating problem confirmation:', updateError)
+      return NextResponse.json(
+        { error: 'Failed to confirm problem' },
+        { status: 500 }
+      )
+    }
+
+    return NextResponse.json({ 
+      success: true,
+      data: updatedProblem
+    })
   } catch (error: any) {
     console.error('Error in PATCH /api/business/problem-reports/[id]/confirm:', error)
     return NextResponse.json(

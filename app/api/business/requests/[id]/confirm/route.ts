@@ -90,14 +90,38 @@ export async function PATCH(
       )
     }
 
-    // confirmed_at 컬럼이 없으므로 성공만 반환 (클라이언트에서 상태 관리)
-    // 필요시 description이나 다른 필드에 확인 정보를 저장할 수 있음
+    // 이미 확인 처리된 경우
+    if (requestData.business_confirmed_at) {
+      return NextResponse.json({ 
+        success: true, 
+        data: requestData,
+        message: 'Already confirmed'
+      })
+    }
+
+    // DB에 확인 처리 정보 저장
+    const { data: updatedRequest, error: updateError } = await supabase
+      .from('requests')
+      .update({
+        business_confirmed_at: new Date().toISOString(),
+        business_confirmed_by: user.id,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', params.id)
+      .select()
+      .single()
+
+    if (updateError || !updatedRequest) {
+      console.error('Error updating request confirmation:', updateError)
+      return NextResponse.json(
+        { error: 'Failed to confirm request' },
+        { status: 500 }
+      )
+    }
+
     return NextResponse.json({ 
       success: true, 
-      data: {
-        ...requestData,
-        confirmed_at: new Date().toISOString(), // 클라이언트에서 사용할 수 있도록 반환
-      }
+      data: updatedRequest
     })
   } catch (error: any) {
     console.error('Error in PATCH /api/business/requests/[id]/confirm:', error)

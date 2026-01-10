@@ -130,18 +130,18 @@ export async function GET(request: NextRequest) {
     ] = await Promise.all([
       supabase
         .from('problem_reports')
-        .select('id, store_id, category, status, title, created_at')
+        .select('id, store_id, category, status, title, created_at, business_confirmed_at')
         .in('store_id', storeIds)
         .gte('created_at', thirtyDaysAgo.toISOString())
         .lte('created_at', todayEnd.toISOString()),
       supabase
         .from('lost_items')
-        .select('id, store_id, status, created_at, updated_at')
+        .select('id, store_id, status, created_at, updated_at, business_confirmed_at')
         .in('store_id', storeIds)
         .or(`created_at.gte.${thirtyDaysAgo.toISOString()},updated_at.gte.${thirtyDaysAgo.toISOString()}`),
       supabase
         .from('requests')
-        .select('id, store_id, title, status, created_at')
+        .select('id, store_id, title, status, created_at, business_confirmed_at')
         .in('store_id', storeIds)
         .gte('created_at', thirtyDaysAgo.toISOString())
         .order('created_at', { ascending: false }),
@@ -434,14 +434,14 @@ export async function GET(request: NextRequest) {
         
         const lostItemCount = lostItems?.length || 0
 
-        // 미처리/처리 완료 카운트 (매장 문제 보고)
+        // 미처리/처리 완료 카운트 (매장 문제 보고) - business_confirmed_at이 null인 것만
         const unprocessedStoreProblems = problemReports?.filter((p: any) => {
           const cat = String(p.category || '').toLowerCase().trim()
           const title = String(p.title || '').toLowerCase()
           const categoryMatch = cat === 'store_problem' || cat === 'store-problem' || cat === 'storeproblem'
           const titleMatch = title.includes('매장 문제') || title.includes('자판기 고장') || title.includes('제품 관련') || title.includes('무인택배함') || title.includes('매장 시설')
           const isStoreProblem = categoryMatch || (titleMatch && !title.includes('자판기 수량') && !title.includes('자판기 제품 걸림'))
-          return isStoreProblem && (p.status === 'pending' || p.status === 'received' || p.status === 'submitted')
+          return isStoreProblem && (p.status === 'pending' || p.status === 'received' || p.status === 'submitted') && !p.business_confirmed_at
         }).length || 0
         
         const completedStoreProblems = problemReports?.filter((p: any) => {
@@ -453,14 +453,14 @@ export async function GET(request: NextRequest) {
           return isStoreProblem && p.status === 'completed'
         }).length || 0
 
-        // 미확인/확인 카운트 (자판기 내부 문제, 분실물)
+        // 미확인/확인 카운트 (자판기 내부 문제, 분실물) - business_confirmed_at이 null인 것만
         const unconfirmedVendingProblems = problemReports?.filter((p: any) => {
           const cat = String(p.category || '').toLowerCase().trim()
           const title = String(p.title || '').toLowerCase()
           const categoryMatch = cat === 'vending_machine' || cat === 'vending-machine' || cat === 'vendingmachine'
           const titleMatch = (title.includes('자판기 수량') || title.includes('자판기 제품 걸림')) && title.includes('자판기')
           const isVendingProblem = categoryMatch || titleMatch
-          return isVendingProblem && (p.status === 'pending' || p.status === 'received' || p.status === 'submitted')
+          return isVendingProblem && (p.status === 'pending' || p.status === 'received' || p.status === 'submitted') && !p.business_confirmed_at
         }).length || 0
         
         const confirmedVendingProblems = problemReports?.filter((p: any) => {
@@ -492,9 +492,9 @@ export async function GET(request: NextRequest) {
           })
         }
 
-        // 분실물 상태별 카운트 - 'completed' 상태만 확인된 것으로 간주 (issue_status enum 사용)
+        // 분실물 상태별 카운트 - business_confirmed_at이 null인 것만 미확인으로 처리
         const unconfirmedLostItems = lostItems?.filter(
-          (l: any) => l.status !== 'completed'
+          (l: any) => !l.business_confirmed_at
         ).length || 0
         const confirmedLostItems = lostItems?.filter(
           (l: any) => l.status === 'completed'
@@ -537,9 +537,9 @@ export async function GET(request: NextRequest) {
         const inProgressRequestCount = inProgressRequests.length
         const completedRequestCount = completedRequests.length
         const rejectedRequestCount = rejectedRequests.length
-        // confirmed_at 컬럼이 없으므로 completed 상태인 모든 요청을 미확인으로 처리
-        const unconfirmedCompletedCount = completedRequests.length
-        const unconfirmedRejectedCount = rejectedRequests.length
+        // business_confirmed_at이 null인 완료/반려 요청만 미확인으로 처리
+        const unconfirmedCompletedCount = completedRequests.filter((r: any) => !r.business_confirmed_at).length
+        const unconfirmedRejectedCount = rejectedRequests.filter((r: any) => !r.business_confirmed_at).length
 
         // 배치 쿼리에서 가져온 물품 요청 데이터 사용
         const supplyRequests = supplyRequestsByStore.get(store.id) || []
