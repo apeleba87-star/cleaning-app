@@ -12,6 +12,32 @@
   }
 }
 
+/* 랜딩 페이지 애니메이션 */
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* 부드러운 스크롤 */
+html {
+  scroll-behavior: smooth;
+}
+
 /* html5-qrcode 스캔 영역 스타일 조정 (사파리/크롬 호환) */
 #barcode-scanner {
   position: relative;

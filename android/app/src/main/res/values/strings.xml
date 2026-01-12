@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">무플(MUPL)</string>
+    <string name="title_activity_main">무플(MUPL)</string>
+    <string name="package_name">com.mupl.cleaningapp</string>
+    <string name="custom_url_scheme">com.mupl.cleaningapp</string>
+</resources>

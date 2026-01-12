@@ -1,13 +1,14 @@
 import { redirect } from 'next/navigation'
 import { getServerUser, getServerSession } from '@/lib/supabase/server'
+import LandingPage from '@/components/LandingPage'
 
 export default async function HomePage() {
   // 먼저 세션 확인
   const session = await getServerSession()
   
-  // 세션이 없으면 로그인 페이지로
+  // 세션이 없으면 랜딩 페이지 표시
   if (!session?.user) {
-    redirect('/login')
+    return <LandingPage />
   }
 
   // 사용자 정보 가져오기

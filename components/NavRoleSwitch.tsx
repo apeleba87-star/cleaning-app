@@ -156,6 +156,7 @@ export function NavRoleSwitch({ userRole, userName, onRefresh, isRefreshing }: N
     { href: '/admin/stores', label: '매장 관리' },
     { href: '/admin/users', label: '사용자 관리' },
     { href: '/admin/categories', label: '카테고리' },
+    { href: '/admin/landing', label: '랜딩 페이지 관리' },
     { href: '/admin/reports', label: '리포트' },
   ]
 
@@ -211,6 +212,7 @@ export function NavRoleSwitch({ userRole, userName, onRefresh, isRefreshing }: N
     { href: '/platform/dashboard', label: '시스템 대시보드' },
     { href: '/platform/companies', label: '전체 회사' },
     { href: '/platform/billing', label: '결제 관리' },
+    { href: '/admin/landing', label: '랜딩 페이지 관리' },
     { href: '/platform/settings', label: '시스템 설정' },
   ]
 

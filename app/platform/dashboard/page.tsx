@@ -36,6 +36,7 @@ export default async function PlatformAdminDashboardPage() {
     { title: '전체 사용자 관리', href: '/platform/users', description: '모든 사용자 조회 및 관리' },
     { title: '전체 매장 관리', href: '/platform/stores', description: '모든 매장 조회 및 관리' },
     { title: '결제 관리', href: '/platform/billing', description: '요금제 생성 및 결제 관리' },
+    { title: '랜딩 페이지 관리', href: '/admin/landing', description: '웹사이트 히어로 섹션 및 콘텐츠 관리' },
     { title: '시스템 설정', href: '/platform/settings', description: '정책 및 제한 설정' },
     { title: '모니터링', href: '/platform/monitoring', description: '로그 및 장애 모니터링' },
   ]
