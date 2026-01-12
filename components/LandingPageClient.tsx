@@ -74,6 +74,12 @@ export default function LandingPageClient({ heroImages, heroSettings, caseStudie
               >
                 관리 사례
               </Link>
+              <Link
+                href="/pricing"
+                className="text-sm sm:text-base text-gray-600 hover:text-gray-900 font-medium transition-colors"
+              >
+                요금제
+              </Link>
             </div>
             <Link
               href="/login"
