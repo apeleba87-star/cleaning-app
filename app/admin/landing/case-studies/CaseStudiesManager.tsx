@@ -187,12 +187,46 @@ export default function CaseStudiesManager() {
 
               {/* 썸네일 */}
               {caseStudy.thumbnail_url && (
-                <div className="w-32 h-32 rounded-lg overflow-hidden bg-gray-100 flex-shrink-0">
+                <div className="w-32 h-32 rounded-lg overflow-hidden bg-gray-100 flex-shrink-0 relative">
                   <img
-                    src={caseStudy.thumbnail_url}
+                    src={
+                      caseStudy.thumbnail_url.includes('postfiles.pstatic.net') ||
+                      caseStudy.thumbnail_url.includes('blogfiles.naver.net')
+                        ? `/api/proxy-image?url=${encodeURIComponent(caseStudy.thumbnail_url)}`
+                        : caseStudy.thumbnail_url
+                    }
                     alt={caseStudy.title}
                     className="w-full h-full object-cover"
+                    loading="lazy"
+                    onError={(e) => {
+                      const target = e.target as HTMLImageElement
+                      target.style.display = 'none'
+                      // 에러 시 플레이스홀더 표시
+                      const placeholder = target.nextElementSibling as HTMLElement
+                      if (placeholder) {
+                        placeholder.style.display = 'flex'
+                      }
+                    }}
                   />
+                  {/* 플레이스홀더 (에러 시 표시) */}
+                  <div
+                    className="hidden w-full h-full bg-gradient-to-br from-green-400 to-blue-500 items-center justify-center absolute inset-0"
+                    style={{ display: 'none' }}
+                  >
+                    <svg
+                      className="w-8 h-8 text-white opacity-80"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
+                      />
+                    </svg>
+                  </div>
                 </div>
               )}
 
@@ -341,20 +375,49 @@ function CaseStudyForm({
             {formData.thumbnail_url && formData.thumbnail_url.trim() && (
               <div className="mt-3">
                 <p className="text-xs text-gray-500 mb-2">미리보기:</p>
-                <div className="w-full max-w-md h-48 rounded-lg overflow-hidden bg-gray-100 border border-gray-300">
+                <div className="w-full max-w-md h-48 rounded-lg overflow-hidden bg-gray-100 border border-gray-300 relative">
                   <img
-                    src={formData.thumbnail_url}
+                    src={
+                      formData.thumbnail_url.includes('postfiles.pstatic.net') ||
+                      formData.thumbnail_url.includes('blogfiles.naver.net')
+                        ? `/api/proxy-image?url=${encodeURIComponent(formData.thumbnail_url)}`
+                        : formData.thumbnail_url
+                    }
                     alt="Thumbnail preview"
                     className="w-full h-full object-cover"
+                    loading="lazy"
                     onError={(e) => {
                       const target = e.target as HTMLImageElement
                       target.style.display = 'none'
-                      const parent = target.parentElement
-                      if (parent) {
-                        parent.innerHTML = '<div class="w-full h-full flex items-center justify-center text-gray-400 text-sm">이미지를 불러올 수 없습니다</div>'
+                      // 에러 시 플레이스홀더 표시
+                      const placeholder = target.nextElementSibling as HTMLElement
+                      if (placeholder) {
+                        placeholder.style.display = 'flex'
                       }
                     }}
                   />
+                  {/* 플레이스홀더 (에러 시 표시) */}
+                  <div
+                    className="hidden w-full h-full bg-gradient-to-br from-green-400 to-blue-500 items-center justify-center absolute inset-0"
+                    style={{ display: 'none' }}
+                  >
+                    <div className="text-center">
+                      <svg
+                        className="w-16 h-16 text-white opacity-80 mx-auto mb-2"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
+                        />
+                      </svg>
+                      <p className="text-white text-sm">이미지를 불러올 수 없습니다</p>
+                    </div>
+                  </div>
                 </div>
               </div>
             )}

@@ -68,6 +68,12 @@ export default function LandingPageClient({ heroImages, heroSettings, caseStudie
               >
                 기능 소개
               </Link>
+              <Link
+                href="/case-studies"
+                className="text-sm sm:text-base text-gray-600 hover:text-gray-900 font-medium transition-colors"
+              >
+                관리 사례
+              </Link>
             </div>
             <Link
               href="/login"
@@ -543,10 +549,207 @@ export default function LandingPageClient({ heroImages, heroSettings, caseStudie
         </div>
       </section>
 
+      {/* 관리 사례 섹션 - 가장 아래에 배치 */}
+      {caseStudies.length > 0 && (
+        <section className="py-20 px-4 sm:px-6 lg:px-8 bg-white relative overflow-hidden">
+          {/* 배경 장식 */}
+          <div className="absolute inset-0 opacity-5">
+            <div className="absolute top-0 right-1/4 w-96 h-96 bg-green-400 rounded-full blur-3xl"></div>
+            <div className="absolute bottom-0 left-1/4 w-96 h-96 bg-blue-400 rounded-full blur-3xl"></div>
+          </div>
+
+          <div className="max-w-7xl mx-auto relative z-10">
+            <div
+              className={`transition-all duration-1000 delay-700 ${
+                isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'
+              }`}
+            >
+              <div className="text-center mb-12">
+                <h2 className="text-4xl sm:text-5xl font-bold text-gray-900 mb-4 bg-gradient-to-r from-gray-900 via-gray-700 to-gray-900 bg-clip-text text-transparent">
+                  관리 사례
+                </h2>
+                <p className="text-xl text-gray-600 max-w-2xl mx-auto">
+                  무플로 현장을 유지하는 실제 사례를 확인하세요
+                </p>
+                <div className="w-24 h-1 bg-gradient-to-r from-green-500 to-blue-600 mx-auto rounded-full mt-4"></div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {caseStudies.map((caseStudy, index) => (
+                  <a
+                    key={caseStudy.id}
+                    href={caseStudy.blog_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="group bg-white rounded-2xl p-6 border-2 border-gray-100 shadow-lg hover:shadow-2xl transition-all duration-500 hover:-translate-y-2 relative overflow-hidden"
+                  >
+                    {/* 배경 그라데이션 (호버 시) */}
+                    <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-green-100 to-blue-50 rounded-bl-full opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
+
+                    <div className="relative z-10">
+                      {/* 썸네일 */}
+                      {caseStudy.thumbnail_url ? (
+                        <div className="w-full h-48 rounded-xl overflow-hidden mb-4 bg-gray-100 relative">
+                          <img
+                            src={
+                              caseStudy.thumbnail_url.includes('postfiles.pstatic.net') ||
+                              caseStudy.thumbnail_url.includes('blogfiles.naver.net')
+                                ? `/api/proxy-image?url=${encodeURIComponent(caseStudy.thumbnail_url)}`
+                                : caseStudy.thumbnail_url
+                            }
+                            alt={caseStudy.title}
+                            className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
+                            loading="lazy"
+                            onError={(e) => {
+                              const target = e.target as HTMLImageElement
+                              target.style.display = 'none'
+                              // 에러 시 플레이스홀더 표시
+                              const placeholder = target.nextElementSibling as HTMLElement
+                              if (placeholder) {
+                                placeholder.style.display = 'flex'
+                              }
+                            }}
+                          />
+                          {/* 플레이스홀더 (에러 시 표시) */}
+                          <div
+                            className="hidden w-full h-full bg-gradient-to-br from-green-400 to-blue-500 items-center justify-center absolute inset-0"
+                            style={{ display: 'none' }}
+                          >
+                            <svg
+                              className="w-16 h-16 text-white opacity-80"
+                              fill="none"
+                              stroke="currentColor"
+                              viewBox="0 0 24 24"
+                            >
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth={2}
+                                d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2m-4-3H9M7 16h6M7 8h6v4H7V8z"
+                              />
+                            </svg>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="w-full h-48 rounded-xl bg-gradient-to-br from-green-400 to-blue-500 flex items-center justify-center mb-4 group-hover:scale-105 transition-transform duration-300">
+                          <svg
+                            className="w-16 h-16 text-white opacity-80"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2m-4-3H9M7 16h6M7 8h6v4H7V8z"
+                            />
+                          </svg>
+                        </div>
+                      )}
+
+                      {/* 제목 */}
+                      <h3 className="text-xl font-bold text-gray-900 mb-2 group-hover:text-green-600 transition-colors line-clamp-2">
+                        {caseStudy.title}
+                      </h3>
+
+                      {/* 설명 */}
+                      {caseStudy.description && (
+                        <p className="text-gray-600 text-sm mb-4 line-clamp-3">
+                          {caseStudy.description}
+                        </p>
+                      )}
+
+                      {/* 링크 표시 */}
+                      <div className="flex items-center gap-2 text-green-600 font-medium text-sm">
+                        <span>자세히 보기</span>
+                        <svg
+                          className="w-4 h-4 group-hover:translate-x-1 transition-transform"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M9 5l7 7-7 7"
+                          />
+                        </svg>
+                      </div>
+                    </div>
+                  </a>
+                ))}
+              </div>
+
+              {/* 더보기 링크 */}
+              <div className="text-center mt-12">
+                <Link
+                  href="/case-studies"
+                  className="inline-flex items-center gap-2 px-6 py-3 bg-gray-900 text-white rounded-lg font-medium hover:bg-gray-800 transition-colors duration-200"
+                >
+                  <span>모든 관리 사례 보기</span>
+                  <svg
+                    className="w-5 h-5"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M9 5l7 7-7 7"
+                    />
+                  </svg>
+                </Link>
+              </div>
+            </div>
+          </div>
+        </section>
+      )}
+
       {/* 푸터 - 브라우니 스타일: 심플한 푸터 */}
       <footer className="py-12 px-4 sm:px-6 lg:px-8 bg-white border-t border-gray-200">
         <div className="max-w-7xl mx-auto">
-          <div className="flex flex-col md:flex-row justify-between items-center gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
+            {/* 왼쪽: 회사 정보 */}
+            <div>
+              <h4 className="text-lg font-bold text-gray-900 mb-4">맨즈컴퍼니</h4>
+              <div className="space-y-2 text-sm text-gray-600">
+                <p>사업자 등록번호: 520-52-00347</p>
+                <p>대표: 한승필</p>
+                <p>주소: 서울 강서구 공항동 1335-4 맨즈컴퍼니</p>
+              </div>
+            </div>
+
+            {/* 오른쪽: 문의 정보 */}
+            <div>
+              <h4 className="text-lg font-bold text-gray-900 mb-4">문의</h4>
+              <div className="space-y-2 text-sm text-gray-600">
+                <p>
+                  대표 문의:{' '}
+                  <a
+                    href="mailto:apeleba2@naver.com"
+                    className="text-blue-600 hover:text-blue-700 hover:underline"
+                  >
+                    apeleba2@naver.com
+                  </a>
+                </p>
+                <p>
+                  제휴/제안:{' '}
+                  <a
+                    href="mailto:apeleba2@naver.com"
+                    className="text-blue-600 hover:text-blue-700 hover:underline"
+                  >
+                    apeleba2@naver.com
+                  </a>
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex flex-col md:flex-row justify-between items-center gap-4 pt-8 border-t border-gray-200">
             <p className="text-sm text-gray-500">
               © 2025 무플. 현장을 유지하는 운영 구조.
             </p>
@@ -556,6 +759,12 @@ export default function LandingPageClient({ heroImages, heroSettings, caseStudie
                 className="text-sm text-gray-600 hover:text-blue-600 transition-colors"
               >
                 기능 소개
+              </Link>
+              <Link
+                href="/case-studies"
+                className="text-sm text-gray-600 hover:text-blue-600 transition-colors"
+              >
+                관리 사례
               </Link>
             </div>
           </div>

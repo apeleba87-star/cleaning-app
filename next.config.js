@@ -9,6 +9,14 @@ const nextConfig = {
         protocol: 'https',
         hostname: '*.supabase.co',
       },
+      {
+        protocol: 'https',
+        hostname: 'postfiles.pstatic.net',
+      },
+      {
+        protocol: 'https',
+        hostname: '*.naver.com',
+      },
     ],
   },
   // 프로덕션 빌드 최적화: console.log 제거

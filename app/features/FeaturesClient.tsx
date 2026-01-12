@@ -42,6 +42,12 @@ export default function FeaturesClient({ features }: FeaturesClientProps) {
               >
                 기능 소개
               </Link>
+              <Link
+                href="/case-studies"
+                className="text-sm sm:text-base text-gray-600 hover:text-gray-900 font-medium transition-colors"
+              >
+                관리 사례
+              </Link>
             </div>
             <Link
               href="/login"
@@ -199,10 +205,57 @@ export default function FeaturesClient({ features }: FeaturesClientProps) {
 
       {/* 푸터 */}
       <footer className="py-12 px-4 sm:px-6 lg:px-8 bg-white border-t border-gray-200">
-        <div className="max-w-7xl mx-auto text-center">
-          <p className="text-sm text-gray-500">
-            © 2025 무플. 현장을 유지하는 운영 구조.
-          </p>
+        <div className="max-w-7xl mx-auto">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
+            {/* 왼쪽: 회사 정보 */}
+            <div>
+              <h4 className="text-lg font-bold text-gray-900 mb-4">맨즈컴퍼니</h4>
+              <div className="space-y-2 text-sm text-gray-600">
+                <p>사업자 등록번호: 520-52-00347</p>
+                <p>대표: 한승필</p>
+                <p>주소: 서울 강서구 공항동 1335-4 맨즈컴퍼니</p>
+              </div>
+            </div>
+
+            {/* 오른쪽: 문의 정보 */}
+            <div>
+              <h4 className="text-lg font-bold text-gray-900 mb-4">문의</h4>
+              <div className="space-y-2 text-sm text-gray-600">
+                <p>
+                  대표 문의:{' '}
+                  <a
+                    href="mailto:apeleba2@naver.com"
+                    className="text-blue-600 hover:text-blue-700 hover:underline"
+                  >
+                    apeleba2@naver.com
+                  </a>
+                </p>
+                <p>
+                  제휴/제안:{' '}
+                  <a
+                    href="mailto:apeleba2@naver.com"
+                    className="text-blue-600 hover:text-blue-700 hover:underline"
+                  >
+                    apeleba2@naver.com
+                  </a>
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex flex-col md:flex-row justify-between items-center gap-4 pt-8 border-t border-gray-200">
+            <p className="text-sm text-gray-500">
+              © 2025 무플. 현장을 유지하는 운영 구조.
+            </p>
+            <div className="flex gap-6">
+              <Link
+                href="/case-studies"
+                className="text-sm text-gray-600 hover:text-blue-600 transition-colors"
+              >
+                관리 사례
+              </Link>
+            </div>
+          </div>
         </div>
       </footer>
     </div>
