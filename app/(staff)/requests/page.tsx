@@ -43,6 +43,7 @@ export default function RequestsPage() {
   const [completingRequestId, setCompletingRequestId] = useState<string | null>(null)
   const [completionPhoto, setCompletionPhoto] = useState<string | null>(null)
   const [completionDescription, setCompletionDescription] = useState('')
+  const [storageLocation, setStorageLocation] = useState('')
   const [uploadingPhoto, setUploadingPhoto] = useState(false)
   const [rejectingRequestId, setRejectingRequestId] = useState<string | null>(null)
   const [rejectionPhoto, setRejectionPhoto] = useState<string | null>(null)
@@ -467,6 +468,14 @@ export default function RequestsPage() {
       setCompletingRequestId(null)
       setCompletionPhoto(null)
       setCompletionDescription('')
+      setStorageLocation('')
+      return
+    }
+
+    // 신분증 및 분실물 처리 카테고리인 경우 보관장소 필수 확인
+    const isLostItemRequest = request.title === '신분증 및 분실물 처리'
+    if (isLostItemRequest && !storageLocation.trim()) {
+      alert('보관장소를 입력해주세요. (없는 경우 "없음"으로 입력해주세요)')
       return
     }
 
@@ -480,6 +489,7 @@ export default function RequestsPage() {
           status: 'completed',
           completion_photo_url: completionPhoto,
           completion_description: completionDescription.trim() || null,
+          storage_location: isLostItemRequest ? (storageLocation.trim() || '없음') : null,
         }),
       })
 
@@ -493,6 +503,7 @@ export default function RequestsPage() {
       setCompletingRequestId(null)
       setCompletionPhoto(null)
       setCompletionDescription('')
+      setStorageLocation('')
       
       // 요청란 목록 다시 로드
       loadRequests()
@@ -753,6 +764,7 @@ export default function RequestsPage() {
                     setCompletingRequestId(null)
                     setCompletionPhoto(null)
                     setCompletionDescription('')
+                    setStorageLocation('')
                   }}
                   className="text-gray-500 hover:text-gray-700 text-2xl"
                 >
@@ -842,17 +854,37 @@ export default function RequestsPage() {
                   )}
                 </div>
 
+                {/* 신분증 및 분실물 처리인 경우 보관장소 필드 */}
+                {request.title === '신분증 및 분실물 처리' && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      보관장소 <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={storageLocation}
+                      onChange={(e) => setStorageLocation(e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
+                      placeholder="보관장소를 입력하세요 (없는 경우 '없음'으로 입력)"
+                      required
+                    />
+                    {!storageLocation.trim() && (
+                      <p className="text-xs text-gray-500 mt-1">보관장소가 없는 경우 '없음'으로 입력해주세요</p>
+                    )}
+                  </div>
+                )}
+
                 {/* 설명란 */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    완료 설명 (선택)
+                    상세내용 (선택)
                   </label>
                   <textarea
                     value={completionDescription}
                     onChange={(e) => setCompletionDescription(e.target.value)}
                     rows={4}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
-                    placeholder="완료 처리 내용을 입력하세요"
+                    placeholder="상세 내용을 입력하세요"
                   />
                 </div>
 
@@ -870,6 +902,7 @@ export default function RequestsPage() {
                       setCompletingRequestId(null)
                       setCompletionPhoto(null)
                       setCompletionDescription('')
+                      setStorageLocation('')
                     }}
                     className="px-4 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300"
                   >
@@ -877,7 +910,7 @@ export default function RequestsPage() {
                   </button>
                   <button
                     onClick={handleComplete}
-                    disabled={uploadingPhoto || isNotClockedIn}
+                    disabled={uploadingPhoto || isNotClockedIn || (request.title === '신분증 및 분실물 처리' && !storageLocation.trim())}
                     className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
                   >
                     완료 처리

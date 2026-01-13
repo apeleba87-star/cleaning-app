@@ -2481,9 +2481,16 @@ export default function StoreManagerDashboardPage() {
                                         {request.description && (
                                           <p className="text-sm text-gray-600 mt-1">{request.description}</p>
                                         )}
+                                        {(request as any).storage_location && (
+                                          <div className="mt-2 p-2 bg-blue-50 rounded">
+                                            <p className="text-sm font-semibold text-blue-800 mb-1">보관장소</p>
+                                            <p className="text-sm text-blue-700">{(request as any).storage_location}</p>
+                                          </div>
+                                        )}
                                         {request.completion_description && (
                                           <div className="mt-2 p-2 bg-green-50 rounded">
-                                            <p className="text-sm text-green-700">처리 완료: {request.completion_description}</p>
+                                            <p className="text-sm font-semibold text-green-800 mb-1">상세내용</p>
+                                            <p className="text-sm text-green-700 whitespace-pre-wrap">{request.completion_description}</p>
                                           </div>
                                         )}
                                         {photos.length > 0 && (

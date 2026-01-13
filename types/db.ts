@@ -244,6 +244,7 @@ export interface Request {
   status: RequestStatus
   completion_photo_url?: string | null
   completion_description?: string | null
+  storage_location?: string | null
   completed_by?: string | null
   completed_at?: string | null
   rejection_photo_url?: string | null

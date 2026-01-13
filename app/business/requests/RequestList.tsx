@@ -61,29 +61,39 @@ export default function RequestList({ initialRequests, storeMap }: RequestListPr
 
   const handleConfirm = async (requestId: string) => {
     try {
+      console.log('Confirming request:', requestId)
       const response = await fetch(`/api/business/requests/${requestId}/status`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: 'in_progress' }),
       })
 
-      if (response.ok) {
-        const data = await response.json()
-        if (data.success) {
-          setRequests(prev => prev.map(r => 
-            r.id === requestId ? { ...r, status: 'in_progress' } : r
-          ))
-          alert('요청이 처리중으로 변경되었습니다.')
-        } else {
-          alert(data.error || '요청 확인에 실패했습니다.')
-        }
-      } else {
-        const data = await response.json()
-        alert(data.error || '요청 확인에 실패했습니다.')
+      let data
+      try {
+        data = await response.json()
+      } catch (parseError) {
+        console.error('Failed to parse response:', parseError)
+        const text = await response.text()
+        console.error('Response text:', text)
+        alert('서버 응답을 파싱할 수 없습니다.')
+        return
       }
-    } catch (error) {
+
+      console.log('Confirm response:', { status: response.status, ok: response.ok, data })
+
+      if (response.ok && data.success) {
+        setRequests(prev => prev.map(r => 
+          r.id === requestId ? { ...r, status: 'in_progress' } : r
+        ))
+        alert('요청이 처리중으로 변경되었습니다.')
+      } else {
+        const errorMessage = data.error || data.message || `요청 확인에 실패했습니다. (${response.status})`
+        console.error('Confirm request error:', { status: response.status, statusText: response.statusText, data })
+        alert(errorMessage)
+      }
+    } catch (error: any) {
       console.error('Error confirming request:', error)
-      alert('요청 확인 중 오류가 발생했습니다.')
+      alert(error.message || '요청 확인 중 오류가 발생했습니다.')
     }
   }
 
@@ -332,6 +342,16 @@ export default function RequestList({ initialRequests, storeMap }: RequestListPr
                           </svg>
                           <span className="text-xs text-green-700 font-semibold">완료됨</span>
                         </div>
+                        {(request as any).storage_location && (
+                          <div className="text-xs text-gray-700 mt-1.5">
+                            <span className="font-semibold text-green-800">보관장소:</span> {(request as any).storage_location}
+                          </div>
+                        )}
+                        {request.completion_description && (
+                          <div className="text-xs text-gray-600 mt-1.5 line-clamp-2">
+                            <span className="font-semibold text-green-800">상세내용:</span> {request.completion_description}
+                          </div>
+                        )}
                         {request.completion_photo_url && (
                           <div className="mt-1.5">
                             <img
@@ -339,11 +359,6 @@ export default function RequestList({ initialRequests, storeMap }: RequestListPr
                               alt="처리 완료 사진"
                               className="w-20 h-20 object-cover rounded-lg border border-green-200"
                             />
-                          </div>
-                        )}
-                        {request.completion_description && (
-                          <div className="text-xs text-gray-600 mt-1.5 line-clamp-2">
-                            {request.completion_description}
                           </div>
                         )}
                       </div>
@@ -454,6 +469,16 @@ export default function RequestList({ initialRequests, storeMap }: RequestListPr
                       </svg>
                       <span className="text-sm text-green-700 font-semibold">완료됨</span>
                     </div>
+                    {(request as any).storage_location && (
+                      <div className="text-xs text-gray-700 mt-2">
+                        <span className="font-semibold text-green-800">보관장소:</span> {(request as any).storage_location}
+                      </div>
+                    )}
+                    {request.completion_description && (
+                      <div className="text-xs text-gray-600 mt-2">
+                        <span className="font-semibold text-green-800">상세내용:</span> {request.completion_description}
+                      </div>
+                    )}
                     {request.completion_photo_url && (
                       <div className="mt-2">
                         <img
@@ -461,11 +486,6 @@ export default function RequestList({ initialRequests, storeMap }: RequestListPr
                           alt="처리 완료 사진"
                           className="w-full h-32 object-cover rounded-lg border border-green-200"
                         />
-                      </div>
-                    )}
-                    {request.completion_description && (
-                      <div className="text-xs text-gray-600 mt-2">
-                        {request.completion_description}
                       </div>
                     )}
                   </div>

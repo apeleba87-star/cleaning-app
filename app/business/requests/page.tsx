@@ -49,6 +49,7 @@ export default async function BusinessRequestsPage() {
       .from('requests')
       .select(`
         *,
+        storage_location,
         users:created_by (
           id,
           name

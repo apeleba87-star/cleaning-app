@@ -44,6 +44,7 @@ export async function GET(
         updated_at,
         completion_photo_url,
         completion_description,
+        storage_location,
         completed_at,
         rejection_photo_url,
         rejection_description,

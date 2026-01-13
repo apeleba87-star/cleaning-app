@@ -204,7 +204,67 @@ export default function FranchiseStoresStatusPage() {
       console.error('Error saving confirmed requests to storage:', error)
     }
   }
-  const [confirmedProblemIds, setConfirmedProblemIds] = useState<Set<string>>(new Set())
+  // 확인된 문제 ID와 확인 시간을 저장 (24시간 이내 확인된 항목은 카운트에서 제외)
+  const loadConfirmedProblemsFromStorage = (): { ids: Set<string>; dates: Map<string, string> } => {
+    if (typeof window === 'undefined') {
+      return { ids: new Set(), dates: new Map() }
+    }
+    
+    try {
+      const today = new Date().toISOString().split('T')[0]
+      const storageKey = `confirmed_problems_${today}`
+      const stored = localStorage.getItem(storageKey)
+      
+      if (stored) {
+        const data = JSON.parse(stored)
+        const ids = new Set<string>(data.ids || [])
+        const dates = new Map<string, string>(data.dates || [])
+        return { ids, dates }
+      }
+    } catch (error) {
+      console.error('Error loading confirmed problems from storage:', error)
+    }
+    
+    return { ids: new Set(), dates: new Map() }
+  }
+
+  const [confirmedProblemIds, setConfirmedProblemIds] = useState<Set<string>>(() => {
+    return loadConfirmedProblemsFromStorage().ids
+  })
+  const [confirmedProblemDates, setConfirmedProblemDates] = useState<Map<string, string>>(() => {
+    return loadConfirmedProblemsFromStorage().dates
+  })
+
+  // 로컬 스토리지에 저장
+  const saveConfirmedProblemsToStorage = (ids: Set<string>, dates: Map<string, string>) => {
+    if (typeof window === 'undefined') return
+    
+    try {
+      const today = new Date().toISOString().split('T')[0]
+      const storageKey = `confirmed_problems_${today}`
+      const data = {
+        ids: Array.from(ids),
+        dates: Array.from(dates.entries())
+      }
+      localStorage.setItem(storageKey, JSON.stringify(data))
+      
+      // 오래된 데이터 정리 (7일 이상 된 데이터 삭제)
+      const sevenDaysAgo = new Date()
+      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7)
+      for (let i = 0; i < 7; i++) {
+        const date = new Date(sevenDaysAgo)
+        date.setDate(date.getDate() + i)
+        const dateKey = date.toISOString().split('T')[0]
+        const oldKey = `confirmed_problems_${dateKey}`
+        if (dateKey !== today) {
+          localStorage.removeItem(oldKey)
+        }
+      }
+    } catch (error) {
+      console.error('Error saving confirmed problems to storage:', error)
+    }
+  }
+
   const [confirmedLostItemIds, setConfirmedLostItemIds] = useState<Set<string>>(new Set())
   const [selectedImage, setSelectedImage] = useState<string | null>(null)
   const [selectedImageInfo, setSelectedImageInfo] = useState<{
@@ -264,10 +324,14 @@ export default function FranchiseStoresStatusPage() {
   }, [showToast])
 
   useEffect(() => {
-    // 초기 로드 시 로컬 스토리지에서 확인된 요청 로드
+    // 초기 로드 시 로컬 스토리지에서 확인된 요청 및 문제 로드
     const { ids, dates } = loadConfirmedRequestsFromStorage()
     setConfirmedRequestIds(ids)
     setConfirmedRequestDates(dates)
+    
+    const { ids: problemIds, dates: problemDates } = loadConfirmedProblemsFromStorage()
+    setConfirmedProblemIds(problemIds)
+    setConfirmedProblemDates(problemDates)
     
     loadStoreStatuses()
 
@@ -293,13 +357,17 @@ export default function FranchiseStoresStatusPage() {
       setupAutoRefresh()
     }, 60 * 1000) // 1분마다 시간 체크
 
-    // 날짜가 변경될 때 확인된 요청 목록 정리 (다음날이 되면 오늘 확인한 것들 제거)
+    // 날짜가 변경될 때 확인된 요청 및 문제 목록 정리 (다음날이 되면 오늘 확인한 것들 제거)
     const dateCheckInterval = setInterval(() => {
       const today = getTodayDateKST()
       // 로컬 스토리지에서 오늘 날짜의 데이터만 로드
       const { ids, dates } = loadConfirmedRequestsFromStorage()
       setConfirmedRequestIds(ids)
       setConfirmedRequestDates(dates)
+      
+      const { ids: problemIds, dates: problemDates } = loadConfirmedProblemsFromStorage()
+      setConfirmedProblemIds(problemIds)
+      setConfirmedProblemDates(problemDates)
     }, 60 * 60 * 1000) // 1시간마다 날짜 체크
 
     return () => {
@@ -477,6 +545,78 @@ export default function FranchiseStoresStatusPage() {
         console.log('Store problems count:', reports.store_problems?.length || 0)
         console.log('Vending problems count:', reports.vending_problems?.length || 0)
         setProblemReports(reports)
+        
+        // 확인된 항목을 카운트에 반영하여 storeStatuses 업데이트
+        // 24시간 이내 확인된 항목만 카운트에 포함
+        const confirmedVendingCount = reports.vending_problems.filter((p: any) => {
+          const confirmedTimestamp = confirmedProblemDates.get(p.id)
+          if (confirmedTimestamp) {
+            return isConfirmedWithin24Hours(confirmedTimestamp)
+          }
+          // confirmedProblemIds에 있지만 timestamp가 없으면 24시간 이내로 간주하지 않음
+          return false
+        }).length
+        
+        const confirmedStoreCount = reports.store_problems.filter((p: any) => {
+          const confirmedTimestamp = confirmedProblemDates.get(p.id)
+          if (confirmedTimestamp) {
+            return isConfirmedWithin24Hours(confirmedTimestamp)
+          }
+          return false
+        }).length
+        
+        // 24시간 이내 확인된 항목을 제외한 미확인 항목 수 계산
+        const unconfirmedVendingCount = reports.vending_problems.filter((p: any) => {
+          // status가 completed인 항목은 제외
+          if (p.status === 'completed') {
+            return false
+          }
+          // 확인된 항목은 제외 (24시간 이내 확인된 것만)
+          const confirmedTimestamp = confirmedProblemDates.get(p.id)
+          if (confirmedTimestamp && isConfirmedWithin24Hours(confirmedTimestamp)) {
+            return false
+          }
+          if (confirmedProblemIds.has(p.id)) {
+            // timestamp가 없으면 24시간 지났다고 간주
+            return false
+          }
+          return true
+        }).length
+        
+        const unprocessedStoreCount = reports.store_problems.filter((p: any) => {
+          if (p.status === 'completed') {
+            return false
+          }
+          const confirmedTimestamp = confirmedProblemDates.get(p.id)
+          if (confirmedTimestamp && isConfirmedWithin24Hours(confirmedTimestamp)) {
+            return false
+          }
+          if (confirmedProblemIds.has(p.id)) {
+            return false
+          }
+          return true
+        }).length
+        
+        // storeStatuses 업데이트
+        // 총 건수는 24시간 이내 확인된 항목 + 미확인 항목
+        setStoreStatuses((prev) => {
+          return prev.map((s) => {
+            if (s.store_id !== store.store_id) return s
+            
+            const totalVending = confirmedVendingCount + unconfirmedVendingCount
+            const totalStore = confirmedStoreCount + unprocessedStoreCount
+            
+            return {
+              ...s,
+              unconfirmed_vending_problems: unconfirmedVendingCount,
+              confirmed_vending_problems: confirmedVendingCount,
+              vending_problem_count: totalVending, // 24시간 이내 항목만 카운트
+              unprocessed_store_problems: unprocessedStoreCount,
+              completed_store_problems: confirmedStoreCount,
+              store_problem_count: totalStore, // 24시간 이내 항목만 카운트
+            }
+          })
+        })
       } else {
         console.error('Problem reports API error:', problemData)
       }
@@ -632,6 +772,22 @@ export default function FranchiseStoresStatusPage() {
         console.log('Processed requests data:', processedData)
         console.log('Setting requests state with in_progress:', processedData.in_progress.length, 'items')
         
+        // completion_description 디버깅
+        if (processedData.completed.length > 0) {
+          console.log('처리완료 요청들의 completion_description:', processedData.completed.map((r: any) => ({
+            id: r.id,
+            title: r.title,
+            completion_description: r.completion_description,
+            completion_description_type: typeof r.completion_description,
+            completion_description_length: r.completion_description?.length,
+            completion_photo_url: r.completion_photo_url,
+            storage_location: r.storage_location,
+            hasCompletionDescription: !!r.completion_description,
+            hasCompletionPhoto: !!r.completion_photo_url,
+            hasStorageLocation: !!(r as any).storage_location
+          })))
+        }
+        
         // photo_url 디버깅
         if (processedData.in_progress.length > 0) {
           console.log('처리중 요청들의 photo_url:', processedData.in_progress.map((r: any) => ({
@@ -677,35 +833,106 @@ export default function FranchiseStoresStatusPage() {
     }
   }
 
-  const handleConfirmRequest = async (requestId: string) => {
+  const handleConfirmRequest = async (requestId: string, storeId?: string) => {
+    // Optimistic Update: 즉시 UI에서 회색으로 표시
+    const now = new Date().toISOString() // 타임스탬프 저장
+    
+    // confirmedRequestIds와 confirmedRequestDates에 추가
+    let updatedIds: Set<string>
+    let updatedDates: Map<string, string>
+    
+    setConfirmedRequestIds((prev) => {
+      updatedIds = new Set(prev).add(requestId)
+      return updatedIds
+    })
+    setConfirmedRequestDates((prevDates) => {
+      updatedDates = new Map(prevDates)
+      updatedDates.set(requestId, now) // 타임스탬프 저장
+      // 로컬 스토리지에 저장
+      saveConfirmedRequestsToStorage(updatedIds, updatedDates)
+      return updatedDates
+    })
+    setViewingCompletedRequestId(null)
+    
+    // 카드 카운트 즉시 업데이트 (24시간 이내 확인한 항목은 카운트에서 제외)
+    if (storeId) {
+      setStoreStatuses((prev) => {
+        return prev.map((store) => {
+          if (store.store_id !== storeId) return store
+          
+          // storeCompletedRequests에서 해당 매장의 처리완료 요청 가져오기
+          const completedRequests = storeCompletedRequests.get(storeId) || []
+          // 24시간 이내 확인한 항목만 제외하여 카운트 계산
+          const unconfirmedCount = completedRequests.filter((r: any) => {
+            if (r.status !== 'completed') return false
+            if (r.id === requestId) {
+              // 방금 확인한 항목은 제외
+              return false
+            }
+            const confirmedTimestamp = confirmedRequestDates.get(r.id)
+            if (confirmedTimestamp) {
+              return !isConfirmedWithin24Hours(confirmedTimestamp)
+            }
+            return true
+          }).length
+          
+          return {
+            ...store,
+            unconfirmed_completed_request_count: unconfirmedCount,
+          }
+        })
+      })
+    }
+    
+    // 백그라운드에서 API 호출
     try {
       const response = await fetch(`/api/franchise/requests/${requestId}/confirm`, {
         method: 'PATCH',
       })
 
       if (response.ok) {
-        const today = new Date().toISOString().split('T')[0] // YYYY-MM-DD 형식
+        // 성공 시 모달의 requests 상태를 직접 업데이트 (새로고침 없이)
+        if (selectedStore?.store_id === storeId) {
+          setRequests((prev) => {
+            // completed 배열에서 해당 요청을 찾아서 업데이트하지 않고, 필터링으로 자동 처리됨
+            return prev
+          })
+        }
+        // 백그라운드에서 카운트만 업데이트 (사용자 대기 없음)
+        if (storeId) {
+          setTimeout(() => {
+            loadStoreCompletedRequests(storeId)
+          }, 1000)
+        }
+      } else {
+        // 실패 시 롤백
         setConfirmedRequestIds((prev) => {
-          const newSet = new Set(prev).add(requestId)
+          const newSet = new Set(prev)
+          newSet.delete(requestId)
           setConfirmedRequestDates((prevDates) => {
             const newMap = new Map(prevDates)
-            newMap.set(requestId, today)
-            // 로컬 스토리지에 저장
+            newMap.delete(requestId)
             saveConfirmedRequestsToStorage(newSet, newMap)
             return newMap
           })
           return newSet
         })
-        setViewingCompletedRequestId(null)
-        // 요청 목록 다시 로드
-        if (selectedStore) {
-          handleOpenRequestModal(selectedStore)
-        }
-      } else {
         const data = await response.json()
         alert(data.error || '확인 처리 중 오류가 발생했습니다.')
       }
     } catch (error) {
+      // 네트워크 에러 시 롤백
+      setConfirmedRequestIds((prev) => {
+        const newSet = new Set(prev)
+        newSet.delete(requestId)
+        setConfirmedRequestDates((prevDates) => {
+          const newMap = new Map(prevDates)
+          newMap.delete(requestId)
+          saveConfirmedRequestsToStorage(newSet, newMap)
+          return newMap
+        })
+        return newSet
+      })
       console.error('Error confirming request:', error)
       alert('확인 처리 중 오류가 발생했습니다.')
     }
@@ -715,6 +942,20 @@ export default function FranchiseStoresStatusPage() {
   const isToday = (dateString: string): boolean => {
     const today = getTodayDateKST()
     return dateString === today
+  }
+
+  // 24시간 이내에 확인했는지 확인하는 함수
+  const isConfirmedWithin24Hours = (confirmedTimestamp: string): boolean => {
+    try {
+      const confirmedTime = new Date(confirmedTimestamp).getTime()
+      const now = new Date().getTime()
+      const hoursSinceConfirmed = (now - confirmedTime) / (1000 * 60 * 60)
+      return hoursSinceConfirmed < 24
+    } catch {
+      // 타임스탬프가 아닌 날짜 형식인 경우 (하위 호환)
+      const today = getTodayDateKST()
+      return confirmedTimestamp === today
+    }
   }
 
   // 확인된 요청 중 오늘 확인한 것만 필터링
@@ -886,21 +1127,169 @@ export default function FranchiseStoresStatusPage() {
   }
 
   const handleConfirmProblem = async (problemId: string) => {
+    // Optimistic Update: 즉시 로컬 상태 업데이트
+    const confirmedTimestamp = new Date().toISOString()
+    
+    // 확인된 문제 ID와 시간 저장
+    setConfirmedProblemIds((prev) => {
+      const newSet = new Set(prev)
+      newSet.add(problemId)
+      return newSet
+    })
+    setConfirmedProblemDates((prev) => {
+      const newMap = new Map(prev)
+      newMap.set(problemId, confirmedTimestamp)
+      saveConfirmedProblemsToStorage(
+        new Set([...Array.from(confirmedProblemIds), problemId]),
+        new Map([...Array.from(confirmedProblemDates.entries()), [problemId, confirmedTimestamp]])
+      )
+      return newMap
+    })
+    
+    // 문제 타입 확인 (setProblemReports 전에)
+    const currentProblemReports = problemReports
+    const isVendingProblem = currentProblemReports.vending_problems.some((p) => p.id === problemId)
+    const isStoreProblem = currentProblemReports.store_problems.some((p) => p.id === problemId)
+    
+    // problemReports 상태 즉시 업데이트 (자판기 내부 문제 모달용)
+    setProblemReports((prev) => {
+      const updated = { ...prev }
+      if (isVendingProblem) {
+        updated.vending_problems = prev.vending_problems.map((p) =>
+          p.id === problemId ? { ...p, franchise_confirmed_at: confirmedTimestamp } : p
+        )
+      }
+      if (isStoreProblem) {
+        updated.store_problems = prev.store_problems.map((p) =>
+          p.id === problemId ? { ...p, franchise_confirmed_at: confirmedTimestamp } : p
+        )
+      }
+      return updated
+    })
+    
+    // storeStatuses 즉시 업데이트 (카드 카운트 반영)
+    if (selectedStore) {
+      setStoreStatuses((prev) => {
+        return prev.map((store) => {
+          if (store.store_id !== selectedStore.store_id) return store
+          
+          // 자판기 내부 문제인 경우
+          if (isVendingProblem) {
+            // 확인 버튼을 누르면 미확인에서 확인으로 이동
+            // 24시간 후에는 카운트에서 제거되므로, 총 건수는 미확인 + 확인 (24시간 이내)
+            const currentUnconfirmed = store.unconfirmed_vending_problems || 0
+            const currentConfirmed = store.confirmed_vending_problems || 0
+            
+            // 미확인이 있으면 1 감소, 확인은 1 증가
+            const newUnconfirmed = currentUnconfirmed > 0 ? currentUnconfirmed - 1 : 0
+            const newConfirmed = currentConfirmed + 1
+            
+            // 총 건수는 미확인 + 확인 (24시간 이내 항목만)
+            const newTotal = newUnconfirmed + newConfirmed
+            
+            return {
+              ...store,
+              unconfirmed_vending_problems: newUnconfirmed,
+              confirmed_vending_problems: newConfirmed,
+              vending_problem_count: newTotal, // 24시간 이내 항목만 카운트
+            }
+          }
+          
+          // 매장 문제 보고인 경우
+          if (isStoreProblem) {
+            // 확인 버튼을 누르면 미처리에서 처리완료로 이동
+            // 24시간 후에는 카운트에서 제거되므로, 총 건수는 미처리 + 처리완료 (24시간 이내)
+            const currentUnprocessed = store.unprocessed_store_problems || 0
+            const currentCompleted = store.completed_store_problems || 0
+            
+            // 미처리가 있으면 1 감소, 처리완료는 1 증가
+            const newUnprocessed = currentUnprocessed > 0 ? currentUnprocessed - 1 : 0
+            const newCompleted = currentCompleted + 1
+            
+            // 총 건수는 미처리 + 처리완료 (24시간 이내 항목만)
+            const newTotal = newUnprocessed + newCompleted
+            
+            return {
+              ...store,
+              unprocessed_store_problems: newUnprocessed,
+              completed_store_problems: newCompleted,
+              store_problem_count: newTotal, // 24시간 이내 항목만 카운트
+            }
+          }
+          
+          return store
+        })
+      })
+    }
+    
+    // 백그라운드에서 API 호출
     try {
       const response = await fetch(`/api/franchise/problem-reports/${problemId}/confirm`, {
         method: 'PATCH',
       })
 
       if (response.ok) {
-        alert('저장 되었습니다')
-        // 상태 갱신
-        loadStoreStatuses()
-        await handleOpenProblemModal(selectedStore!)
+        // 성공 시 백그라운드에서 최신 데이터 동기화
+        if (selectedStore) {
+          setTimeout(async () => {
+            const timestamp = new Date().getTime()
+            const problemResponse = await fetch(`/api/franchise/stores/${selectedStore.store_id}/problem-reports?t=${timestamp}`, {
+              cache: 'no-store',
+            })
+            if (problemResponse.ok) {
+              const problemData = await problemResponse.json()
+              setProblemReports(problemData.data || { store_problems: [], vending_problems: [] })
+            }
+            loadStoreStatuses()
+          }, 500)
+        }
       } else {
+        // 실패 시 롤백
+        setConfirmedProblemIds((prev) => {
+          const newSet = new Set(prev)
+          newSet.delete(problemId)
+          return newSet
+        })
+        setConfirmedProblemDates((prev) => {
+          const newMap = new Map(prev)
+          newMap.delete(problemId)
+          return newMap
+        })
+        setProblemReports((prev) => {
+          const updated = { ...prev }
+          updated.vending_problems = prev.vending_problems.map((p) =>
+            p.id === problemId ? { ...p, franchise_confirmed_at: undefined } : p
+          )
+          updated.store_problems = prev.store_problems.map((p) =>
+            p.id === problemId ? { ...p, franchise_confirmed_at: undefined } : p
+          )
+          return updated
+        })
         const data = await response.json()
         alert(data.error || '확인 처리 중 오류가 발생했습니다.')
       }
     } catch (error) {
+      // 네트워크 에러 시 롤백
+      setConfirmedProblemIds((prev) => {
+        const newSet = new Set(prev)
+        newSet.delete(problemId)
+        return newSet
+      })
+      setConfirmedProblemDates((prev) => {
+        const newMap = new Map(prev)
+        newMap.delete(problemId)
+        return newMap
+      })
+      setProblemReports((prev) => {
+        const updated = { ...prev }
+        updated.vending_problems = prev.vending_problems.map((p) =>
+          p.id === problemId ? { ...p, franchise_confirmed_at: undefined } : p
+        )
+        updated.store_problems = prev.store_problems.map((p) =>
+          p.id === problemId ? { ...p, franchise_confirmed_at: undefined } : p
+        )
+        return updated
+      })
       console.error('Error confirming problem:', error)
       alert('확인 처리 중 오류가 발생했습니다.')
     }
@@ -1561,7 +1950,10 @@ export default function FranchiseStoresStatusPage() {
             {filteredStores
               .filter((status) => expandedStores.has(status.store_id))
               .map((status) => {
-                const totalProblems = status.store_problem_count + status.vending_problem_count + status.lost_item_count
+                // 24시간 이내 항목만 카운트 (미확인 + 확인)
+                const totalStoreProblems = (status.unprocessed_store_problems || 0) + (status.completed_store_problems || 0)
+                const totalVendingProblems = (status.unconfirmed_vending_problems || 0) + (status.confirmed_vending_problems || 0)
+                const totalProblems = totalStoreProblems + totalVendingProblems + status.lost_item_count
                 const hasRequests = status.received_request_count > 0 || status.in_progress_request_count > 0 || status.completed_request_count > 0 || status.rejected_request_count > 0
                 const notificationCount = getTotalNotificationCount(status)
                 const isExpanded = true
@@ -1787,21 +2179,25 @@ export default function FranchiseStoresStatusPage() {
                           </div>
                         </div>
                       )}
-                      {status.vending_problem_count > 0 && (
-                        <div className="space-y-1">
-                          <div className="flex items-center gap-2">
-                            <div className="w-2 h-2 bg-orange-500 rounded-full flex-shrink-0"></div>
-                            <span className="text-sm text-gray-700">자판기 내부 문제</span>
-                            <span className="text-sm font-semibold text-gray-900 ml-auto">
-                              {status.vending_problem_count}건
-                            </span>
+                      {(() => {
+                        // 24시간 이내 항목만 카운트 (미확인 + 확인)
+                        const totalVending = (status.unconfirmed_vending_problems || 0) + (status.confirmed_vending_problems || 0)
+                        return totalVending > 0 ? (
+                          <div className="space-y-1">
+                            <div className="flex items-center gap-2">
+                              <div className="w-2 h-2 bg-orange-500 rounded-full flex-shrink-0"></div>
+                              <span className="text-sm text-gray-700">자판기 내부 문제</span>
+                              <span className="text-sm font-semibold text-gray-900 ml-auto">
+                                {totalVending}건
+                              </span>
+                            </div>
+                            <div className="pl-4 text-xs text-gray-600">
+                              미확인 <span className="font-semibold text-red-600">{status.unconfirmed_vending_problems || 0}</span>건 / 
+                              확인 <span className="font-semibold text-green-600">{status.confirmed_vending_problems || 0}</span>건
+                            </div>
                           </div>
-                          <div className="pl-4 text-xs text-gray-600">
-                            미확인 <span className="font-semibold text-red-600">{status.unconfirmed_vending_problems}</span>건 / 
-                            확인 <span className="font-semibold text-green-600">{status.confirmed_vending_problems}</span>건
-                          </div>
-                        </div>
-                      )}
+                        ) : null
+                      })()}
                       {status.lost_item_count > 0 && (
                         <div className="space-y-1">
                           <div className="flex items-center gap-2">
@@ -1843,160 +2239,72 @@ export default function FranchiseStoresStatusPage() {
                     </div>
                     <div className="space-y-3">
                       {/* 접수 */}
-                      {status.received_request_count > 0 && (
-                        <div className="flex items-center justify-between">
-                          <span className="text-sm text-gray-600">접수</span>
-                          <span className="text-sm font-semibold text-blue-600">
-                            {status.received_request_count}건
-                          </span>
-                        </div>
-                      )}
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm text-gray-600">접수</span>
+                        <span className="text-sm font-semibold text-blue-600">
+                          {status.received_request_count || 0}건
+                        </span>
+                      </div>
                       
                       {/* 처리중 */}
-                      {status.in_progress_request_count > 0 && (
-                        <div className="flex items-center justify-between">
-                          <span className="text-sm text-gray-600">처리중</span>
-                          <span className="text-sm font-semibold text-orange-600">
-                            {status.in_progress_request_count}건
-                          </span>
-                        </div>
-                      )}
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm text-gray-600">처리중</span>
+                        <span className="text-sm font-semibold text-orange-600">
+                          {status.in_progress_request_count || 0}건
+                        </span>
+                      </div>
                       
-                      {/* 반려처리 */}
-                      {(() => {
-                        // 클라이언트에서 확인된 반려처리 항목 제외
-                        const rejectedRequests = storeCompletedRequests.get(status.store_id) || []
-                        const unconfirmedRejected = rejectedRequests.filter((r: any) => {
-                          if (r.status !== 'rejected') return false
-                          const confirmedDate = confirmedRequestDates.get(r.id)
-                          if (!confirmedDate) {
-                            return !confirmedRequestIds.has(r.id)
-                          }
-                          return false // 확인된 항목은 제외
-                        })
-                        return unconfirmedRejected.length > 0 ? (
-                          <div>
-                            <div className="flex items-center justify-between mb-2">
-                              <span className="text-sm text-gray-600">반려처리</span>
-                              <span className="text-sm font-semibold text-red-600">
-                                {unconfirmedRejected.length}건
-                              </span>
-                            </div>
-                          </div>
-                        ) : null
-                      })()}
+                      {/* 구분선 */}
+                      <hr className="border-gray-200" />
                       
                       {/* 처리완료 */}
                       {(() => {
                         // 해당 매장의 처리완료 요청 목록 가져오기
                         const completedRequests = storeCompletedRequests.get(status.store_id) || []
-                        // 확인되지 않은 항목만 필터링 (오늘 확인한 것도 제외)
+                        // 24시간 이내 확인한 항목만 제외 (24시간 지난 항목은 다시 포함)
                         const unconfirmedRequests = completedRequests.filter((r: any) => {
                           if (r.status !== 'completed') return false
-                          const confirmedDate = confirmedRequestDates.get(r.id)
-                          if (!confirmedDate) {
-                            return !confirmedRequestIds.has(r.id)
+                          const confirmedTimestamp = confirmedRequestDates.get(r.id)
+                          if (confirmedTimestamp) {
+                            // 24시간 이내 확인한 항목은 제외 (카운트에서 제외)
+                            // 24시간 지난 항목은 다시 포함 (카운트에 포함)
+                            return !isConfirmedWithin24Hours(confirmedTimestamp)
                           }
-                          return false // 확인된 항목은 제외
+                          // confirmedRequestIds에 있지만 timestamp가 없으면 24시간 지났다고 간주하여 포함
+                          // 확인 안된 항목은 포함
+                          return true
                         })
                         
-                        return unconfirmedRequests.length > 0 ? (
+                        // storeCompletedRequests가 비어있으면 서버 값 사용 (fallback)
+                        const displayCount = completedRequests.length > 0 
+                          ? unconfirmedRequests.length 
+                          : (status.unconfirmed_completed_request_count !== undefined 
+                              ? status.unconfirmed_completed_request_count 
+                              : (status.completed_request_count || 0))
+                        
+                        return (
                           <div>
                             <div className="flex items-center justify-between mb-2">
                               <span className="text-sm text-gray-600">처리완료</span>
                               <span className="text-sm font-semibold text-green-600">
-                                {unconfirmedRequests.length}건
+                                {displayCount}건
                               </span>
                             </div>
-                            <div 
-                              onClick={(e) => e.stopPropagation()}
-                              className="space-y-2 mt-2"
-                            >
-                              {(() => {
-                                if (unconfirmedRequests.length === 0) {
-                                  return null
-                                }
-                                
-                                // 3건 이상일 때는 안내 메시지 표시
-                                if (unconfirmedRequests.length >= 3) {
-                                  return (
-                                    <div className="border rounded p-3 bg-blue-50 border-blue-200">
-                                      <div className="flex items-center justify-between">
-                                        <div className="flex-1">
-                                          <p className="text-xs text-gray-700 font-medium mb-1">
-                                            확인 안된 처리완료 항목이 {unconfirmedRequests.length}건 있습니다.
-                                          </p>
-                                          <p className="text-xs text-gray-500">
-                                            전체 보기에서 확인하실 수 있습니다.
-                                          </p>
-                                        </div>
-                                        <button
-                                          onClick={(e) => {
-                                            e.stopPropagation()
-                                            handleOpenRequestModal(status)
-                                          }}
-                                          className="ml-3 px-3 py-1.5 bg-blue-600 text-white text-xs rounded hover:bg-blue-700 transition-colors flex-shrink-0 whitespace-nowrap"
-                                        >
-                                          전체 보기
-                                        </button>
-                                      </div>
-                                    </div>
-                                  )
-                                }
-                                
-                                // 2건 이하일 때는 개별 항목 표시
-                                return unconfirmedRequests.map((request: any) => {
-                                  const confirmedDate = confirmedRequestDates.get(request.id)
-                                  const isConfirmedToday = confirmedDate && isToday(confirmedDate)
-                                  
-                                  return (
-                                    <div
-                                      key={request.id}
-                                      className={`border rounded p-2 text-xs ${
-                                        isConfirmedToday ? 'opacity-60 bg-gray-50' : 'bg-white'
-                                      }`}
-                                    >
-                                      <div className="flex items-center justify-between">
-                                        <span className="text-gray-700 flex-1 truncate mr-2">
-                                          -{request.title}
-                                        </span>
-                                        {!isConfirmedToday && (
-                                          <button
-                                            onClick={(e) => {
-                                              e.stopPropagation()
-                                              handleConfirmRequest(request.id)
-                                              // 확인 후 해당 매장의 요청 목록 다시 로드
-                                              setTimeout(() => {
-                                                loadStoreCompletedRequests(status.store_id)
-                                              }, 500)
-                                            }}
-                                            className="px-2 py-1 bg-blue-600 text-white text-xs rounded hover:bg-blue-700 transition-colors flex-shrink-0"
-                                          >
-                                            확인
-                                          </button>
-                                        )}
-                                      </div>
-                                    </div>
-                                  )
-                                })
-                              })()}
-                            </div>
+                            {(displayCount > 0 || completedRequests.length > 0) && (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  handleOpenRequestModal(status)
+                                }}
+                                className="w-full mt-2 px-3 py-1.5 bg-blue-600 text-white text-xs rounded hover:bg-blue-700 transition-colors"
+                              >
+                                전체 보기
+                              </button>
+                            )}
                           </div>
-                        ) : null
+                        )
                       })()}
-                      
-                      {!hasRequests && (
-                        <p className="text-sm text-gray-500">요청 없음</p>
-                      )}
                     </div>
-                    {hasRequests && (
-                      <div
-                        onClick={() => handleOpenRequestModal(status)}
-                        className="mt-3 text-center text-xs text-blue-600 hover:text-blue-800 cursor-pointer"
-                      >
-                        전체 보기 →
-                      </div>
-                    )}
                     </div>
                   </div>
                     {/* 매장 상세 링크 */}
@@ -2274,7 +2582,15 @@ export default function FranchiseStoresStatusPage() {
                     <h3 className="text-lg font-medium text-red-700">매장 문제 보고</h3>
                     {!expandedSections.storeProblems && (
                       <span className="text-sm font-semibold text-red-600 bg-white px-3 py-1 rounded-full">
-                        {problemReports.store_problems.filter((p) => p.status !== 'completed').length}건
+                        {problemReports.store_problems.filter((p) => {
+                          if (p.status === 'completed') return false
+                          // 확인된 항목은 24시간 이내라도 카운트에서 제외
+                          const confirmedTimestamp = confirmedProblemDates.get(p.id)
+                          if (confirmedTimestamp && isConfirmedWithin24Hours(confirmedTimestamp)) {
+                            return false
+                          }
+                          return !confirmedProblemIds.has(p.id)
+                        }).length}건
                       </span>
                     )}
                   </div>
@@ -2290,7 +2606,15 @@ export default function FranchiseStoresStatusPage() {
                       <div className="space-y-4">
                     {/* 미처리 항목 */}
                     {problemReports.store_problems
-                      .filter((p) => p.status !== 'completed')
+                      .filter((p) => {
+                        if (p.status === 'completed') return false
+                        // 확인된 항목은 24시간 이내라도 표시하지 않음
+                        const confirmedTimestamp = confirmedProblemDates.get(p.id)
+                        if (confirmedTimestamp && isConfirmedWithin24Hours(confirmedTimestamp)) {
+                          return false
+                        }
+                        return !confirmedProblemIds.has(p.id)
+                      })
                       .map((problem) => {
                         // description에서 원본 내용만 추출
                         const originalDescription = problem.description?.split('\n\n[처리 완료]')[0] || problem.description
@@ -2445,10 +2769,16 @@ export default function FranchiseStoresStatusPage() {
                         )
                       })}
                     
-                    {/* 완료된 항목 - 아래로 이동하고 연하게 표시 (24시간 이내만 표시) */}
+                    {/* 완료된 항목 - 아래로 이동하고 연하게 표시 (24시간 이내만 표시, 확인된 항목은 제외) */}
                     {problemReports.store_problems
                       .filter((p) => {
                         if (p.status !== 'completed') return false
+                        // 확인된 항목은 표시하지 않음
+                        const confirmedTimestamp = confirmedProblemDates.get(p.id)
+                        if (confirmedTimestamp && isConfirmedWithin24Hours(confirmedTimestamp)) {
+                          return false
+                        }
+                        if (confirmedProblemIds.has(p.id)) return false
                         // 처리 완료 후 24시간 이내만 표시
                         if (p.updated_at) {
                           const completedTime = new Date(p.updated_at).getTime()
@@ -2558,7 +2888,15 @@ export default function FranchiseStoresStatusPage() {
                     <h3 className="text-lg font-medium text-orange-700">자판기 내부 문제</h3>
                     {!expandedSections.vendingProblems && (
                       <span className="text-sm font-semibold text-orange-600 bg-white px-3 py-1 rounded-full">
-                        {problemReports.vending_problems.filter((p) => p.status !== 'completed').length}건
+                        {problemReports.vending_problems.filter((p) => {
+                          if (p.status === 'completed') return false
+                          // 확인된 항목은 24시간 이내라도 카운트에서 제외
+                          const confirmedTimestamp = confirmedProblemDates.get(p.id)
+                          if (confirmedTimestamp && isConfirmedWithin24Hours(confirmedTimestamp)) {
+                            return false
+                          }
+                          return !confirmedProblemIds.has(p.id)
+                        }).length}건
                       </span>
                     )}
                   </div>
@@ -2574,7 +2912,15 @@ export default function FranchiseStoresStatusPage() {
                       <div className="space-y-4">
                     {/* 미확인 항목 */}
                     {problemReports.vending_problems
-                      .filter((p) => p.status !== 'completed')
+                      .filter((p) => {
+                        if (p.status === 'completed') return false
+                        // 확인된 항목은 24시간 이내라도 표시하지 않음
+                        const confirmedTimestamp = confirmedProblemDates.get(p.id)
+                        if (confirmedTimestamp && isConfirmedWithin24Hours(confirmedTimestamp)) {
+                          return false
+                        }
+                        return !confirmedProblemIds.has(p.id)
+                      })
                       .map((problem) => (
                         <div key={problem.id} className="border rounded-lg p-4">
                           <div className="flex justify-between items-start mb-2">
@@ -2610,9 +2956,17 @@ export default function FranchiseStoresStatusPage() {
                         </div>
                       ))}
                     
-                    {/* 확인된 항목 - 연하게 표시 */}
+                    {/* 확인된 항목 - 연하게 표시 (24시간 이내만 표시) */}
                     {problemReports.vending_problems
-                      .filter((p) => p.status === 'completed')
+                      .filter((p) => {
+                        if (p.status !== 'completed') return false
+                        // 확인된 항목은 24시간 이내만 표시
+                        const confirmedTimestamp = confirmedProblemDates.get(p.id)
+                        if (confirmedTimestamp) {
+                          return isConfirmedWithin24Hours(confirmedTimestamp)
+                        }
+                        return confirmedProblemIds.has(p.id)
+                      })
                       .map((problem) => (
                         <div key={problem.id} className="border border-gray-300 bg-gray-50 rounded-lg p-4 opacity-60">
                           <div className="flex justify-between items-start mb-2">
@@ -2905,12 +3259,13 @@ export default function FranchiseStoresStatusPage() {
                                 className="w-full px-3 py-2 border border-gray-300 rounded-md"
                               >
                                 <option value="">선택하세요</option>
-                                <option value="제품 관련 요청">제품 관련 요청</option>
-                                <option value="자판기 관련 요청">자판기 관련 요청</option>
-                                <option value="무인 택배함 관련">무인 택배함 관련</option>
-                                <option value="매장 시설/청결 관련">매장 시설/청결 관련</option>
-                                <option value="운영 관련">운영 관련</option>
-                                <option value="기타">기타</option>
+                              <option value="제품 관련 요청">제품 관련 요청</option>
+                              <option value="자판기 관련 요청">자판기 관련 요청</option>
+                              <option value="무인 택배함 관련">무인 택배함 관련</option>
+                              <option value="매장 시설/청결 관련">매장 시설/청결 관련</option>
+                              <option value="운영 관련">운영 관련</option>
+                              <option value="신분증 및 분실물 처리">신분증 및 분실물 처리</option>
+                              <option value="기타">기타</option>
                               </select>
                             </div>
                             <div>
@@ -3296,7 +3651,7 @@ export default function FranchiseStoresStatusPage() {
                                 </div>
                                 {!isConfirmedToday && (
                                   <button
-                                    onClick={() => handleConfirmRequest(request.id)}
+                                    onClick={() => handleConfirmRequest(request.id, selectedStore?.store_id)}
                                     className="px-3 py-1 bg-blue-600 text-white text-sm rounded hover:bg-blue-700"
                                   >
                                     확인
@@ -3321,44 +3676,67 @@ export default function FranchiseStoresStatusPage() {
                   <>
                     <div className="mb-3 text-sm text-gray-600">
                       총 {requests.completed.filter((r) => {
-                        const confirmedDate = confirmedRequestDates.get(r.id)
-                        if (!confirmedDate) {
+                        const confirmedTimestamp = confirmedRequestDates.get(r.id)
+                        if (!confirmedTimestamp) {
                           return !confirmedRequestIds.has(r.id)
                         }
-                        return false // 확인된 항목은 카운트에서 제외
+                        // 24시간 이내 확인한 항목은 카운트에서 제외
+                        return !isConfirmedWithin24Hours(confirmedTimestamp)
                       }).length}건 (확인 안된 항목만 표시)
                     </div>
                     <div className="space-y-4">
                       {(() => {
                         const today = new Date().toISOString().split('T')[0]
-                        // 확인 안된 항목과 확인된 항목 분리
+                        // 확인 안된 항목과 24시간 이내 확인된 항목 분리
                         const unconfirmed = requests.completed.filter((r) => {
-                          const confirmedDate = confirmedRequestDates.get(r.id)
-                          if (!confirmedDate) {
+                          const confirmedTimestamp = confirmedRequestDates.get(r.id)
+                          if (!confirmedTimestamp) {
                             return !confirmedRequestIds.has(r.id)
                           }
-                          return false
+                          // 24시간 이내 확인한 항목은 제외
+                          return !isConfirmedWithin24Hours(confirmedTimestamp)
                         })
                         
-                        const confirmedToday = requests.completed.filter((r) => {
-                          const confirmedDate = confirmedRequestDates.get(r.id)
-                          return confirmedDate && isToday(confirmedDate)
+                        // 24시간 이내 확인된 항목 (회색으로 표시)
+                        const confirmedWithin24Hours = requests.completed.filter((r) => {
+                          const confirmedTimestamp = confirmedRequestDates.get(r.id)
+                          if (!confirmedTimestamp) return false
+                          return isConfirmedWithin24Hours(confirmedTimestamp)
                         })
                         
-                        // 확인 안된 항목 먼저 표시, 그 다음 확인된 항목 표시 (가장 아래로, 연하게)
-                        return [...unconfirmed, ...confirmedToday].map((request) => {
-                          // 처리 완료 내용 추출
-                          const hasCompletionDetails = request.completion_description || request.completion_photo_url
-                          const isViewing = viewingCompletedRequestId === request.id
+                        return [...unconfirmed, ...confirmedWithin24Hours].map((request) => {
+                          // 처리 완료 내용 추출 - 빈 문자열도 체크
+                          const hasCompletionDescription = request.completion_description && String(request.completion_description).trim().length > 0
+                          const hasCompletionPhoto = !!request.completion_photo_url
+                          const hasStorageLocation = !!(request as any).storage_location && String((request as any).storage_location).trim().length > 0
+                          const hasCompletionDetails = hasCompletionDescription || hasCompletionPhoto || hasStorageLocation
                           
-                          const confirmedDate = confirmedRequestDates.get(request.id)
-                          const isConfirmedToday = confirmedDate && isToday(confirmedDate)
+                          // 디버깅: completion_description 확인
+                          if (request.status === 'completed') {
+                            console.log('처리완료 요청 상세 (렌더링 시점):', {
+                              id: request.id,
+                              title: request.title,
+                              completion_description: request.completion_description,
+                              completion_description_type: typeof request.completion_description,
+                              completion_description_value: JSON.stringify(request.completion_description),
+                              completion_photo_url: request.completion_photo_url,
+                              storage_location: (request as any).storage_location,
+                              hasCompletionDescription,
+                              hasCompletionPhoto,
+                              hasStorageLocation,
+                              hasCompletionDetails,
+                              willShowDetails: hasCompletionDetails
+                            })
+                          }
+                          
+                          const confirmedTimestamp = confirmedRequestDates.get(request.id)
+                          const isConfirmed = confirmedTimestamp && isConfirmedWithin24Hours(confirmedTimestamp)
                           
                           return (
                             <div 
                               key={request.id} 
                               className={`border rounded-lg p-4 transition-all ${
-                                isConfirmedToday ? 'opacity-40 bg-gray-50' : ''
+                                isConfirmed ? 'opacity-40 bg-gray-50' : ''
                               }`}
                             >
                               <div className="flex justify-between items-start mb-2">
@@ -3370,7 +3748,7 @@ export default function FranchiseStoresStatusPage() {
                                         (점주 직접 요청)
                                       </span>
                                     )}
-                                    {isConfirmedToday && (
+                                    {isConfirmed && (
                                       <span className="text-xs bg-gray-200 text-gray-600 px-2 py-1 rounded">확인 완료</span>
                                     )}
                                   </div>
@@ -3385,32 +3763,24 @@ export default function FranchiseStoresStatusPage() {
                                       처리 완료: {new Date(request.updated_at).toLocaleString('ko-KR')}
                                     </p>
                                   )}
-                                  {isConfirmedToday && confirmedDate && (
+                                  {isConfirmed && confirmedTimestamp && (
                                     <p className="text-xs text-gray-400">
-                                      확인: {new Date(confirmedDate).toLocaleDateString('ko-KR')}
+                                      확인: {new Date(confirmedTimestamp).toLocaleString('ko-KR')}
                                     </p>
                                   )}
                                 </div>
-                                {!isConfirmedToday && (
+                                {!isConfirmed && (
                                   <button
-                                    onClick={() => {
-                                      if (hasCompletionDetails && !isViewing) {
-                                        // 처리 완료 내용 보기
-                                        setViewingCompletedRequestId(request.id)
-                                      } else {
-                                        // 확인 처리
-                                        handleConfirmRequest(request.id)
-                                      }
-                                    }}
+                                    onClick={() => handleConfirmRequest(request.id, selectedStore?.store_id)}
                                     className="px-3 py-1 bg-blue-600 text-white text-sm rounded hover:bg-blue-700"
                                   >
-                                    {hasCompletionDetails && !isViewing ? '확인' : '확인'}
+                                    확인
                                   </button>
                                 )}
                               </div>
 
-                              {/* 처리 완료 내용 표시 */}
-                              {isViewing && hasCompletionDetails && (
+                              {/* 처리 완료 내용 표시 - completion_description, completion_photo_url, storage_location 중 하나라도 있으면 표시 */}
+                              {hasCompletionDetails && (
                                 <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg space-y-3">
                                   {/* 완료 처리한 사람 표시 */}
                                   {(request as any).completed_by_user && (
@@ -3426,9 +3796,15 @@ export default function FranchiseStoresStatusPage() {
                                       </p>
                                     </div>
                                   )}
-                                  {request.completion_description && (
+                                  {hasStorageLocation && (
                                     <div>
-                                      <h5 className="text-sm font-semibold text-blue-800 mb-2">처리 완료 내용</h5>
+                                      <h5 className="text-sm font-semibold text-blue-800 mb-2">보관장소</h5>
+                                      <p className="text-sm text-gray-700">{(request as any).storage_location}</p>
+                                    </div>
+                                  )}
+                                  {hasCompletionDescription && (
+                                    <div>
+                                      <h5 className="text-sm font-semibold text-blue-800 mb-2">상세내용</h5>
                                       <p className="text-sm text-gray-700 whitespace-pre-wrap">{request.completion_description}</p>
                                     </div>
                                   )}
@@ -3448,28 +3824,11 @@ export default function FranchiseStoresStatusPage() {
                                       </div>
                                     </div>
                                   )}
-                                  <div className="flex gap-2">
-                                    <button
-                                      onClick={() => {
-                                        handleConfirmRequest(request.id)
-                                        setViewingCompletedRequestId(null)
-                                      }}
-                                      className="px-4 py-2 bg-blue-600 text-white text-sm rounded hover:bg-blue-700"
-                                    >
-                                      확인
-                                    </button>
-                                    <button
-                                      onClick={() => setViewingCompletedRequestId(null)}
-                                      className="px-4 py-2 bg-gray-300 text-gray-700 text-sm rounded hover:bg-gray-400"
-                                    >
-                                      닫기
-                                    </button>
-                                  </div>
                                 </div>
                               )}
 
                               {/* 원본 사진 */}
-                              {request.photo_url && !isViewing && (
+                              {request.photo_url && (
                                 <div className="mt-2">
                                   <div className="flex flex-wrap gap-2">
                                     {getPhotoUrls(request.photo_url).map((url, idx) => (
@@ -3542,6 +3901,7 @@ export default function FranchiseStoresStatusPage() {
                   <option value="무인 택배함 관련">무인 택배함 관련</option>
                   <option value="매장 시설/청결 관련">매장 시설/청결 관련</option>
                   <option value="운영 관련">운영 관련</option>
+                  <option value="신분증 및 분실물 처리">신분증 및 분실물 처리</option>
                   <option value="기타">기타</option>
                 </select>
               </div>
@@ -4628,6 +4988,7 @@ export default function FranchiseStoresStatusPage() {
                               <option value="무인 택배함 관련 요청">무인 택배함 관련 요청</option>
                               <option value="매장시설/청결 관련 요청">매장시설/청결 관련 요청</option>
                               <option value="운영 관련 요청">운영 관련 요청</option>
+                              <option value="신분증 및 분실물 처리">신분증 및 분실물 처리</option>
                               <option value="기타">기타</option>
                             </select>
                           </div>

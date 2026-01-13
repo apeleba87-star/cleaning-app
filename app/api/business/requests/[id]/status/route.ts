@@ -14,7 +14,7 @@ export async function PATCH(
     }
 
     const body = await req.json()
-    const { status, completion_photo_url, completion_description, rejection_photo_url, rejection_description } = body
+    const { status, completion_photo_url, completion_description, storage_location, rejection_photo_url, rejection_description } = body
 
     if (!status || !['received', 'in_progress', 'completed', 'rejected'].includes(status)) {
       throw new Error('Invalid status. Must be one of: received, in_progress, completed, rejected')
@@ -87,6 +87,10 @@ export async function PATCH(
     if (status === 'completed' && user.role === 'staff') {
       updateData.completion_photo_url = completion_photo_url || null
       updateData.completion_description = completion_description || null
+      // storage_location이 있으면 업데이트 (신분증 및 분실물 처리용)
+      if (storage_location !== undefined) {
+        updateData.storage_location = storage_location || null
+      }
       // completed_by 컬럼이 있는 경우에만 설정 (컬럼이 없으면 에러 발생)
       // 일단 주석 처리하고, 컬럼이 있으면 나중에 활성화
       // updateData.completed_by = user.id
@@ -94,15 +98,22 @@ export async function PATCH(
     }
 
     // 반려 처리 시 반려 정보 업데이트
-    // rejection_description 컬럼이 없을 수 있으므로, description 필드에 반려 정보 추가
-    if (status === 'rejected' && user.role === 'staff' && rejection_description) {
-      // 기존 description에 반려 정보 추가 (컬럼이 없을 경우 대비)
-      const existingDescription = requestData.description || ''
-      const rejectionInfo = `\n\n[반려 처리] ${rejection_description}`
-      updateData.description = existingDescription + rejectionInfo
+    if (status === 'rejected' && user.role === 'staff') {
+      // rejection_description 컬럼에 저장 시도
+      if (rejection_description) {
+        updateData.rejection_description = rejection_description.trim()
+        // 기존 description에 반려 정보 추가 (하위 호환성을 위해)
+        const existingDescription = requestData.description || ''
+        const rejectionInfo = `\n\n[반려 처리] ${rejection_description.trim()}`
+        updateData.description = existingDescription + rejectionInfo
+      }
+      // rejection_photo_url이 있으면 저장
+      if (rejection_photo_url) {
+        updateData.rejection_photo_url = rejection_photo_url
+      }
     }
 
-    // 먼저 기본 정보만 업데이트 (status, updated_at, description)
+    // 먼저 기본 정보만 업데이트 (status, updated_at, description, storage_location, rejection_description, rejection_photo_url, completion_description, completion_photo_url)
     const basicUpdateData: any = {
       status: updateData.status,
       updated_at: updateData.updated_at,
@@ -110,6 +121,31 @@ export async function PATCH(
     
     if (updateData.description) {
       basicUpdateData.description = updateData.description
+    }
+    
+    if (updateData.storage_location !== undefined) {
+      basicUpdateData.storage_location = updateData.storage_location
+    }
+    
+    if (updateData.rejection_description !== undefined) {
+      basicUpdateData.rejection_description = updateData.rejection_description
+    }
+    
+    if (updateData.rejection_photo_url !== undefined) {
+      basicUpdateData.rejection_photo_url = updateData.rejection_photo_url
+    }
+    
+    // completion_description과 completion_photo_url도 포함
+    // null 값도 포함시켜야 함 (빈 문자열을 null로 변환한 경우도 저장해야 함)
+    if (status === 'completed' && user.role === 'staff') {
+      // completion_description이 undefined가 아니면 (null 포함) 저장
+      if (updateData.completion_description !== undefined) {
+        basicUpdateData.completion_description = updateData.completion_description
+      }
+      // completion_photo_url이 undefined가 아니면 (null 포함) 저장
+      if (updateData.completion_photo_url !== undefined) {
+        basicUpdateData.completion_photo_url = updateData.completion_photo_url
+      }
     }
 
     let { data: updatedRequest, error } = await supabase

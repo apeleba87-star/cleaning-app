@@ -84,13 +84,14 @@ export async function GET(
     let completedRequestsWithDetails = completedRequests
     
     try {
-      // completed_by, completion_photo_url, completion_description이 있는지 확인
+      // completed_by, completion_photo_url, completion_description, storage_location이 있는지 확인
       const { data: completedDetails, error: detailsError } = await supabase
         .from('requests')
         .select(`
           id,
           completion_photo_url,
           completion_description,
+          storage_location,
           completed_at
         `)
         .eq('store_id', params.id)
@@ -105,6 +106,7 @@ export async function GET(
           ...req,
           completion_photo_url: detailsMap.get(req.id)?.completion_photo_url || null,
           completion_description: detailsMap.get(req.id)?.completion_description || null,
+          storage_location: detailsMap.get(req.id)?.storage_location || null,
           completed_at: detailsMap.get(req.id)?.completed_at || null,
           completed_by: null // 일단 null로 설정, 나중에 별도 조회
         }))
@@ -116,6 +118,7 @@ export async function GET(
         ...req,
         completion_photo_url: null,
         completion_description: null,
+        storage_location: null,
         completed_at: null,
         completed_by: null
       }))

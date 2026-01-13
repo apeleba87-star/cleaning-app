@@ -95,6 +95,7 @@ export async function GET(
           id,
           completion_photo_url,
           completion_description,
+          storage_location,
           completed_at
         `)
         .eq('store_id', params.id)
@@ -108,6 +109,7 @@ export async function GET(
           ...req,
           completion_photo_url: detailsMap.get(req.id)?.completion_photo_url || null,
           completion_description: detailsMap.get(req.id)?.completion_description || null,
+          storage_location: detailsMap.get(req.id)?.storage_location || null,
           completed_at: detailsMap.get(req.id)?.completed_at || null,
           completed_by: null
         }))
@@ -118,6 +120,7 @@ export async function GET(
         ...req,
         completion_photo_url: null,
         completion_description: null,
+        storage_location: null,
         completed_at: null,
         completed_by: null
       }))

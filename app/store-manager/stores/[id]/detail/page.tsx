@@ -1219,21 +1219,37 @@ export default function StoreDetailPage() {
                           ))}
                         </div>
                       )}
-                      {request.status === 'completed' && request.completion_photo_url && (
+                      {request.status === 'completed' && (request.completion_photo_url || request.completion_description || (request as any).storage_location) && (
                         <div className="mt-3 p-3 bg-green-50 rounded">
                           <p className="text-sm font-medium text-green-800 mb-1">처리 완료</p>
-                          {request.completion_description && (
-                            <p className="text-sm text-green-700">{request.completion_description}</p>
+                          {(request as any).storage_location && (
+                            <div className="mb-2">
+                              <p className="text-sm font-semibold text-green-800 mb-1">보관장소</p>
+                              <p className="text-sm text-green-700">{(request as any).storage_location}</p>
+                            </div>
                           )}
-                          {getPhotoUrls(request.completion_photo_url).map((url, idx) => (
-                            <img
-                              key={idx}
-                              src={url}
-                              alt={`처리 완료 사진 ${idx + 1}`}
-                              className="w-20 h-20 object-cover rounded mt-2 cursor-pointer hover:opacity-80"
-                              onClick={() => setSelectedImage(url)}
-                            />
-                          ))}
+                          {request.completion_description && (
+                            <div className="mb-2">
+                              <p className="text-sm font-semibold text-green-800 mb-1">상세내용</p>
+                              <p className="text-sm text-green-700 whitespace-pre-wrap">{request.completion_description}</p>
+                            </div>
+                          )}
+                          {request.completion_photo_url && getPhotoUrls(request.completion_photo_url).length > 0 && (
+                            <div className="mt-2">
+                              <p className="text-sm font-semibold text-green-800 mb-1">처리 완료 사진</p>
+                              <div className="flex flex-wrap gap-2">
+                                {getPhotoUrls(request.completion_photo_url).map((url, idx) => (
+                                  <img
+                                    key={idx}
+                                    src={url}
+                                    alt={`처리 완료 사진 ${idx + 1}`}
+                                    className="w-20 h-20 object-cover rounded cursor-pointer hover:opacity-80"
+                                    onClick={() => setSelectedImage(url)}
+                                  />
+                                ))}
+                              </div>
+                            </div>
+                          )}
                           {request.completed_by_user && (
                             <p className="text-xs text-green-600 mt-1">
                               처리자: {request.completed_by_user.name}

@@ -167,6 +167,7 @@ export async function GET(
         updated_at,
         completion_photo_url,
         completion_description,
+        storage_location,
         completed_by,
         completed_at,
         rejected_by,
