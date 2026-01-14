@@ -2052,6 +2052,18 @@ export default function BusinessStoresStatusPage() {
     return 'bg-yellow-100 text-yellow-700'
   }
 
+  // 관리 요일 포맷 함수 (접힌 상태용: 쉼표 없이)
+  const formatWorkDaysCompact = (workDay: string | null): string | null => {
+    if (!workDay) return null
+    return workDay.split(',').map(d => d.trim()).join(',')
+  }
+
+  // 관리 요일 포맷 함수 (펼친 상태용: 쉼표와 공백 포함)
+  const formatWorkDaysExpanded = (workDay: string | null): string | null => {
+    if (!workDay) return null
+    return workDay.split(',').map(d => d.trim()).join(', ')
+  }
+
   const getTotalNotificationCount = (status: StoreStatus): number => {
     // 확인 처리되지 않은 항목만 카운트
     // 요청: 진행중 요청 + 미확인 완료/반려 요청
@@ -2493,6 +2505,12 @@ export default function BusinessStoresStatusPage() {
                           </div>
                           <div className="flex items-center gap-4 text-sm text-gray-600">
                             {status.store_address && <span>{status.store_address}</span>}
+                            {status.work_day && (
+                              <span className="flex items-center gap-1">
+                                <span className="w-1 h-1 bg-gray-400 rounded-full"></span>
+                                {formatWorkDaysExpanded(status.work_day)}
+                              </span>
+                            )}
                             {status.staff_name && (
                               <span className="flex items-center gap-1">
                                 <span className="w-1 h-1 bg-gray-400 rounded-full"></span>
@@ -2857,6 +2875,12 @@ export default function BusinessStoresStatusPage() {
                               </span>
                             )}
                           </div>
+                          {/* 관리 요일 */}
+                          {status.work_day && (
+                            <div className="text-xs text-gray-600">
+                              {formatWorkDaysCompact(status.work_day)}
+                            </div>
+                          )}
                           {/* 출근상태 */}
                           <div className="flex items-center gap-2">
                             <span 
