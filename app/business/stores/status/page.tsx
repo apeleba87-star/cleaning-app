@@ -932,7 +932,8 @@ export default function BusinessStoresStatusPage() {
     let updatedDates: Map<string, string>
     
     setConfirmedRequestIds((prevIds) => {
-      updatedIds = new Set([...prevIds, requestId])
+      updatedIds = new Set(prevIds)
+      updatedIds.add(requestId)
       return updatedIds
     })
     setConfirmedRequestDates((prevDates) => {
