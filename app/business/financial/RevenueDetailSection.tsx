@@ -5,12 +5,14 @@ import Link from 'next/link'
 
 interface Revenue {
   id: string
-  store_id: string
+  store_id: string | null
   service_period: string
   amount: number
   due_date: string
   status: 'unpaid' | 'partial' | 'paid'
   billing_memo: string | null
+  revenue_name: string | null
+  revenue_memo: string | null
   stores: {
     id: string
     name: string
@@ -89,7 +91,10 @@ export default function RevenueDetailSection({ period, onRefresh }: RevenueDetai
   }
 
   const filteredRevenues = revenues.filter((revenue) => {
-    const matchesSearch = revenue.stores?.name.toLowerCase().includes(searchTerm.toLowerCase()) || false
+    const matchesSearch = 
+      revenue.stores?.name?.toLowerCase().includes(searchTerm.toLowerCase()) || 
+      revenue.revenue_name?.toLowerCase().includes(searchTerm.toLowerCase()) || 
+      false
     const matchesStatus = statusFilter === 'all' || revenue.status === statusFilter
     return matchesSearch && matchesStatus
   })
@@ -177,7 +182,7 @@ export default function RevenueDetailSection({ period, onRefresh }: RevenueDetai
         <div className="flex gap-4">
           <input
             type="text"
-            placeholder="매장명 검색..."
+            placeholder="매장명 또는 매출명 검색..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -262,7 +267,7 @@ export default function RevenueDetailSection({ period, onRefresh }: RevenueDetai
               paginatedRevenues.map((revenue) => (
                 <tr key={revenue.id} className="hover:bg-gray-50">
                   <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
-                    {revenue.stores?.name || '-'}
+                    {revenue.stores?.name || revenue.revenue_name || '기타 매출'}
                   </td>
                   <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
                     {formatDate(revenue.due_date)}

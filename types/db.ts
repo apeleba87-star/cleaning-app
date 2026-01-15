@@ -319,13 +319,15 @@ export type RevenueStatus = 'unpaid' | 'partial' | 'paid'
 
 export interface Revenue {
   id: string
-  store_id: string
+  store_id: string | null
   company_id: string
   service_period: string // 'YYYY-MM' 형식
   amount: number
   due_date: string
   status: RevenueStatus
   billing_memo: string | null
+  revenue_name: string | null // 신규 매출명/설명
+  revenue_memo: string | null // 신규 매출 메모
   created_at: string
   updated_at: string
   deleted_at: string | null

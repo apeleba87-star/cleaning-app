@@ -4,6 +4,19 @@ import { useState, useEffect, useCallback } from 'react'
 import { Revenue, Receipt } from '@/types/db'
 import { adjustPaymentDayToLastDay } from '@/lib/utils/date'
 
+// ESC 키로 모달 닫기 훅
+const useEscapeKey = (callback: () => void) => {
+  useEffect(() => {
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        callback()
+      }
+    }
+    document.addEventListener('keydown', handleEscape)
+    return () => document.removeEventListener('keydown', handleEscape)
+  }, [callback])
+}
+
 interface StoreReceivable {
   store_id: string
   store_name: string
@@ -59,11 +72,14 @@ export default function ReceivablesPage() {
   const revenueItemsPerPage = 30
 
   // 매출(청구) 폼 상태
+  const [revenueType, setRevenueType] = useState<'existing' | 'new'>('existing') // 'existing': 기존 매장, 'new': 신규 매출
   const [revenueStoreId, setRevenueStoreId] = useState('')
   const [revenueServicePeriod, setRevenueServicePeriod] = useState('')
   const [revenueAmount, setRevenueAmount] = useState('')
   const [revenueDueDate, setRevenueDueDate] = useState('')
   const [revenueBillingMemo, setRevenueBillingMemo] = useState('')
+  const [revenueName, setRevenueName] = useState('') // 신규 매출명/설명
+  const [revenueMemo, setRevenueMemo] = useState('') // 신규 매출 메모
   const [batchMode, setBatchMode] = useState(false)
   const [batchStores, setBatchStores] = useState<Array<{
     storeId: string
@@ -86,11 +102,11 @@ export default function ReceivablesPage() {
       return
     }
 
-    // 현재 기간에 이미 매출이 등록된 매장 ID 목록
+    // 현재 기간에 이미 매출이 등록된 매장 ID 목록 (store_id가 null이 아닌 경우만)
     const registeredStoreIds = new Set(
       revenues
-        .filter(r => r.service_period === selectedPeriod)
-        .map(r => r.store_id)
+        .filter(r => r.service_period === selectedPeriod && r.store_id)
+        .map(r => r.store_id!)
     )
 
     // 수정 모드인 경우, 현재 수정 중인 매출의 매장은 제외하지 않음
@@ -132,6 +148,30 @@ export default function ReceivablesPage() {
     // stores나 revenues가 변경되면 사용 가능한 매장 목록 업데이트
     updateAvailableStores()
   }, [revenues, stores, selectedPeriod, editingRevenue, updateAvailableStores])
+
+  // ESC 키로 모달 닫기
+  useEscapeKey(() => {
+    if (showRevenueForm) {
+      setShowRevenueForm(false)
+      resetRevenueForm()
+    }
+    if (showReceiptForm) {
+      setShowReceiptForm(false)
+      resetReceiptForm()
+    }
+  })
+
+  // 모달 열릴 때 body 스크롤 방지
+  useEffect(() => {
+    if (showRevenueForm || showReceiptForm) {
+      document.body.style.overflow = 'hidden'
+    } else {
+      document.body.style.overflow = 'unset'
+    }
+    return () => {
+      document.body.style.overflow = 'unset'
+    }
+  }, [showRevenueForm, showReceiptForm])
 
   const loadStores = async () => {
     try {
@@ -246,20 +286,58 @@ export default function ReceivablesPage() {
     setError(null)
 
     try {
-      if (!revenueStoreId || !revenueServicePeriod || !revenueAmount || !revenueDueDate) {
-        setError('모든 필수 항목을 입력해주세요.')
-        return
+      // 기존 매장 매출 등록인 경우
+      if (revenueType === 'existing') {
+        if (!revenueStoreId || !revenueServicePeriod || !revenueAmount || !revenueDueDate) {
+          setError('모든 필수 항목을 입력해주세요.')
+          return
+        }
+      } else {
+        // 신규 매출 등록인 경우
+        if (!revenueName.trim() || !revenueAmount) {
+          setError('매출명/설명과 금액을 입력해주세요.')
+          return
+        }
+        
+        // 신규 매출 등록 시 서비스 기간과 납기일 자동 설정
+        const now = new Date()
+        const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+        const today = now.toISOString().split('T')[0]
+        
+        // 서비스 기간과 납기일이 없으면 자동 설정
+        if (!revenueServicePeriod) {
+          setRevenueServicePeriod(currentMonth)
+        }
+        if (!revenueDueDate) {
+          setRevenueDueDate(today)
+        }
+      }
+
+      // 신규 매출 등록 시 서비스 기간과 납기일 자동 설정
+      let finalServicePeriod = revenueServicePeriod
+      let finalDueDate = revenueDueDate
+      
+      if (revenueType === 'new') {
+        if (!finalServicePeriod) {
+          const now = new Date()
+          finalServicePeriod = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+        }
+        if (!finalDueDate) {
+          finalDueDate = new Date().toISOString().split('T')[0]
+        }
       }
 
       const response = await fetch('/api/business/revenues', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          store_id: revenueStoreId,
-          service_period: revenueServicePeriod,
+          store_id: revenueType === 'existing' ? revenueStoreId : null,
+          service_period: finalServicePeriod,
           amount: parseFloat(revenueAmount),
-          due_date: revenueDueDate,
-          billing_memo: revenueBillingMemo.trim() || null,
+          due_date: finalDueDate,
+          billing_memo: revenueType === 'existing' ? (revenueBillingMemo.trim() || null) : null,
+          revenue_name: revenueType === 'new' ? revenueName.trim() : null,
+          revenue_memo: revenueType === 'new' ? revenueMemo.trim() || null : null,
         }),
       })
 
@@ -312,7 +390,7 @@ export default function ReceivablesPage() {
 
       if (!response.ok) {
         const errorData = await response.json()
-        throw new Error(errorData.error || '수금 등록 실패')
+        throw new Error(errorData.error || '입금 내역 등록 실패')
       }
 
       // 성공 시 폼 초기화 및 목록 새로고침
@@ -441,11 +519,14 @@ export default function ReceivablesPage() {
   }
 
   const resetRevenueForm = () => {
+    setRevenueType('existing')
     setRevenueStoreId('')
     setRevenueServicePeriod(selectedPeriod)
     setRevenueAmount('')
     setRevenueDueDate('')
     setRevenueBillingMemo('')
+    setRevenueName('')
+    setRevenueMemo('')
     setEditingRevenue(null)
     setBatchMode(false)
     setBatchStores([])
@@ -453,11 +534,14 @@ export default function ReceivablesPage() {
 
   const handleEditRevenue = (revenue: Revenue) => {
     setEditingRevenue(revenue)
-    setRevenueStoreId(revenue.store_id)
+    setRevenueType(revenue.store_id ? 'existing' : 'new')
+    setRevenueStoreId(revenue.store_id || '')
     setRevenueServicePeriod(revenue.service_period)
     setRevenueAmount(revenue.amount.toString())
     setRevenueDueDate(revenue.due_date.split('T')[0])
     setRevenueBillingMemo(revenue.billing_memo || '')
+    setRevenueName((revenue as any).revenue_name || '')
+    setRevenueMemo((revenue as any).revenue_memo || '')
     setShowRevenueForm(true)
   }
 
@@ -468,19 +552,41 @@ export default function ReceivablesPage() {
     if (!editingRevenue) return
 
     try {
-      if (!revenueServicePeriod || !revenueAmount || !revenueDueDate) {
-        setError('모든 필수 항목을 입력해주세요.')
-        return
+      // 기존 매장 매출인 경우
+      if (revenueType === 'existing') {
+        if (!revenueServicePeriod || !revenueAmount || !revenueDueDate) {
+          setError('모든 필수 항목을 입력해주세요.')
+          return
+        }
+      } else {
+        // 신규 매출인 경우
+        if (!revenueName.trim() || !revenueAmount) {
+          setError('매출명/설명과 금액을 입력해주세요.')
+          return
+        }
+        // 서비스 기간과 납기일은 기존 값 유지 (없으면 자동 설정)
+        if (!revenueServicePeriod) {
+          const now = new Date()
+          setRevenueServicePeriod(`${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`)
+        }
+        if (!revenueDueDate) {
+          setRevenueDueDate(new Date().toISOString().split('T')[0])
+        }
       }
 
       const response = await fetch(`/api/business/revenues/${editingRevenue.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          service_period: revenueServicePeriod,
+          service_period: revenueServicePeriod || (() => {
+            const now = new Date()
+            return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+          })(),
           amount: parseFloat(revenueAmount),
-          due_date: revenueDueDate,
-          billing_memo: revenueBillingMemo.trim() || null,
+          due_date: revenueDueDate || new Date().toISOString().split('T')[0],
+          billing_memo: revenueType === 'existing' ? (revenueBillingMemo.trim() || null) : null,
+          revenue_name: revenueType === 'new' ? revenueName.trim() : null,
+          revenue_memo: revenueType === 'new' ? revenueMemo.trim() || null : null,
         }),
       })
 
@@ -747,8 +853,8 @@ export default function ReceivablesPage() {
 
     switch (revenueSortColumn) {
       case 'store_name':
-        aValue = (a as any).stores?.name || ''
-        bValue = (b as any).stores?.name || ''
+        aValue = (a as any).stores?.name || (a as any).revenue_name || ''
+        bValue = (b as any).stores?.name || (b as any).revenue_name || ''
         break
       case 'service_period':
         aValue = a.service_period
@@ -868,7 +974,7 @@ export default function ReceivablesPage() {
                 className="w-full sm:w-auto px-4 py-3 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-xl hover:from-blue-700 hover:to-blue-800 shadow-lg hover:shadow-xl transition-all duration-200 font-medium text-sm sm:text-base flex items-center justify-center gap-2 min-h-[48px]"
               >
                 <span className="text-lg">+</span>
-                <span className="hidden sm:inline">신규 매출(청구) 등록</span>
+                <span className="hidden sm:inline">신규 매출 등록</span>
                 <span className="sm:hidden">매출 등록</span>
               </button>
               <span className="mt-1.5 text-xs text-gray-600 text-center max-w-[200px] sm:max-w-none">
@@ -883,36 +989,61 @@ export default function ReceivablesPage() {
                 className="w-full sm:w-auto px-4 py-3 bg-gradient-to-r from-green-600 to-green-700 text-white rounded-xl hover:from-green-700 hover:to-green-800 shadow-lg hover:shadow-xl transition-all duration-200 font-medium text-sm sm:text-base flex items-center justify-center gap-2 min-h-[48px]"
               >
                 <span className="text-lg">+</span>
-                <span>수금 등록</span>
+                <span>입금 내역 등록</span>
               </button>
               <span className="mt-1.5 text-xs text-gray-600 text-center max-w-[200px] sm:max-w-none">
-                등록된 매출에 대한<br className="hidden sm:block" />수금 내역을 등록
+                청구한 매출에 대한 고객이<br className="hidden sm:block" />실제 입금한 금액을 기록합니다
               </span>
             </div>
           </div>
         </div>
       </div>
 
-      {/* 매출(청구) 등록 폼 */}
+      {/* 매출(청구) 등록 모달 */}
       {showRevenueForm && (
-        <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-          <div className="flex justify-between items-center mb-4">
-            <h2 className="text-lg font-semibold">
-              {batchMode ? '매출(청구) 일괄 등록' : editingRevenue ? '매출(청구) 수정' : '매출(청구) 등록'}
-            </h2>
-            <button
-              onClick={() => {
-                setShowRevenueForm(false)
-                resetRevenueForm()
-              }}
-              className="text-gray-500 hover:text-gray-700"
-            >
-              ✕
-            </button>
-          </div>
+        <div 
+          className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fadeIn"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              setShowRevenueForm(false)
+              resetRevenueForm()
+            }
+          }}
+        >
+          <div 
+            className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col animate-slideUp"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* 헤더 - 그라데이션 */}
+            <div className="bg-gradient-to-r from-blue-600 to-blue-700 px-6 py-4 flex justify-between items-center">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-white/20 rounded-lg flex items-center justify-center">
+                  <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                </div>
+                <h2 className="text-xl font-bold text-white">
+                  {batchMode ? '매출 일괄 등록' : editingRevenue ? '매출 수정' : '매출 등록'}
+                </h2>
+              </div>
+              <button
+                onClick={() => {
+                  setShowRevenueForm(false)
+                  resetRevenueForm()
+                }}
+                className="text-white/80 hover:text-white hover:bg-white/20 rounded-lg p-2 transition-colors"
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            {/* 본문 - 스크롤 가능 */}
+            <div className="overflow-y-auto flex-1 p-6">
           
-          {batchMode ? (
-            <form onSubmit={handleBatchSubmit} className="space-y-4">
+              {batchMode ? (
+                <form id="batch-form" onSubmit={handleBatchSubmit} className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   서비스 기간 <span className="text-red-500">*</span>
@@ -1033,275 +1164,486 @@ export default function ReceivablesPage() {
                 </div>
               </div>
 
-              <div className="flex space-x-2">
-                <button
-                  type="submit"
-                  className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
-                >
-                  일괄 등록 ({batchStores.filter(s => s.checked).length}개)
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowRevenueForm(false)
-                    resetRevenueForm()
-                  }}
-                  className="px-4 py-2 bg-gray-300 text-gray-700 rounded-md hover:bg-gray-400"
-                >
-                  취소
-                </button>
-              </div>
             </form>
-          ) : (
-            <form onSubmit={editingRevenue ? handleUpdateRevenue : handleRevenueSubmit} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  매장 <span className="text-red-500">*</span>
-                </label>
-                <select
-                  value={revenueStoreId}
-                  onChange={(e) => {
-                    const selectedStoreId = e.target.value
-                    setRevenueStoreId(selectedStoreId)
-                    
-                    // 매장 선택 시 서비스 금액 및 납기일 자동 입력 (수정 모드가 아닐 때만)
-                    if (selectedStoreId && !editingRevenue) {
-                      const selectedStore = stores.find(s => s.id === selectedStoreId)
-                      if (selectedStore) {
-                        // 서비스 금액 자동 입력
-                        if (selectedStore.service_amount) {
-                          setRevenueAmount(selectedStore.service_amount.toString())
-                        } else {
-                          setRevenueAmount('')
-                        }
-                        
-                        // 납기일 자동 계산
-                        if (revenueServicePeriod && selectedStore.payment_day) {
-                          const calculatedDueDate = calculateDueDate(revenueServicePeriod, selectedStore.payment_day)
-                          if (calculatedDueDate) {
-                            setRevenueDueDate(calculatedDueDate)
-                          }
-                        }
-                      }
-                    } else if (!selectedStoreId) {
-                      setRevenueAmount('')
-                      setRevenueDueDate('')
-                    }
-                  }}
-                  required
-                  disabled={!!editingRevenue}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100"
-                >
-                  <option value="">매장 선택</option>
-                  {availableStores.map((store) => (
-                    <option key={store.id} value={store.id}>
-                      {store.name}
-                    </option>
-                  ))}
-                  {availableStores.length === 0 && stores.length > 0 && (
-                    <option value="" disabled>
-                      {selectedPeriod ? `${selectedPeriod} 기간에 등록 가능한 매장이 없습니다.` : '등록 가능한 매장이 없습니다.'}
-                    </option>
+              ) : (
+                <form id="revenue-form" onSubmit={editingRevenue ? handleUpdateRevenue : handleRevenueSubmit} className="space-y-5">
+                  {/* 매출 유형 선택 */}
+                  {!editingRevenue && (
+                    <div className="bg-gradient-to-r from-blue-50 to-purple-50 rounded-xl p-4 border border-blue-100">
+                      <label className="block text-sm font-semibold text-gray-700 mb-3">
+                        매출 유형 <span className="text-red-500">*</span>
+                      </label>
+                      <div className="grid grid-cols-2 gap-3">
+                        <label className={`flex items-center p-4 rounded-lg border-2 cursor-pointer transition-all ${
+                          revenueType === 'existing' 
+                            ? 'border-blue-500 bg-blue-50 shadow-md' 
+                            : 'border-gray-200 bg-white hover:border-blue-300'
+                        }`}>
+                          <input
+                            type="radio"
+                            value="existing"
+                            checked={revenueType === 'existing'}
+                            onChange={(e) => {
+                              setRevenueType('existing')
+                              setRevenueStoreId('')
+                              setRevenueName('')
+                              setRevenueMemo('')
+                            }}
+                            className="mr-3 w-5 h-5 text-blue-600 focus:ring-blue-500"
+                          />
+                          <div>
+                            <div className="font-medium text-gray-900">기존 매장 매출</div>
+                            <div className="text-xs text-gray-500 mt-1">등록된 매장의 매출 등록</div>
+                          </div>
+                        </label>
+                        <label className={`flex items-center p-4 rounded-lg border-2 cursor-pointer transition-all ${
+                          revenueType === 'new' 
+                            ? 'border-blue-500 bg-blue-50 shadow-md' 
+                            : 'border-gray-200 bg-white hover:border-blue-300'
+                        }`}>
+                          <input
+                            type="radio"
+                            value="new"
+                            checked={revenueType === 'new'}
+                            onChange={(e) => {
+                              setRevenueType('new')
+                              setRevenueStoreId('')
+                              setRevenueAmount('')
+                              setRevenueDueDate('')
+                              setRevenueServicePeriod('')
+                              setRevenueBillingMemo('')
+                            }}
+                            className="mr-3 w-5 h-5 text-blue-600 focus:ring-blue-500"
+                          />
+                          <div>
+                            <div className="font-medium text-gray-900">신규 매출</div>
+                            <div className="text-xs text-gray-500 mt-1">입금 확인 후 등록</div>
+                          </div>
+                        </label>
+                      </div>
+                    </div>
                   )}
-                </select>
-                {editingRevenue && (
-                  <p className="mt-1 text-xs text-gray-500">수정 시 매장은 변경할 수 없습니다.</p>
-                )}
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  서비스 기간 <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="month"
-                  value={revenueServicePeriod}
-                  onChange={(e) => {
-                    setRevenueServicePeriod(e.target.value)
-                    // 서비스 기간 변경 시 납기일 자동 재계산
-                    if (revenueStoreId && e.target.value) {
-                      const selectedStore = stores.find(s => s.id === revenueStoreId)
-                      if (selectedStore && selectedStore.payment_day) {
-                        const calculatedDueDate = calculateDueDate(e.target.value, selectedStore.payment_day)
-                        if (calculatedDueDate) {
-                          setRevenueDueDate(calculatedDueDate)
-                        }
-                      }
-                    }
-                  }}
-                  required
-                  className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  청구 금액 <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="number"
-                  value={revenueAmount}
-                  onChange={(e) => setRevenueAmount(e.target.value)}
-                  required
-                  min="0"
-                  step="0.01"
-                  className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder="0"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  납기일 <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="date"
-                  value={revenueDueDate}
-                  onChange={(e) => setRevenueDueDate(e.target.value)}
-                  required
-                  className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-                {revenueStoreId && stores.find(s => s.id === revenueStoreId)?.payment_day && (
-                  <p className="mt-1 text-xs text-gray-500">
-                    매장의 결제일({stores.find(s => s.id === revenueStoreId)?.payment_day}일) 기준으로 자동 계산됩니다.
-                  </p>
-                )}
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  청구 메모
-                </label>
-                <textarea
-                  value={revenueBillingMemo}
-                  onChange={(e) => setRevenueBillingMemo(e.target.value)}
-                  rows={3}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder="청구 관련 메모 (선택사항)"
-                />
-              </div>
-              <div className="flex space-x-2">
-                <button
-                  type="submit"
-                  className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
-                >
-                  {editingRevenue ? '수정' : '등록'}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowRevenueForm(false)
-                    resetRevenueForm()
-                  }}
-                  className="px-4 py-2 bg-gray-300 text-gray-700 rounded-md hover:bg-gray-400"
-                >
-                  취소
-                </button>
-              </div>
-            </form>
-          )}
+
+                  {/* 기존 매장 매출 등록 필드 */}
+                  {revenueType === 'existing' && (
+                    <div className="space-y-4">
+                      <div>
+                        <label className="block text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2">
+                          <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                          </svg>
+                          매장 <span className="text-red-500">*</span>
+                        </label>
+                        <select
+                          value={revenueStoreId}
+                          onChange={(e) => {
+                            const selectedStoreId = e.target.value
+                            setRevenueStoreId(selectedStoreId)
+                            
+                            // 매장 선택 시 서비스 금액 및 납기일 자동 입력 (수정 모드가 아닐 때만)
+                            if (selectedStoreId && !editingRevenue) {
+                              const selectedStore = stores.find(s => s.id === selectedStoreId)
+                              if (selectedStore) {
+                                // 서비스 금액 자동 입력
+                                if (selectedStore.service_amount) {
+                                  setRevenueAmount(selectedStore.service_amount.toString())
+                                } else {
+                                  setRevenueAmount('')
+                                }
+                                
+                                // 납기일 자동 계산
+                                if (revenueServicePeriod && selectedStore.payment_day) {
+                                  const calculatedDueDate = calculateDueDate(revenueServicePeriod, selectedStore.payment_day)
+                                  if (calculatedDueDate) {
+                                    setRevenueDueDate(calculatedDueDate)
+                                  }
+                                }
+                              }
+                            } else if (!selectedStoreId) {
+                              setRevenueAmount('')
+                              setRevenueDueDate('')
+                            }
+                          }}
+                          required={revenueType === 'existing'}
+                          disabled={!!editingRevenue}
+                          className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white disabled:bg-gray-50"
+                        >
+                          <option value="">매장을 선택하세요</option>
+                          {availableStores.map((store) => (
+                            <option key={store.id} value={store.id}>
+                              {store.name}
+                            </option>
+                          ))}
+                          {availableStores.length === 0 && stores.length > 0 && (
+                            <option value="" disabled>
+                              {selectedPeriod ? `${selectedPeriod} 기간에 등록 가능한 매장이 없습니다.` : '등록 가능한 매장이 없습니다.'}
+                            </option>
+                          )}
+                        </select>
+                        {editingRevenue && (
+                          <p className="mt-2 text-xs text-gray-500 flex items-center gap-1">
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                            수정 시 매장은 변경할 수 없습니다.
+                          </p>
+                        )}
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2">
+                            <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                            </svg>
+                            서비스 기간 <span className="text-red-500">*</span>
+                          </label>
+                          <input
+                            type="month"
+                            value={revenueServicePeriod}
+                            onChange={(e) => {
+                              setRevenueServicePeriod(e.target.value)
+                              // 서비스 기간 변경 시 납기일 자동 재계산
+                              if (revenueStoreId && e.target.value) {
+                                const selectedStore = stores.find(s => s.id === revenueStoreId)
+                                if (selectedStore && selectedStore.payment_day) {
+                                  const calculatedDueDate = calculateDueDate(e.target.value, selectedStore.payment_day)
+                                  if (calculatedDueDate) {
+                                    setRevenueDueDate(calculatedDueDate)
+                                  }
+                                }
+                              }
+                            }}
+                            required
+                            className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2">
+                            <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                            납기일 <span className="text-red-500">*</span>
+                          </label>
+                          <input
+                            type="date"
+                            value={revenueDueDate}
+                            onChange={(e) => setRevenueDueDate(e.target.value)}
+                            required
+                            className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white"
+                          />
+                          {revenueStoreId && stores.find(s => s.id === revenueStoreId)?.payment_day && (
+                            <p className="mt-2 text-xs text-gray-500 flex items-center gap-1">
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                              </svg>
+                              매장의 결제일({stores.find(s => s.id === revenueStoreId)?.payment_day}일) 기준으로 자동 계산됩니다.
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2">
+                          <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          </svg>
+                          청구 금액 <span className="text-red-500">*</span>
+                        </label>
+                        <input
+                          type="number"
+                          value={revenueAmount}
+                          onChange={(e) => setRevenueAmount(e.target.value)}
+                          required
+                          min="0"
+                          step="0.01"
+                          className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white text-lg font-semibold"
+                          placeholder="0"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2">
+                          <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                          </svg>
+                          청구 메모
+                        </label>
+                        <textarea
+                          value={revenueBillingMemo}
+                          onChange={(e) => setRevenueBillingMemo(e.target.value)}
+                          rows={3}
+                          className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white resize-none"
+                          placeholder="청구 관련 메모를 입력하세요 (선택사항)"
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  {/* 신규 매출 등록 필드 - 지출 등록과 비슷한 구조 */}
+                  {revenueType === 'new' && (
+                    <div className="space-y-4">
+                      <div>
+                        <label className="block text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2">
+                          <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
+                          </svg>
+                          매출명/설명 <span className="text-red-500">*</span>
+                        </label>
+                        <input
+                          type="text"
+                          value={revenueName}
+                          onChange={(e) => setRevenueName(e.target.value)}
+                          required={revenueType === 'new'}
+                          className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white"
+                          placeholder="예: 제품 판매 수익, 일회성 서비스 등"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2">
+                          <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          </svg>
+                          금액 <span className="text-red-500">*</span>
+                        </label>
+                        <input
+                          type="number"
+                          value={revenueAmount}
+                          onChange={(e) => setRevenueAmount(e.target.value)}
+                          required={revenueType === 'new'}
+                          min="0"
+                          step="0.01"
+                          className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white text-lg font-semibold"
+                          placeholder="0"
+                        />
+                        <p className="mt-2 text-xs text-gray-500 flex items-center gap-1">
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          </svg>
+                          신규 매출은 입금 확인 후 등록하므로 자동으로 완납 처리됩니다.
+                        </p>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2">
+                          <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                          </svg>
+                          메모
+                        </label>
+                        <textarea
+                          value={revenueMemo}
+                          onChange={(e) => setRevenueMemo(e.target.value)}
+                          rows={3}
+                          className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white resize-none"
+                          placeholder="신규 매출 관련 메모를 입력하세요 (선택사항)"
+                        />
+                      </div>
+                    </div>
+                  )}
+                </form>
+              )}
+            </div>
+
+            {/* 푸터 - 고정 */}
+            <div className="border-t border-gray-200 px-6 py-4 bg-gray-50 flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowRevenueForm(false)
+                  resetRevenueForm()
+                }}
+                className="px-6 py-2.5 border-2 border-gray-300 text-gray-700 rounded-xl hover:bg-gray-100 font-medium transition-all"
+              >
+                취소
+              </button>
+              <button
+                type="submit"
+                form={batchMode ? 'batch-form' : 'revenue-form'}
+                className="px-6 py-2.5 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-xl hover:from-blue-700 hover:to-blue-800 font-medium shadow-lg hover:shadow-xl transition-all flex items-center gap-2"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+                {editingRevenue ? '수정하기' : batchMode ? `일괄 등록 (${batchStores.filter(s => s.checked).length}개)` : '등록하기'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
-      {/* 수금 등록 폼 */}
+      {/* 입금 내역 등록 모달 */}
       {showReceiptForm && (
-        <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-          <div className="flex justify-between items-center mb-4">
-            <h2 className="text-lg font-semibold">수금 등록</h2>
-            <button
-              onClick={() => {
-                setShowReceiptForm(false)
-                resetReceiptForm()
-              }}
-              className="text-gray-500 hover:text-gray-700"
-            >
-              ✕
-            </button>
-          </div>
-          <form onSubmit={editingReceipt ? handleUpdateReceipt : handleReceiptSubmit} className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                매출(청구) 선택 <span className="text-red-500">*</span>
-              </label>
-              <select
-                value={receiptRevenueId}
-                onChange={(e) => {
-                  setReceiptRevenueId(e.target.value)
-                  // 선택한 매출 정보 로드
-                  const revenue = receivables
-                    .flatMap((r) => r.revenues)
-                    .find((rev) => rev.id === e.target.value)
-                  if (revenue) {
-                    // 최대 수금 가능 금액 표시를 위해 selectedRevenue에 저장
-                    // 실제로는 API에서 revenue 정보를 가져와야 하지만, 간단하게 처리
-                  }
-                }}
-                required
-                className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="">매출 선택</option>
-                {receivables.flatMap((r) =>
-                  r.revenues.map((rev) => (
-                    <option key={rev.id} value={rev.id}>
-                      {r.store_name} - {rev.service_period} ({formatCurrency(rev.amount)}, 미수: {formatCurrency(rev.unpaid)})
-                    </option>
-                  ))
-                )}
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                수금 일시
-              </label>
-              <input
-                type="datetime-local"
-                value={receiptReceivedAt}
-                onChange={(e) => setReceiptReceivedAt(e.target.value)}
-                className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                수금액 <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="number"
-                value={receiptAmount}
-                onChange={(e) => setReceiptAmount(e.target.value)}
-                required
-                min="0"
-                step="0.01"
-                className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="0"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                메모
-              </label>
-              <textarea
-                value={receiptMemo}
-                onChange={(e) => setReceiptMemo(e.target.value)}
-                rows={3}
-                className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="수금 관련 메모 (선택사항)"
-              />
-            </div>
-            <div className="flex space-x-2">
+        <div 
+          className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fadeIn"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              setShowReceiptForm(false)
+              resetReceiptForm()
+            }
+          }}
+        >
+          <div 
+            className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col animate-slideUp"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* 헤더 - 그라데이션 */}
+            <div className="bg-gradient-to-r from-green-600 to-green-700 px-6 py-4 flex justify-between items-center">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-white/20 rounded-lg flex items-center justify-center">
+                  <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                </div>
+                <h2 className="text-xl font-bold text-white">
+                  {editingReceipt ? '입금 내역 수정' : '입금 내역 등록'}
+                </h2>
+              </div>
               <button
-                type="submit"
-                className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700"
+                onClick={() => {
+                  setShowReceiptForm(false)
+                  resetReceiptForm()
+                }}
+                className="text-white/80 hover:text-white hover:bg-white/20 rounded-lg p-2 transition-colors"
               >
-                {editingReceipt ? '수정' : '등록'}
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
               </button>
+            </div>
+
+            {/* 본문 - 스크롤 가능 */}
+            <div className="overflow-y-auto flex-1 p-6">
+              <form id="receipt-form" onSubmit={editingReceipt ? handleUpdateReceipt : handleReceiptSubmit} className="space-y-5">
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2">
+                    <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                    </svg>
+                    입금받을 매출(청구) 선택 <span className="text-red-500">*</span>
+                  </label>
+                  <select
+                    value={receiptRevenueId}
+                    onChange={(e) => {
+                      setReceiptRevenueId(e.target.value)
+                      const revenue = receivables
+                        .flatMap((r) => r.revenues)
+                        .find((rev) => rev.id === e.target.value)
+                      if (revenue) {
+                        setSelectedRevenue(revenue as any)
+                      }
+                    }}
+                    required
+                    className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all bg-white"
+                  >
+                    <option value="">매출(청구)를 선택하세요</option>
+                    {receivables.flatMap((r) =>
+                      r.revenues
+                        .filter(rev => rev.unpaid > 0) // 미수금이 있는 매출만 표시
+                        .map((rev) => (
+                          <option key={rev.id} value={rev.id}>
+                            {r.store_name} - {rev.service_period} (청구: {formatCurrency(rev.amount)}, 미수: {formatCurrency(rev.unpaid)})
+                          </option>
+                        ))
+                    )}
+                  </select>
+                  {receiptRevenueId && (() => {
+                    const selectedRev = receivables
+                      .flatMap((r) => r.revenues)
+                      .find((rev) => rev.id === receiptRevenueId)
+                    return selectedRev && selectedRev.unpaid > 0 ? (
+                      <div className="mt-3 p-3 bg-green-50 border border-green-200 rounded-xl">
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm font-medium text-gray-700">최대 입금 가능 금액:</span>
+                          <span className="text-lg font-bold text-green-600">{formatCurrency(selectedRev.unpaid)}</span>
+                        </div>
+                      </div>
+                    ) : null
+                  })()}
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2">
+                    <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                    </svg>
+                    입금 일시
+                  </label>
+                  <input
+                    type="datetime-local"
+                    value={receiptReceivedAt}
+                    onChange={(e) => setReceiptReceivedAt(e.target.value)}
+                    className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all bg-white"
+                  />
+                  <p className="mt-2 text-xs text-gray-500 flex items-center gap-1">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    미입력 시 현재 시간으로 자동 설정됩니다.
+                  </p>
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2">
+                    <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    입금액 <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="number"
+                    value={receiptAmount}
+                    onChange={(e) => setReceiptAmount(e.target.value)}
+                    required
+                    min="0"
+                    step="0.01"
+                    className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all bg-white text-lg font-semibold"
+                    placeholder="0"
+                  />
+                  <p className="mt-2 text-xs text-gray-500 flex items-center gap-1">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    이번에 실제로 입금받은 금액을 입력하세요
+                  </p>
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2">
+                    <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                    </svg>
+                    메모
+                  </label>
+                  <textarea
+                    value={receiptMemo}
+                    onChange={(e) => setReceiptMemo(e.target.value)}
+                    rows={3}
+                    className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all bg-white resize-none"
+                    placeholder="입금 관련 메모를 입력하세요 (선택사항)"
+                  />
+                </div>
+              </form>
+            </div>
+
+            {/* 푸터 - 고정 */}
+            <div className="border-t border-gray-200 px-6 py-4 bg-gray-50 flex justify-end gap-3">
               <button
                 type="button"
                 onClick={() => {
                   setShowReceiptForm(false)
                   resetReceiptForm()
                 }}
-                className="px-4 py-2 bg-gray-300 text-gray-700 rounded-md hover:bg-gray-400"
+                className="px-6 py-2.5 border-2 border-gray-300 text-gray-700 rounded-xl hover:bg-gray-100 font-medium transition-all"
               >
                 취소
               </button>
+              <button
+                type="submit"
+                form="receipt-form"
+                className="px-6 py-2.5 bg-gradient-to-r from-green-600 to-green-700 text-white rounded-xl hover:from-green-700 hover:to-green-800 font-medium shadow-lg hover:shadow-xl transition-all flex items-center gap-2"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+                {editingReceipt ? '수정하기' : '등록하기'}
+              </button>
             </div>
-          </form>
+          </div>
         </div>
       )}
 
@@ -1814,7 +2156,7 @@ export default function ReceivablesPage() {
                 return (
                   <tr key={revenue.id} className={`hover:bg-gray-50 ${revenueRowBgColor}`}>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {(revenue as any).stores?.name || '-'}
+                      {(revenue as any).stores?.name || (revenue as any).revenue_name || '기타 매출'}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                       {revenue.service_period}
@@ -1941,7 +2283,7 @@ export default function ReceivablesPage() {
                   <div className="flex items-start justify-between mb-3">
                     <div className="flex-1">
                       <h3 className="font-semibold text-gray-900 mb-1">
-                        {(revenue as any).stores?.name || '-'}
+                        {(revenue as any).stores?.name || (revenue as any).revenue_name || '기타 매출'}
                       </h3>
                       <p className="text-sm text-gray-600">{revenue.service_period}</p>
                     </div>

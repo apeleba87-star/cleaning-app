@@ -23,7 +23,7 @@ export async function PATCH(
     }
 
     const body = await request.json()
-    const { service_period, amount, due_date, billing_memo } = body
+    const { service_period, amount, due_date, billing_memo, revenue_name, revenue_memo } = body
 
     const supabase = await createServerSupabaseClient()
 
@@ -50,6 +50,8 @@ export async function PATCH(
     if (amount !== undefined) updateData.amount = parseFloat(amount)
     if (due_date) updateData.due_date = due_date
     if (billing_memo !== undefined) updateData.billing_memo = billing_memo?.trim() || null
+    if (revenue_name !== undefined) updateData.revenue_name = revenue_name?.trim() || null
+    if (revenue_memo !== undefined) updateData.revenue_memo = revenue_memo?.trim() || null
 
     // RLS 우회를 위해 서비스 역할 키 사용
     const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY

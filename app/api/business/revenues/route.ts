@@ -91,10 +91,20 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json()
-    const { store_id, service_period, amount, due_date, billing_memo } = body
+    const { store_id, service_period, amount, due_date, billing_memo, revenue_name, revenue_memo } = body
 
-    if (!store_id || !service_period || !amount || !due_date) {
-      throw new Error('store_id, service_period, amount, and due_date are required')
+    // 필수 필드 검증
+    if (!service_period || !amount || !due_date) {
+      throw new Error('service_period, amount, and due_date are required')
+    }
+
+    // store_id가 있는 경우와 없는 경우(신규 매출) 모두 허용
+    // store_id가 있으면 매장 검증, 없으면 신규 매출로 처리
+    if (store_id && (!revenue_name || !revenue_name.trim())) {
+      // 기존 매장 매출 등록: store_id 필수
+    } else if (!store_id && (!revenue_name || !revenue_name.trim())) {
+      // 신규 매출 등록: revenue_name 필수
+      throw new Error('revenue_name is required for new revenue (without store)')
     }
 
     // service_period 형식 검증 (YYYY-MM)
@@ -119,33 +129,46 @@ export async function POST(request: NextRequest) {
 
     const supabase = await createServerSupabaseClient()
 
-    // 매장이 회사에 속해있는지 확인 및 payment_method 조회
-    const { data: store } = await supabase
-      .from('stores')
-      .select('id, company_id, payment_method')
-      .eq('id', store_id)
-      .eq('company_id', user.company_id)
-      .is('deleted_at', null)
-      .single()
+    let store = null
+    let isAutoPayment = false
+    const isNewRevenue = !store_id // 신규 매출 여부
 
-    if (!store) {
-      throw new ForbiddenError('Store not found or access denied')
+    // store_id가 있는 경우에만 매장 검증
+    if (store_id) {
+      const { data: storeData } = await supabase
+        .from('stores')
+        .select('id, company_id, payment_method')
+        .eq('id', store_id)
+        .eq('company_id', user.company_id)
+        .is('deleted_at', null)
+        .single()
+
+      if (!storeData) {
+        throw new ForbiddenError('Store not found or access denied')
+      }
+
+      store = storeData
+      isAutoPayment = store.payment_method === 'auto_payment'
     }
 
     const revenueAmount = parseFloat(amount)
-    const isAutoPayment = store.payment_method === 'auto_payment'
+
+    // status 결정: 신규 매출은 무조건 완납, 기존 매장은 자동결제면 완납, 아니면 미수금
+    const revenueStatus = isNewRevenue ? 'paid' : (isAutoPayment ? 'paid' : 'unpaid')
 
     // 매출(청구) 생성 - 서비스 역할 키 사용
     const { data: revenue, error } = await adminSupabase
       .from('revenues')
       .insert({
-        store_id,
+        store_id: store_id || null,
         company_id: user.company_id,
         service_period,
         amount: revenueAmount,
         due_date,
         billing_memo: billing_memo?.trim() || null,
-        status: isAutoPayment ? 'paid' : 'unpaid', // 자동결제면 완납, 아니면 미수금
+        revenue_name: revenue_name?.trim() || null,
+        revenue_memo: revenue_memo?.trim() || null,
+        status: revenueStatus,
       })
       .select(`
         *,
@@ -160,8 +183,9 @@ export async function POST(request: NextRequest) {
       throw new Error(`Failed to create revenue: ${error.message}`)
     }
 
-    // 자동결제인 경우 수금도 자동 등록 - 서비스 역할 키 사용
-    if (isAutoPayment && revenue) {
+    // 완납 상태인 경우 수금도 자동 등록 (신규 매출 또는 자동결제)
+    if (revenueStatus === 'paid' && revenue) {
+      const receiptMemo = isNewRevenue ? '신규 매출 (입금 확인 완료)' : '자동결제'
       const { error: receiptError } = await adminSupabase
         .from('receipts')
         .insert({
@@ -169,7 +193,7 @@ export async function POST(request: NextRequest) {
           company_id: user.company_id,
           received_at: new Date().toISOString(),
           amount: revenueAmount,
-          memo: '자동결제',
+          memo: receiptMemo,
         })
 
       if (receiptError) {
