@@ -72,7 +72,7 @@ export async function GET(request: NextRequest) {
     const now = new Date()
     const todayDateUTC = now.toISOString().split('T')[0]
     
-    // 한국 시간대 계산 (안전한 방식 - toLocaleString 사용 안 함)
+    // 한국 시간대 객체 생성 (요일 확인용) - UTC offset 계산 방식 (서버리스 환경 안정성)
     const kstOffset = 9 * 60 // 분 단위
     const utc = now.getTime() + (now.getTimezoneOffset() * 60 * 1000)
     const koreaTime = new Date(utc + (kstOffset * 60 * 1000))
