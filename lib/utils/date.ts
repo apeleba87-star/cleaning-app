@@ -114,12 +114,13 @@ export function isWithinManagementPeriod(
 
 /**
  * 야간매장의 관리일 범위에 해당하는 날짜(work_date) 계산
- * 제안 방식: 09:00 경계만 확인
- * 다음날 09:00 이전 출근 = 전날 관리일에 속함 (예: 2일 08:00 출근 → work_date = 1일)
+ * work_end_hour 기준으로 전날/당일 판단
+ * work_end_hour 이전 출근 = 전날 관리일에 속함 (예: 2일 07:00 출근 → work_date = 1일)
+ * work_start_hour 이후 출근 = 당일 관리일에 속함 (예: 1일 18:00 출근 → work_date = 1일)
  * 
  * @param isNightShift 야간매장 여부
- * @param workStartHour 근무 시작 시간 (0-23, 제안 방식에서는 사용하지 않음 - 하위 호환성 유지)
- * @param workEndHour 근무 종료 시간 (0-23, 제안 방식에서는 사용하지 않음 - 하위 호환성 유지)
+ * @param workStartHour 근무 시작 시간 (0-23)
+ * @param workEndHour 근무 종료 시간 (0-23, 다음날 의미)
  * @param currentHour 현재 시간 (0-23, KST)
  * @returns work_date (YYYY-MM-DD 형식) - 관리일에 속하는 날짜
  */
@@ -133,27 +134,31 @@ export function calculateWorkDateForNightShift(
     return getTodayDateKST()
   }
   
-  // 제안 방식: 09:00 경계만 확인
-  // 다음날 09:00 이전 출근 = 전날 관리일
-  // 예: 2일 08:00 출근 → work_date = 1일
-  // 예: 2일 09:00 출근 → work_date = 2일
-  if (currentHour < 9) {
-    // 다음날 09:00 이전 = 전날 관리일
+  const endHour = workEndHour ?? 8  // 기본값 8시 (하위 호환성)
+  const startHour = workStartHour ?? 18  // 기본값 18시 (하위 호환성)
+  
+  // work_end_hour 이전에 시작 → 전날 관리일
+  if (currentHour < endHour) {
     return getYesterdayDateKST()
+  } else if (currentHour >= startHour) {
+    // work_start_hour 이후에 시작 → 당일 관리일
+    return getTodayDateKST()
   } else {
-    // 당일 관리일
+    // 금지 시간대 (work_end_hour ~ work_start_hour 사이)
+    // 하지만 이미 출근 가능한 시간대에서 호출되므로, 당일로 처리
+    // (실제로는 UI에서 금지 시간대를 막아야 함)
     return getTodayDateKST()
   }
 }
 
 /**
  * 야간매장의 관리일 여부 판단 (요일 기준)
- * 제안 방식: 09:00 경계만 확인하여 관리일에 속하는 날짜 결정
+ * work_end_hour 기준으로 관리일에 속하는 날짜 결정
  * 
  * @param managementDays 관리 요일 문자열 (예: "월,수,금")
  * @param isNightShift 야간매장 여부
- * @param workStartHour 근무 시작 시간 (제안 방식에서는 사용하지 않음 - 하위 호환성 유지)
- * @param workEndHour 근무 종료 시간 (제안 방식에서는 사용하지 않음 - 하위 호환성 유지)
+ * @param workStartHour 근무 시작 시간 (0-23)
+ * @param workEndHour 근무 종료 시간 (0-23, 다음날 의미)
  * @param checkDate 확인할 날짜 (YYYY-MM-DD, 없으면 현재 시간 기준)
  * @returns 관리일 여부
  */
@@ -176,15 +181,16 @@ export function isManagementDay(
   if (checkDate) {
     dateToCheck = new Date(checkDate + 'T00:00:00+09:00')
   } else {
-    // 제안 방식: 09:00 경계만 확인
     if (isNightShift) {
       const currentHour = kst.getHours()
-      if (currentHour < 9) {
-        // 다음날 09:00 이전 = 전날 관리일 확인
+      const endHour = workEndHour ?? 8  // 기본값 8시 (하위 호환성)
+      
+      // work_end_hour 이전 = 전날 관리일 확인
+      if (currentHour < endHour) {
         dateToCheck = new Date(kst)
         dateToCheck.setDate(dateToCheck.getDate() - 1)
       } else {
-        // 당일 관리일 확인
+        // work_start_hour 이후 = 당일 관리일 확인
         dateToCheck = kst
       }
     } else {
@@ -204,13 +210,14 @@ export function isManagementDay(
 
 /**
  * 야간 매장의 경우 출근 시간에 따라 work_date를 결정합니다.
- * 야간 매장: 09:00 이전 출근 시 전날 관리일로 속함 (예: 2일 08:00 출근 → work_date = 1일)
+ * 야간 매장: work_end_hour 이전 출근 시 전날 관리일로 속함 (예: 2일 07:00 출근 → work_date = 1일)
+ * 야간 매장: work_start_hour 이후 출근 시 당일 관리일로 속함 (예: 1일 18:00 출근 → work_date = 1일)
  * 야간 매장이 아닌 경우 항상 오늘 날짜를 반환합니다.
  * 
  * @param isNightShift 야간 매장 여부
- * @param workStartHour 근무 시작 시간 (0-23, 제안 방식에서는 사용하지 않음 - 하위 호환성 유지)
+ * @param workStartHour 근무 시작 시간 (0-23)
  * @param currentHour 현재 시간 (0-23, KST)
- * @param workEndHour 근무 종료 시간 (0-23, 제안 방식에서는 사용하지 않음 - 하위 호환성 유지)
+ * @param workEndHour 근무 종료 시간 (0-23, 다음날 의미)
  * @returns work_date (YYYY-MM-DD 형식)
  */
 export function calculateWorkDate(
@@ -224,15 +231,19 @@ export function calculateWorkDate(
     return getTodayDateKST()
   }
 
-  // 제안 방식: 09:00 경계만 확인
-  // 다음날 09:00 이전 출근 = 전날 관리일에 속함
-  // 예: 2일 08:00 출근 → work_date = 1일
-  // 예: 2일 09:00 출근 → work_date = 2일
-  if (currentHour < 9) {
-    // 다음날 09:00 이전 = 전날 관리일
+  const endHour = workEndHour ?? 8  // 기본값 8시 (하위 호환성)
+  const startHour = workStartHour ?? 18  // 기본값 18시 (하위 호환성)
+  
+  // work_end_hour 이전에 시작 → 전날 관리일
+  if (currentHour < endHour) {
     return getYesterdayDateKST()
+  } else if (currentHour >= startHour) {
+    // work_start_hour 이후에 시작 → 당일 관리일
+    return getTodayDateKST()
   } else {
-    // 당일 관리일
+    // 금지 시간대 (work_end_hour ~ work_start_hour 사이)
+    // 하지만 이미 출근 가능한 시간대에서 호출되므로, 당일로 처리
+    // (실제로는 UI에서 금지 시간대를 막아야 함)
     return getTodayDateKST()
   }
 }
