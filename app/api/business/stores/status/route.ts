@@ -125,19 +125,16 @@ export async function GET(request: NextRequest) {
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
     thirtyDaysAgo.setHours(0, 0, 0, 0)
 
+    // product_photos 쿼리 최적화: 7일 범위로 제한 (JSON 파싱 에러 방지)
+    const sevenDaysAgo = new Date()
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7)
+    sevenDaysAgo.setHours(0, 0, 0, 0)
+
     // 모든 배정된 직원 ID 수집
     const allAssignedUserIds = Array.from(new Set(Array.from(assignsByStore.values()).flat()))
 
-    const [
-      { data: allProblemReports, error: allProblemReportsError },
-      { data: allLostItems, error: allLostItemsError },
-      { data: allRequests, error: allRequestsError },
-      { data: allSupplyRequests, error: allSupplyRequestsError },
-      { data: allChecklists, error: allChecklistsError },
-      { data: allCleaningPhotos, error: allCleaningPhotosError },
-      { data: allAttendances, error: allAttendancesError },
-      { data: allProductPhotos, error: allProductPhotosError },
-    ] = await Promise.all([
+    // Promise.allSettled 사용: 일부 쿼리 실패해도 나머지 데이터 반환 보장
+    const results = await Promise.allSettled([
       supabase
         .from('problem_reports')
         .select('id, store_id, category, status, title, created_at, business_confirmed_at')
@@ -181,24 +178,45 @@ export async function GET(request: NextRequest) {
         .gte('clock_in_at', todayStart.toISOString())
         .lte('clock_in_at', todayEnd.toISOString())
         .order('clock_in_at', { ascending: false }),
-      // 모든 매장의 제품 입고/보관 사진을 한 번에 조회
+      // 모든 매장의 제품 입고/보관 사진을 한 번에 조회 (7일 범위로 최적화)
       supabase
         .from('product_photos')
         .select('id, store_id, type, photo_urls, created_at')
         .in('store_id', storeIds)
         .in('type', ['receipt', 'storage'])
-        .gte('created_at', todayStart.toISOString())
+        .gte('created_at', sevenDaysAgo.toISOString())
         .lte('created_at', todayEnd.toISOString()),
     ])
 
-    // 출근 기록 에러 처리
-    if (allAttendancesError) {
-      console.error('Error fetching all attendances:', allAttendancesError)
+    // Promise.allSettled 결과 처리: 에러가 있어도 데이터 추출
+    const extractData = <T>(result: PromiseSettledResult<{ data: T | null; error: any }>, name: string): { data: T | null; error: any } => {
+      if (result.status === 'fulfilled') {
+        if (result.value.error) {
+          console.error(`Error fetching ${name}:`, result.value.error)
+        }
+        return result.value
+      } else {
+        console.error(`Promise rejected for ${name}:`, result.reason)
+        return { data: null, error: result.reason }
+      }
     }
 
-    // 제품 사진 에러 처리
+    const { data: allProblemReports, error: allProblemReportsError } = extractData(results[0], 'problem_reports')
+    const { data: allLostItems, error: allLostItemsError } = extractData(results[1], 'lost_items')
+    const { data: allRequests, error: allRequestsError } = extractData(results[2], 'requests')
+    const { data: allSupplyRequests, error: allSupplyRequestsError } = extractData(results[3], 'supply_requests')
+    const { data: allChecklists, error: allChecklistsError } = extractData(results[4], 'checklist')
+    const { data: allCleaningPhotos, error: allCleaningPhotosError } = extractData(results[5], 'cleaning_photos')
+    const { data: allAttendances, error: allAttendancesError } = extractData(results[6], 'attendance')
+    const { data: allProductPhotos, error: allProductPhotosError } = extractData(results[7], 'product_photos')
+
+    // product_photos 에러 특별 처리 (큰 JSON 파싱 에러 가능성)
     if (allProductPhotosError) {
       console.error('Error fetching all product photos:', allProductPhotosError)
+      // JSON 파싱 에러인 경우 상세 로깅
+      if (allProductPhotosError.message?.includes('SyntaxError') || allProductPhotosError.message?.includes('JSON')) {
+        console.error('Product photos JSON parsing error detected. This may indicate very large response data.')
+      }
     }
 
     // 모든 출근한 직원의 ID 수집
