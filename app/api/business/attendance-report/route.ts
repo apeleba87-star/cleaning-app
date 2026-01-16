@@ -251,11 +251,14 @@ export async function GET(request: NextRequest) {
 
     const today = getTodayDateKST()
     const regularStoreIds: string[] = []
-    const nightStoreIds: string[] = []
+    const nightStores: Array<{ id: string; work_end_hour: number }> = []
     
     workDayStores.forEach(store => {
       if (store.is_night_shift) {
-        nightStoreIds.push(store.id)
+        nightStores.push({
+          id: store.id,
+          work_end_hour: store.work_end_hour ?? 8  // 기본값 8시 (하위 호환성)
+        })
       } else {
         regularStoreIds.push(store.id)
       }
@@ -282,29 +285,37 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // 야간 매장: 제안 방식 - work_date = yesterday 기준으로 조회
-    // 1일 00:00 ~ 2일 09:00 출근 → work_date = 1일 (yesterday)
+    // 야간 매장: 매장별 work_end_hour 기준으로 조회
+    // 각 매장의 work_end_hour 이전 출근 기록 = yesterday 관리일
     let nightAttendances: any[] = []
-    if (nightStoreIds.length > 0 && !isMorningReport) {
+    if (nightStores.length > 0 && !isMorningReport) {
       try {
-        // 제안 방식: work_date = yesterday인 출근 기록만 조회
-        // 단, clock_in_at 범위 확인 (yesterday 00:00 ~ today 09:00)
-        const yesterdayStartTime = new Date(`${yesterday}T00:00:00+09:00`).toISOString()
-        const todayEndTime = new Date(`${today}T09:00:00+09:00`).toISOString()
+        // 각 야간 매장별로 work_end_hour 기준으로 조회
+        const nightAttendancesPromises = nightStores.map(async (nightStore) => {
+          const endHour = nightStore.work_end_hour
+          
+          // yesterday 00:00 ~ today {endHour}:00 범위로 조회
+          const yesterdayStartTime = new Date(`${yesterday}T00:00:00+09:00`).toISOString()
+          const todayEndTime = new Date(`${today}T${String(endHour).padStart(2, '0')}:00:00+09:00`).toISOString()
 
-        const { data, error } = await supabase
-          .from('attendance')
-          .select('id, store_id, user_id, clock_in_at, work_date')
-          .in('store_id', nightStoreIds)
-          .eq('work_date', yesterday) // work_date = yesterday만 조회
-          .gte('clock_in_at', yesterdayStartTime)
-          .lte('clock_in_at', todayEndTime)
+          const { data, error } = await supabase
+            .from('attendance')
+            .select('id, store_id, user_id, clock_in_at, work_date')
+            .eq('store_id', nightStore.id)
+            .eq('work_date', yesterday) // work_date = yesterday만 조회
+            .gte('clock_in_at', yesterdayStartTime)
+            .lte('clock_in_at', todayEndTime)
 
-        if (error) {
-          console.error('Error fetching night store attendances:', error)
-        }
+          if (error) {
+            console.error(`Error fetching night store attendance for ${nightStore.id}:`, error)
+            return []
+          }
 
-        nightAttendances = data || []
+          return data || []
+        })
+
+        const nightAttendancesResults = await Promise.all(nightAttendancesPromises)
+        nightAttendances = nightAttendancesResults.flat()
       } catch (error) {
         console.error('Error fetching night store attendances:', error)
         // 에러가 발생해도 계속 진행 (빈 배열로 처리)

@@ -135,10 +135,12 @@ export default function StoreSelector({ selectedStoreId: propSelectedStoreId, on
       let isManagementDay = false
       
       if (store.is_night_shift) {
-        // 제안 방식: 09:00 경계만 확인하여 관리일에 속하는 날짜 결정
+        // work_end_hour 기준으로 관리일에 속하는 날짜 결정
         let dateToCheck: Date
-        if (currentHour < 9) {
-          // 다음날 09:00 이전 = 전날 관리일 확인
+        const endHour = store.work_end_hour ?? 8  // 기본값 8시 (하위 호환성)
+        
+        if (currentHour < endHour) {
+          // work_end_hour 이전 = 전날 관리일 확인
           const yesterday = new Date()
           const kstOffset = 9 * 60
           const utc = yesterday.getTime() + (yesterday.getTimezoneOffset() * 60 * 1000)
@@ -146,7 +148,7 @@ export default function StoreSelector({ selectedStoreId: propSelectedStoreId, on
           kst.setDate(kst.getDate() - 1)
           dateToCheck = kst
         } else {
-          // 당일 관리일 확인
+          // work_start_hour 이후 = 당일 관리일 확인
           const today = new Date()
           const kstOffset = 9 * 60
           const utc = today.getTime() + (today.getTimezoneOffset() * 60 * 1000)
@@ -155,7 +157,7 @@ export default function StoreSelector({ selectedStoreId: propSelectedStoreId, on
         
         checkDayName = dayNames[dateToCheck.getDay()]
         const workDate = dateToCheck.toISOString().split('T')[0]
-        console.log(`🌙 야간 매장 ${store.name}: 09:00 경계 확인 → work_date(${workDate}, ${checkDayName}요일)`)
+        console.log(`🌙 야간 매장 ${store.name}: work_end_hour(${endHour}) 기준 → work_date(${workDate}, ${checkDayName}요일)`)
       }
       
       // management_days에서 확인할 요일이 포함되어 있는지 확인

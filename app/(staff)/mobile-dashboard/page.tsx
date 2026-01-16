@@ -149,13 +149,14 @@ export default function MobileDashboardPage() {
     }
     
     // 출근 기록이 없는 경우
-    if (isNightShift) {
-      // 제안 방식: 09:00 경계만 확인하여 관리일에 속하는 날짜 결정
+    if (isNightShift && workEndHour !== null && workEndHour !== undefined) {
+      // work_end_hour 기준으로 관리일에 속하는 날짜 결정
       const currentHour = getCurrentHourKST()
+      const endHour = workEndHour ?? 8  // 기본값 8시 (하위 호환성)
       let dateToCheck: Date
       
-      if (currentHour < 9) {
-        // 다음날 09:00 이전 = 전날 관리일 확인
+      if (currentHour < endHour) {
+        // work_end_hour 이전 = 전날 관리일 확인
         const yesterday = new Date()
         const kstOffset = 9 * 60
         const utc = yesterday.getTime() + (yesterday.getTimezoneOffset() * 60 * 1000)
@@ -163,7 +164,7 @@ export default function MobileDashboardPage() {
         kst.setDate(kst.getDate() - 1)
         dateToCheck = kst
       } else {
-        // 당일 관리일 확인
+        // work_start_hour 이후 = 당일 관리일 확인
         const today = new Date()
         const kstOffset = 9 * 60
         const utc = today.getTime() + (today.getTimezoneOffset() * 60 * 1000)
@@ -393,12 +394,13 @@ export default function MobileDashboardPage() {
             .eq('user_id', session.user.id)
           .eq('work_date', today)
 
-        // 어제 날짜의 출근 기록도 조회 (날짜 경계를 넘는 야간 근무 고려, 퇴근 완료 포함)
+        // 어제 날짜의 미퇴근 기록만 조회 (날짜 경계를 넘는 야간 근무 고려)
         const { data: yesterdayAttendance, error: yesterdayAttendanceError } = await supabase
             .from('attendance')
             .select('store_id, clock_out_at, work_date, attendance_type')
             .eq('user_id', session.user.id)
           .eq('work_date', yesterday)
+          .is('clock_out_at', null) // 미퇴근 기록만
           .order('clock_in_at', { ascending: false })
           .limit(10) // 최근 10개만 조회 (성능 최적화)
 
@@ -421,18 +423,14 @@ export default function MobileDashboardPage() {
           })
         }
         
-        // 어제 날짜의 출근 기록 처리 (오늘 출근 기록이 없는 경우에만)
+        // 어제 날짜의 미퇴근 기록 처리 (오늘 출근 기록이 없는 경우에만)
+        // 어제 완료된 기록은 오늘 상태에 표시하지 않음 (이미 미퇴근 기록만 조회하므로 clock_out_at은 항상 NULL)
         if (yesterdayAttendance) {
           yesterdayAttendance.forEach((attendance: any) => {
             // 오늘 날짜로 이미 처리된 매장이 아니면 처리
             if (!attendanceMap.has(attendance.store_id)) {
-              if (attendance.clock_out_at) {
-                // 퇴근 완료된 기록
-                attendanceMap.set(attendance.store_id, { status: 'clocked_out', workDate: attendance.work_date, attendanceType: attendance.attendance_type || null })
-              } else {
-                // 미퇴근 기록
-                attendanceMap.set(attendance.store_id, { status: 'clocked_in', workDate: attendance.work_date, attendanceType: attendance.attendance_type || null })
-              }
+              // 미퇴근 기록만 조회했으므로 항상 "관리중" 상태
+              attendanceMap.set(attendance.store_id, { status: 'clocked_in', workDate: attendance.work_date, attendanceType: attendance.attendance_type || null })
             }
           })
         }
@@ -1495,23 +1493,20 @@ export default function MobileDashboardPage() {
                       return
                     }
                     
-                    // 야간매장이고 work_start_hour 이전인지 확인
-                    if (store.is_night_shift && 
-                        store.work_start_hour !== null && 
-                        store.work_start_hour !== undefined) {
+                    // 야간매장 금지 시간대 체크 (work_end_hour ~ work_start_hour 사이)
+                    if (store.is_night_shift) {
                       const currentHour = getCurrentHourKST()
-                      if (currentHour < store.work_start_hour) {
-                        // 확인 모달 표시
-                        setShowNightShiftConfirmModal({
-                          storeId: store.id,
-                          storeName: store.name,
-                          workStartHour: store.work_start_hour
-                        })
+                      const endHour = store.work_end_hour ?? 8  // 기본값 8시
+                      const startHour = store.work_start_hour ?? 18  // 기본값 18시
+                      
+                      // 금지 시간대: work_end_hour <= currentHour < work_start_hour
+                      if (currentHour >= endHour && currentHour < startHour) {
+                        alert(`야간 관리 시간이 아닙니다.\n관리 시작 시간: ${startHour < 12 ? `오전 ${startHour === 0 ? 12 : startHour}시` : `오후 ${startHour === 12 ? 12 : startHour - 12}시`}`)
                         return
                       }
                     }
                     
-                    // 일반 매장이거나 관리 시작 시간 이후면 바로 출근 처리
+                    // 일반 매장이거나 야간 관리 시간이면 바로 출근 처리
                     await performClockIn(store)
                   }
 
