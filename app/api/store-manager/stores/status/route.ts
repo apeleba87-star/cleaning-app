@@ -98,8 +98,14 @@ export async function GET(request: NextRequest) {
 
     // 오늘 날짜 (한국 시간 기준)
     const todayDateKST = getTodayDateKST()
-    const todayDateUTC = new Date().toISOString().split('T')[0]
-    const koreaTime = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Seoul' }))
+    const now = new Date()
+    const todayDateUTC = now.toISOString().split('T')[0]
+    
+    // 한국 시간대 계산 (안전한 방식 - toLocaleString 사용 안 함)
+    const kstOffset = 9 * 60 // 분 단위
+    const utc = now.getTime() + (now.getTimezoneOffset() * 60 * 1000)
+    const koreaTime = new Date(utc + (kstOffset * 60 * 1000))
+    
     const todayStartKST = new Date(koreaTime)
     todayStartKST.setHours(0, 0, 0, 0)
     const todayEndKST = new Date(koreaTime)

@@ -643,8 +643,10 @@ export async function GET(request: NextRequest) {
 
     // 월별 성장률 계산 (수금액 기준)
     const nowForGrowth = new Date()
-    // 한국 시간대로 현재 날짜 가져오기
-    const koreaTimeForGrowth = new Date(nowForGrowth.toLocaleString('en-US', { timeZone: 'Asia/Seoul' }))
+    // 한국 시간대 계산 (안전한 방식 - toLocaleString 사용 안 함)
+    const kstOffset = 9 * 60 // 분 단위
+    const utcForGrowth = nowForGrowth.getTime() + (nowForGrowth.getTimezoneOffset() * 60 * 1000)
+    const koreaTimeForGrowth = new Date(utcForGrowth + (kstOffset * 60 * 1000))
     
     // 이번 달 시작일/종료일 (KST 기준)
     const growthCurrentYear = koreaTimeForGrowth.getFullYear()

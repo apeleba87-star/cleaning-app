@@ -34,9 +34,13 @@ export async function GET(request: NextRequest) {
           persistSession: false,
         },
       })
-      console.log('서비스 역할 키를 사용하여 attendance 테이블 조회 (RLS 우회)')
+      if (process.env.NODE_ENV === 'development') {
+        console.log('서비스 역할 키를 사용하여 attendance 테이블 조회 (RLS 우회)')
+      }
     } else {
-      console.warn('서비스 역할 키가 설정되지 않음. RLS 정책에 따라 attendance 조회가 실패할 수 있습니다.')
+      if (process.env.NODE_ENV === 'development') {
+        console.warn('서비스 역할 키가 설정되지 않음. RLS 정책에 따라 attendance 조회가 실패할 수 있습니다.')
+      }
     }
     
     // attendance 테이블 조회용 클라이언트 (서비스 역할 키 우선 사용)
@@ -68,8 +72,10 @@ export async function GET(request: NextRequest) {
     const now = new Date()
     const todayDateUTC = now.toISOString().split('T')[0]
     
-    // 한국 시간대 객체 생성 (요일 확인용)
-    const koreaTime = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Seoul' }))
+    // 한국 시간대 계산 (안전한 방식 - toLocaleString 사용 안 함)
+    const kstOffset = 9 * 60 // 분 단위
+    const utc = now.getTime() + (now.getTimezoneOffset() * 60 * 1000)
+    const koreaTime = new Date(utc + (kstOffset * 60 * 1000))
     
     // 한국 시간 기준으로 오늘 00:00:00 ~ 23:59:59 (UTC로 변환)
     const todayStartKST = new Date(koreaTime)
@@ -85,10 +91,13 @@ export async function GET(request: NextRequest) {
     const dayNames = ['일', '월', '화', '수', '목', '금', '토']
     const todayDayName = dayNames[koreaTime.getDay()]
     
-    console.log(`=== Store Status API 호출 ===`)
-    console.log(`오늘 날짜 (KST): ${todayDateKST}`)
-    console.log(`오늘 날짜 (UTC): ${todayDateUTC}`)
-    console.log(`오늘 요일: ${todayDayName}`)
+    // 개발 환경에서만 로그 출력
+    if (process.env.NODE_ENV === 'development') {
+      console.log(`=== Store Status API 호출 ===`)
+      console.log(`오늘 날짜 (KST): ${todayDateKST}`)
+      console.log(`오늘 날짜 (UTC): ${todayDateUTC}`)
+      console.log(`오늘 요일: ${todayDayName}`)
+    }
 
     // 배치 쿼리 최적화: 모든 매장의 store_assign을 한 번에 조회
     const storeIds = stores.map(s => s.id)
@@ -98,6 +107,7 @@ export async function GET(request: NextRequest) {
       .in('store_id', storeIds)
 
     if (allStoreAssignsError) {
+      // 에러는 항상 로깅
       console.error('Error fetching all store assigns:', allStoreAssignsError)
     }
 
@@ -162,12 +172,14 @@ export async function GET(request: NextRequest) {
         .neq('area_category', 'inventory')
         .gte('created_at', todayStart.toISOString())
         .lte('created_at', todayEnd.toISOString()),
-      // 모든 매장의 출근 기록을 한 번에 조회
+      // 모든 매장의 출근 기록을 한 번에 조회 (최적화: OR 조건 단순화)
+      // work_date는 인덱스 활용을 위해 별도 쿼리로 분리하지 않고, clock_in_at 범위로 우선 조회
       attendanceClient
         .from('attendance')
         .select('store_id, user_id, work_date, clock_in_at, clock_out_at')
         .in('store_id', storeIds)
-        .or(`work_date.eq.${todayDateKST},work_date.eq.${todayDateUTC},clock_in_at.gte.${todayStart.toISOString()},clock_in_at.lte.${todayEnd.toISOString()}`)
+        .gte('clock_in_at', todayStart.toISOString())
+        .lte('clock_in_at', todayEnd.toISOString())
         .order('clock_in_at', { ascending: false }),
       // 모든 매장의 제품 입고/보관 사진을 한 번에 조회
       supabase
@@ -361,26 +373,25 @@ export async function GET(request: NextRequest) {
         const problemReports = problemReportsByStore.get(store.id) || []
         const lostItems = lostItemsByStore.get(store.id) || []
         
-        console.log(`Lost items query for ${store.name}: found ${lostItems?.length || 0} items`)
-
-        // 디버깅: 실제 저장된 category 값 확인
-        console.log(`\n=== Store ${store.id} (${store.name}) ===`)
-        console.log(`Total problem reports found: ${problemReports?.length || 0}`)
-        if (problemReports && problemReports.length > 0) {
-          // 모든 고유한 category 값 확인
-          const categorySet = new Set<string>()
-          problemReports.forEach((p: any) => {
-            if (p.category) categorySet.add(p.category)
-          })
-          const uniqueCategories = Array.from(categorySet)
-          console.log(`Unique category values in DB:`, uniqueCategories)
-          
-          console.log('All problem reports with raw category values:')
-          problemReports.forEach((p: any, index: number) => {
-            console.log(`  [${index + 1}] ID: ${p.id}, Category: "${p.category}", Status: ${p.status}, Title: ${p.title?.substring(0, 40)}`)
-          })
-        } else {
-          console.log('No problem reports found for this store')
+        // 개발 환경에서만 디버깅 로그 출력
+        if (process.env.NODE_ENV === 'development') {
+          console.log(`Lost items query for ${store.name}: found ${lostItems?.length || 0} items`)
+          console.log(`\n=== Store ${store.id} (${store.name}) ===`)
+          console.log(`Total problem reports found: ${problemReports?.length || 0}`)
+          if (problemReports && problemReports.length > 0) {
+            const categorySet = new Set<string>()
+            problemReports.forEach((p: any) => {
+              if (p.category) categorySet.add(p.category)
+            })
+            const uniqueCategories = Array.from(categorySet)
+            console.log(`Unique category values in DB:`, uniqueCategories)
+            console.log('All problem reports with raw category values:')
+            problemReports.forEach((p: any, index: number) => {
+              console.log(`  [${index + 1}] ID: ${p.id}, Category: "${p.category}", Status: ${p.status}, Title: ${p.title?.substring(0, 40)}`)
+            })
+          } else {
+            console.log('No problem reports found for this store')
+          }
         }
 
         // 문제보고 카운트 (카테고리별, 상태별)
@@ -472,24 +483,27 @@ export async function GET(request: NextRequest) {
           return isVendingProblem && p.status === 'completed'
         }).length || 0
 
-        console.log(`Counts for ${store.name}:`, {
-          storeProblemCount,
-          vendingProblemCount,
-          lostItemCount,
-          totalProblemReports: problemReports?.length || 0,
-          unprocessedStoreProblems,
-          completedStoreProblems,
-          unconfirmedVendingProblems,
-          confirmedVendingProblems
-        })
-        console.log(`=== End Store ${store.id} ===\n`)
-
-        // 분실물 상태 디버깅
-        if (lostItems && lostItems.length > 0) {
-          console.log(`Lost items for ${store.name}:`)
-          lostItems.forEach((l: any) => {
-            console.log(`  - ID: ${l.id}, Status: "${l.status}"`)
+        // 개발 환경에서만 디버깅 로그 출력
+        if (process.env.NODE_ENV === 'development') {
+          console.log(`Counts for ${store.name}:`, {
+            storeProblemCount,
+            vendingProblemCount,
+            lostItemCount,
+            totalProblemReports: problemReports?.length || 0,
+            unprocessedStoreProblems,
+            completedStoreProblems,
+            unconfirmedVendingProblems,
+            confirmedVendingProblems
           })
+          console.log(`=== End Store ${store.id} ===\n`)
+
+          // 분실물 상태 디버깅
+          if (lostItems && lostItems.length > 0) {
+            console.log(`Lost items for ${store.name}:`)
+            lostItems.forEach((l: any) => {
+              console.log(`  - ID: ${l.id}, Status: "${l.status}"`)
+            })
+          }
         }
 
         // 분실물 상태별 카운트 - business_confirmed_at이 null인 것만 미확인으로 처리
@@ -500,8 +514,11 @@ export async function GET(request: NextRequest) {
           (l: any) => l.status === 'completed'
         ).length || 0
 
-        console.log(`Lost items counts for ${store.name}: unconfirmed=${unconfirmedLostItems}, confirmed=${confirmedLostItems}`)
-        console.log(`Lost items status breakdown:`, lostItems?.map((l: any) => ({ id: l.id, status: l.status })))
+        // 개발 환경에서만 디버깅 로그 출력
+        if (process.env.NODE_ENV === 'development') {
+          console.log(`Lost items counts for ${store.name}: unconfirmed=${unconfirmedLostItems}, confirmed=${confirmedLostItems}`)
+          console.log(`Lost items status breakdown:`, lostItems?.map((l: any) => ({ id: l.id, status: l.status })))
+        }
 
         // 배치 쿼리에서 가져온 제품 사진 데이터 사용
         const storeProductPhotos = productPhotosByStore.get(store.id) || []
@@ -655,7 +672,7 @@ export async function GET(request: NextRequest) {
           const recordDate = a.work_date
           // 한국 시간대 기준 오늘 날짜와 정확히 일치하는 것만
           const isToday = recordDate === todayDateKST
-          if (!isToday) {
+          if (!isToday && process.env.NODE_ENV === 'development') {
             console.log(`Store ${store.name}: 어제 출근 기록 제외 (work_date: ${recordDate}, 오늘: ${todayDateKST})`)
           }
           return isToday
@@ -665,7 +682,10 @@ export async function GET(request: NextRequest) {
         let clockInTime: string | null = null
         let clockOutTime: string | null = null
 
-        console.log(`Store ${store.name}: 배정된 직원 수: ${assignedUserIds.length}, 전체 출근 기록 수: ${todayAttendances.length}, 오늘 출근 기록 수: ${todayOnlyAttendances.length}`)
+        // 개발 환경에서만 디버깅 로그 출력
+        if (process.env.NODE_ENV === 'development') {
+          console.log(`Store ${store.name}: 배정된 직원 수: ${assignedUserIds.length}, 전체 출근 기록 수: ${todayAttendances.length}, 오늘 출근 기록 수: ${todayOnlyAttendances.length}`)
+        }
 
         if (todayOnlyAttendances.length > 0) {
           // 출근 중인 직원이 있는지 확인 (출근했지만 퇴근하지 않은 경우)
@@ -675,7 +695,9 @@ export async function GET(request: NextRequest) {
             // 한 명이라도 출근 중이면 "출근중"
             attendanceStatus = 'clocked_in'
             clockInTime = clockedInStaff.clock_in_at
-            console.log(`Store ${store.name}: 출근중 상태 (user_id: ${clockedInStaff.user_id})`)
+            if (process.env.NODE_ENV === 'development') {
+              console.log(`Store ${store.name}: 출근중 상태 (user_id: ${clockedInStaff.user_id})`)
+            }
           } else {
             // 모두 퇴근했으면 "퇴근완료" (가장 최근 퇴근 시간 기준)
             const latestClockOut = todayOnlyAttendances
@@ -686,11 +708,15 @@ export async function GET(request: NextRequest) {
               attendanceStatus = 'clocked_out'
               clockOutTime = latestClockOut.clock_out_at
               clockInTime = latestClockOut.clock_in_at
-              console.log(`Store ${store.name}: 퇴근완료 상태 (user_id: ${latestClockOut.user_id})`)
+              if (process.env.NODE_ENV === 'development') {
+                console.log(`Store ${store.name}: 퇴근완료 상태 (user_id: ${latestClockOut.user_id})`)
+              }
             }
           }
         } else {
-          console.log(`Store ${store.name}: 출근전 상태 (배정된 직원: ${assignedUserIds.length}명, 오늘 출근 기록 없음)`)
+          if (process.env.NODE_ENV === 'development') {
+            console.log(`Store ${store.name}: 출근전 상태 (배정된 직원: ${assignedUserIds.length}명, 오늘 출근 기록 없음)`)
+          }
         }
 
         // 휴무일일 때는 출퇴근 시간을 표시하지 않음
@@ -845,11 +871,17 @@ export async function GET(request: NextRequest) {
       ? allStoreUpdates.sort().reverse()[0] 
       : new Date().toISOString()
 
-    return Response.json({
+    // 캐싱 설정: 30초 캐시 (짧은 TTL로 최신성 유지)
+    const response = Response.json({
       success: true,
       data: storeStatuses,
       last_modified_at: lastModifiedAt,
     })
+    
+    // Cache-Control 헤더 설정 (30초 캐싱)
+    response.headers.set('Cache-Control', 'public, s-maxage=30, stale-while-revalidate=60')
+    
+    return response
   } catch (error: any) {
     return handleApiError(error)
   }
