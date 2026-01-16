@@ -889,17 +889,11 @@ export async function GET(request: NextRequest) {
       ? allStoreUpdates.sort().reverse()[0] 
       : new Date().toISOString()
 
-    // 캐싱 설정: 30초 캐시 (짧은 TTL로 최신성 유지)
-    const response = Response.json({
+    return Response.json({
       success: true,
       data: storeStatuses,
       last_modified_at: lastModifiedAt,
     })
-    
-    // Cache-Control 헤더 설정 (30초 캐싱)
-    response.headers.set('Cache-Control', 'public, s-maxage=30, stale-while-revalidate=60')
-    
-    return response
   } catch (error: any) {
     return handleApiError(error)
   }
