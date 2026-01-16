@@ -18,17 +18,28 @@ export function ChecklistCamera({ items, mode, storeId, checklistId, onComplete,
   const [tempPhotos, setTempPhotos] = useState<Record<number, string>>({})
   const [stream, setStream] = useState<MediaStream | null>(null)
   const [saving, setSaving] = useState(false)
+  const [captureLoading, setCaptureLoading] = useState(false) // 캡처 로딩 상태
   const videoRef = useRef<HTMLVideoElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const cameraRequestedRef = useRef(false) // 재초기화를 위해 useRef 사용
   const isMountedRef = useRef(true)
   const isReinitializingRef = useRef(false) // 재초기화 중인지 추적 (무한 루프 방지)
   const hasInitializedRef = useRef(false) // 최초 초기화 완료 여부
+  const retryCountRef = useRef(0) // 재시도 횟수 추적 (무한 루프 방지)
+  const isCleaningUpRef = useRef(false) // 정리 중인지 추적 (중복 정리 방지)
+  const isCapturingRef = useRef(false) // 캡처 중인지 추적 (중복 클릭 방지)
+  const isIOSRef = useRef(false) // iOS 감지 (한 번만 확인)
 
   // 전달받은 항목들이 이미 필터링되어 있음
   const photoItems = items.filter(item => item.area?.trim())
 
   const [cameraError, setCameraError] = useState<string | null>(null)
+
+  // iOS 감지 (컴포넌트 마운트 시 한 번만 확인)
+  useEffect(() => {
+    const userAgent = navigator.userAgent || navigator.vendor || (window as any).opera
+    isIOSRef.current = /iPhone|iPad|iPod/i.test(userAgent)
+  }, [])
 
   useEffect(() => {
     let currentStream: MediaStream | null = null
@@ -141,8 +152,14 @@ export function ChecklistCamera({ items, mode, storeId, checklistId, onComplete,
         }
         
         setCameraError(`${errorMessage} ${errorDetails}`)
+        // 재시도 가능한 에러인지 확인 (NotReadableError는 일시적일 수 있음)
+        const isRetryableError = error.name === 'NotReadableError' && retryCountRef.current < 3
+        if (!isRetryableError) {
+          // 재시도 불가능한 에러는 플래그 리셋하여 수동 재시도 가능하도록
+          cameraRequestedRef.current = false
+        }
       } finally {
-        // 에러 발생 시에도 플래그 리셋 (재시도 가능하도록)
+        // 언마운트 시 플래그 리셋
         if (!isMountedRef.current) {
           cameraRequestedRef.current = false
         }
@@ -176,8 +193,29 @@ export function ChecklistCamera({ items, mode, storeId, checklistId, onComplete,
       // 4. 에러 상태 초기화
       setCameraError(null)
       
-      // 5. 잠시 대기 후 재초기화 (스트림 정리 시간 확보)
-      await new Promise(resolve => setTimeout(resolve, 100))
+      // 5. 스트림이 완전히 해제될 때까지 대기 (OS/하드웨어 레벨 해제 시간 확보)
+      await new Promise(resolve => setTimeout(resolve, 500))
+      
+      // 스트림 트랙이 완전히 종료되었는지 확인
+      const allTracksEnded = await new Promise<boolean>((resolve) => {
+        let checkCount = 0
+        const maxChecks = 10 // 최대 5초 대기 (500ms * 10)
+        const checkInterval = setInterval(() => {
+          checkCount++
+          // 모든 트랙이 종료되었는지 확인
+          if (currentStream === null && (!stream || stream.getVideoTracks().every(track => track.readyState === 'ended'))) {
+            clearInterval(checkInterval)
+            resolve(true)
+          } else if (checkCount >= maxChecks) {
+            clearInterval(checkInterval)
+            resolve(false) // 시간 초과
+          }
+        }, 500)
+      })
+      
+      if (!allTracksEnded) {
+        console.log('⚠️ 스트림 해제 완료 대기 시간 초과, 재초기화 진행')
+      }
       
       // 6. 새 스트림 요청
       if (isMountedRef.current) {
@@ -204,10 +242,32 @@ export function ChecklistCamera({ items, mode, storeId, checklistId, onComplete,
 
     return () => {
       isMountedRef.current = false
-      // 정리
+      isCleaningUpRef.current = true
+      
+      // 1. currentStream 정리
       if (currentStream) {
         currentStream.getTracks().forEach((track) => track.stop())
+        currentStream = null
       }
+      
+      // 2. stream state 정리 (cleanup에서도 stream state 정리 필요)
+      // 주의: 언마운트 중이므로 setState는 호출해도 경고가 나올 수 있으나, 정리가 목적이므로 호출
+      if (stream) {
+        stream.getTracks().forEach((track) => track.stop())
+        setStream(null)
+      }
+      
+      // 3. videoRef 초기화
+      if (videoRef.current) {
+        videoRef.current.srcObject = null
+      }
+      
+      // 4. 모든 ref 리셋
+      cameraRequestedRef.current = false
+      isReinitializingRef.current = false
+      retryCountRef.current = 0
+      isCapturingRef.current = false
+      
       window.removeEventListener('popstate', handlePopState)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -235,7 +295,7 @@ export function ChecklistCamera({ items, mode, storeId, checklistId, onComplete,
           // 재초기화는 initCamera 내부에서 처리되므로 여기서는 호출만
           // reinitCamera는 클로저 내부에 있으므로 직접 호출 불가
           // 대신 stream state를 null로 설정하여 다른 useEffect에서 감지하도록
-          if (stream) {
+          if (stream && !isCleaningUpRef.current) {
             stream.getTracks().forEach(track => track.stop())
             setStream(null)
           }
@@ -268,9 +328,11 @@ export function ChecklistCamera({ items, mode, storeId, checklistId, onComplete,
           stream.getVideoTracks().every(track => track.readyState !== 'live')) {
         
         console.log('🔍 스트림 상태 체크: 끊김 감지, 재초기화 필요')
-        // 스트림 정리 후 재초기화 트리거
-        stream.getTracks().forEach(track => track.stop())
-        setStream(null)
+        // 스트림 정리 후 재초기화 트리거 (정리 중이 아닐 때만)
+        if (!isCleaningUpRef.current) {
+          stream.getTracks().forEach(track => track.stop())
+          setStream(null)
+        }
       }
     }
 
@@ -299,17 +361,21 @@ export function ChecklistCamera({ items, mode, storeId, checklistId, onComplete,
 
   // stream이 null이 되면 재초기화 (다른 useEffect에서 감지한 경우)
   useEffect(() => {
-    // 최초 초기화가 완료되었고, 스트림이 없고, 에러도 없고, 재초기화 중이 아니면 재초기화
+    // 최초 초기화가 완료되었고, 스트림이 없고, 재초기화 중이 아니고, 정리 중이 아니면 재초기화
+    // cameraError 조건 제거: 에러가 있어도 재초기화 시도 가능 (NotReadableError는 재시도 가능)
+    // 단, 재시도 횟수 제한으로 무한 루프 방지
     if (!stream && 
-        !cameraError && 
         isMountedRef.current && 
         !saving && 
         hasInitializedRef.current && 
-        !isReinitializingRef.current) {
+        !isReinitializingRef.current &&
+        !isCleaningUpRef.current &&
+        retryCountRef.current < 3) {
       
-      // 스트림이 없고 에러도 없으면 재초기화 필요
-      console.log('🔄 스트림이 null이 되었으므로 재초기화 시작')
+      // 스트림이 없으면 재초기화 필요 (에러가 있어도 재시도)
+      console.log('🔄 스트림이 null이 되었으므로 재초기화 시작', { retryCount: retryCountRef.current })
       isReinitializingRef.current = true
+      retryCountRef.current++
       
       // 기존 initCamera 로직을 다시 실행
       const reinit = async () => {
@@ -353,31 +419,70 @@ export function ChecklistCamera({ items, mode, storeId, checklistId, onComplete,
             setStream(mediaStream)
             setCameraError(null)
             isReinitializingRef.current = false
+            retryCountRef.current = 0 // 성공 시 재시도 횟수 리셋
             if (videoRef.current) {
               videoRef.current.srcObject = mediaStream
             }
             console.log('✅ 카메라 스트림 재초기화 완료')
           } else {
             isReinitializingRef.current = false
+            // 재시도 횟수 초과 시 리셋하여 수동 재시도 가능하도록
+            if (retryCountRef.current >= 3) {
+              retryCountRef.current = 0
+            }
           }
         } catch (error: any) {
-          console.error('재초기화 실패:', error)
+          console.error('재초기화 실패:', error, { retryCount: retryCountRef.current })
           isReinitializingRef.current = false
-          // 에러는 기존 initCamera의 에러 처리 로직과 동일하게
-          const isNative = Capacitor.isNativePlatform()
-          let errorMessage = '카메라 접근에 실패했습니다.'
-          let errorDetails = isNative 
-            ? '앱 설정에서 카메라 권한을 확인하거나 앱을 재시작해주세요.'
-            : '브라우저 설정에서 이 사이트의 카메라 권한을 확인하세요.'
           
-          if (error.name === 'NotAllowedError') {
-            errorMessage = '카메라 접근 권한이 거부되었습니다.'
-          } else if (error.name === 'NotReadableError') {
-            errorMessage = '카메라를 사용할 수 없습니다.'
-            errorDetails = '다른 앱에서 카메라를 사용 중일 수 있습니다.'
+          // 재시도 가능한 에러인지 확인
+          const isRetryableError = error.name === 'NotReadableError' && retryCountRef.current < 3
+          
+          // 재시도 불가능하거나 재시도 횟수 초과 시에만 에러 메시지 표시
+          if (!isRetryableError) {
+            const isNative = Capacitor.isNativePlatform()
+            let errorMessage = '카메라 접근에 실패했습니다.'
+            let errorDetails = isNative 
+              ? '앱 설정에서 카메라 권한을 확인하거나 앱을 재시작해주세요.'
+              : '브라우저 설정에서 이 사이트의 카메라 권한을 확인하세요.'
+            
+            if (error.name === 'NotAllowedError') {
+              errorMessage = '카메라 접근 권한이 거부되었습니다.'
+              // NotAllowedError는 재시도 불가능
+              retryCountRef.current = 0 // 수동 재시도 가능하도록 리셋
+            } else if (error.name === 'NotReadableError') {
+              errorMessage = '카메라를 사용할 수 없습니다.'
+              errorDetails = '다른 앱에서 카메라를 사용 중일 수 있습니다. 다른 앱을 종료하고 다시 시도하세요.'
+            } else if (retryCountRef.current >= 3) {
+              errorDetails = '재시도 횟수를 초과했습니다. 앱을 재시작하거나 잠시 후 다시 시도해주세요.'
+              retryCountRef.current = 0 // 수동 재시도 가능하도록 리셋
+            }
+            
+            setCameraError(`${errorMessage} ${errorDetails}`)
+          } else {
+            // 재시도 가능한 에러는 잠시 대기 후 자동 재시도
+            console.log(`⏳ 재시도 가능한 에러 감지 (${retryCountRef.current}/3), ${2000}ms 후 자동 재시도...`)
+            
+            // 재시도 대기 (이미 useEffect에서 retryCountRef가 증가했으므로 추가 증가 없음)
+            await new Promise(resolve => setTimeout(resolve, 2000))
+            
+            // 플래그 리셋하여 useEffect가 다시 실행되도록 함
+            // 단, 재시도 횟수가 초과되지 않았을 때만
+            if (isMountedRef.current && retryCountRef.current < 3) {
+              isReinitializingRef.current = false
+              cameraRequestedRef.current = false
+              // stream이 이미 null이고 플래그가 리셋되었으므로 
+              // useEffect가 조건을 만족하여 자동으로 재초기화 시도
+            } else {
+              // 재시도 횟수 초과 시 에러 메시지 표시
+              isReinitializingRef.current = false
+              cameraRequestedRef.current = false
+              const isNative = Capacitor.isNativePlatform()
+              setCameraError(`카메라 접근에 실패했습니다. 재시도 횟수를 초과했습니다. ${isNative ? '앱을 재시작하거나' : '페이지를 새로고침하거나'} 잠시 후 다시 시도해주세요.`)
+              retryCountRef.current = 0 // 수동 재시도 가능하도록 리셋
+            }
+            return // 재시도 중이거나 횟수 초과 시 함수 종료
           }
-          
-          setCameraError(`${errorMessage} ${errorDetails}`)
         }
       }
       
@@ -438,56 +543,198 @@ export function ChecklistCamera({ items, mode, storeId, checklistId, onComplete,
     }
   }, [currentIndex, checklistId, mode])
 
-  const capturePhoto = () => {
-    // 모든 환경에서 비디오 스트림을 사용한 연속 촬영
-    // 네이티브 앱의 웹뷰에서도 getUserMedia를 사용하므로 동일한 방식으로 작동
-    if (!videoRef.current || !canvasRef.current) return
+  // 메타데이터 로딩 대기 (타임아웃 포함, 무한 로딩 방지)
+  const waitForVideoMetadata = async (video: HTMLVideoElement, timeout = 2000): Promise<boolean> => {
+    // 이미 준비된 경우 즉시 반환
+    if (video.readyState >= 2 && video.videoWidth > 0 && video.videoHeight > 0) {
+      return true
+    }
+
+    // iOS는 더 긴 타임아웃 필요
+    const actualTimeout = isIOSRef.current ? 3000 : timeout
+
+    try {
+      // Promise.race로 타임아웃과 메타데이터 로딩 경쟁
+      const result = await Promise.race([
+        // 메타데이터 로딩 대기
+        new Promise<boolean>((resolve) => {
+          // 컴포넌트가 언마운트되면 즉시 종료
+          if (!isMountedRef.current) {
+            resolve(false)
+            return
+          }
+
+          const checkMetadata = () => {
+            // 컴포넌트 언마운트 확인
+            if (!isMountedRef.current) {
+              video.removeEventListener('loadedmetadata', checkMetadata)
+              resolve(false)
+              return
+            }
+
+            // 메타데이터가 로드되었는지 확인
+            if (video.readyState >= 2 && video.videoWidth > 0 && video.videoHeight > 0) {
+              video.removeEventListener('loadedmetadata', checkMetadata)
+              resolve(true)
+            }
+          }
+
+          // 이미 이벤트가 발생했을 수 있으므로 즉시 확인
+          checkMetadata()
+
+          // 이벤트 리스너 등록
+          video.addEventListener('loadedmetadata', checkMetadata)
+        }),
+        // 타임아웃
+        new Promise<boolean>((resolve) => {
+          setTimeout(() => {
+            if (isMountedRef.current) {
+              console.log('⚠️ 메타데이터 로딩 타임아웃 (대체 크기 사용)')
+              resolve(false)
+            } else {
+              resolve(false)
+            }
+          }, actualTimeout)
+        })
+      ])
+
+      return result
+    } catch (error) {
+      console.error('메타데이터 대기 중 오류:', error)
+      return false
+    }
+  }
+
+  // 비디오 크기 가져오기 (대체 로직 포함)
+  const getVideoDimensions = (video: HTMLVideoElement): { width: number; height: number } => {
+    // 1차 시도: videoWidth/videoHeight (실제 비디오 스트림 크기)
+    if (video.videoWidth > 0 && video.videoHeight > 0) {
+      return { width: video.videoWidth, height: video.videoHeight }
+    }
+
+    // 2차 시도: clientWidth/clientHeight (화면에 표시되는 크기)
+    if (video.clientWidth > 0 && video.clientHeight > 0) {
+      // 비디오 스트림의 종횡비를 고려 (일반적으로 16:9)
+      const aspectRatio = 16 / 9
+      const width = Math.max(video.clientWidth, 1280) // 최소 1280px
+      const height = Math.round(width / aspectRatio)
+      return { width, height }
+    }
+
+    // 3차 시도: 기본값 (1920x1080)
+    console.log('⚠️ 비디오 크기를 가져올 수 없어 기본값 사용 (1920x1080)')
+    return { width: 1920, height: 1080 }
+  }
+
+  const capturePhoto = async () => {
+    // 중복 클릭 방지
+    if (isCapturingRef.current || captureLoading || saving) {
+      console.log('⏸️ 이미 캡처 중이거나 저장 중입니다.')
+      return
+    }
+
+    // 기본 유효성 검사
+    if (!videoRef.current || !canvasRef.current) {
+      console.error('❌ 비디오 또는 캔버스 요소를 찾을 수 없습니다.')
+      return
+    }
 
     const video = videoRef.current
     const canvas = canvasRef.current
-    canvas.width = video.videoWidth
-    canvas.height = video.videoHeight
 
-    const ctx = canvas.getContext('2d')
-    if (!ctx) return
+    // 캡처 시작
+    isCapturingRef.current = true
+    setCaptureLoading(true)
 
-    ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
-    
-    // 임시 저장 (base64로 저장)
-    const dataURL = canvas.toDataURL('image/jpeg', 0.8)
-    
-    // 1. React 상태에 저장 (UI 즉시 반영)
-    setTempPhotos(prev => ({
-      ...prev,
-      [currentIndex]: dataURL
-    }))
-    
-    // 2. localStorage에 백업 저장 (앱 꺼져도 유지, 서버 요청 없음)
-    const photoKey = `checklist_photo_${checklistId}_${mode}_${currentIndex}`
     try {
-      localStorage.setItem(photoKey, dataURL)
-      console.log(`💾 사진 로컬 저장: ${photoItems[currentIndex]?.area} (인덱스 ${currentIndex})`)
-    } catch (error) {
-      console.error('localStorage 저장 실패:', error)
-      // localStorage 용량 초과 시 오래된 사진 정리
-      cleanupOldPhotos()
-      // 재시도
+      // 컴포넌트 마운트 확인
+      if (!isMountedRef.current) {
+        return
+      }
+
+      // 메타데이터 로딩 대기 (iOS에서 스크린샷 문제 해결)
+      const metadataLoaded = await waitForVideoMetadata(video)
+
+      if (!metadataLoaded) {
+        console.log('⚠️ 메타데이터 로딩 타임아웃, 대체 크기 사용하여 캡처 진행')
+      }
+
+      // 컴포넌트 마운트 재확인 (비동기 작업 후)
+      if (!isMountedRef.current) {
+        return
+      }
+
+      // 비디오 크기 가져오기 (대체 로직 포함)
+      const { width, height } = getVideoDimensions(video)
+
+      // 캔버스 크기 설정
+      canvas.width = width
+      canvas.height = height
+
+      const ctx = canvas.getContext('2d')
+      if (!ctx) {
+        console.error('❌ 캔버스 컨텍스트를 가져올 수 없습니다.')
+        return
+      }
+
+      // 비디오 프레임을 캔버스에 그리기
+      ctx.drawImage(video, 0, 0, width, height)
+      
+      // 임시 저장 (base64로 저장)
+      const dataURL = canvas.toDataURL('image/jpeg', 0.8)
+      
+      // 컴포넌트 마운트 재확인
+      if (!isMountedRef.current) {
+        return
+      }
+
+      // 1. React 상태에 저장 (UI 즉시 반영)
+      setTempPhotos(prev => ({
+        ...prev,
+        [currentIndex]: dataURL
+      }))
+      
+      // 2. localStorage에 백업 저장 (앱 꺼져도 유지, 서버 요청 없음)
+      const photoKey = `checklist_photo_${checklistId}_${mode}_${currentIndex}`
       try {
         localStorage.setItem(photoKey, dataURL)
-      } catch (retryError) {
-        console.error('localStorage 재시도 실패:', retryError)
+        console.log(`💾 사진 로컬 저장: ${photoItems[currentIndex]?.area} (인덱스 ${currentIndex})`)
+      } catch (error) {
+        console.error('localStorage 저장 실패:', error)
+        // localStorage 용량 초과 시 오래된 사진 정리
+        cleanupOldPhotos()
+        // 재시도
+        try {
+          localStorage.setItem(photoKey, dataURL)
+        } catch (retryError) {
+          console.error('localStorage 재시도 실패:', retryError)
+        }
       }
-    }
 
-    // 자동으로 다음 항목으로 이동
-    const nextIndex = currentIndex + 1
-    if (nextIndex < photoItems.length) {
-      setCurrentIndex(nextIndex)
-      // useEffect에서 자동 저장되므로 여기서는 저장하지 않음
-      console.log(`➡️ 다음 인덱스로 이동: ${nextIndex}`)
-    } else {
-      // 모든 사진을 찍었으면 마지막 인덱스 유지 (useEffect에서 자동 저장됨)
-      console.log(`✅ 모든 사진 촬영 완료 (인덱스 ${currentIndex})`)
+      // 자동으로 다음 항목으로 이동
+      const nextIndex = currentIndex + 1
+      if (nextIndex < photoItems.length) {
+        setCurrentIndex(nextIndex)
+        // useEffect에서 자동 저장되므로 여기서는 저장하지 않음
+        console.log(`➡️ 다음 인덱스로 이동: ${nextIndex}`)
+      } else {
+        // 모든 사진을 찍었으면 마지막 인덱스 유지 (useEffect에서 자동 저장됨)
+        console.log(`✅ 모든 사진 촬영 완료 (인덱스 ${currentIndex})`)
+      }
+    } catch (error) {
+      // 에러 처리
+      console.error('캡처 중 오류:', error)
+      if (isMountedRef.current) {
+        // 사용자에게 에러 표시 (필요시)
+        // alert는 사용자 경험을 해칠 수 있으므로 콘솔 로그만 남김
+        console.error('사진 촬영에 실패했습니다. 다시 시도해주세요.')
+      }
+    } finally {
+      // 상태 정리 (컴포넌트가 마운트되어 있을 때만)
+      if (isMountedRef.current) {
+        isCapturingRef.current = false
+        setCaptureLoading(false)
+      }
     }
   }
   
@@ -765,6 +1012,16 @@ export function ChecklistCamera({ items, mode, storeId, checklistId, onComplete,
           </div>
         </div>
       )}
+
+      {/* 캡처 중 오버레이 (저장 중이 아닐 때만 표시) */}
+      {captureLoading && !saving && (
+        <div className="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center z-40 pointer-events-none">
+          <div className="bg-white bg-opacity-90 rounded-lg px-4 py-2 flex items-center gap-2">
+            <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-gray-600"></div>
+            <p className="text-sm font-medium text-gray-900">캡처 중...</p>
+          </div>
+        </div>
+      )}
       
       {/* 상단: 현재 촬영 중인 항목 표시 */}
       <div className="absolute top-0 left-0 right-0 bg-black bg-opacity-70 text-white p-4 z-10">
@@ -904,10 +1161,19 @@ export function ChecklistCamera({ items, mode, storeId, checklistId, onComplete,
           {!cameraError && (
             <button
               onClick={capturePhoto}
-              className="w-16 h-16 bg-white rounded-full border-4 border-gray-300 hover:bg-gray-100 active:scale-95 transition-transform flex items-center justify-center shadow-lg"
-              title="사진 촬영"
+              disabled={captureLoading || saving || isCapturingRef.current}
+              className="w-16 h-16 bg-white rounded-full border-4 border-gray-300 hover:bg-gray-100 active:scale-95 transition-transform flex items-center justify-center shadow-lg disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-white relative"
+              title={captureLoading ? "캡처 중..." : "사진 촬영"}
+              aria-label={captureLoading ? "캡처 중입니다" : "사진 촬영"}
+              aria-busy={captureLoading}
             >
-              <div className="w-12 h-12 bg-white rounded-full border-2 border-gray-400"></div>
+              {captureLoading ? (
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-600"></div>
+                </div>
+              ) : (
+                <div className="w-12 h-12 bg-white rounded-full border-2 border-gray-400"></div>
+              )}
             </button>
           )}
           {allCaptured && (
