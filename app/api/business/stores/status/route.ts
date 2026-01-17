@@ -27,6 +27,13 @@ export async function GET(request: NextRequest) {
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
     let adminSupabase: ReturnType<typeof createClient> | null = null
     
+    // 디버그 정보 (배포 환경에서도 확인 가능하도록)
+    const debugInfo: any = {
+      has_service_role_key: !!serviceRoleKey,
+      has_supabase_url: !!supabaseUrl,
+      environment: process.env.NODE_ENV,
+    }
+    
     if (serviceRoleKey && supabaseUrl) {
       adminSupabase = createClient(supabaseUrl, serviceRoleKey, {
         auth: {
@@ -34,13 +41,10 @@ export async function GET(request: NextRequest) {
           persistSession: false,
         },
       })
-      if (process.env.NODE_ENV === 'development') {
-        console.log('서비스 역할 키를 사용하여 attendance 테이블 조회 (RLS 우회)')
-      }
+      console.log('[Store Status API] 서비스 역할 키를 사용하여 attendance 테이블 조회 (RLS 우회)')
     } else {
-      if (process.env.NODE_ENV === 'development') {
-        console.warn('서비스 역할 키가 설정되지 않음. RLS 정책에 따라 attendance 조회가 실패할 수 있습니다.')
-      }
+      console.warn('[Store Status API] ⚠️ 서비스 역할 키가 설정되지 않음. RLS 정책에 따라 attendance 조회가 실패할 수 있습니다.')
+      console.warn('[Store Status API] Debug Info:', debugInfo)
     }
     
     // attendance 테이블 조회용 클라이언트 (서비스 역할 키 우선 사용)
@@ -893,6 +897,14 @@ export async function GET(request: NextRequest) {
       success: true,
       data: storeStatuses,
       last_modified_at: lastModifiedAt,
+      // 배포 환경 디버깅을 위한 정보 (개발 환경에서만 포함)
+      ...(process.env.NODE_ENV === 'development' && {
+        _debug: {
+          ...debugInfo,
+          total_stores: storeStatuses.length,
+          stores_with_attendance: storeStatuses.filter((s: any) => s.attendance_status !== 'not_clocked_in').length,
+        },
+      }),
     })
   } catch (error: any) {
     return handleApiError(error)
