@@ -175,14 +175,13 @@ export async function GET(request: NextRequest) {
         .neq('area_category', 'inventory')
         .gte('created_at', todayStart.toISOString())
         .lte('created_at', todayEnd.toISOString()),
-      // 모든 매장의 출근 기록을 한 번에 조회 (최적화: OR 조건 단순화)
-      // work_date는 인덱스 활용을 위해 별도 쿼리로 분리하지 않고, clock_in_at 범위로 우선 조회
+      // 모든 매장의 출근 기록을 한 번에 조회
+      // work_date와 clock_in_at 범위 둘 다 사용 (다른 API와 동일한 방식)
       attendanceClient
         .from('attendance')
         .select('store_id, user_id, work_date, clock_in_at, clock_out_at')
         .in('store_id', storeIds)
-        .gte('clock_in_at', todayStart.toISOString())
-        .lte('clock_in_at', todayEnd.toISOString())
+        .or(`work_date.eq.${todayDateKST},work_date.eq.${todayDateUTC},clock_in_at.gte.${todayStart.toISOString()},clock_in_at.lte.${todayEnd.toISOString()}`)
         .order('clock_in_at', { ascending: false }),
       // 모든 매장의 제품 입고/보관 사진을 한 번에 조회 (7일 범위로 최적화)
       supabase
