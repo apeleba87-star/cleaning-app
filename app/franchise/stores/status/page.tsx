@@ -283,6 +283,11 @@ export default function FranchiseStoresStatusPage() {
   const [showCompletionForm, setShowCompletionForm] = useState<string | null>(null)
   const [completionDescription, setCompletionDescription] = useState('')
   const [completionPhotos, setCompletionPhotos] = useState<string[]>([])
+  // 전체 문제발생 모달용 처리 완료 폼 상태 (각 문제 ID별로 관리)
+  const [allProblemsCompletionForms, setAllProblemsCompletionForms] = useState<Map<string, {
+    description: string
+    photos: string[]
+  }>>(new Map())
   const [showRequestCreateModal, setShowRequestCreateModal] = useState(false)
   const [broadcastMode, setBroadcastMode] = useState(false)
   const [editingRequestId, setEditingRequestId] = useState<string | null>(null)
@@ -397,6 +402,13 @@ export default function FranchiseStoresStatusPage() {
       })
     }
   }, [storeStatuses])
+
+  // 전체 문제발생 모달이 닫힐 때 폼 상태 초기화
+  useEffect(() => {
+    if (!showAllProblemsModal) {
+      setAllProblemsCompletionForms(new Map())
+    }
+  }, [showAllProblemsModal])
 
   const loadStoreStatuses = async () => {
     try {
@@ -1229,8 +1241,25 @@ export default function FranchiseStoresStatusPage() {
       })
 
       if (response.ok) {
-        // 성공 시 백그라운드에서 최신 데이터 동기화
+        // 성공: 카운트만 부분 업데이트 (전체 새로고침 없음)
         if (selectedStore) {
+          setStoreStatuses((prev) => {
+            return prev.map((s) => {
+              if (s.store_id === selectedStore.store_id) {
+                return {
+                  ...s,
+                  unconfirmed_vending_problems: Math.max(0, (s.unconfirmed_vending_problems || 0) - 1),
+                  vending_problem_count: Math.max(0, (s.vending_problem_count || 0) - 1),
+                  has_problem: (s.unprocessed_store_problems || 0) > 0 || 
+                             (s.unconfirmed_vending_problems || 0) - 1 > 0 || 
+                             (s.unconfirmed_lost_items || 0) > 0
+                }
+              }
+              return s
+            })
+          })
+          
+          // 모달 데이터만 새로고침 (약간의 지연을 두어 DB 반영 시간 확보)
           setTimeout(async () => {
             const timestamp = new Date().getTime()
             const problemResponse = await fetch(`/api/franchise/stores/${selectedStore.store_id}/problem-reports?t=${timestamp}`, {
@@ -1240,9 +1269,10 @@ export default function FranchiseStoresStatusPage() {
               const problemData = await problemResponse.json()
               setProblemReports(problemData.data || { store_problems: [], vending_problems: [] })
             }
-            loadStoreStatuses()
-          }, 500)
+          }, 300)
         }
+        
+        showToast('확인 처리되었습니다.', 'success')
       } else {
         // 실패 시 롤백
         setConfirmedProblemIds((prev) => {
@@ -1266,7 +1296,7 @@ export default function FranchiseStoresStatusPage() {
           return updated
         })
         const data = await response.json()
-        alert(data.error || '확인 처리 중 오류가 발생했습니다.')
+        showToast(data.error || '확인 처리 중 오류가 발생했습니다.', 'error')
       }
     } catch (error) {
       // 네트워크 에러 시 롤백
@@ -1291,7 +1321,7 @@ export default function FranchiseStoresStatusPage() {
         return updated
       })
       console.error('Error confirming problem:', error)
-      alert('확인 처리 중 오류가 발생했습니다.')
+      showToast('확인 처리 중 오류가 발생했습니다.', 'error')
     }
   }
 
@@ -1399,31 +1429,15 @@ export default function FranchiseStoresStatusPage() {
         })
       }
 
-      // 상태 갱신 (약간의 지연 후, API 업데이트가 반영될 시간 확보)
-      // 데이터베이스 변경사항이 반영될 시간을 확보하기 위해 더 긴 지연 시간 사용
-      console.log('Waiting for database update to propagate...')
-      await new Promise(resolve => setTimeout(resolve, 1500))
+      // 모달 데이터만 새로고침 (약간의 지연을 두어 DB 반영 시간 확보)
+      // 전체 새로고침 없이 모달 데이터만 업데이트
+      setTimeout(async () => {
+        if (selectedStore) {
+          await handleOpenProblemModal(selectedStore)
+        }
+      }, 300)
       
-      // 대시보드 상태 새로고침 (캐시 무효화를 위해 타임스탬프 추가)
-      console.log('Refreshing store statuses...')
-      await loadStoreStatuses()
-      console.log('Store statuses refreshed')
-      
-      // 추가 지연 후 모달 데이터 새로고침 (데이터베이스에서 최신 상태 가져오기)
-      await new Promise(resolve => setTimeout(resolve, 500))
-      console.log('Refreshing modal data...')
-      
-      if (selectedStore) {
-        await handleOpenProblemModal(selectedStore)
-        
-        // 새로고침 후에도 confirmedLostItemIds 유지 보장
-        setConfirmedLostItemIds((prev) => {
-          const newSet = new Set(prev)
-          newSet.add(lostItemId)
-          console.log('Final confirmedLostItemIds after refresh:', Array.from(newSet))
-          return newSet
-        })
-      }
+      showToast('확인 처리되었습니다.', 'success')
     } catch (error) {
       console.error('Error confirming lost item:', error)
       alert('확인 처리 중 오류가 발생했습니다.')
@@ -1476,20 +1490,35 @@ export default function FranchiseStoresStatusPage() {
         setCompletionDescription('')
         setCompletionPhotos([])
         
-        // 전체 상태 갱신 먼저 (매장 상태 카드 업데이트)
-        await loadStoreStatuses()
-        
-        // 모달 데이터 새로고침 (약간의 지연을 두어 DB 반영 시간 확보)
+        // 카운트만 부분 업데이트 (전체 새로고침 없음)
         if (selectedStore) {
+          setStoreStatuses((prev) => {
+            return prev.map((s) => {
+              if (s.store_id === selectedStore.store_id) {
+                return {
+                  ...s,
+                  unprocessed_store_problems: Math.max(0, (s.unprocessed_store_problems || 0) - 1),
+                  completed_store_problems: (s.completed_store_problems || 0) + 1,
+                  store_problem_count: Math.max(0, (s.store_problem_count || 0) - 1),
+                  has_problem: (s.unprocessed_store_problems || 0) - 1 > 0 || 
+                             (s.unconfirmed_vending_problems || 0) > 0 || 
+                             (s.unconfirmed_lost_items || 0) > 0
+                }
+              }
+              return s
+            })
+          })
+          
+          // 모달 데이터만 새로고침 (약간의 지연을 두어 DB 반영 시간 확보)
           setTimeout(async () => {
             await handleOpenProblemModal(selectedStore)
-          }, 500)
+          }, 300)
         }
         
-        alert('처리 완료되었습니다.')
+        showToast('처리 완료되었습니다.', 'success')
       } else {
         console.error('Failed to complete problem report:', data)
-        alert(data.error || '처리 완료 중 오류가 발생했습니다.')
+        showToast(data.error || '처리 완료 중 오류가 발생했습니다.', 'error')
       }
     } catch (error) {
       console.error('Error completing problem:', error)
@@ -1734,6 +1763,8 @@ export default function FranchiseStoresStatusPage() {
             })
           )
           setAllProblemsData(newData)
+          // 모달이 열릴 때 확인된 ID 초기화 (서버에서 최신 데이터를 가져왔으므로)
+          // 단, 모달이 열려있는 동안에는 유지하여 연속 처리 가능
         } catch (error) {
           console.error('Error loading all problems data:', error)
         } finally {
@@ -1741,8 +1772,18 @@ export default function FranchiseStoresStatusPage() {
         }
       }
       loadData()
+    } else {
+      // 모달이 닫힐 때 확인된 ID 초기화 및 전체 상태 동기화
+      setConfirmedProblemIds(new Set())
+      setConfirmedLostItemIds(new Set())
+      // 모달 닫을 때만 전체 새로고침 (사용자가 여러 건 처리한 후 최종 동기화)
+      // loadStoreStatuses는 함수이므로 직접 호출 가능
+      if (storeStatuses.length > 0) {
+        loadStoreStatuses()
+      }
     }
-  }, [showAllProblemsModal, storeStatuses])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showAllProblemsModal])
 
   // 알림 모달이 열릴 때 데이터 로드
   useEffect(() => {
@@ -4170,6 +4211,7 @@ export default function FranchiseStoresStatusPage() {
                     const lostItems = allProblemsData.get(store.store_id)?.lost_items || []
                     
                     // 미처리/미확인 항목만 필터링 (확인 처리된 항목 제외)
+                    // 낙관적 업데이트: confirmedProblemIds와 confirmedLostItemIds에 있는 항목은 제외
                     const unprocessedStoreProblems = storeProblems.filter((p: any) => 
                       p.status !== 'completed' && !confirmedProblemIds.has(p.id)
                     )
@@ -4240,16 +4282,216 @@ export default function FranchiseStoresStatusPage() {
                                             {new Date(problem.created_at).toLocaleString('ko-KR')}
                                           </p>
                                         </div>
-                                        <button
-                                          onClick={() => {
-                                            setSelectedStore(store)
-                                            setShowProblemModal(true)
-                                            setShowAllProblemsModal(false)
-                                          }}
-                                          className="ml-4 px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-md hover:bg-blue-700"
-                                        >
-                                          처리 완료
-                                        </button>
+                                        {allProblemsCompletionForms.get(problem.id) ? (
+                                          <div className="ml-4 space-y-2 min-w-[200px]">
+                                            <textarea
+                                              value={allProblemsCompletionForms.get(problem.id)?.description || ''}
+                                              onChange={(e) => {
+                                                setAllProblemsCompletionForms((prev) => {
+                                                  const newMap = new Map(prev)
+                                                  const form = newMap.get(problem.id) || { description: '', photos: [] }
+                                                  newMap.set(problem.id, { ...form, description: e.target.value })
+                                                  return newMap
+                                                })
+                                              }}
+                                              placeholder="처리 완료 설명을 입력하세요"
+                                              className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+                                              rows={3}
+                                            />
+                                            <div>
+                                              <input
+                                                type="file"
+                                                multiple
+                                                accept="image/*"
+                                                onChange={(e) => {
+                                                  const files = Array.from(e.target.files || [])
+                                                  const filePromises = files.map((file) => {
+                                                    // 파일 크기 체크 (5MB)
+                                                    if (file.size > 5 * 1024 * 1024) {
+                                                      showToast('파일 크기는 5MB 이하여야 합니다.', 'error')
+                                                      return null
+                                                    }
+                                                    return new Promise<string | null>((resolve) => {
+                                                      const reader = new FileReader()
+                                                      reader.onload = (event) => {
+                                                        resolve(event.target?.result as string)
+                                                      }
+                                                      reader.onerror = () => resolve(null)
+                                                      reader.readAsDataURL(file)
+                                                    })
+                                                  })
+                                                  Promise.all(filePromises).then((urls) => {
+                                                    const validUrls = urls.filter((url): url is string => url !== null)
+                                                    setAllProblemsCompletionForms((prev) => {
+                                                      const newMap = new Map(prev)
+                                                      const form = newMap.get(problem.id) || { description: '', photos: [] }
+                                                      newMap.set(problem.id, { ...form, photos: [...form.photos, ...validUrls] })
+                                                      return newMap
+                                                    })
+                                                  })
+                                                  // input 초기화
+                                                  if (e.target) {
+                                                    e.target.value = ''
+                                                  }
+                                                }}
+                                                className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+                                              />
+                                              <p className="mt-1 text-xs text-gray-500">여러 사진을 선택할 수 있습니다 (최대 5MB)</p>
+                                              {allProblemsCompletionForms.get(problem.id)?.photos && allProblemsCompletionForms.get(problem.id)!.photos.length > 0 && (
+                                                <div className="mt-2 flex flex-wrap gap-2">
+                                                  {allProblemsCompletionForms.get(problem.id)!.photos.map((url, idx) => (
+                                                    <div key={idx} className="relative">
+                                                      <img
+                                                        src={url}
+                                                        alt={`처리 완료 사진 ${idx + 1}`}
+                                                        className="w-20 h-20 object-cover rounded"
+                                                      />
+                                                      <button
+                                                        onClick={() => {
+                                                          setAllProblemsCompletionForms((prev) => {
+                                                            const newMap = new Map(prev)
+                                                            const form = newMap.get(problem.id) || { description: '', photos: [] }
+                                                            newMap.set(problem.id, { ...form, photos: form.photos.filter((_, i) => i !== idx) })
+                                                            return newMap
+                                                          })
+                                                        }}
+                                                        className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs"
+                                                      >
+                                                        ×
+                                                      </button>
+                                                    </div>
+                                                  ))}
+                                                </div>
+                                              )}
+                                            </div>
+                                            <div className="flex gap-2">
+                                              <button
+                                                onClick={async () => {
+                                                  const form = allProblemsCompletionForms.get(problem.id)
+                                                  if (!form) return
+                                                  
+                                                  // 원본 상태 스냅샷 저장 (롤백용)
+                                                  const originalConfirmedIds = new Set(confirmedProblemIds)
+                                                  const wasConfirmed = confirmedProblemIds.has(problem.id)
+                                                  
+                                                  // 낙관적 업데이트: 즉시 UI에서 제거
+                                                  if (!wasConfirmed) {
+                                                    setConfirmedProblemIds(prev => new Set(prev).add(problem.id))
+                                                  }
+                                                  
+                                                  // 사진 업로드
+                                                  const photoUrls: string[] = []
+                                                  if (form.photos.length > 0) {
+                                                    for (const photoDataUrl of form.photos) {
+                                                      try {
+                                                        const response = await fetch(photoDataUrl)
+                                                        const blob = await response.blob()
+                                                        const file = new File([blob], `completion-${Date.now()}.jpg`, { type: blob.type })
+                                                        const url = await uploadPhoto(file, store.store_id, 'issue')
+                                                        photoUrls.push(url)
+                                                      } catch (uploadError) {
+                                                        console.error('Photo upload error:', uploadError)
+                                                        showToast('사진 업로드 중 오류가 발생했습니다.', 'error')
+                                                        // 롤백
+                                                        if (!wasConfirmed) {
+                                                          setConfirmedProblemIds(originalConfirmedIds)
+                                                        }
+                                                        return
+                                                      }
+                                                    }
+                                                  }
+                                                  
+                                                  // 백그라운드에서 API 호출
+                                                  try {
+                                                    const finalDescription = form.description.trim() || '처리 완료'
+                                                    const response = await fetch(`/api/franchise/problem-reports/${problem.id}/complete`, {
+                                                      method: 'PATCH',
+                                                      headers: { 'Content-Type': 'application/json' },
+                                                      body: JSON.stringify({
+                                                        description: finalDescription,
+                                                        photo_urls: photoUrls,
+                                                      }),
+                                                    })
+                                                    
+                                                    const data = await response.json()
+                                                    
+                                                    if (response.ok && data.success) {
+                                                      // 성공: 상태 유지 (이미 낙관적 업데이트됨)
+                                                      // 카운트만 부분 업데이트 (전체 새로고침 없음)
+                                                      setStoreStatuses((prev) => {
+                                                        return prev.map((s) => {
+                                                          if (s.store_id === store.store_id) {
+                                                            return {
+                                                              ...s,
+                                                              unprocessed_store_problems: Math.max(0, (s.unprocessed_store_problems || 0) - 1),
+                                                              completed_store_problems: (s.completed_store_problems || 0) + 1,
+                                                              store_problem_count: Math.max(0, (s.store_problem_count || 0) - 1),
+                                                              has_problem: (s.unprocessed_store_problems || 0) - 1 > 0 || 
+                                                                         (s.unconfirmed_vending_problems || 0) > 0 || 
+                                                                         (s.unconfirmed_lost_items || 0) > 0
+                                                            }
+                                                          }
+                                                          return s
+                                                        })
+                                                      })
+                                                      
+                                                      // 폼 초기화
+                                                      setAllProblemsCompletionForms((prev) => {
+                                                        const newMap = new Map(prev)
+                                                        newMap.delete(problem.id)
+                                                        return newMap
+                                                      })
+                                                      
+                                                      // 토스트 메시지
+                                                      showToast('처리 완료되었습니다.', 'success')
+                                                    } else {
+                                                      // 실패: 롤백
+                                                      if (!wasConfirmed) {
+                                                        setConfirmedProblemIds(originalConfirmedIds)
+                                                      }
+                                                      showToast(data.error || '처리 완료 중 오류가 발생했습니다.', 'error')
+                                                    }
+                                                  } catch (error) {
+                                                    // 에러 발생: 롤백
+                                                    if (!wasConfirmed) {
+                                                      setConfirmedProblemIds(originalConfirmedIds)
+                                                    }
+                                                    console.error('Error completing problem:', error)
+                                                    showToast('처리 완료 중 오류가 발생했습니다.', 'error')
+                                                  }
+                                                }}
+                                                className="px-3 py-1.5 bg-blue-600 text-white text-sm rounded hover:bg-blue-700"
+                                              >
+                                                완료
+                                              </button>
+                                              <button
+                                                onClick={() => {
+                                                  setAllProblemsCompletionForms((prev) => {
+                                                    const newMap = new Map(prev)
+                                                    newMap.delete(problem.id)
+                                                    return newMap
+                                                  })
+                                                }}
+                                                className="px-3 py-1.5 bg-gray-300 text-gray-700 text-sm rounded hover:bg-gray-400"
+                                              >
+                                                취소
+                                              </button>
+                                            </div>
+                                          </div>
+                                        ) : (
+                                          <button
+                                            onClick={() => {
+                                              setAllProblemsCompletionForms((prev) => {
+                                                const newMap = new Map(prev)
+                                                newMap.set(problem.id, { description: '', photos: [] })
+                                                return newMap
+                                              })
+                                            }}
+                                            className="ml-4 px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-md hover:bg-blue-700"
+                                          >
+                                            처리 완료
+                                          </button>
+                                        )}
                                       </div>
                                     </div>
                                   )
@@ -4307,37 +4549,58 @@ export default function FranchiseStoresStatusPage() {
                                         </div>
                                         <button
                                           onClick={async () => {
+                                            // 원본 상태 스냅샷 저장 (롤백용)
+                                            const originalConfirmedIds = new Set(confirmedProblemIds)
+                                            const wasConfirmed = confirmedProblemIds.has(problem.id)
+                                            
+                                            // 낙관적 업데이트: 즉시 UI에서 제거
+                                            if (!wasConfirmed) {
+                                              setConfirmedProblemIds(prev => new Set(prev).add(problem.id))
+                                            }
+                                            
+                                            // 백그라운드에서 API 호출
                                             try {
                                               const response = await fetch(`/api/franchise/problem-reports/${problem.id}/confirm`, {
                                                 method: 'PATCH',
                                               })
-                                              if (response.ok) {
-                                                // 데이터 다시 로드
-                                                const timestamp = new Date().getTime()
-                                                const [problemResponse, lostResponse] = await Promise.all([
-                                                  fetch(`/api/franchise/stores/${store.store_id}/problem-reports?t=${timestamp}`, {
-                                                    cache: 'no-store',
-                                                  }),
-                                                  fetch(`/api/franchise/stores/${store.store_id}/lost-items?t=${timestamp}`, {
-                                                    cache: 'no-store',
+                                              
+                                              const data = await response.json()
+                                              
+                                              if (response.ok && data.success) {
+                                                // 성공: 상태 유지 (이미 낙관적 업데이트됨)
+                                                // 카운트만 부분 업데이트 (전체 새로고침 없음)
+                                                setStoreStatuses((prev) => {
+                                                  return prev.map((s) => {
+                                                    if (s.store_id === store.store_id) {
+                                                      return {
+                                                        ...s,
+                                                        unconfirmed_vending_problems: Math.max(0, (s.unconfirmed_vending_problems || 0) - 1),
+                                                        vending_problem_count: Math.max(0, (s.vending_problem_count || 0) - 1),
+                                                        has_problem: (s.unprocessed_store_problems || 0) > 0 || 
+                                                                   (s.unconfirmed_vending_problems || 0) - 1 > 0 || 
+                                                                   (s.unconfirmed_lost_items || 0) > 0
+                                                      }
+                                                    }
+                                                    return s
                                                   })
-                                                ])
-                                                const problemData = await problemResponse.json()
-                                                const lostData = await lostResponse.json()
-                                                if (problemResponse.ok && problemData.data) {
-                                                  setAllProblemsData((prev) => {
-                                                    const newMap = new Map(prev)
-                                                    newMap.set(store.store_id, {
-                                                      store_problems: problemData.data.store_problems || [],
-                                                      vending_problems: problemData.data.vending_problems || [],
-                                                      lost_items: lostData.data || []
-                                                    })
-                                                    return newMap
-                                                  })
+                                                })
+                                                
+                                                // 토스트 메시지 (alert 대신)
+                                                showToast('확인 처리되었습니다.', 'success')
+                                              } else {
+                                                // 실패: 롤백
+                                                if (!wasConfirmed) {
+                                                  setConfirmedProblemIds(originalConfirmedIds)
                                                 }
+                                                showToast(data.error || '확인 처리 중 오류가 발생했습니다.', 'error')
                                               }
                                             } catch (error) {
+                                              // 에러 발생: 롤백
+                                              if (!wasConfirmed) {
+                                                setConfirmedProblemIds(originalConfirmedIds)
+                                              }
                                               console.error('Error confirming problem:', error)
+                                              showToast('확인 처리 중 오류가 발생했습니다.', 'error')
                                             }
                                           }}
                                           className="ml-4 px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-md hover:bg-blue-700"
@@ -4405,37 +4668,58 @@ export default function FranchiseStoresStatusPage() {
                                         </div>
                                         <button
                                           onClick={async () => {
+                                            // 원본 상태 스냅샷 저장 (롤백용)
+                                            const originalConfirmedIds = new Set(confirmedLostItemIds)
+                                            const wasConfirmed = confirmedLostItemIds.has(item.id)
+                                            
+                                            // 낙관적 업데이트: 즉시 UI에서 제거
+                                            if (!wasConfirmed) {
+                                              setConfirmedLostItemIds(prev => new Set(prev).add(item.id))
+                                            }
+                                            
+                                            // 백그라운드에서 API 호출
                                             try {
                                               const response = await fetch(`/api/franchise/lost-items/${item.id}/confirm`, {
                                                 method: 'PATCH',
                                               })
-                                              if (response.ok) {
-                                                // 데이터 다시 로드
-                                                const timestamp = new Date().getTime()
-                                                const [problemResponse, lostResponse] = await Promise.all([
-                                                  fetch(`/api/franchise/stores/${store.store_id}/problem-reports?t=${timestamp}`, {
-                                                    cache: 'no-store',
-                                                  }),
-                                                  fetch(`/api/franchise/stores/${store.store_id}/lost-items?t=${timestamp}`, {
-                                                    cache: 'no-store',
+                                              
+                                              const data = await response.json()
+                                              
+                                              if (response.ok && data.success) {
+                                                // 성공: 상태 유지 (이미 낙관적 업데이트됨)
+                                                // 카운트만 부분 업데이트 (전체 새로고침 없음)
+                                                setStoreStatuses((prev) => {
+                                                  return prev.map((s) => {
+                                                    if (s.store_id === store.store_id) {
+                                                      return {
+                                                        ...s,
+                                                        unconfirmed_lost_items: Math.max(0, (s.unconfirmed_lost_items || 0) - 1),
+                                                        lost_item_count: Math.max(0, (s.lost_item_count || 0) - 1),
+                                                        has_problem: (s.unprocessed_store_problems || 0) > 0 || 
+                                                                   (s.unconfirmed_vending_problems || 0) > 0 || 
+                                                                   (s.unconfirmed_lost_items || 0) - 1 > 0
+                                                      }
+                                                    }
+                                                    return s
                                                   })
-                                                ])
-                                                const problemData = await problemResponse.json()
-                                                const lostData = await lostResponse.json()
-                                                if (problemResponse.ok && problemData.data) {
-                                                  setAllProblemsData((prev) => {
-                                                    const newMap = new Map(prev)
-                                                    newMap.set(store.store_id, {
-                                                      store_problems: problemData.data.store_problems || [],
-                                                      vending_problems: problemData.data.vending_problems || [],
-                                                      lost_items: lostData.data || []
-                                                    })
-                                                    return newMap
-                                                  })
+                                                })
+                                                
+                                                // 토스트 메시지 (alert 대신)
+                                                showToast('확인 처리되었습니다.', 'success')
+                                              } else {
+                                                // 실패: 롤백
+                                                if (!wasConfirmed) {
+                                                  setConfirmedLostItemIds(originalConfirmedIds)
                                                 }
+                                                showToast(data.error || '확인 처리 중 오류가 발생했습니다.', 'error')
                                               }
                                             } catch (error) {
+                                              // 에러 발생: 롤백
+                                              if (!wasConfirmed) {
+                                                setConfirmedLostItemIds(originalConfirmedIds)
+                                              }
                                               console.error('Error confirming lost item:', error)
+                                              showToast('확인 처리 중 오류가 발생했습니다.', 'error')
                                             }
                                           }}
                                           className="ml-4 px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-md hover:bg-blue-700"
