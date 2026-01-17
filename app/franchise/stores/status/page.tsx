@@ -613,9 +613,11 @@ export default function FranchiseStoresStatusPage() {
         // description 기준 확인된 항목을 confirmedProblemIds에 동기화
         if (descriptionConfirmedIds.size > 0) {
           setConfirmedProblemIds((prev) => {
-            const newSet = new Set([...prev, ...descriptionConfirmedIds])
+            const newSet = new Set(prev)
+            Array.from(descriptionConfirmedIds).forEach(id => newSet.add(id))
             setConfirmedProblemDates((prevDates) => {
-              const newDates = new Map([...prevDates, ...descriptionConfirmedDates])
+              const newDates = new Map(prevDates)
+              descriptionConfirmedDates.forEach((value, key) => newDates.set(key, value))
               // 로컬 스토리지에 저장
               saveConfirmedProblemsToStorage(newSet, newDates)
               return newDates
@@ -625,8 +627,10 @@ export default function FranchiseStoresStatusPage() {
         }
         
         // 최종 confirmedProblemIds (description 동기화 후)
-        const finalConfirmedProblemIds = new Set([...confirmedProblemIds, ...descriptionConfirmedIds])
-        const finalConfirmedProblemDates = new Map([...confirmedProblemDates, ...descriptionConfirmedDates])
+        const finalConfirmedProblemIds = new Set(confirmedProblemIds)
+        Array.from(descriptionConfirmedIds).forEach(id => finalConfirmedProblemIds.add(id))
+        const finalConfirmedProblemDates = new Map(confirmedProblemDates)
+        descriptionConfirmedDates.forEach((value, key) => finalConfirmedProblemDates.set(key, value))
         
         // 24시간 이내 확인된 항목을 제외한 미확인 항목 수 계산
         // 방법 3: description 확인(주) + 로컬 스토리지(보조)
@@ -1864,9 +1868,11 @@ export default function FranchiseStoresStatusPage() {
           // description 기준 확인된 항목을 confirmedProblemIds에 동기화
           if (descriptionConfirmedIds.size > 0) {
             setConfirmedProblemIds((prev) => {
-              const newSet = new Set([...prev, ...descriptionConfirmedIds])
+              const newSet = new Set(prev)
+              Array.from(descriptionConfirmedIds).forEach(id => newSet.add(id))
               setConfirmedProblemDates((prevDates) => {
-                const newDates = new Map([...prevDates, ...descriptionConfirmedDates])
+                const newDates = new Map(prevDates)
+                descriptionConfirmedDates.forEach((value, key) => newDates.set(key, value))
                 // 로컬 스토리지에 저장
                 saveConfirmedProblemsToStorage(newSet, newDates)
                 return newDates
