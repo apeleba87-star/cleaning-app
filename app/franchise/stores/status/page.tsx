@@ -577,18 +577,74 @@ export default function FranchiseStoresStatusPage() {
           return false
         }).length
         
+        // 방법 3: description 기준으로 확인된 항목 동기화 (주)
+        // description에 [프렌차이즈 확인]이 있으면 confirmedProblemIds에 추가
+        const descriptionConfirmedIds = new Set<string>()
+        const descriptionConfirmedDates = new Map<string, string>()
+        
+        // 자판기 문제와 매장 문제에서 description 확인
+        const allProblems = [
+          ...(Array.isArray(reports.vending_problems) ? reports.vending_problems : []),
+          ...(Array.isArray(reports.store_problems) ? reports.store_problems : [])
+        ]
+        allProblems.forEach((p: any) => {
+          if (p.description?.includes('[프렌차이즈 확인]')) {
+            descriptionConfirmedIds.add(p.id)
+            // description에서 확인 시간 추출 시도 (없으면 updated_at 사용)
+            const match = p.description.match(/\[프렌차이즈 확인\]\s*(.+?)(?:\n|$)/)
+            if (match && match[1]) {
+              try {
+                const confirmedDate = new Date(match[1].trim())
+                if (!isNaN(confirmedDate.getTime())) {
+                  descriptionConfirmedDates.set(p.id, confirmedDate.toISOString())
+                }
+              } catch (e) {
+                // 파싱 실패 시 updated_at 사용
+                if (p.updated_at) {
+                  descriptionConfirmedDates.set(p.id, p.updated_at)
+                }
+              }
+            } else if (p.updated_at) {
+              descriptionConfirmedDates.set(p.id, p.updated_at)
+            }
+          }
+        })
+        
+        // description 기준 확인된 항목을 confirmedProblemIds에 동기화
+        if (descriptionConfirmedIds.size > 0) {
+          setConfirmedProblemIds((prev) => {
+            const newSet = new Set([...prev, ...descriptionConfirmedIds])
+            setConfirmedProblemDates((prevDates) => {
+              const newDates = new Map([...prevDates, ...descriptionConfirmedDates])
+              // 로컬 스토리지에 저장
+              saveConfirmedProblemsToStorage(newSet, newDates)
+              return newDates
+            })
+            return newSet
+          })
+        }
+        
+        // 최종 confirmedProblemIds (description 동기화 후)
+        const finalConfirmedProblemIds = new Set([...confirmedProblemIds, ...descriptionConfirmedIds])
+        const finalConfirmedProblemDates = new Map([...confirmedProblemDates, ...descriptionConfirmedDates])
+        
         // 24시간 이내 확인된 항목을 제외한 미확인 항목 수 계산
+        // 방법 3: description 확인(주) + 로컬 스토리지(보조)
         const unconfirmedVendingCount = reports.vending_problems.filter((p: any) => {
           // status가 completed인 항목은 제외
           if (p.status === 'completed') {
             return false
           }
+          // description에 확인 정보가 있으면 제외 (주)
+          if (p.description?.includes('[프렌차이즈 확인]')) {
+            return false
+          }
           // 확인된 항목은 제외 (24시간 이내 확인된 것만)
-          const confirmedTimestamp = confirmedProblemDates.get(p.id)
+          const confirmedTimestamp = finalConfirmedProblemDates.get(p.id)
           if (confirmedTimestamp && isConfirmedWithin24Hours(confirmedTimestamp)) {
             return false
           }
-          if (confirmedProblemIds.has(p.id)) {
+          if (finalConfirmedProblemIds.has(p.id)) {
             // timestamp가 없으면 24시간 지났다고 간주
             return false
           }
@@ -599,11 +655,15 @@ export default function FranchiseStoresStatusPage() {
           if (p.status === 'completed') {
             return false
           }
-          const confirmedTimestamp = confirmedProblemDates.get(p.id)
+          // description에 확인 정보가 있으면 제외 (주)
+          if (p.description?.includes('[프렌차이즈 확인]')) {
+            return false
+          }
+          const confirmedTimestamp = finalConfirmedProblemDates.get(p.id)
           if (confirmedTimestamp && isConfirmedWithin24Hours(confirmedTimestamp)) {
             return false
           }
-          if (confirmedProblemIds.has(p.id)) {
+          if (finalConfirmedProblemIds.has(p.id)) {
             return false
           }
           return true
@@ -1278,12 +1338,14 @@ export default function FranchiseStoresStatusPage() {
         setConfirmedProblemIds((prev) => {
           const newSet = new Set(prev)
           newSet.delete(problemId)
+          setConfirmedProblemDates((prevDates) => {
+            const newDates = new Map(prevDates)
+            newDates.delete(problemId)
+            // 로컬 스토리지도 롤백
+            saveConfirmedProblemsToStorage(newSet, newDates)
+            return newDates
+          })
           return newSet
-        })
-        setConfirmedProblemDates((prev) => {
-          const newMap = new Map(prev)
-          newMap.delete(problemId)
-          return newMap
         })
         setProblemReports((prev) => {
           const updated = { ...prev }
@@ -1303,12 +1365,14 @@ export default function FranchiseStoresStatusPage() {
       setConfirmedProblemIds((prev) => {
         const newSet = new Set(prev)
         newSet.delete(problemId)
+        setConfirmedProblemDates((prevDates) => {
+          const newDates = new Map(prevDates)
+          newDates.delete(problemId)
+          // 로컬 스토리지도 롤백
+          saveConfirmedProblemsToStorage(newSet, newDates)
+          return newDates
+        })
         return newSet
-      })
-      setConfirmedProblemDates((prev) => {
-        const newMap = new Map(prev)
-        newMap.delete(problemId)
-        return newMap
       })
       setProblemReports((prev) => {
         const updated = { ...prev }
@@ -1763,8 +1827,53 @@ export default function FranchiseStoresStatusPage() {
             })
           )
           setAllProblemsData(newData)
-          // 모달이 열릴 때 확인된 ID 초기화 (서버에서 최신 데이터를 가져왔으므로)
-          // 단, 모달이 열려있는 동안에는 유지하여 연속 처리 가능
+          
+          // 방법 3: description 기준으로 확인된 항목 동기화 (주)
+          // 모든 매장의 문제에서 description에 [프렌차이즈 확인]이 있는 항목 찾기
+          const descriptionConfirmedIds = new Set<string>()
+          const descriptionConfirmedDates = new Map<string, string>()
+          
+          newData.forEach((problemsData) => {
+            const allProblems = [
+              ...(Array.isArray(problemsData.vending_problems) ? problemsData.vending_problems : []),
+              ...(Array.isArray(problemsData.store_problems) ? problemsData.store_problems : [])
+            ]
+            allProblems.forEach((p: any) => {
+              if (p.description?.includes('[프렌차이즈 확인]')) {
+                descriptionConfirmedIds.add(p.id)
+                // description에서 확인 시간 추출 시도
+                const match = p.description.match(/\[프렌차이즈 확인\]\s*(.+?)(?:\n|$)/)
+                if (match && match[1]) {
+                  try {
+                    const confirmedDate = new Date(match[1].trim())
+                    if (!isNaN(confirmedDate.getTime())) {
+                      descriptionConfirmedDates.set(p.id, confirmedDate.toISOString())
+                    }
+                  } catch (e) {
+                    if (p.updated_at) {
+                      descriptionConfirmedDates.set(p.id, p.updated_at)
+                    }
+                  }
+                } else if (p.updated_at) {
+                  descriptionConfirmedDates.set(p.id, p.updated_at)
+                }
+              }
+            })
+          })
+          
+          // description 기준 확인된 항목을 confirmedProblemIds에 동기화
+          if (descriptionConfirmedIds.size > 0) {
+            setConfirmedProblemIds((prev) => {
+              const newSet = new Set([...prev, ...descriptionConfirmedIds])
+              setConfirmedProblemDates((prevDates) => {
+                const newDates = new Map([...prevDates, ...descriptionConfirmedDates])
+                // 로컬 스토리지에 저장
+                saveConfirmedProblemsToStorage(newSet, newDates)
+                return newDates
+              })
+              return newSet
+            })
+          }
         } catch (error) {
           console.error('Error loading all problems data:', error)
         } finally {
@@ -1773,8 +1882,9 @@ export default function FranchiseStoresStatusPage() {
       }
       loadData()
     } else {
-      // 모달이 닫힐 때 확인된 ID 초기화 및 전체 상태 동기화
-      setConfirmedProblemIds(new Set())
+      // 모달이 닫힐 때는 확인된 ID를 초기화하지 않음
+      // description 기준 확인된 항목은 유지되어야 하므로
+      // 전체 새로고침만 수행 (다음 로드 시 description 기준으로 다시 동기화됨)
       setConfirmedLostItemIds(new Set())
       // 모달 닫을 때만 전체 새로고침 (사용자가 여러 건 처리한 후 최종 동기화)
       // loadStoreStatuses는 함수이므로 직접 호출 가능
@@ -2738,7 +2848,7 @@ export default function FranchiseStoresStatusPage() {
                             </div>
                             
                             {showCompletionForm === problem.id && (
-                              <div className="mt-4 p-4 bg-white border border-red-200 rounded-lg space-y-3">
+                              <div className="mt-4 p-3 sm:p-4 bg-white border border-red-200 rounded-lg space-y-3">
                                 <div>
                                   <label className="block text-sm font-medium text-gray-700 mb-1">
                                     처리 완료 설명
@@ -2746,7 +2856,7 @@ export default function FranchiseStoresStatusPage() {
                                   <textarea
                                     value={completionDescription}
                                     onChange={(e) => setCompletionDescription(e.target.value)}
-                                    placeholder="처리 완료 설명을 입력하세요"
+                                    placeholder="처리 완료 방법을 상세히 입력해주세요 (업체관리자/점주 확인용)"
                                     className="w-full px-3 py-2 border border-gray-300 rounded-md"
                                     rows={3}
                                   />
@@ -2795,13 +2905,13 @@ export default function FranchiseStoresStatusPage() {
                                           <img
                                             src={url}
                                             alt={`처리 완료 사진 ${idx + 1}`}
-                                            className="w-20 h-20 object-cover rounded"
+                                            className="w-16 h-16 sm:w-20 sm:h-20 object-cover rounded"
                                           />
                                           <button
                                             onClick={() => {
                                               setCompletionPhotos((prev) => prev.filter((_, i) => i !== idx))
                                             }}
-                                            className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs"
+                                            className="absolute -top-1 -right-1 sm:-top-2 sm:-right-2 bg-red-500 text-white rounded-full w-5 h-5 sm:w-6 sm:h-6 flex items-center justify-center text-xs"
                                           >
                                             ×
                                           </button>
@@ -2810,10 +2920,10 @@ export default function FranchiseStoresStatusPage() {
                                     </div>
                                   )}
                                 </div>
-                                <div className="flex gap-2">
+                                <div className="flex flex-col sm:flex-row gap-2">
                                   <button
                                     onClick={() => handleCompleteStoreProblem(problem.id)}
-                                    className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+                                    className="w-full sm:w-auto px-4 py-2.5 bg-blue-600 text-white rounded hover:bg-blue-700"
                                   >
                                     완료
                                   </button>
@@ -2823,7 +2933,7 @@ export default function FranchiseStoresStatusPage() {
                                       setCompletionDescription('')
                                       setCompletionPhotos([])
                                     }}
-                                    className="px-4 py-2 bg-gray-300 text-gray-700 rounded hover:bg-gray-400"
+                                    className="w-full sm:w-auto px-4 py-2.5 bg-gray-300 text-gray-700 rounded hover:bg-gray-400"
                                   >
                                     취소
                                   </button>
@@ -2955,6 +3065,8 @@ export default function FranchiseStoresStatusPage() {
                       <span className="text-sm font-semibold text-orange-600 bg-white px-3 py-1 rounded-full">
                         {problemReports.vending_problems.filter((p) => {
                           if (p.status === 'completed') return false
+                          // 방법 3: description에 확인 정보가 있으면 제외 (주)
+                          if (p.description?.includes('[프렌차이즈 확인]')) return false
                           // 확인된 항목은 24시간 이내라도 카운트에서 제외
                           const confirmedTimestamp = confirmedProblemDates.get(p.id)
                           if (confirmedTimestamp && isConfirmedWithin24Hours(confirmedTimestamp)) {
@@ -2979,6 +3091,8 @@ export default function FranchiseStoresStatusPage() {
                     {problemReports.vending_problems
                       .filter((p) => {
                         if (p.status === 'completed') return false
+                        // 방법 3: description에 확인 정보가 있으면 제외 (주)
+                        if (p.description?.includes('[프렌차이즈 확인]')) return false
                         // 확인된 항목은 24시간 이내라도 표시하지 않음
                         const confirmedTimestamp = confirmedProblemDates.get(p.id)
                         if (confirmedTimestamp && isConfirmedWithin24Hours(confirmedTimestamp)) {
@@ -4186,11 +4300,11 @@ export default function FranchiseStoresStatusPage() {
 
       {/* 문제발생 전체보기 모달 */}
       {showAllProblemsModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50" onClick={() => setShowAllProblemsModal(false)}>
-          <div className="bg-white rounded-lg p-6 max-w-5xl w-full mx-4 max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="text-2xl font-semibold text-red-700">전체 문제발생 현황</h2>
-              <button onClick={() => setShowAllProblemsModal(false)} className="text-gray-500 hover:text-gray-700 text-2xl">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-2 sm:p-4" onClick={() => setShowAllProblemsModal(false)}>
+          <div className="bg-white rounded-lg p-3 sm:p-6 max-w-5xl w-full max-h-[95vh] sm:max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <div className="flex justify-between items-center mb-3 sm:mb-4">
+              <h2 className="text-lg sm:text-2xl font-semibold text-red-700">전체 문제발생 현황</h2>
+              <button onClick={() => setShowAllProblemsModal(false)} className="text-gray-500 hover:text-gray-700 text-xl sm:text-2xl w-8 h-8 sm:w-auto sm:h-auto flex items-center justify-center">
                 ×
               </button>
             </div>
@@ -4211,13 +4325,24 @@ export default function FranchiseStoresStatusPage() {
                     const lostItems = allProblemsData.get(store.store_id)?.lost_items || []
                     
                     // 미처리/미확인 항목만 필터링 (확인 처리된 항목 제외)
-                    // 낙관적 업데이트: confirmedProblemIds와 confirmedLostItemIds에 있는 항목은 제외
-                    const unprocessedStoreProblems = storeProblems.filter((p: any) => 
-                      p.status !== 'completed' && !confirmedProblemIds.has(p.id)
-                    )
-                    const unconfirmedVendingProblems = vendingProblems.filter((p: any) => 
-                      p.status !== 'completed' && !confirmedProblemIds.has(p.id)
-                    )
+                    // 방법 3: description 확인(주) + 로컬 스토리지(보조)
+                    // description에 [프렌차이즈 확인]이 있으면 확인된 것으로 판단
+                    const unprocessedStoreProblems = storeProblems.filter((p: any) => {
+                      if (p.status === 'completed') return false
+                      // description에 확인 정보가 있으면 제외
+                      if (p.description?.includes('[프렌차이즈 확인]')) return false
+                      // 로컬 스토리지에 있으면 제외 (낙관적 업데이트)
+                      if (confirmedProblemIds.has(p.id)) return false
+                      return true
+                    })
+                    const unconfirmedVendingProblems = vendingProblems.filter((p: any) => {
+                      if (p.status === 'completed') return false
+                      // description에 확인 정보가 있으면 제외 (주)
+                      if (p.description?.includes('[프렌차이즈 확인]')) return false
+                      // 로컬 스토리지에 있으면 제외 (보조 - 낙관적 업데이트)
+                      if (confirmedProblemIds.has(p.id)) return false
+                      return true
+                    })
                     const unconfirmedLostItems = lostItems.filter((item: any) => 
                       item.status !== 'completed' && !confirmedLostItemIds.has(item.id)
                     )
@@ -4250,9 +4375,9 @@ export default function FranchiseStoresStatusPage() {
                                   const originalDescription = problem.description?.split('\n\n[처리 완료]')[0] || problem.description
                                   const originalPhotos = problem.photo_url ? getPhotoUrls(problem.photo_url) : []
                                   return (
-                                    <div key={problem.id} className="border-2 border-red-300 bg-white rounded-lg p-4 shadow-sm">
-                                      <div className="flex justify-between items-start mb-3">
-                                        <div className="flex-1">
+                                    <div key={problem.id} className="border-2 border-red-300 bg-white rounded-lg p-3 sm:p-4 shadow-sm">
+                                      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start mb-3 gap-3">
+                                        <div className="flex-1 w-full">
                                           <div className="mb-2">
                                             <span className="inline-block px-3 py-1 bg-red-600 text-white text-sm font-semibold rounded-md">
                                               {problem.title?.replace(/^매장 문제:\s*/, '') || problem.title || '매장 문제'}
@@ -4283,7 +4408,7 @@ export default function FranchiseStoresStatusPage() {
                                           </p>
                                         </div>
                                         {allProblemsCompletionForms.get(problem.id) ? (
-                                          <div className="ml-4 space-y-2 min-w-[200px]">
+                                          <div className="ml-0 sm:ml-4 mt-3 sm:mt-0 space-y-2 w-full sm:w-auto">
                                             <textarea
                                               value={allProblemsCompletionForms.get(problem.id)?.description || ''}
                                               onChange={(e) => {
@@ -4294,7 +4419,7 @@ export default function FranchiseStoresStatusPage() {
                                                   return newMap
                                                 })
                                               }}
-                                              placeholder="처리 완료 설명을 입력하세요"
+                                              placeholder="처리 완료 방법을 상세히 입력해주세요 (업체관리자/점주 확인용)"
                                               className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
                                               rows={3}
                                             />
@@ -4344,7 +4469,7 @@ export default function FranchiseStoresStatusPage() {
                                                       <img
                                                         src={url}
                                                         alt={`처리 완료 사진 ${idx + 1}`}
-                                                        className="w-20 h-20 object-cover rounded"
+                                                        className="w-16 h-16 sm:w-20 sm:h-20 object-cover rounded"
                                                       />
                                                       <button
                                                         onClick={() => {
@@ -4355,7 +4480,7 @@ export default function FranchiseStoresStatusPage() {
                                                             return newMap
                                                           })
                                                         }}
-                                                        className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs"
+                                                        className="absolute -top-1 -right-1 sm:-top-2 sm:-right-2 bg-red-500 text-white rounded-full w-5 h-5 sm:w-6 sm:h-6 flex items-center justify-center text-xs"
                                                       >
                                                         ×
                                                       </button>
@@ -4364,7 +4489,7 @@ export default function FranchiseStoresStatusPage() {
                                                 </div>
                                               )}
                                             </div>
-                                            <div className="flex gap-2">
+                                            <div className="flex flex-col sm:flex-row gap-2">
                                               <button
                                                 onClick={async () => {
                                                   const form = allProblemsCompletionForms.get(problem.id)
@@ -4460,7 +4585,7 @@ export default function FranchiseStoresStatusPage() {
                                                     showToast('처리 완료 중 오류가 발생했습니다.', 'error')
                                                   }
                                                 }}
-                                                className="px-3 py-1.5 bg-blue-600 text-white text-sm rounded hover:bg-blue-700"
+                                                className="w-full sm:w-auto px-4 py-2.5 bg-blue-600 text-white text-sm rounded hover:bg-blue-700"
                                               >
                                                 완료
                                               </button>
@@ -4472,7 +4597,7 @@ export default function FranchiseStoresStatusPage() {
                                                     return newMap
                                                   })
                                                 }}
-                                                className="px-3 py-1.5 bg-gray-300 text-gray-700 text-sm rounded hover:bg-gray-400"
+                                                className="w-full sm:w-auto px-4 py-2.5 bg-gray-300 text-gray-700 text-sm rounded hover:bg-gray-400"
                                               >
                                                 취소
                                               </button>
@@ -4487,7 +4612,7 @@ export default function FranchiseStoresStatusPage() {
                                                 return newMap
                                               })
                                             }}
-                                            className="ml-4 px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-md hover:bg-blue-700"
+                                            className="w-full sm:w-auto sm:ml-4 px-4 py-2.5 bg-blue-600 text-white text-sm font-semibold rounded-md hover:bg-blue-700"
                                           >
                                             처리 완료
                                           </button>
@@ -4551,11 +4676,23 @@ export default function FranchiseStoresStatusPage() {
                                           onClick={async () => {
                                             // 원본 상태 스냅샷 저장 (롤백용)
                                             const originalConfirmedIds = new Set(confirmedProblemIds)
+                                            const originalConfirmedDates = new Map(confirmedProblemDates)
                                             const wasConfirmed = confirmedProblemIds.has(problem.id)
                                             
                                             // 낙관적 업데이트: 즉시 UI에서 제거
                                             if (!wasConfirmed) {
-                                              setConfirmedProblemIds(prev => new Set(prev).add(problem.id))
+                                              const now = new Date().toISOString()
+                                              setConfirmedProblemIds(prev => {
+                                                const newSet = new Set(prev).add(problem.id)
+                                                setConfirmedProblemDates(prevDates => {
+                                                  const newDates = new Map(prevDates)
+                                                  newDates.set(problem.id, now)
+                                                  // 로컬 스토리지에 저장 (방법 3: 보조)
+                                                  saveConfirmedProblemsToStorage(newSet, newDates)
+                                                  return newDates
+                                                })
+                                                return newSet
+                                              })
                                             }
                                             
                                             // 백그라운드에서 API 호출
@@ -4591,6 +4728,9 @@ export default function FranchiseStoresStatusPage() {
                                                 // 실패: 롤백
                                                 if (!wasConfirmed) {
                                                   setConfirmedProblemIds(originalConfirmedIds)
+                                                  setConfirmedProblemDates(originalConfirmedDates)
+                                                  // 로컬 스토리지도 롤백
+                                                  saveConfirmedProblemsToStorage(originalConfirmedIds, originalConfirmedDates)
                                                 }
                                                 showToast(data.error || '확인 처리 중 오류가 발생했습니다.', 'error')
                                               }
@@ -4598,6 +4738,9 @@ export default function FranchiseStoresStatusPage() {
                                               // 에러 발생: 롤백
                                               if (!wasConfirmed) {
                                                 setConfirmedProblemIds(originalConfirmedIds)
+                                                setConfirmedProblemDates(originalConfirmedDates)
+                                                // 로컬 스토리지도 롤백
+                                                saveConfirmedProblemsToStorage(originalConfirmedIds, originalConfirmedDates)
                                               }
                                               console.error('Error confirming problem:', error)
                                               showToast('확인 처리 중 오류가 발생했습니다.', 'error')
@@ -4750,11 +4893,11 @@ export default function FranchiseStoresStatusPage() {
 
       {/* 알림 전체보기 모달 */}
       {showAllNotificationsModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50" onClick={() => setShowAllNotificationsModal(false)}>
-          <div className="bg-white rounded-lg p-6 max-w-5xl w-full mx-4 max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="text-2xl font-semibold text-yellow-700">전체 알림 현황</h2>
-              <button onClick={() => setShowAllNotificationsModal(false)} className="text-gray-500 hover:text-gray-700 text-2xl">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-2 sm:p-4" onClick={() => setShowAllNotificationsModal(false)}>
+          <div className="bg-white rounded-lg p-3 sm:p-6 max-w-5xl w-full max-h-[95vh] sm:max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <div className="flex justify-between items-center mb-3 sm:mb-4">
+              <h2 className="text-lg sm:text-2xl font-semibold text-yellow-700">전체 알림 현황</h2>
+              <button onClick={() => setShowAllNotificationsModal(false)} className="text-gray-500 hover:text-gray-700 text-xl sm:text-2xl w-8 h-8 sm:w-auto sm:h-auto flex items-center justify-center">
                 ×
               </button>
             </div>

@@ -572,8 +572,9 @@ export default function MonthlyReport({ storeId, storeName }: MonthlyReportProps
                       animationEasing="ease-out"
                     >
                       {requestStatusData.map((entry, index) => {
-                        // 완료는 초록색, 반려는 파란색
+                        // 처리완료는 진한 녹색, 처리중은 주황색, 반려는 파란색
                         const color = entry.name === '처리완료' || entry.name === 'completed' ? '#10B981' : 
+                                     entry.name === '처리중' || entry.name === 'in_progress' ? '#F59E0B' :
                                      entry.name === '반려' || entry.name === 'rejected' ? '#3B82F6' : 
                                      COLORS[index % COLORS.length]
                         return <Cell key={`cell-${index}`} fill={color} />
@@ -586,9 +587,10 @@ export default function MonthlyReport({ storeId, storeName }: MonthlyReportProps
                   {requestStatusData.map((entry, index) => {
                     const percent = (entry.value / requestStatusData.reduce((sum, e) => sum + e.value, 0)) * 100
                     const color = entry.name === '처리완료' || entry.name === 'completed' ? '#10B981' : 
+                                 entry.name === '처리중' || entry.name === 'in_progress' ? '#F59E0B' :
                                  entry.name === '반려' || entry.name === 'rejected' ? '#3B82F6' : 
                                  COLORS[index % COLORS.length]
-                    const displayName = entry.name === '처리완료' ? '처리완료' : entry.name === '반려' ? '반려' : entry.name
+                    const displayName = entry.name === '처리완료' ? '처리완료' : entry.name === '처리중' ? '처리중' : entry.name === '반려' ? '반려' : entry.name
                     return (
                       <div key={index} className="flex items-center gap-2 text-sm">
                         <div 
@@ -604,9 +606,10 @@ export default function MonthlyReport({ storeId, storeName }: MonthlyReportProps
                   {requestStatusData.map((entry, index) => {
                     const percent = (entry.value / requestStatusData.reduce((sum, e) => sum + e.value, 0)) * 100
                     const color = entry.name === '처리완료' || entry.name === 'completed' ? '#10B981' : 
+                                 entry.name === '처리중' || entry.name === 'in_progress' ? '#F59E0B' :
                                  entry.name === '반려' || entry.name === 'rejected' ? '#3B82F6' : 
                                  COLORS[index % COLORS.length]
-                    const displayName = entry.name === '처리완료' ? '처리완료' : entry.name === '반려' ? '반려' : entry.name
+                    const displayName = entry.name === '처리완료' ? '처리완료' : entry.name === '처리중' ? '처리중' : entry.name === '반려' ? '반려' : entry.name
                     return (
                       <div key={index} className="flex flex-col items-center">
                         <div className="text-sm font-medium text-gray-700">{displayName}</div>
