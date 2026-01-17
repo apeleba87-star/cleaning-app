@@ -12,7 +12,7 @@ interface MonthlyReportData {
   summary: {
     total_days: number
     management_completion_rate: number
-    checklist_completion_rate: number
+    avg_request_processing_time: number
     total_problems: number
     total_lost_items: number
     total_requests: number
@@ -20,11 +20,11 @@ interface MonthlyReportData {
     management_days: number
     // 전달대비 데이터
     prev_management_completion_rate?: number
-    prev_checklist_completion_rate?: number
+    prev_avg_request_processing_time?: number
     prev_total_problems?: number
     prev_user_coverage?: number
     management_rate_diff?: number
-    checklist_rate_diff?: number
+    request_processing_time_diff?: number
     problem_diff?: number
     user_coverage_diff?: number
   }
@@ -32,22 +32,22 @@ interface MonthlyReportData {
     date: string
     attendance_count: number
     attendance_completed: number
-    checklist_count: number
-    checklist_completed: number
     problem_count: number
     lost_item_count: number
     request_count: number
     request_completed: number
+    request_processing_time_sum: number
+    request_processing_count: number
   }>
   weekly_stats: Array<{
     week: number
     attendance_count: number
     attendance_completed: number
-    checklist_count: number
-    checklist_completed: number
     problem_count: number
     request_count: number
     request_completed: number
+    request_processing_time_sum: number
+    request_processing_count: number
   }>
   problem_type_stats: { [type: string]: number }
   request_status_stats: { [status: string]: number }
@@ -188,14 +188,18 @@ export default function MonthlyReport({ storeId, storeName }: MonthlyReportProps
   const dailyCompletionData = reportData.daily_stats.map((stat) => ({
     date: formatDate(stat.date),
     관리완료율: stat.attendance_count > 0 ? Math.round((stat.attendance_completed / stat.attendance_count) * 100) : 0,
-    체크리스트완료율: stat.checklist_count > 0 ? Math.round((stat.checklist_completed / stat.checklist_count) * 100) : 0,
+    평균요청처리시간: stat.request_processing_count > 0 
+      ? Math.round((stat.request_processing_time_sum / stat.request_processing_count) * 10) / 10 
+      : 0,
   }))
 
   // 주차별 데이터
   const weeklyData = reportData.weekly_stats.map((stat) => ({
     주차: `${stat.week}주차`,
     관리완료율: stat.attendance_count > 0 ? Math.round((stat.attendance_completed / stat.attendance_count) * 100) : 0,
-    체크리스트완료율: stat.checklist_count > 0 ? Math.round((stat.checklist_completed / stat.checklist_count) * 100) : 0,
+    평균요청처리시간: stat.request_processing_count > 0 
+      ? Math.round((stat.request_processing_time_sum / stat.request_processing_count) * 10) / 10 
+      : 0,
     문제건수: stat.problem_count,
     요청건수: stat.request_count,
   }))
@@ -216,13 +220,6 @@ export default function MonthlyReport({ storeId, storeName }: MonthlyReportProps
   const avgManagementRate = reportData.daily_stats.length > 0
     ? Math.round(reportData.daily_stats.reduce((sum, stat) => {
         const rate = stat.attendance_count > 0 ? (stat.attendance_completed / stat.attendance_count) * 100 : 0
-        return sum + rate
-      }, 0) / reportData.daily_stats.length)
-    : 0
-
-  const avgChecklistRate = reportData.daily_stats.length > 0
-    ? Math.round(reportData.daily_stats.reduce((sum, stat) => {
-        const rate = stat.checklist_count > 0 ? (stat.checklist_completed / stat.checklist_count) * 100 : 0
         return sum + rate
       }, 0) / reportData.daily_stats.length)
     : 0
@@ -312,28 +309,33 @@ export default function MonthlyReport({ storeId, storeName }: MonthlyReportProps
             <div className="text-xs opacity-75 mt-2">관리일수: {reportData.summary.management_days}일</div>
           </div>
 
-          {/* 체크리스트 완료율 */}
+          {/* 평균 요청 처리 시간 */}
           <div className="bg-gradient-to-br from-green-500 to-green-600 rounded-xl p-6 text-white shadow-lg transform hover:scale-105 transition-transform relative">
             <div className="absolute top-3 right-3">
               <svg className="w-8 h-8 opacity-80" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
             </div>
-            <div className="text-sm opacity-90 mb-2">체크리스트 완료율</div>
-            <div className="text-3xl font-bold mb-2">{reportData.summary.checklist_completion_rate}%</div>
-            {reportData.summary.checklist_rate_diff !== undefined && reportData.summary.checklist_rate_diff !== 0 && (
+            <div className="text-sm opacity-90 mb-2">평균 요청 처리 시간</div>
+            <div className="text-3xl font-bold mb-2">{reportData.summary.avg_request_processing_time}일</div>
+            {reportData.summary.request_processing_time_diff !== undefined && reportData.summary.request_processing_time_diff !== 0 && (
               <div className="flex items-center gap-1 text-xs opacity-90 mb-1">
-                <span className={reportData.summary.checklist_rate_diff > 0 ? 'text-green-200' : 'text-red-200'}>
-                  {reportData.summary.checklist_rate_diff > 0 ? '+' : ''}{reportData.summary.checklist_rate_diff}%
+                <span className={reportData.summary.request_processing_time_diff < 0 ? 'text-green-200' : 'text-red-200'}>
+                  {reportData.summary.request_processing_time_diff > 0 ? '+' : ''}{reportData.summary.request_processing_time_diff.toFixed(1)}일
                 </span>
-                {reportData.summary.checklist_rate_diff > 0 && (
+                {reportData.summary.request_processing_time_diff < 0 && (
                   <svg className="w-4 h-4 text-green-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 10l7-7m0 0l7 7m-7-7v18" />
                   </svg>
                 )}
+                {reportData.summary.request_processing_time_diff > 0 && (
+                  <svg className="w-4 h-4 text-red-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
+                  </svg>
+                )}
               </div>
             )}
-            <div className="text-xs opacity-75">총 {reportData.summary.total_days}일</div>
+            <div className="text-xs opacity-75">완료된 요청 기준</div>
           </div>
 
           {/* 문제 보고 */}
@@ -406,10 +408,12 @@ export default function MonthlyReport({ storeId, storeName }: MonthlyReportProps
               <LineChart data={dailyCompletionData}>
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="date" />
-                <YAxis domain={[0, 100]} />
+                <YAxis yAxisId="left" domain={[0, 100]} label={{ value: '관리완료율 (%)', angle: -90, position: 'insideLeft' }} />
+                <YAxis yAxisId="right" orientation="right" domain={[0, 'dataMax + 1']} label={{ value: '평균 요청 처리 시간 (일)', angle: 90, position: 'insideRight' }} />
                 <Tooltip />
                 <Legend />
                 <Line 
+                  yAxisId="left"
                   type="monotone" 
                   dataKey="관리완료율" 
                   stroke="#3B82F6" 
@@ -420,8 +424,9 @@ export default function MonthlyReport({ storeId, storeName }: MonthlyReportProps
                   animationEasing="ease-out"
                 />
                 <Line 
+                  yAxisId="right"
                   type="monotone" 
-                  dataKey="체크리스트완료율" 
+                  dataKey="평균요청처리시간" 
                   stroke="#10B981" 
                   strokeWidth={2}
                   dot={{ fill: '#10B981', r: 4 }}
@@ -446,10 +451,12 @@ export default function MonthlyReport({ storeId, storeName }: MonthlyReportProps
               <BarChart data={weeklyData}>
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="주차" />
-                <YAxis domain={[0, 100]} />
+                <YAxis yAxisId="left" domain={[0, 100]} label={{ value: '관리완료율 (%)', angle: -90, position: 'insideLeft' }} />
+                <YAxis yAxisId="right" orientation="right" domain={[0, 'dataMax + 1']} label={{ value: '평균 요청 처리 시간 (일)', angle: 90, position: 'insideRight' }} />
                 <Tooltip />
                 <Legend />
                 <Bar 
+                  yAxisId="left"
                   dataKey="관리완료율" 
                   fill="#3B82F6"
                   isAnimationActive={true}
@@ -457,13 +464,15 @@ export default function MonthlyReport({ storeId, storeName }: MonthlyReportProps
                   animationEasing="ease-out"
                 />
                 <Bar 
-                  dataKey="체크리스트완료율" 
+                  yAxisId="right"
+                  dataKey="평균요청처리시간" 
                   fill="#10B981"
                   isAnimationActive={true}
                   animationDuration={1000}
                   animationEasing="ease-out"
                 />
                 <Bar 
+                  yAxisId="left"
                   dataKey="문제건수" 
                   fill="#EF4444"
                   isAnimationActive={true}
@@ -471,6 +480,7 @@ export default function MonthlyReport({ storeId, storeName }: MonthlyReportProps
                   animationEasing="ease-out"
                 />
                 <Bar 
+                  yAxisId="left"
                   dataKey="요청건수" 
                   fill="#8B5CF6"
                   isAnimationActive={true}
@@ -654,7 +664,7 @@ export default function MonthlyReport({ storeId, storeName }: MonthlyReportProps
                 <tr className="border-b-2 border-gray-300">
                   <th className="px-4 py-3 text-left font-semibold text-gray-700">날짜</th>
                   <th className="px-4 py-3 text-center font-semibold text-gray-700">관리 완료율</th>
-                  <th className="px-4 py-3 text-center font-semibold text-gray-700">체크리스트 완료율</th>
+                  <th className="px-4 py-3 text-center font-semibold text-gray-700">평균 요청 처리 시간</th>
                   <th className="px-4 py-3 text-center font-semibold text-gray-700">문제</th>
                   <th className="px-4 py-3 text-center font-semibold text-gray-700">분실물</th>
                   <th className="px-4 py-3 text-center font-semibold text-gray-700">요청</th>
@@ -665,10 +675,10 @@ export default function MonthlyReport({ storeId, storeName }: MonthlyReportProps
                   const managementRate = stat.attendance_count > 0 
                     ? Math.round((stat.attendance_completed / stat.attendance_count) * 100) 
                     : 0
-                  const checklistRate = stat.checklist_count > 0 
-                    ? Math.round((stat.checklist_completed / stat.checklist_count) * 100) 
+                  const avgRequestProcessingTime = stat.request_processing_count > 0
+                    ? Math.round((stat.request_processing_time_sum / stat.request_processing_count) * 10) / 10
                     : 0
-                  const hasData = managementRate > 0 || checklistRate > 0 || stat.problem_count > 0 || stat.lost_item_count > 0 || stat.request_count > 0
+                  const hasData = managementRate > 0 || avgRequestProcessingTime > 0 || stat.problem_count > 0 || stat.lost_item_count > 0 || stat.request_count > 0
 
                   return (
                     <tr key={stat.date} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
@@ -692,16 +702,16 @@ export default function MonthlyReport({ storeId, storeName }: MonthlyReportProps
                         )}
                       </td>
                       <td className="px-4 py-3 text-center">
-                        {checklistRate > 0 ? (
+                        {avgRequestProcessingTime > 0 ? (
                           <span className={`inline-block px-2 py-1 rounded font-semibold ${
-                            checklistRate >= 80 ? 'bg-green-100 text-green-600' : 
-                            checklistRate >= 50 ? 'bg-yellow-100 text-yellow-600' : 
+                            avgRequestProcessingTime <= 1 ? 'bg-green-100 text-green-600' : 
+                            avgRequestProcessingTime <= 3 ? 'bg-yellow-100 text-yellow-600' : 
                             'bg-red-100 text-red-600'
                           }`}>
-                            {checklistRate}%
+                            {avgRequestProcessingTime.toFixed(1)}일
                           </span>
                         ) : (
-                          <span className="text-gray-400">0%</span>
+                          <span className="text-gray-400">-</span>
                         )}
                       </td>
                       <td className="px-4 py-3 text-center">
@@ -745,8 +755,8 @@ export default function MonthlyReport({ storeId, storeName }: MonthlyReportProps
               <div className="text-2xl font-bold text-blue-700">{avgManagementRate.toFixed(1)}%</div>
             </div>
             <div className="bg-green-50 rounded-lg p-4 border border-green-200">
-              <div className="text-sm text-green-600 mb-1">평균 체크율</div>
-              <div className="text-2xl font-bold text-green-700">{avgChecklistRate.toFixed(1)}%</div>
+              <div className="text-sm text-green-600 mb-1">평균 요청 처리</div>
+              <div className="text-2xl font-bold text-green-700">{reportData.summary.avg_request_processing_time.toFixed(1)}일</div>
             </div>
             <div className="bg-orange-50 rounded-lg p-4 border border-orange-200">
               <div className="text-sm text-orange-600 mb-1">총 문제</div>

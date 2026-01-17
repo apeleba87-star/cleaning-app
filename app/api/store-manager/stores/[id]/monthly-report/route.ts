@@ -130,10 +130,10 @@ export async function GET(
       .lte('created_at', endDate.toISOString())
       .order('created_at', { ascending: true })
 
-    // 5. 요청 데이터
+    // 5. 요청 데이터 (updated_at도 조회하여 completed_at이 없을 때 대체 사용)
     const { data: requests } = await supabase
       .from('requests')
-      .select('id, title, status, created_at, completed_at, rejected_at')
+      .select('id, title, status, created_at, completed_at, updated_at, rejected_at')
       .eq('store_id', params.id)
       .gte('created_at', startDate.toISOString())
       .lte('created_at', endDate.toISOString())
@@ -145,12 +145,12 @@ export async function GET(
         date: string
         attendance_count: number
         attendance_completed: number
-        checklist_count: number
-        checklist_completed: number
         problem_count: number
         lost_item_count: number
         request_count: number
         request_completed: number
+        request_processing_time_sum: number // 일별 요청 처리 시간 합계 (일 단위)
+        request_processing_count: number // 일별 완료된 요청 수
       }
     } = {}
 
@@ -161,12 +161,12 @@ export async function GET(
         date: dateStr,
         attendance_count: 0,
         attendance_completed: 0,
-        checklist_count: 0,
-        checklist_completed: 0,
         problem_count: 0,
         lost_item_count: 0,
         request_count: 0,
         request_completed: 0,
+        request_processing_time_sum: 0,
+        request_processing_count: 0,
       }
     }
 
@@ -192,24 +192,7 @@ export async function GET(
       console.log('[Monthly Report] No attendance data found')
     }
 
-    // 체크리스트 데이터 집계
-    if (checklistData) {
-      checklistData.forEach((checklist) => {
-        const dateStr = checklist.work_date
-        if (dailyStats[dateStr]) {
-          dailyStats[dateStr].checklist_count++
-          const items = checklist.items || []
-          const totalItems = items.length
-          const completedItems = items.filter((item: any) => 
-            (item.type === 'photo' && item.before_photo_url && item.after_photo_url) ||
-            (item.type === 'check' && item.checked)
-          ).length
-          if (totalItems > 0 && completedItems === totalItems) {
-            dailyStats[dateStr].checklist_completed++
-          }
-        }
-      })
-    }
+    // 체크리스트 데이터 집계 제거 (체크리스트 완료율 대신 평균 요청 처리 시간 사용)
 
     // 문제 보고 집계
     if (problemReports) {
@@ -231,7 +214,7 @@ export async function GET(
       })
     }
 
-    // 요청 집계
+    // 요청 집계 및 처리 시간 계산
     if (requests) {
       requests.forEach((request) => {
         const dateStr = request.created_at.split('T')[0]
@@ -239,6 +222,37 @@ export async function GET(
           dailyStats[dateStr].request_count++
           if (request.status === 'completed' || request.completed_at) {
             dailyStats[dateStr].request_completed++
+            
+            // 완료된 요청의 처리 시간 계산 (일 단위)
+            // completed_at이 있으면 사용, 없으면 updated_at을 대체로 사용
+            if (request.created_at) {
+              let completedTime: number | null = null
+              
+              // completed_at이 있으면 우선 사용
+              if (request.completed_at) {
+                completedTime = new Date(request.completed_at).getTime()
+              } 
+              // completed_at이 없고 status가 'completed'이면 updated_at 사용
+              else if (request.status === 'completed' && request.updated_at) {
+                completedTime = new Date(request.updated_at).getTime()
+              }
+              
+              if (completedTime) {
+                const createdTime = new Date(request.created_at).getTime()
+                
+                // completedTime이 created_at보다 이후인 경우만 계산
+                if (completedTime > createdTime) {
+                  const processingTimeMs = completedTime - createdTime
+                  const processingTimeDays = processingTimeMs / (1000 * 60 * 60 * 24) // 밀리초를 일로 변환
+                  
+                  // 비정상적으로 긴 처리 시간(30일 이상)은 제외
+                  if (processingTimeDays <= 30) {
+                    dailyStats[dateStr].request_processing_time_sum += processingTimeDays
+                    dailyStats[dateStr].request_processing_count++
+                  }
+                }
+              }
+            }
           }
         }
       })
@@ -250,11 +264,11 @@ export async function GET(
         week: number
         attendance_count: number
         attendance_completed: number
-        checklist_count: number
-        checklist_completed: number
         problem_count: number
         request_count: number
         request_completed: number
+        request_processing_time_sum: number // 주차별 요청 처리 시간 합계 (일 단위)
+        request_processing_count: number // 주차별 완료된 요청 수
       }
     } = {}
 
@@ -266,32 +280,37 @@ export async function GET(
           week,
           attendance_count: 0,
           attendance_completed: 0,
-          checklist_count: 0,
-          checklist_completed: 0,
           problem_count: 0,
           request_count: 0,
           request_completed: 0,
+          request_processing_time_sum: 0,
+          request_processing_count: 0,
         }
       }
       weeklyStats[week].attendance_count += stat.attendance_count
       weeklyStats[week].attendance_completed += stat.attendance_completed
-      weeklyStats[week].checklist_count += stat.checklist_count
-      weeklyStats[week].checklist_completed += stat.checklist_completed
       weeklyStats[week].problem_count += stat.problem_count
       weeklyStats[week].request_count += stat.request_count
       weeklyStats[week].request_completed += stat.request_completed
+      weeklyStats[week].request_processing_time_sum += stat.request_processing_time_sum
+      weeklyStats[week].request_processing_count += stat.request_processing_count
     })
 
     // 전체 통계 계산
     const totalDays = Object.keys(dailyStats).length
     const totalAttendance = Object.values(dailyStats).reduce((sum, stat) => sum + stat.attendance_count, 0)
     const totalAttendanceCompleted = Object.values(dailyStats).reduce((sum, stat) => sum + stat.attendance_completed, 0)
-    const totalChecklist = Object.values(dailyStats).reduce((sum, stat) => sum + stat.checklist_count, 0)
-    const totalChecklistCompleted = Object.values(dailyStats).reduce((sum, stat) => sum + stat.checklist_completed, 0)
     const totalProblems = problemReports?.length || 0
     const totalLostItems = lostItems?.length || 0
     const totalRequests = requests?.length || 0
     const totalRequestsCompleted = requests?.filter(r => r.status === 'completed' || r.completed_at).length || 0
+    
+    // 평균 요청 처리 시간 계산 (일 단위)
+    const totalRequestProcessingTime = Object.values(dailyStats).reduce((sum, stat) => sum + stat.request_processing_time_sum, 0)
+    const totalRequestProcessingCount = Object.values(dailyStats).reduce((sum, stat) => sum + stat.request_processing_count, 0)
+    const avgRequestProcessingTime = totalRequestProcessingCount > 0 
+      ? Math.round((totalRequestProcessingTime / totalRequestProcessingCount) * 10) / 10 // 소수점 첫째 자리까지
+      : 0
     
     // 관리일수: 퇴근 완료(관리 완료)가 있는 날짜 수
     const managementDays = Object.values(dailyStats).filter(stat => stat.attendance_completed > 0).length
@@ -339,13 +358,7 @@ export async function GET(
       .gte('work_date', prevStartDateStr)
       .lte('work_date', prevEndDateStr)
 
-    // 이전 달 체크리스트 데이터
-    const { data: prevChecklistData } = await supabase
-      .from('checklist')
-      .select('id, items, work_date')
-      .eq('store_id', params.id)
-      .gte('work_date', prevStartDateStr)
-      .lte('work_date', prevEndDateStr)
+    // 이전 달 체크리스트 데이터 제거 (체크리스트 완료율 대신 평균 요청 처리 시간 사용)
 
     // 이전 달 문제 보고 데이터
     const { data: prevProblemReports } = await supabase
@@ -355,10 +368,10 @@ export async function GET(
       .gte('created_at', prevStartDate.toISOString())
       .lte('created_at', prevEndDate.toISOString())
 
-    // 이전 달 요청 데이터
+    // 이전 달 요청 데이터 (처리 시간 계산을 위해 created_at, updated_at도 필요)
     const { data: prevRequests } = await supabase
       .from('requests')
-      .select('id, status, completed_at')
+      .select('id, status, created_at, completed_at, updated_at')
       .eq('store_id', params.id)
       .gte('created_at', prevStartDate.toISOString())
       .lte('created_at', prevEndDate.toISOString())
@@ -370,36 +383,61 @@ export async function GET(
       ? Math.round((prevTotalAttendanceCompleted / prevTotalAttendance) * 100) 
       : 0
 
-    const prevTotalChecklist = prevChecklistData?.length || 0
-    const prevTotalChecklistCompleted = prevChecklistData?.filter(c => {
-      const items = c.items || []
-      const totalItems = items.length
-      const completedItems = items.filter((item: any) => 
-        (item.type === 'photo' && item.before_photo_url && item.after_photo_url) ||
-        (item.type === 'check' && item.checked)
-      ).length
-      return totalItems > 0 && completedItems === totalItems
-    }).length || 0
-    const prevChecklistCompletionRate = prevTotalChecklist > 0 
-      ? Math.round((prevTotalChecklistCompleted / prevTotalChecklist) * 100) 
-      : 0
-
     const prevTotalProblems = prevProblemReports?.length || 0
     const prevTotalRequests = prevRequests?.length || 0
     const prevTotalRequestsCompleted = prevRequests?.filter(r => r.status === 'completed' || r.completed_at).length || 0
     const prevRequestCompletionRate = prevTotalRequests > 0 
       ? Math.round((prevTotalRequestsCompleted / prevTotalRequests) * 100) 
       : 0
+    
+    // 이전 달 평균 요청 처리 시간 계산
+    const prevCompletedRequests = prevRequests?.filter(r => r.status === 'completed' || r.completed_at) || []
+    let prevRequestProcessingTimeSum = 0
+    let prevRequestProcessingCount = 0
+    
+    prevCompletedRequests.forEach((request: any) => {
+      if (request.created_at) {
+        let completedTime: number | null = null
+        
+        // completed_at이 있으면 우선 사용
+        if (request.completed_at) {
+          completedTime = new Date(request.completed_at).getTime()
+        } 
+        // completed_at이 없고 status가 'completed'이면 updated_at 사용
+        else if (request.status === 'completed' && request.updated_at) {
+          completedTime = new Date(request.updated_at).getTime()
+        }
+        
+        if (completedTime) {
+          const createdTime = new Date(request.created_at).getTime()
+          
+          // completedTime이 created_at보다 이후인 경우만 계산
+          if (completedTime > createdTime) {
+            const processingTimeMs = completedTime - createdTime
+            const processingTimeDays = processingTimeMs / (1000 * 60 * 60 * 24)
+            
+            // 비정상적으로 긴 처리 시간(30일 이상)은 제외
+            if (processingTimeDays <= 30) {
+              prevRequestProcessingTimeSum += processingTimeDays
+              prevRequestProcessingCount++
+            }
+          }
+        }
+      }
+    })
+    
+    const prevAvgRequestProcessingTime = prevRequestProcessingCount > 0
+      ? Math.round((prevRequestProcessingTimeSum / prevRequestProcessingCount) * 10) / 10
+      : 0
 
     // 전달대비 계산
     const currentManagementRate = totalAttendance > 0 ? Math.round((totalAttendanceCompleted / totalAttendance) * 100) : 0
-    const currentChecklistRate = totalChecklist > 0 ? Math.round((totalChecklistCompleted / totalChecklist) * 100) : 0
     const currentRequestRate = totalRequests > 0 ? Math.round((totalRequestsCompleted / totalRequests) * 100) : 0
 
     const managementRateDiff = currentManagementRate - prevManagementCompletionRate
-    const checklistRateDiff = currentChecklistRate - prevChecklistCompletionRate
     const problemDiff = totalProblems - prevTotalProblems
     const requestRateDiff = currentRequestRate - prevRequestCompletionRate
+    const requestProcessingTimeDiff = avgRequestProcessingTime - prevAvgRequestProcessingTime
 
     // 유저 커버 계산 (요청 처리 완료율로 사용)
     const userCoverage = currentRequestRate
@@ -414,7 +452,7 @@ export async function GET(
         summary: {
           total_days: totalDays,
           management_completion_rate: currentManagementRate,
-          checklist_completion_rate: currentChecklistRate,
+          avg_request_processing_time: avgRequestProcessingTime,
           total_problems: totalProblems,
           total_lost_items: totalLostItems,
           total_requests: totalRequests,
@@ -422,11 +460,11 @@ export async function GET(
           management_days: managementDays,
           // 전달대비 데이터
           prev_management_completion_rate: prevManagementCompletionRate,
-          prev_checklist_completion_rate: prevChecklistCompletionRate,
+          prev_avg_request_processing_time: prevAvgRequestProcessingTime,
           prev_total_problems: prevTotalProblems,
           prev_user_coverage: prevUserCoverage,
           management_rate_diff: managementRateDiff,
-          checklist_rate_diff: checklistRateDiff,
+          request_processing_time_diff: requestProcessingTimeDiff,
           problem_diff: problemDiff,
           user_coverage_diff: userCoverageDiff,
         },
