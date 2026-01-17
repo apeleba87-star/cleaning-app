@@ -95,13 +95,15 @@ export async function GET(request: NextRequest) {
     const dayNames = ['일', '월', '화', '수', '목', '금', '토']
     const todayDayName = dayNames[koreaTime.getDay()]
     
-    // 개발 환경에서만 로그 출력
-    if (process.env.NODE_ENV === 'development') {
-      console.log(`=== Store Status API 호출 ===`)
-      console.log(`오늘 날짜 (KST): ${todayDateKST}`)
-      console.log(`오늘 날짜 (UTC): ${todayDateUTC}`)
-      console.log(`오늘 요일: ${todayDayName}`)
-    }
+    // 배포 환경에서도 날짜 정보 로깅 (디버깅용)
+    console.log(`[Store Status API] === 날짜 정보 ===`)
+    console.log(`[Store Status API] 오늘 날짜 (KST): ${todayDateKST}`)
+    console.log(`[Store Status API] 오늘 날짜 (UTC): ${todayDateUTC}`)
+    console.log(`[Store Status API] 오늘 요일: ${todayDayName}`)
+    console.log(`[Store Status API] todayStart (UTC): ${todayStart.toISOString()}`)
+    console.log(`[Store Status API] todayEnd (UTC): ${todayEnd.toISOString()}`)
+    console.log(`[Store Status API] 현재 시간 (KST): ${koreaTime.toISOString()}`)
+    console.log(`[Store Status API] 현재 시간 (UTC): ${now.toISOString()}`)
 
     // 배치 쿼리 최적화: 모든 매장의 store_assign을 한 번에 조회
     const storeIds = stores.map(s => s.id)
@@ -219,6 +221,7 @@ export async function GET(request: NextRequest) {
       console.error('[Store Status API] ⚠️ Attendance 조회 에러:', allAttendancesError)
     } else {
       console.log(`[Store Status API] Attendance 조회 성공: ${allAttendances?.length || 0}건`)
+      console.log(`[Store Status API] 쿼리 파라미터: storeIds=${storeIds.length}개, todayStart=${todayStart.toISOString()}, todayEnd=${todayEnd.toISOString()}`)
       if (allAttendances && allAttendances.length > 0) {
         console.log('[Store Status API] Attendance 샘플:', allAttendances.slice(0, 3).map(a => ({
           store_id: a.store_id,
@@ -227,6 +230,11 @@ export async function GET(request: NextRequest) {
           clock_in_at: a.clock_in_at,
           clock_out_at: a.clock_out_at
         })))
+      } else {
+        console.log('[Store Status API] ⚠️ Attendance 조회 결과가 0건입니다. 다음을 확인하세요:')
+        console.log(`[Store Status API] - 쿼리 범위: ${todayStart.toISOString()} ~ ${todayEnd.toISOString()}`)
+        console.log(`[Store Status API] - 오늘 날짜 (KST): ${todayDateKST}, (UTC): ${todayDateUTC}`)
+        console.log(`[Store Status API] - 조회 대상 매장 수: ${storeIds.length}개`)
       }
     }
 
@@ -923,6 +931,13 @@ export async function GET(request: NextRequest) {
           has_error: !!allAttendancesError,
           error_message: allAttendancesError?.message || null,
           sample_store_ids: allAttendances?.slice(0, 5).map(a => a.store_id) || [],
+          query_params: {
+            today_start: todayStart.toISOString(),
+            today_end: todayEnd.toISOString(),
+            today_date_kst: todayDateKST,
+            today_date_utc: todayDateUTC,
+            store_ids_count: storeIds.length,
+          },
         },
       },
     })
