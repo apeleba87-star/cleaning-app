@@ -214,6 +214,22 @@ export async function GET(request: NextRequest) {
     const { data: allAttendances, error: allAttendancesError } = extractData(results[6], 'attendance')
     const { data: allProductPhotos, error: allProductPhotosError } = extractData(results[7], 'product_photos')
 
+    // attendance 조회 결과 디버깅 (배포 환경에서도 로깅)
+    if (allAttendancesError) {
+      console.error('[Store Status API] ⚠️ Attendance 조회 에러:', allAttendancesError)
+    } else {
+      console.log(`[Store Status API] Attendance 조회 성공: ${allAttendances?.length || 0}건`)
+      if (allAttendances && allAttendances.length > 0) {
+        console.log('[Store Status API] Attendance 샘플:', allAttendances.slice(0, 3).map(a => ({
+          store_id: a.store_id,
+          user_id: a.user_id,
+          work_date: a.work_date,
+          clock_in_at: a.clock_in_at,
+          clock_out_at: a.clock_out_at
+        })))
+      }
+    }
+
     // product_photos 에러 특별 처리 (큰 JSON 파싱 에러 가능성)
     if (allProductPhotosError) {
       console.error('Error fetching all product photos:', allProductPhotosError)
@@ -902,6 +918,12 @@ export async function GET(request: NextRequest) {
         ...debugInfo,
         total_stores: storeStatuses.length,
         stores_with_attendance: storeStatuses.filter((s: any) => s.attendance_status !== 'not_clocked_in').length,
+        attendance_query_result: {
+          total_attendances: allAttendances?.length || 0,
+          has_error: !!allAttendancesError,
+          error_message: allAttendancesError?.message || null,
+          sample_store_ids: allAttendances?.slice(0, 5).map(a => a.store_id) || [],
+        },
       },
     })
   } catch (error: any) {
