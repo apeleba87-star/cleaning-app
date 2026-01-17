@@ -897,14 +897,12 @@ export async function GET(request: NextRequest) {
       success: true,
       data: storeStatuses,
       last_modified_at: lastModifiedAt,
-      // 배포 환경 디버깅을 위한 정보 (개발 환경에서만 포함)
-      ...(process.env.NODE_ENV === 'development' && {
-        _debug: {
-          ...debugInfo,
-          total_stores: storeStatuses.length,
-          stores_with_attendance: storeStatuses.filter((s: any) => s.attendance_status !== 'not_clocked_in').length,
-        },
-      }),
+      // 배포 환경 디버깅을 위한 정보 (항상 포함)
+      _debug: {
+        ...debugInfo,
+        total_stores: storeStatuses.length,
+        stores_with_attendance: storeStatuses.filter((s: any) => s.attendance_status !== 'not_clocked_in').length,
+      },
     })
   } catch (error: any) {
     return handleApiError(error)
