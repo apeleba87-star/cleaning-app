@@ -1,5 +1,6 @@
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
+import { isNearMidnightKST } from '@/lib/utils/date' 
 
 export async function createServerSupabaseClient() {
   const cookieStore = await cookies()
@@ -169,3 +170,77 @@ export async function getServerUser() {
   return { ...session.user, ...data }
 }
 
+/**
+ * 세션을 갱신합니다.
+ * @returns 갱신 성공 여부
+ */
+export async function refreshServerSession(): Promise<boolean> {
+  try {
+    const supabase = await createServerSupabaseClient()
+    const { data: { session }, error: getSessionError } = await supabase.auth.getSession()
+    
+    if (getSessionError || !session) {
+      console.log('Server: Cannot refresh session - no session found')
+      return false
+    }
+    
+    // 세션 갱신 시도
+    const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession()
+    
+    if (refreshError) {
+      console.log('Server: Session refresh error:', refreshError.message)
+      return false
+    }
+    
+    if (refreshData.session) {
+      console.log('Server: Session refreshed successfully')
+      return true
+    }
+    
+    return false
+  } catch (error: any) {
+    console.log('Server: refreshServerSession() exception:', error.message)
+    return false
+  }
+}
+
+/**
+ * 세션을 확인하고 필요시 갱신합니다.
+ * 자정 근처 시간대(23:50 ~ 00:10)에는 사전 갱신을 시도합니다.
+ * 세션이 만료된 경우 갱신을 시도합니다.
+ * @returns 세션이 유효한지 여부
+ */
+export async function ensureValidSession(): Promise<boolean> {
+  try {
+    // 자정 근처 시간대인지 확인
+    const nearMidnight = isNearMidnightKST()
+    
+    // 세션 확인
+    const session = await getServerSession()
+    
+    // 자정 근처 시간대이고 세션이 있으면 사전 갱신 시도
+    if (nearMidnight && session) {
+      console.log('Server: Near midnight - attempting preemptive session refresh')
+      await refreshServerSession()
+    }
+    
+    // 세션이 없으면 갱신 시도
+    if (!session) {
+      console.log('Server: Session expired - attempting refresh')
+      const refreshed = await refreshServerSession()
+      if (!refreshed) {
+        console.log('Server: Session refresh failed')
+        return false
+      }
+      
+      // 갱신 후 다시 확인
+      const newSession = await getServerSession()
+      return !!newSession
+    }
+    
+    return true
+  } catch (error: any) {
+    console.log('Server: ensureValidSession() exception:', error.message)
+    return false
+  }
+}
