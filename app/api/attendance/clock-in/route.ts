@@ -1,11 +1,17 @@
 import { NextRequest } from 'next/server'
-import { createServerSupabaseClient, getServerUser } from '@/lib/supabase/server'
+import { createServerSupabaseClient, getServerUser, ensureValidSession } from '@/lib/supabase/server'
 import { clockInSchema } from '@/zod/schemas'
 import { handleApiError, ValidationError, UnauthorizedError, ForbiddenError } from '@/lib/errors'
 import { getTodayDateKST, getYesterdayDateKST, calculateWorkDate, getCurrentHourKST } from '@/lib/utils/date'
 
 export async function POST(request: NextRequest) {
   try {
+    // 세션 확인 및 필요시 갱신 (자정 근처 시간대 사전 갱신 포함)
+    const isValidSession = await ensureValidSession()
+    if (!isValidSession) {
+      throw new UnauthorizedError('세션이 만료되었습니다. 다시 로그인해주세요.')
+    }
+    
     const user = await getServerUser()
     if (!user) {
       throw new UnauthorizedError('Authentication required')

@@ -1,6 +1,6 @@
 'use server'
 
-import { createServerSupabaseClient, getServerUser } from '@/lib/supabase/server'
+import { createServerSupabaseClient, getServerUser, ensureValidSession } from '@/lib/supabase/server'
 import { clockInSchema, clockOutSchema } from '@/zod/schemas'
 import { revalidatePath } from 'next/cache'
 import { GPSLocation } from '@/types/db'
@@ -22,6 +22,12 @@ export async function clockInAction(
   change_reason?: string | null
 ): Promise<ServerActionResponse> {
   try {
+    // 세션 확인 및 필요시 갱신 (자정 근처 시간대 사전 갱신 포함)
+    const isValidSession = await ensureValidSession()
+    if (!isValidSession) {
+      return { success: false, error: '세션이 만료되었습니다. 다시 로그인해주세요.' }
+    }
+    
     const user = await getServerUser()
     if (!user || user.role !== 'staff') {
       return { success: false, error: 'Unauthorized' }

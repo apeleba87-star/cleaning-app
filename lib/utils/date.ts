@@ -260,6 +260,30 @@ export function getCurrentHourKST(): number {
   return kst.getHours()
 }
 
+/**
+ * 한국 시간대(KST) 기준으로 현재 분(0-59)을 반환합니다.
+ */
+export function getCurrentMinuteKST(): number {
+  const now = new Date()
+  const kstOffset = 9 * 60 // 분 단위
+  const utc = now.getTime() + (now.getTimezoneOffset() * 60 * 1000)
+  const kst = new Date(utc + (kstOffset * 60 * 1000))
+  
+  return kst.getMinutes()
+}
+
+/**
+ * 자정 근처 시간대인지 확인합니다 (23:50 ~ 00:10).
+ * @returns 자정 근처 시간대인지 여부
+ */
+export function isNearMidnightKST(): boolean {
+  const hour = getCurrentHourKST()
+  const minute = getCurrentMinuteKST()
+  
+  // 23:50 ~ 23:59 또는 00:00 ~ 00:10
+  return (hour === 23 && minute >= 50) || (hour === 0 && minute <= 10)
+}
+
 
 
 
