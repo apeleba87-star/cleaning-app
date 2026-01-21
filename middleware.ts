@@ -38,19 +38,19 @@ export async function middleware(request: NextRequest) {
     }
   )
 
-  // 세션 새로고침 (쿠키 업데이트)
+  // 보안: getUser()를 사용하여 서버에서 인증 확인
   const {
-    data: { session },
-  } = await supabase.auth.getSession()
+    data: { user },
+  } = await supabase.auth.getUser()
 
-  // 세션이 있고, 동시 접속 제한이 필요한 역할인 경우 세션 갱신
-  if (session?.user) {
+  // 사용자가 있고, 동시 접속 제한이 필요한 역할인 경우 세션 갱신
+  if (user) {
     try {
       // 사용자 정보 조회
       const { data: userData } = await supabase
         .from('users')
         .select('role')
-        .eq('id', session.user.id)
+        .eq('id', user.id)
         .single()
 
       if (userData) {

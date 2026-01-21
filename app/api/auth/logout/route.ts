@@ -4,17 +4,18 @@ import { NextRequest, NextResponse } from 'next/server'
 export async function POST(request: NextRequest) {
   try {
     const supabase = await createServerSupabaseClient()
-    const { data: { session } } = await supabase.auth.getSession()
+    
+    // 보안: getUser()를 사용하여 서버에서 인증 확인
+    const { data: { user } } = await supabase.auth.getUser()
     
     // 세션 삭제 (user_sessions 테이블에서)
-    if (session?.user) {
+    if (user) {
       try {
-        const supabase = await createServerSupabaseClient()
         // 현재 사용자의 모든 세션 삭제
         await supabase
           .from('user_sessions')
           .delete()
-          .eq('user_id', session.user.id)
+          .eq('user_id', user.id)
       } catch (error) {
         // 에러는 무시
         console.error('Session deletion error:', error)

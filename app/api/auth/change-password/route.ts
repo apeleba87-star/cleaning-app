@@ -31,9 +31,9 @@ export async function POST(request: NextRequest) {
 
     const supabase = await createServerSupabaseClient()
 
-    // 현재 세션에서 이메일 가져오기
-    const { data: { session } } = await supabase.auth.getSession()
-    if (!session?.user?.email) {
+    // 보안: getUser()를 사용하여 서버에서 인증 확인
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user?.email) {
       return NextResponse.json(
         { error: '사용자 정보를 찾을 수 없습니다.' },
         { status: 400 }
@@ -42,7 +42,7 @@ export async function POST(request: NextRequest) {
 
     // 현재 비밀번호 확인
     const { error: signInError } = await supabase.auth.signInWithPassword({
-      email: session.user.email,
+      email: user.email,
       password: currentPassword,
     })
 
