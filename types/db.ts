@@ -218,6 +218,8 @@ export interface SupplyRequest {
   completion_photo_url: string | null // 처리 완료 사진
   completion_description: string | null // 처리 완료 설명
   completed_at: string | null // 처리 완료 시간
+  archived_at?: string | null
+  is_archived?: boolean
   created_at: string
   updated_at: string
 }
@@ -251,6 +253,8 @@ export interface Request {
   rejection_description?: string | null
   rejected_by?: string | null
   rejected_at?: string | null
+  archived_at?: string | null
+  is_archived?: boolean
   created_at: string
   updated_at: string
 }

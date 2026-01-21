@@ -11,7 +11,7 @@ export default async function BusinessRequestsPage() {
     redirect('/business/dashboard')
   }
 
-  // 최근 30일 데이터만 조회 (초기 로드 최적화)
+  // 아카이브 기준: 완료 후 30일 경과
   const thirtyDaysAgo = new Date()
   thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
   const thirtyDaysAgoISO = thirtyDaysAgo.toISOString()
@@ -45,52 +45,165 @@ export default async function BusinessRequestsPage() {
   // 병렬 쿼리: requests와 supply_requests 동시 조회 (stores 조인 제거, users만 조인)
   const [requestsResult, nonCompletedSupplyResult, completedSupplyResult] = await Promise.all([
     // 1. 일반 요청 (stores 조인 제거, users만 조인)
-    supabase
-      .from('requests')
-      .select(`
-        *,
-        storage_location,
-        users:created_by (
-          id,
-          name
-        )
-      `)
-      .in('store_id', storeIds)
-      .gte('created_at', thirtyDaysAgoISO)
-      .order('created_at', { ascending: false })
-      .limit(50), // 초기 로드: 50개만
+    // 아카이브되지 않은 요청만 조회
+    // 완료되지 않았거나 완료 후 30일 이내인 요청
+    // 두 개의 쿼리로 분리: 완료되지 않은 요청 + 완료 후 30일 이내 요청
+    // 1. 일반 요청 (아카이브 필터는 쿼리 결과에서 처리)
+    (async () => {
+      // 완료되지 않은 요청
+      let { data: nonCompleted, error: nonCompletedError } = await supabase
+        .from('requests')
+        .select(`
+          *,
+          storage_location,
+          users:created_by (
+            id,
+            name
+          )
+        `)
+        .in('store_id', storeIds)
+        .neq('status', 'completed')
+        .order('created_at', { ascending: false })
+        .limit(50)
+
+      // is_archived 컬럼 관련 에러인 경우 무시 (컬럼이 없을 수 있음)
+      if (nonCompletedError?.message?.includes('is_archived') || nonCompletedError?.code === 'PGRST116') {
+        // 이미 컬럼 없이 조회했으므로 에러는 다른 원인
+        return { data: null, error: nonCompletedError }
+      }
+
+      // 완료 후 30일 이내 요청
+      let { data: recentCompleted, error: recentCompletedError } = await supabase
+        .from('requests')
+        .select(`
+          *,
+          storage_location,
+          users:created_by (
+            id,
+            name
+          )
+        `)
+        .in('store_id', storeIds)
+        .eq('status', 'completed')
+        .gte('completed_at', thirtyDaysAgoISO)
+        .order('created_at', { ascending: false })
+        .limit(50)
+
+      // is_archived 컬럼 관련 에러인 경우 무시
+      if (recentCompletedError?.message?.includes('is_archived') || recentCompletedError?.code === 'PGRST116') {
+        return { data: null, error: recentCompletedError }
+      }
+
+      if (nonCompletedError || recentCompletedError) {
+        return { data: null, error: nonCompletedError || recentCompletedError }
+      }
+
+      // is_archived가 false이거나 없는 것만 필터링 (컬럼이 있는 경우)
+      const filteredNonCompleted = (nonCompleted || []).filter((r: any) => 
+        r.is_archived === false || r.is_archived === undefined || r.is_archived === null
+      )
+      const filteredRecentCompleted = (recentCompleted || []).filter((r: any) => 
+        r.is_archived === false || r.is_archived === undefined || r.is_archived === null
+      )
+
+      // 두 결과 합치기 (중복 제거)
+      const allRequests = [...filteredNonCompleted, ...filteredRecentCompleted]
+      const uniqueRequests = Array.from(
+        new Map(allRequests.map(r => [r.id, r])).values()
+      )
+        .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+        .slice(0, 50)
+
+      return { data: uniqueRequests, error: null }
+    })(),
     
-    // 2. 물품요청 (completed 제외)
-    supabase
-      .from('supply_requests')
-      .select(`
-        *,
-        users:user_id (
-          id,
-          name
-        )
-      `)
-      .in('store_id', storeIds)
-      .neq('status', 'completed')
-      .gte('created_at', thirtyDaysAgoISO)
-      .order('created_at', { ascending: false })
-      .limit(50),
+    // 2. 물품요청 (completed 제외, 아카이브되지 않은 것만)
+    (async () => {
+      let { data, error } = await supabase
+        .from('supply_requests')
+        .select(`
+          *,
+          users:user_id (
+            id,
+            name
+          )
+        `)
+        .in('store_id', storeIds)
+        .neq('status', 'completed')
+        .gte('created_at', thirtyDaysAgoISO)
+        .order('created_at', { ascending: false })
+        .limit(50)
+
+      // is_archived 컬럼 관련 에러인 경우 무시 (컬럼이 없을 수 있음)
+      if (error?.message?.includes('is_archived') || error?.code === 'PGRST116') {
+        // 컬럼 없이 재시도
+        const retry = await supabase
+          .from('supply_requests')
+          .select(`
+            *,
+            users:user_id (
+              id,
+              name
+            )
+          `)
+          .in('store_id', storeIds)
+          .neq('status', 'completed')
+          .gte('created_at', thirtyDaysAgoISO)
+          .order('created_at', { ascending: false })
+          .limit(50)
+        data = retry.data
+        error = retry.error
+      } else if (!error && data) {
+        // 성공한 경우, is_archived가 false인 것만 필터링 (컬럼이 있는 경우)
+        data = data.filter((r: any) => r.is_archived === false || r.is_archived === undefined || r.is_archived === null)
+      }
+
+      return { data, error }
+    })(),
     
-    // 3. 물품요청 (completed, 14일 이내)
-    supabase
-      .from('supply_requests')
-      .select(`
-        *,
-        users:user_id (
-          id,
-          name
-        )
-      `)
-      .in('store_id', storeIds)
-      .eq('status', 'completed')
-      .gte('completed_at', fourteenDaysAgoISO)
-      .order('created_at', { ascending: false })
-      .limit(50)
+    // 3. 물품요청 (completed, 14일 이내, 아카이브되지 않은 것만)
+    (async () => {
+      let { data, error } = await supabase
+        .from('supply_requests')
+        .select(`
+          *,
+          users:user_id (
+            id,
+            name
+          )
+        `)
+        .in('store_id', storeIds)
+        .eq('status', 'completed')
+        .gte('completed_at', fourteenDaysAgoISO)
+        .order('created_at', { ascending: false })
+        .limit(50)
+
+      // is_archived 컬럼 관련 에러인 경우 무시 (컬럼이 없을 수 있음)
+      if (error?.message?.includes('is_archived') || error?.code === 'PGRST116') {
+        // 컬럼 없이 재시도
+        const retry = await supabase
+          .from('supply_requests')
+          .select(`
+            *,
+            users:user_id (
+              id,
+              name
+            )
+          `)
+          .in('store_id', storeIds)
+          .eq('status', 'completed')
+          .gte('completed_at', fourteenDaysAgoISO)
+          .order('created_at', { ascending: false })
+          .limit(50)
+        data = retry.data
+        error = retry.error
+      } else if (!error && data) {
+        // 성공한 경우, is_archived가 false인 것만 필터링 (컬럼이 있는 경우)
+        data = data.filter((r: any) => r.is_archived === false || r.is_archived === undefined || r.is_archived === null)
+      }
+
+      return { data, error }
+    })()
   ])
 
   const requests = requestsResult.data || []
