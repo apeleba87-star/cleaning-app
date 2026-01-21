@@ -14,40 +14,21 @@ export async function createServerSupabaseClient() {
     )
   }
 
-  // 디버깅: 쿠키 확인 (더 상세하게)
-  const allCookies = cookieStore.getAll()
-  const supabaseCookies = allCookies.filter(c => 
-    c.name.includes('sb-') || c.name.includes('supabase')
-  )
-  if (supabaseCookies.length > 0) {
-    console.log('Server: Found Supabase cookies:', supabaseCookies.map(c => ({
-      name: c.name,
-      hasValue: !!c.value,
-      valueLength: c.value?.length || 0
-    })))
-  } else {
-    console.log('Server: No Supabase cookies found. All cookies:', allCookies.map(c => c.name))
-  }
-
   return createServerClient(
     supabaseUrl,
     supabaseAnonKey,
     {
       cookies: {
         getAll() {
-          const cookies = cookieStore.getAll()
-          console.log('Server: getAll() called, returning', cookies.length, 'cookies')
-          return cookies
+          return cookieStore.getAll()
         },
         setAll(cookiesToSet: Array<{ name: string; value: string; options?: any }>) {
           try {
             cookiesToSet.forEach(({ name, value, options }) => {
               cookieStore.set(name, value, options)
             })
-            console.log('Server: setAll() called for', cookiesToSet.length, 'cookies')
           } catch (error) {
             // 서버 컴포넌트에서 setAll 호출 시 무시 (읽기 전용)
-            console.log('Cookie setAll error (expected in server components):', error)
           }
         },
       } as any,
@@ -57,78 +38,68 @@ export async function createServerSupabaseClient() {
 
 export async function getServerSession() {
   try {
-    const cookieStore = await cookies()
-    const allCookies = cookieStore.getAll()
-    const authCookie = allCookies.find(c => c.name.includes('sb-') && c.name.includes('auth-token'))
-    
-    if (authCookie) {
-      console.log('Server: Auth cookie found:', authCookie.name)
-      console.log('Server: Cookie value length:', authCookie.value?.length || 0)
-      console.log('Server: Cookie value preview:', authCookie.value?.substring(0, 50) || 'empty')
-    }
-    
     const supabase = await createServerSupabaseClient()
     const {
-      data: { session },
+      data: { user },
       error,
-    } = await supabase.auth.getSession()
+    } = await supabase.auth.getUser()
     
-    if (error) {
-      console.log('Server: getSession() error:', error.message, error.status)
-      console.log('Server: Error details:', JSON.stringify(error, null, 2))
+    if (error || !user) {
       return null
     }
     
-    if (session) {
-      console.log('Server: Session found for user:', session.user.email)
-    } else {
-      console.log('Server: No session found')
-      // 쿠키 값 직접 확인
-      if (authCookie?.value) {
-        try {
-          const decoded = decodeURIComponent(authCookie.value)
-          console.log('Server: Decoded cookie preview:', decoded.substring(0, 100))
-        } catch (e) {
-          console.log('Server: Failed to decode cookie:', e)
-        }
-      }
-    }
-    
+    // getUser()는 user만 반환하므로, session 객체를 구성
+    // refreshSession()을 통해 session을 가져옴
+    const { data: { session } } = await supabase.auth.getSession()
     return session
   } catch (error: any) {
-    console.log('Server: getServerSession() exception:', error.message)
-    console.log('Server: Exception stack:', error.stack)
     return null
   }
 }
 
 export async function getServerUser() {
-  const session = await getServerSession()
-  if (!session?.user) return null
-
-  const supabase = await createServerSupabaseClient()
-  
-  // RLS를 우회하기 위해 service role key 사용 시도 (하지만 anon key로 시도)
-  const { data, error } = await supabase
-    .from('users')
-    .select('id, role, name, phone, company_id, employment_contract_date, salary_date, salary_amount, employment_active')
-    .eq('id', session.user.id)
-    .single()
-
-  // users 테이블에 데이터가 없으면 세션 정보만 반환 (기본값: staff)
-  // 하지만 admin 계정의 경우 DB에 데이터가 있어야 함
-  if (error) {
-    console.log('Error fetching user:', error.message, error.code)
-    console.log('Session user ID:', session.user.id)
-    console.log('Session user email:', session.user.email)
+  try {
+    const supabase = await createServerSupabaseClient()
     
-    // RLS 에러일 경우, 세션 정보만 반환
-    if (error.code === 'PGRST116' || error.message.includes('permission')) {
-      console.log('RLS permission denied, returning session only')
+    // 보안: getUser()를 사용하여 서버에서 인증 확인
+    const {
+      data: { user },
+      error: getUserError,
+    } = await supabase.auth.getUser()
+    
+    if (getUserError || !user) {
+      return null
+    }
+    
+    // users 테이블에서 추가 정보 조회
+    const { data, error } = await supabase
+      .from('users')
+      .select('id, role, name, phone, company_id, employment_contract_date, salary_date, salary_amount, employment_active')
+      .eq('id', user.id)
+      .single()
+
+    // users 테이블에 데이터가 없으면 기본값 반환
+    if (error) {
+      // RLS 에러일 경우, 기본값 반환
+      if (error.code === 'PGRST116' || error.message.includes('permission')) {
+        return {
+          ...user,
+          role: 'staff' as const,
+          name: user.email?.split('@')[0] || 'User',
+          phone: null,
+          company_id: null,
+          employment_contract_date: null,
+          salary_date: null,
+          salary_amount: null,
+          employment_active: true,
+        }
+      }
+      
+      // 다른 에러도 기본값 반환
       return {
-        ...session.user,
+        ...user,
         role: 'staff' as const,
-        name: session.user.email?.split('@')[0] || 'User',
+        name: user.email?.split('@')[0] || 'User',
         phone: null,
         company_id: null,
         employment_contract_date: null,
@@ -137,37 +108,25 @@ export async function getServerUser() {
         employment_active: true,
       }
     }
-    
-    // 다른 에러도 세션 정보 반환
-    return {
-      ...session.user,
-      role: 'staff' as const,
-      name: session.user.email?.split('@')[0] || 'User',
-      phone: null,
-      company_id: null,
-      employment_contract_date: null,
-      salary_date: null,
-      salary_amount: null,
-      employment_active: true,
-    }
-  }
   
-  if (!data) {
-    console.log('No user data found in users table')
-    return {
-      ...session.user,
-      role: 'staff' as const,
-      name: session.user.email?.split('@')[0] || 'User',
-      phone: null,
-      company_id: null,
-      employment_contract_date: null,
-      salary_date: null,
-      salary_amount: null,
-      employment_active: true,
+    if (!data) {
+      return {
+        ...user,
+        role: 'staff' as const,
+        name: user.email?.split('@')[0] || 'User',
+        phone: null,
+        company_id: null,
+        employment_contract_date: null,
+        salary_date: null,
+        salary_amount: null,
+        employment_active: true,
+      }
     }
-  }
   
-  return { ...session.user, ...data }
+    return { ...user, ...data }
+  } catch (error: any) {
+    return null
+  }
 }
 
 /**
@@ -177,29 +136,23 @@ export async function getServerUser() {
 export async function refreshServerSession(): Promise<boolean> {
   try {
     const supabase = await createServerSupabaseClient()
-    const { data: { session }, error: getSessionError } = await supabase.auth.getSession()
     
-    if (getSessionError || !session) {
-      console.log('Server: Cannot refresh session - no session found')
+    // getUser()로 먼저 인증 확인
+    const { data: { user }, error: getUserError } = await supabase.auth.getUser()
+    
+    if (getUserError || !user) {
       return false
     }
     
     // 세션 갱신 시도
     const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession()
     
-    if (refreshError) {
-      console.log('Server: Session refresh error:', refreshError.message)
+    if (refreshError || !refreshData.session) {
       return false
     }
     
-    if (refreshData.session) {
-      console.log('Server: Session refreshed successfully')
-      return true
-    }
-    
-    return false
+    return true
   } catch (error: any) {
-    console.log('Server: refreshServerSession() exception:', error.message)
     return false
   }
 }
@@ -215,32 +168,30 @@ export async function ensureValidSession(): Promise<boolean> {
     // 자정 근처 시간대인지 확인
     const nearMidnight = isNearMidnightKST()
     
-    // 세션 확인
-    const session = await getServerSession()
+    const supabase = await createServerSupabaseClient()
     
-    // 자정 근처 시간대이고 세션이 있으면 사전 갱신 시도
-    if (nearMidnight && session) {
-      console.log('Server: Near midnight - attempting preemptive session refresh')
+    // getUser()로 인증 확인
+    const { data: { user }, error: getUserError } = await supabase.auth.getUser()
+    
+    // 자정 근처 시간대이고 사용자가 있으면 사전 갱신 시도
+    if (nearMidnight && user) {
       await refreshServerSession()
     }
     
-    // 세션이 없으면 갱신 시도
-    if (!session) {
-      console.log('Server: Session expired - attempting refresh')
+    // 사용자가 없으면 갱신 시도
+    if (getUserError || !user) {
       const refreshed = await refreshServerSession()
       if (!refreshed) {
-        console.log('Server: Session refresh failed')
         return false
       }
       
       // 갱신 후 다시 확인
-      const newSession = await getServerSession()
-      return !!newSession
+      const { data: { user: newUser } } = await supabase.auth.getUser()
+      return !!newUser
     }
     
     return true
   } catch (error: any) {
-    console.log('Server: ensureValidSession() exception:', error.message)
     return false
   }
 }
