@@ -52,6 +52,7 @@ export async function GET(request: NextRequest) {
     }
 
     // 모든 매장의 completed/rejected 요청을 한 번에 조회
+    // completed_by와 rejected_by 컬럼은 존재하지 않을 수 있으므로 제외
     const { data: allRequests, error: requestsError } = await supabase
       .from('requests')
       .select(`
@@ -65,17 +66,14 @@ export async function GET(request: NextRequest) {
         updated_at,
         completion_photo_url,
         completion_description,
-        completed_by,
         completed_at,
-        rejected_by,
         rejected_at,
+        created_by,
         created_by_user:created_by (
           id,
           name,
           role
-        ),
-        completed_by_user:users!requests_completed_by_fkey(id, name),
-        rejected_by_user:users!requests_rejected_by_fkey(id, name)
+        )
       `)
       .in('store_id', validStoreIds)
       .in('status', ['completed', 'rejected'])
@@ -85,10 +83,19 @@ export async function GET(request: NextRequest) {
       throw new Error(`Failed to fetch requests: ${requestsError.message}`)
     }
 
+    // 요청 데이터에 사용자 정보 추가 (completed_by, rejected_by 컬럼이 없으므로 null로 설정)
+    const requestsWithUsers = (allRequests || []).map((req: any) => ({
+      ...req,
+      completed_by: null,
+      completed_by_user: null,
+      rejected_by: null,
+      rejected_by_user: null,
+    }))
+
     // 매장별로 그룹화
     const requestsByStore = new Map<string, any[]>()
     
-    allRequests?.forEach((req: any) => {
+    requestsWithUsers.forEach((req: any) => {
       if (!requestsByStore.has(req.store_id)) {
         requestsByStore.set(req.store_id, [])
       }
