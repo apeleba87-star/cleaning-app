@@ -392,14 +392,47 @@ export default function FranchiseStoresStatusPage() {
     return () => clearInterval(timer)
   }, [])
 
-  // 매장 상태가 로드되면 처리완료 및 반려처리 요청 목록도 로드
+  // 매장 상태가 로드되면 처리완료 및 반려처리 요청 목록도 배치로 로드
   useEffect(() => {
     if (storeStatuses.length > 0) {
-      storeStatuses.forEach((status) => {
-        if (status.completed_request_count > 0 || status.rejected_request_count > 0) {
-          loadStoreCompletedRequests(status.store_id)
+      // 배치 API로 모든 매장의 requests를 한 번에 로드
+      const loadAllCompletedRequests = async () => {
+        try {
+          const timestamp = new Date().getTime()
+          const response = await fetch(`/api/franchise/stores/requests/batch?t=${timestamp}`, {
+            cache: 'no-store',
+            headers: {
+              'Cache-Control': 'no-cache',
+            },
+          })
+          const data = await response.json()
+          
+          if (response.ok && data.success) {
+            const batchData = data.data || {}
+            const newMap = new Map<string, any[]>()
+            
+            // 배치 데이터에서 각 매장의 completed와 rejected 요청 추출
+            Object.keys(batchData).forEach(storeId => {
+              const storeRequests = batchData[storeId] || { received: [], in_progress: [], completed: [], rejected: [] }
+              const allRequests = [...(storeRequests.completed || []), ...(storeRequests.rejected || [])]
+              newMap.set(storeId, allRequests)
+            })
+            
+            setStoreCompletedRequests(newMap)
+          }
+        } catch (error) {
+          console.error('Error loading batch completed requests:', error)
         }
-      })
+      }
+      
+      // completed 또는 rejected 요청이 있는 매장이 하나라도 있으면 배치 로드
+      const hasCompletedRequests = storeStatuses.some(
+        status => status.completed_request_count > 0 || status.rejected_request_count > 0
+      )
+      
+      if (hasCompletedRequests) {
+        loadAllCompletedRequests()
+      }
     }
   }, [storeStatuses])
 
@@ -735,35 +768,31 @@ export default function FranchiseStoresStatusPage() {
     setEditingReceivedRequest(null)
 
     try {
-      // 모든 매장의 접수 요청을 로드
-      const allReceivedRequests: Request[] = []
+      // 배치 API로 모든 매장의 접수 요청을 한 번에 로드
+      const timestamp = new Date().getTime()
+      const response = await fetch(`/api/franchise/stores/requests/batch?t=${timestamp}`, {
+        cache: 'no-store',
+        headers: {
+          'Cache-Control': 'no-cache',
+        },
+      })
+      const data = await response.json()
       
-      for (const store of storeStatuses) {
-        if (store.received_request_count > 0) {
-          const timestamp = new Date().getTime()
-          const response = await fetch(`/api/franchise/stores/${store.store_id}/requests?t=${timestamp}`, {
-            cache: 'no-store',
-            headers: {
-              'Cache-Control': 'no-cache',
-            },
-          })
-          const data = await response.json()
-          
-          if (response.ok && data.success) {
-            const requestsData = data.data || { received: [], in_progress: [], completed: [], rejected: [] }
-            const received = requestsData.received || []
-            // 매장 정보 추가
-            const requestsWithStore = received.map((req: any) => ({
-              ...req,
-              store_name: store.store_name,
-              store_id: store.store_id,
-            }))
-            allReceivedRequests.push(...requestsWithStore)
-          }
-        }
+      if (response.ok && data.success) {
+        const allReceivedRequests: Request[] = []
+        const batchData = data.data || {}
+        
+        // 배치 데이터에서 각 매장의 received 요청만 추출
+        Object.keys(batchData).forEach(storeId => {
+          const storeRequests = batchData[storeId] || { received: [], in_progress: [], completed: [], rejected: [] }
+          const received = storeRequests.received || []
+          allReceivedRequests.push(...received)
+        })
+        
+        setReceivedRequests(allReceivedRequests)
+      } else {
+        console.error('Error loading batch requests:', data.error)
       }
-      
-      setReceivedRequests(allReceivedRequests)
     } catch (error) {
       console.error('Error loading all received requests:', error)
     }
