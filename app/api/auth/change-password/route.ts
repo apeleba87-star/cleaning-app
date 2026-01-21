@@ -3,9 +3,9 @@ import { createServerSupabaseClient, getServerUser } from '@/lib/supabase/server
 
 export async function POST(request: NextRequest) {
   try {
-    const user = await getServerUser()
+    const dbUser = await getServerUser()
     
-    if (!user) {
+    if (!dbUser) {
       return NextResponse.json(
         { error: '로그인이 필요합니다.' },
         { status: 401 }
