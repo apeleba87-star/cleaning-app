@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { useToast } from '@/components/Toast'
 
 // 기본 카테고리 목록
 const DEFAULT_CATEGORIES = [
@@ -26,6 +27,7 @@ interface QuickExpenseFormProps {
 }
 
 export default function QuickExpenseForm({ onSuccess }: QuickExpenseFormProps) {
+  const { showToast, ToastContainer } = useToast()
   const [isExpanded, setIsExpanded] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [quickDate, setQuickDate] = useState(new Date().toISOString().slice(0, 10))
@@ -58,28 +60,47 @@ export default function QuickExpenseForm({ onSuccess }: QuickExpenseFormProps) {
     e.preventDefault()
 
     if (!quickDate || !quickCategory || !quickAmount) {
-      alert('날짜, 카테고리, 금액을 모두 입력해주세요.')
+      showToast('날짜, 카테고리, 금액을 모두 입력해주세요.', 'error')
       return
     }
 
+    // 낙관적 업데이트: 즉시 폼 초기화하여 연속 등록 가능
+    const formData = {
+      date: quickDate,
+      category: quickCategory,
+      amount: parseFloat(quickAmount),
+      memo: quickMemo.trim(),
+      storeId: (quickStoreId && quickStoreId !== '__custom__' && quickStoreId.trim() !== '') ? quickStoreId : null,
+      storeCustom: quickStoreCustom.trim(),
+    }
+
+    // 직접 입력한 매장명이 있으면 memo에 포함
+    let finalMemo = formData.memo
+    if (formData.storeCustom) {
+      finalMemo = `[${formData.storeCustom}] ${finalMemo}`.trim()
+    }
+
+    // 폼 즉시 초기화 (낙관적 업데이트)
+    setQuickDate(new Date().toISOString().slice(0, 10))
+    setQuickCategory('')
+    setQuickAmount('')
+    setQuickMemo('')
+    setQuickStoreId('')
+    setQuickStoreCustom('')
+
+    // 백그라운드에서 API 호출
+    setSubmitting(true)
+    
     try {
-      setSubmitting(true)
-      
-      // 직접 입력한 매장명이 있으면 memo에 포함
-      let finalMemo = quickMemo.trim()
-      if (quickStoreCustom.trim()) {
-        finalMemo = `[${quickStoreCustom.trim()}] ${finalMemo}`.trim()
-      }
-      
       const response = await fetch('/api/business/expenses', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          date: quickDate,
-          category: quickCategory,
-          amount: parseFloat(quickAmount),
+          date: formData.date,
+          category: formData.category,
+          amount: formData.amount,
           memo: finalMemo || null,
-          store_id: (quickStoreId && quickStoreId !== '__custom__' && quickStoreId.trim() !== '') ? quickStoreId : null,
+          store_id: formData.storeId,
         }),
       })
 
@@ -88,41 +109,46 @@ export default function QuickExpenseForm({ onSuccess }: QuickExpenseFormProps) {
         throw new Error(errorData.error || '지출 등록 실패')
       }
 
-      // 폼 초기화
-      setQuickDate(new Date().toISOString().slice(0, 10))
-      setQuickCategory('')
-      setQuickAmount('')
-      setQuickMemo('')
-      setQuickStoreId('')
-      setQuickStoreCustom('')
+      // 성공 시 토스트만 표시 (새로고침 없음)
+      showToast('지출이 등록되었습니다.', 'success')
       
+      // 부분 업데이트: 재무 요약만 업데이트 (전체 새로고침 없음)
       if (onSuccess) {
         onSuccess()
       }
-      alert('지출이 등록되었습니다.')
     } catch (err: any) {
-      alert(err.message || '지출 등록 중 오류가 발생했습니다.')
+      // 실패 시 롤백: 폼 데이터 복원
+      setQuickDate(formData.date)
+      setQuickCategory(formData.category)
+      setQuickAmount(formData.amount.toString())
+      setQuickMemo(formData.memo)
+      setQuickStoreId(formData.storeId || '')
+      setQuickStoreCustom(formData.storeCustom)
+      
+      showToast(err.message || '지출 등록 중 오류가 발생했습니다.', 'error')
     } finally {
       setSubmitting(false)
     }
   }
 
   return (
-    <div className="bg-orange-50 rounded-lg border-l-4 border-orange-500 mb-6">
-      <div className="p-3">
-        <div className="flex items-center justify-between">
-          <h3 className="text-sm font-semibold text-gray-700">빠른 지출 등록</h3>
-          <button
-            type="button"
-            onClick={() => setIsExpanded(!isExpanded)}
-            className="text-xs text-orange-600 hover:text-orange-800 font-medium"
-          >
-            {isExpanded ? '접기 ▲' : '펼치기 ▼'}
-          </button>
-        </div>
-        
-        {isExpanded && (
-          <form onSubmit={handleQuickSubmit} className="mt-3 grid grid-cols-1 md:grid-cols-5 gap-2">
+    <>
+      <ToastContainer />
+      <div className="bg-orange-50 rounded-lg border-l-4 border-orange-500 mb-6">
+        <div className="p-3">
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-semibold text-gray-700">빠른 지출 등록</h3>
+            <button
+              type="button"
+              onClick={() => setIsExpanded(!isExpanded)}
+              className="text-xs text-orange-600 hover:text-orange-800 font-medium"
+            >
+              {isExpanded ? '접기 ▲' : '펼치기 ▼'}
+            </button>
+          </div>
+          
+          {isExpanded && (
+            <form onSubmit={handleQuickSubmit} className="mt-3 grid grid-cols-1 md:grid-cols-5 gap-2">
             <input
               type="date"
               value={quickDate}
@@ -216,9 +242,10 @@ export default function QuickExpenseForm({ onSuccess }: QuickExpenseFormProps) {
               {submitting ? '등록 중...' : '추가'}
             </button>
           </form>
-        )}
+          )}
+        </div>
       </div>
-    </div>
+    </>
   )
 }
 

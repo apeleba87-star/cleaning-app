@@ -446,7 +446,23 @@ export default function FinancialSummarySection({ companyId }: FinancialSummaryS
       </div>
 
       {/* 빠른 지출 등록 */}
-      <QuickExpenseForm onSuccess={loadFinancialSummary} />
+      <QuickExpenseForm onSuccess={async () => {
+        // 부분 업데이트: 재무 요약만 백그라운드에서 업데이트 (전체 새로고침 없음)
+        // 로딩 상태를 표시하지 않고 백그라운드에서만 업데이트
+        try {
+          const response = await fetch('/api/business/financial-summary')
+          if (response.ok) {
+            const data = await response.json()
+            if (data.success) {
+              setSummary(data.data)
+              setFinancialData(data.data) // Context에 데이터 저장
+            }
+          }
+        } catch (err) {
+          // 백그라운드 업데이트 실패는 무시 (사용자 경험 방해 안 함)
+          console.error('Failed to update financial summary:', err)
+        }
+      }} />
 
       {/* 미수금 상위 매장 리스트 */}
       {summary.top_unpaid_stores.length > 0 && (

@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { useToast } from '@/components/Toast'
 
 interface Expense {
   id: string
@@ -54,6 +55,7 @@ const DEFAULT_CATEGORIES = [
 ]
 
 export default function ExpenseDetailSection({ period, onRefresh }: ExpenseDetailSectionProps) {
+  const { showToast, ToastContainer } = useToast()
   const [expenses, setExpenses] = useState<Expense[]>([])
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
@@ -169,15 +171,15 @@ export default function ExpenseDetailSection({ period, onRefresh }: ExpenseDetai
     e.preventDefault()
 
     if (!quickDate || !quickCategory || !quickAmount) {
-      alert('날짜, 카테고리, 금액을 모두 입력해주세요.')
+      showToast('날짜, 카테고리, 금액을 모두 입력해주세요.', 'error')
       return
     }
 
-    try {
-      setSubmitting(true)
-      
-      // 고정비로 등록하는 경우
-      if (quickIsRecurring) {
+    // 고정비로 등록하는 경우
+    if (quickIsRecurring) {
+      try {
+        setSubmitting(true)
+        
         // 직접 입력한 매장명이 있으면 memo에 포함
         let finalMemo = quickMemo.trim()
         if (quickStoreCustom.trim()) {
@@ -201,12 +203,6 @@ export default function ExpenseDetailSection({ period, onRefresh }: ExpenseDetai
           throw new Error(errorData.error || '고정비 등록 실패')
         }
 
-        await loadRecurringExpenses()
-        const hasFilters = searchTerm || categoryFilter !== 'all' || recurringFilter !== 'all'
-        await loadExpenses(!hasFilters)
-        onRefresh()
-        alert('고정비가 등록되었습니다. 이번 달 지출도 함께 생성되었습니다.')
-        
         // 폼 초기화
         setQuickDate(new Date().toISOString().slice(0, 10))
         setQuickCategory('')
@@ -215,26 +211,68 @@ export default function ExpenseDetailSection({ period, onRefresh }: ExpenseDetai
         setQuickStoreId('')
         setQuickStoreCustom('')
         setQuickIsRecurring(false)
+
+        // 백그라운드에서 데이터 업데이트 (새로고침 없음)
+        await loadRecurringExpenses()
+        const hasFilters = searchTerm || categoryFilter !== 'all' || recurringFilter !== 'all'
+        loadExpenses(!hasFilters) // await 없이 백그라운드 실행
+        onRefresh() // 부분 업데이트
+        showToast('고정비가 등록되었습니다. 이번 달 지출도 함께 생성되었습니다.', 'success')
+      } catch (err: any) {
+        showToast(err.message || '고정비 등록 중 오류가 발생했습니다.', 'error')
+      } finally {
         setSubmitting(false)
-        return
       }
-      
-      // 일반 지출 등록
-      // 직접 입력한 매장명이 있으면 memo에 포함
-      let finalMemo = quickMemo.trim()
-      if (quickStoreCustom.trim()) {
-        finalMemo = `[${quickStoreCustom.trim()}] ${finalMemo}`.trim()
-      }
-      
+      return
+    }
+    
+    // 일반 지출 등록 - 낙관적 업데이트
+    // 직접 입력한 매장명이 있으면 memo에 포함
+    let finalMemo = quickMemo.trim()
+    if (quickStoreCustom.trim()) {
+      finalMemo = `[${quickStoreCustom.trim()}] ${finalMemo}`.trim()
+    }
+
+    // 낙관적 업데이트: 임시 ID로 즉시 UI에 추가
+    const tempId = `temp-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+    const optimisticExpense: Expense = {
+      id: tempId,
+      date: quickDate,
+      category: quickCategory,
+      amount: parseFloat(getNumericValue(quickAmount)),
+      memo: finalMemo || null,
+      store_id: (quickStoreId && quickStoreId !== '__custom__' && quickStoreId.trim() !== '') ? quickStoreId : null,
+      recurring_expense_id: null,
+      stores: quickStoreId && quickStoreId !== '__custom__' && quickStoreId.trim() !== '' 
+        ? stores.find(s => s.id === quickStoreId) || null
+        : null,
+    }
+
+    // 즉시 UI에 추가 (낙관적 업데이트)
+    setExpenses(prev => [optimisticExpense, ...prev])
+
+    // 폼 즉시 초기화 (연속 등록 가능)
+    setQuickDate(new Date().toISOString().slice(0, 10))
+    setQuickCategory('')
+    setQuickAmount('')
+    setQuickMemo('')
+    setQuickStoreId('')
+    setQuickStoreCustom('')
+    setQuickIsRecurring(false)
+
+    // 백그라운드에서 API 호출
+    setSubmitting(true)
+    
+    try {
       const response = await fetch('/api/business/expenses', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          date: quickDate,
-          category: quickCategory,
-          amount: parseFloat(getNumericValue(quickAmount)),
-          memo: finalMemo || null,
-          store_id: quickStoreId || null, // 직접 입력 시에는 null
+          date: optimisticExpense.date,
+          category: optimisticExpense.category,
+          amount: optimisticExpense.amount,
+          memo: optimisticExpense.memo,
+          store_id: optimisticExpense.store_id,
         }),
       })
 
@@ -243,21 +281,24 @@ export default function ExpenseDetailSection({ period, onRefresh }: ExpenseDetai
         throw new Error(errorData.error || '지출 등록 실패')
       }
 
-      // 폼 초기화
-      setQuickDate(new Date().toISOString().slice(0, 10))
-      setQuickCategory('')
-      setQuickAmount('')
-      setQuickMemo('')
-      setQuickStoreId('')
-      setQuickStoreCustom('')
-      setQuickIsRecurring(false)
-
-      const hasFilters = searchTerm || categoryFilter !== 'all' || recurringFilter !== 'all'
-      loadExpenses(!hasFilters)
-      onRefresh()
-      alert('지출이 등록되었습니다.')
+      const result = await response.json()
+      if (result.success && result.data) {
+        // 성공 시: 임시 항목을 서버 데이터로 교체
+        setExpenses(prev => {
+          const filtered = prev.filter(e => e.id !== tempId)
+          return [result.data, ...filtered]
+        })
+        showToast('지출이 등록되었습니다.', 'success')
+        
+        // 부분 업데이트: 재무 요약만 업데이트 (전체 새로고침 없음)
+        onRefresh()
+      } else {
+        throw new Error('지출 등록 실패')
+      }
     } catch (err: any) {
-      alert(err.message || '지출 등록 중 오류가 발생했습니다.')
+      // 실패 시 롤백: 임시 항목 제거
+      setExpenses(prev => prev.filter(e => e.id !== tempId))
+      showToast(err.message || '지출 등록 중 오류가 발생했습니다.', 'error')
     } finally {
       setSubmitting(false)
     }
@@ -641,8 +682,10 @@ export default function ExpenseDetailSection({ period, onRefresh }: ExpenseDetai
   }
 
   return (
-    <div>
-      {/* 빠른 입력 폼 */}
+    <>
+      <ToastContainer />
+      <div>
+        {/* 빠른 입력 폼 */}
       <div className="bg-orange-50 rounded-lg p-4 mb-6 border-l-4 border-orange-500">
         <h3 className="text-sm font-semibold text-gray-700 mb-3">빠른 지출 등록</h3>
         <form onSubmit={handleQuickSubmit} className="space-y-2">
@@ -1340,7 +1383,8 @@ export default function ExpenseDetailSection({ period, onRefresh }: ExpenseDetai
           </div>
         </div>
       )}
-    </div>
+      </div>
+    </>
   )
 }
 
