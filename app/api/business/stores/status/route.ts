@@ -189,10 +189,10 @@ async function fetchStoreStatusData(companyId: string) {
         .order('clock_in_at', { ascending: false }),
       // 모든 매장의 제품 입고/보관 사진을 한 번에 조회 (3일 범위로 최적화, 타임아웃 방지)
       // 타임아웃 방지를 위해 별도 Promise로 래핑
-      (async () => {
+      (async (): Promise<{ data: any[] | null; error: any }> => {
         try {
-          const timeoutPromise = new Promise((_, reject) => 
-            setTimeout(() => reject(new Error('Product photos query timeout')), 3000)
+          const timeoutPromise = new Promise<{ data: any[] | null; error: any }>((resolve) => 
+            setTimeout(() => resolve({ data: [], error: { message: 'Product photos query timeout' } }), 3000)
           )
           const queryPromise = supabase
             .from('product_photos')
@@ -201,9 +201,10 @@ async function fetchStoreStatusData(companyId: string) {
             .in('type', ['receipt', 'storage'])
             .gte('created_at', threeDaysAgo.toISOString())
             .lte('created_at', todayEnd.toISOString())
+            .then((result) => ({ data: result.data, error: result.error }))
           
           return await Promise.race([queryPromise, timeoutPromise])
-        } catch (error) {
+        } catch (error: any) {
           return { data: [], error: { message: 'Product photos query timeout or error' } }
         }
       })(),
