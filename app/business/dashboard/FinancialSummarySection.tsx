@@ -357,6 +357,14 @@ export default function FinancialSummarySection({ companyId }: FinancialSummaryS
     return null
   }
 
+  // 매출(총액)에 부가세(10%)가 포함되어 있다고 가정하고 공급가액/부가세를 분리
+  // 예: 396,000원 -> 부가세 36,000원 / 공급가액 360,000원
+  const grossRevenue = summary.total_revenue || 0
+  const vatAmount = Math.round(grossRevenue / 11) // 10% VAT 포함 총액 기준: VAT = total * (10/110) = total/11
+  const netRevenue = Math.max(0, grossRevenue - vatAmount)
+  const netProfit = netRevenue - (summary.total_payroll || 0) - (summary.total_expenses || 0)
+  const profitTextColor = netProfit >= 0 ? 'text-green-700' : 'text-red-700'
+
   // 오늘 날짜 포맷팅
   const today = new Date()
   const todayFormatted = `${today.getMonth() + 1}월 ${today.getDate()}일`
@@ -377,71 +385,124 @@ export default function FinancialSummarySection({ companyId }: FinancialSummaryS
       </div>
 
       {/* 재무 지표 카드 */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
+      {/* PC에서는 3개씩 2줄(3x2) 고정으로 잘림 방지 */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
+        {/* 1줄: 수익 / 매출 / 미수금 */}
         <Link
-          href="/business/financial?section=revenue"
-          className="bg-blue-50 rounded-lg p-4 border-l-4 border-blue-500 hover:bg-blue-100 transition-colors cursor-pointer"
+          href="/business/financial"
+          className="bg-teal-50 rounded-xl p-5 border border-teal-100 hover:bg-teal-100 transition-colors cursor-pointer shadow-sm hover:shadow-md flex flex-col min-h-[172px]"
         >
-          <h3 className="text-sm font-medium text-gray-600 mb-1">이번 달 매출</h3>
-          <p className="text-2xl font-bold text-gray-900">{formatCurrency(summary.total_revenue)}</p>
-          <p className="text-xs text-gray-500 mt-1">{summary.revenue_count}건</p>
-          <p className="text-xs text-blue-600 mt-2 font-medium">전체보기 →</p>
+          <h3 className="text-xs font-semibold text-gray-700 mb-2">이번 달 수익</h3>
+          <p className={`text-2xl font-extrabold leading-tight ${profitTextColor}`}>{formatCurrency(netProfit)}</p>
+          <p className="text-[11px] text-gray-500 mt-1">공급가액 - 인건비 - 지출</p>
+          <div className="mt-3 space-y-1 text-xs">
+            <div className="flex justify-between">
+              <span className="text-gray-500">매출(공급가액)</span>
+              <span className="font-semibold text-gray-700">{formatCurrency(netRevenue)}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-gray-500">부가세</span>
+              <span className="font-semibold text-gray-700">{formatCurrency(vatAmount)}</span>
+            </div>
+          </div>
+          <div className="mt-auto pt-3 flex items-center justify-end">
+            <span className="text-xs text-teal-800 font-semibold">전체보기 →</span>
+          </div>
         </Link>
 
         <Link
-          href="/business/financial?section=receipt"
-          className="bg-green-50 rounded-lg p-4 border-l-4 border-green-500 hover:bg-green-100 transition-colors cursor-pointer"
+          href="/business/financial?section=revenue"
+          className="bg-blue-50 rounded-xl p-5 border border-blue-100 hover:bg-blue-100 transition-colors cursor-pointer shadow-sm hover:shadow-md flex flex-col min-h-[172px]"
         >
-          <h3 className="text-sm font-medium text-gray-600 mb-1">이번 달 수금</h3>
-          <p className="text-2xl font-bold text-gray-900">{formatCurrency(summary.total_received)}</p>
-          <p className="text-xs text-gray-500 mt-1">{summary.receipt_count}건</p>
-          <p className="text-xs text-green-600 mt-2 font-medium">전체보기 →</p>
+          <h3 className="text-xs font-semibold text-gray-700 mb-2">이번 달 매출</h3>
+          <p className="text-2xl font-extrabold text-gray-900 leading-tight">{formatCurrency(netRevenue)}</p>
+          <p className="text-[11px] text-gray-500 mt-1">공급가액</p>
+          <div className="mt-3 space-y-1 text-xs">
+            <div className="flex justify-between">
+              <span className="text-gray-500">부가세</span>
+              <span className="font-semibold text-gray-700">{formatCurrency(vatAmount)}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-gray-500">총합</span>
+              <span className="font-semibold text-blue-700">{formatCurrency(grossRevenue)}</span>
+            </div>
+          </div>
+          <div className="mt-auto pt-3 flex items-center justify-between">
+            <span className="text-xs text-gray-500">{summary.revenue_count}건</span>
+            <span className="text-xs text-blue-700 font-semibold">전체보기 →</span>
+          </div>
         </Link>
 
         <Link
           href="/business/financial?section=unpaid"
-          className="bg-red-50 rounded-lg p-4 border-l-4 border-red-500 hover:bg-red-100 transition-colors cursor-pointer"
+          className="bg-red-50 rounded-xl p-5 border border-red-100 hover:bg-red-100 transition-colors cursor-pointer shadow-sm hover:shadow-md flex flex-col min-h-[172px]"
         >
-          <h3 className="text-sm font-medium text-gray-600 mb-1">현재 미수금</h3>
-          <p className="text-2xl font-bold text-gray-900">{formatCurrency(summary.total_unpaid)}</p>
-          <p className="text-xs text-gray-500 mt-1">{summary.unpaid_count}건</p>
-          <p className="text-xs text-red-600 mt-2 font-medium">전체보기 →</p>
+          <h3 className="text-xs font-semibold text-gray-700 mb-2">현재 미수금</h3>
+          <p className="text-2xl font-extrabold text-gray-900 leading-tight">{formatCurrency(summary.total_unpaid)}</p>
+          <div className="mt-auto pt-3 flex items-center justify-between">
+            <span className="text-xs text-gray-500">{summary.unpaid_count}건</span>
+            <span className="text-xs text-red-700 font-semibold">전체보기 →</span>
+          </div>
         </Link>
 
-        <Link
-          href="/business/financial?section=expense"
-          className="bg-orange-50 rounded-lg p-4 border-l-4 border-orange-500 hover:bg-orange-100 transition-colors cursor-pointer"
-        >
-          <h3 className="text-sm font-medium text-gray-600 mb-1">이번 달 지출</h3>
-          <p className="text-2xl font-bold text-gray-900">{formatCurrency(summary.total_expenses)}</p>
-          <p className="text-xs text-gray-500 mt-1">{summary.expense_count}건</p>
-          {summary.total_recurring_expenses > 0 && (
-            <p className="text-xs text-purple-700 mt-1">고정비: {formatCurrency(summary.total_recurring_expenses)}</p>
-          )}
-          <p className="text-xs text-orange-600 mt-2 font-medium">전체보기 →</p>
-        </Link>
-
+        {/* 2줄: 인건비 / 지출 / 수금 */}
         <Link
           href="/business/financial?section=payroll"
-          className="bg-purple-50 rounded-lg p-4 border-l-4 border-purple-500 hover:bg-purple-100 transition-colors cursor-pointer"
+          className="bg-purple-50 rounded-xl p-5 border border-purple-100 hover:bg-purple-100 transition-colors cursor-pointer shadow-sm hover:shadow-md flex flex-col min-h-[172px]"
         >
-          <h3 className="text-sm font-medium text-gray-600 mb-1">이번 달 인건비</h3>
-          <p className="text-2xl font-bold text-gray-900">{formatCurrency(summary.total_payroll)}</p>
-          <div className="mt-2 space-y-1">
-            <div className="flex justify-between text-xs">
-              <span className="text-gray-500">지급완료:</span>
-              <span className="font-semibold text-green-600">
+          <div className="flex items-start justify-between gap-2 mb-2">
+            <h3 className="text-xs font-semibold text-gray-700">이번 달 인건비</h3>
+            <span className="text-[11px] text-gray-600 bg-white/70 border border-purple-100 rounded-full px-2 py-0.5">
+              도급 포함
+            </span>
+          </div>
+          <p className="text-2xl font-extrabold text-gray-900 leading-tight">{formatCurrency(summary.total_payroll)}</p>
+          <div className="mt-3 space-y-1 text-xs">
+            <div className="flex justify-between">
+              <span className="text-gray-500">지급완료</span>
+              <span className="font-semibold text-green-700">
                 {summary.paid_payroll_count}건 {formatCurrency(summary.paid_payroll)}
               </span>
             </div>
-            <div className="flex justify-between text-xs">
-              <span className="text-gray-500">예정:</span>
-              <span className="font-semibold text-yellow-600">
+            <div className="flex justify-between">
+              <span className="text-gray-500">예정</span>
+              <span className="font-semibold text-yellow-700">
                 {summary.scheduled_payroll_count}건 {formatCurrency(summary.scheduled_payroll)}
               </span>
             </div>
           </div>
-          <p className="text-xs text-purple-600 mt-2 font-medium">전체보기 →</p>
+          <div className="mt-auto pt-3 flex items-center justify-end">
+            <span className="text-xs text-purple-700 font-semibold">전체보기 →</span>
+          </div>
+        </Link>
+
+        <Link
+          href="/business/financial?section=expense"
+          className="bg-orange-50 rounded-xl p-5 border border-orange-100 hover:bg-orange-100 transition-colors cursor-pointer shadow-sm hover:shadow-md flex flex-col min-h-[172px]"
+        >
+          <h3 className="text-xs font-semibold text-gray-700 mb-2">이번 달 지출</h3>
+          <p className="text-2xl font-extrabold text-gray-900 leading-tight">{formatCurrency(summary.total_expenses)}</p>
+          {summary.total_recurring_expenses > 0 && (
+            <p className="text-xs text-purple-700 mt-2">
+              고정비 <span className="font-semibold">{formatCurrency(summary.total_recurring_expenses)}</span>
+            </p>
+          )}
+          <div className="mt-auto pt-3 flex items-center justify-between">
+            <span className="text-xs text-gray-500">{summary.expense_count}건</span>
+            <span className="text-xs text-orange-700 font-semibold">전체보기 →</span>
+          </div>
+        </Link>
+
+        <Link
+          href="/business/financial?section=receipt"
+          className="bg-green-50 rounded-xl p-5 border border-green-100 hover:bg-green-100 transition-colors cursor-pointer shadow-sm hover:shadow-md flex flex-col min-h-[172px]"
+        >
+          <h3 className="text-xs font-semibold text-gray-700 mb-2">이번 달 수금</h3>
+          <p className="text-2xl font-extrabold text-gray-900 leading-tight">{formatCurrency(summary.total_received)}</p>
+          <div className="mt-auto pt-3 flex items-center justify-between">
+            <span className="text-xs text-gray-500">{summary.receipt_count}건</span>
+            <span className="text-xs text-green-700 font-semibold">전체보기 →</span>
+          </div>
         </Link>
       </div>
 

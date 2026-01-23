@@ -14,8 +14,14 @@ type ActiveSection = 'summary' | 'revenue' | 'receipt' | 'unpaid' | 'payroll' | 
 function ProfitCard({ summary, formatCurrency }: { summary: any; formatCurrency: (amount: number) => string }) {
   const [isExpanded, setIsExpanded] = useState(false)
 
-  // 순수익 계산: 매출 - 인건비 - 지출
-  const netProfit = (summary.total_revenue || 0) - (summary.total_payroll || 0) - (summary.total_expenses || 0)
+  // 매출(총액)에 부가세(10%)가 포함되어 있다고 가정하고 공급가액/부가세를 분리
+  // 예: 396,000원 -> 부가세 36,000원 / 공급가액 360,000원
+  const grossRevenue = summary.total_revenue || 0
+  const vatAmount = Math.round(grossRevenue / 11) // 10% VAT 포함 총액 기준: VAT = total * (10/110) = total/11
+  const netRevenue = Math.max(0, grossRevenue - vatAmount)
+
+  // 순수익 계산: 공급가액(총매출-부가세) - 인건비 - 지출
+  const netProfit = netRevenue - (summary.total_payroll || 0) - (summary.total_expenses || 0)
   
   // 실제 수익 계산: 수금액 - 지급완료 인건비 - 지출
   const actualProfit = (summary.total_received || 0) - (summary.paid_payroll || 0) - (summary.total_expenses || 0)
@@ -51,7 +57,11 @@ function ProfitCard({ summary, formatCurrency }: { summary: any; formatCurrency:
             <div className="space-y-1 text-sm">
               <div className="flex justify-between">
                 <span className="text-gray-600">매출:</span>
-                <span className="font-medium">{formatCurrency(summary.total_revenue || 0)}</span>
+                <span className="font-medium">{formatCurrency(grossRevenue)}</span>
+              </div>
+              <div className="flex justify-between pl-4">
+                <span className="text-gray-600">- 부가세:</span>
+                <span className="font-medium">{formatCurrency(vatAmount)}</span>
               </div>
               <div className="flex justify-between pl-4">
                 <span className="text-gray-600">- 인건비:</span>
@@ -183,6 +193,12 @@ export default function FinancialPage() {
     )
   }
 
+  // 매출(총액)에 부가세(10%)가 포함되어 있다고 가정하고 공급가액/부가세를 분리
+  // 예: 396,000원 -> 부가세 36,000원 / 공급가액 360,000원
+  const grossRevenue = summary.total_revenue || 0
+  const vatAmount = Math.round(grossRevenue / 11) // 10% VAT 포함 총액 기준: VAT = total * (10/110) = total/11
+  const netRevenue = Math.max(0, grossRevenue - vatAmount)
+
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6">
       {/* 헤더 - 모바일 최적화 */}
@@ -290,8 +306,18 @@ export default function FinancialPage() {
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4 mb-6">
               <div className="bg-gradient-to-br from-blue-50 to-blue-100/50 rounded-xl p-4 sm:p-5 border-l-4 border-blue-500 shadow-md hover:shadow-lg transition-shadow duration-200">
                 <h3 className="text-xs sm:text-sm font-medium text-gray-600 mb-2">이번 달 매출</h3>
-                <p className="text-xl sm:text-2xl font-bold text-gray-900 mb-1">{formatCurrency(summary.total_revenue)}</p>
-                <p className="text-xs text-gray-500">{summary.revenue_count}건</p>
+                <p className="text-xl sm:text-2xl font-bold text-gray-900 mb-1">{formatCurrency(netRevenue)}</p>
+                <div className="mt-2 space-y-1">
+                  <div className="flex justify-between text-xs">
+                    <span className="text-gray-500">부가세:</span>
+                    <span className="font-semibold text-gray-700">{formatCurrency(vatAmount)}</span>
+                  </div>
+                  <div className="flex justify-between text-xs">
+                    <span className="text-gray-500">총합:</span>
+                    <span className="font-semibold text-blue-700">{formatCurrency(grossRevenue)}</span>
+                  </div>
+                </div>
+                <p className="text-xs text-gray-500 mt-2">{summary.revenue_count}건</p>
               </div>
 
               <div className="bg-gradient-to-br from-green-50 to-green-100/50 rounded-xl p-4 sm:p-5 border-l-4 border-green-500 shadow-md hover:shadow-lg transition-shadow duration-200">
@@ -309,6 +335,7 @@ export default function FinancialPage() {
               <div className="bg-gradient-to-br from-purple-50 to-purple-100/50 rounded-xl p-4 sm:p-5 border-l-4 border-purple-500 shadow-md hover:shadow-lg transition-shadow duration-200">
                 <h3 className="text-xs sm:text-sm font-medium text-gray-600 mb-2">이번 달 인건비</h3>
                 <p className="text-xl sm:text-2xl font-bold text-gray-900 mb-2">{formatCurrency(summary.total_payroll)}</p>
+                <p className="text-xs text-gray-500 mb-1">도급 포함</p>
                 <div className="space-y-1.5">
                   <div className="flex justify-between text-xs">
                     <span className="text-gray-500">지급완료:</span>

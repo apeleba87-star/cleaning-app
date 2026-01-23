@@ -37,6 +37,7 @@ export async function GET(request: NextRequest) {
       { data: allRevenues, error: allRevenuesError },
       { data: expenses, error: expensesError },
       { data: payrolls, error: payrollsError },
+      { data: subcontractPayments, error: subcontractPaymentsError },
     ] = await Promise.all([
       supabase
         .from('revenues')
@@ -68,6 +69,12 @@ export async function GET(request: NextRequest) {
         .eq('company_id', user.company_id)
         .eq('pay_period', period)
         .is('deleted_at', null),
+      supabase
+        .from('subcontract_payments')
+        .select('amount, status')
+        .eq('company_id', user.company_id)
+        .eq('pay_period', period)
+        .is('deleted_at', null),
     ])
 
     if (revenuesError) {
@@ -84,6 +91,9 @@ export async function GET(request: NextRequest) {
     }
     if (payrollsError) {
       throw new Error(`Failed to fetch payrolls: ${payrollsError.message}`)
+    }
+    if (subcontractPaymentsError) {
+      throw new Error(`Failed to fetch subcontract payments: ${subcontractPaymentsError.message}`)
     }
 
     const totalRevenue = revenues?.reduce((sum, r) => sum + (r.amount || 0), 0) || 0
@@ -144,13 +154,24 @@ export async function GET(request: NextRequest) {
     const expenseCount = expenses?.length || 0
     const totalRecurringExpenses = expenses?.filter(e => e.recurring_expense_id !== null).reduce((sum, e) => sum + (e.amount || 0), 0) || 0
 
-    const totalPayroll = payrolls?.reduce((sum, p) => sum + (p.amount || 0), 0) || 0
-    const paidPayrolls = payrolls?.filter(p => p.status === 'paid') || []
-    const scheduledPayrolls = payrolls?.filter(p => p.status === 'scheduled') || []
-    const paidPayroll = paidPayrolls.reduce((sum, p) => sum + (p.amount || 0), 0)
-    const scheduledPayroll = scheduledPayrolls.reduce((sum, p) => sum + (p.amount || 0), 0)
-    const paidPayrollCount = paidPayrolls.length
-    const scheduledPayrollCount = scheduledPayrolls.length
+    // 이번 달 인건비 합계: 정규 인건비(payrolls) + 도급 정산(subcontract_payments) 포함
+    const regularPayrollTotal = payrolls?.reduce((sum, p) => sum + (p.amount || 0), 0) || 0
+    const regularPaidPayrolls = payrolls?.filter(p => p.status === 'paid') || []
+    const regularScheduledPayrolls = payrolls?.filter(p => p.status === 'scheduled') || []
+    const regularPaidPayrollTotal = regularPaidPayrolls.reduce((sum, p) => sum + (p.amount || 0), 0)
+    const regularScheduledPayrollTotal = regularScheduledPayrolls.reduce((sum, p) => sum + (p.amount || 0), 0)
+
+    const subcontractPayrollTotal = subcontractPayments?.reduce((sum, p) => sum + (p.amount || 0), 0) || 0
+    const paidSubcontractPayrolls = subcontractPayments?.filter(p => p.status === 'paid') || []
+    const scheduledSubcontractPayrolls = subcontractPayments?.filter(p => p.status === 'scheduled') || []
+    const paidSubcontractPayrollTotal = paidSubcontractPayrolls.reduce((sum, p) => sum + (p.amount || 0), 0)
+    const scheduledSubcontractPayrollTotal = scheduledSubcontractPayrolls.reduce((sum, p) => sum + (p.amount || 0), 0)
+
+    const totalPayroll = regularPayrollTotal + subcontractPayrollTotal
+    const paidPayroll = regularPaidPayrollTotal + paidSubcontractPayrollTotal
+    const scheduledPayroll = regularScheduledPayrollTotal + scheduledSubcontractPayrollTotal
+    const paidPayrollCount = regularPaidPayrolls.length + paidSubcontractPayrolls.length
+    const scheduledPayrollCount = regularScheduledPayrolls.length + scheduledSubcontractPayrolls.length
 
     // 미수금 상위 매장 리스트 - 배치 쿼리로 최적화
     const { data: unpaidTrackingStores } = await supabase
