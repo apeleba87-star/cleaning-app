@@ -8,6 +8,14 @@ import { getTodayDateKST } from '@/lib/utils/date'
 import { uploadPhoto } from '@/lib/supabase/upload'
 import { useToast } from '@/components/Toast'
 
+const isDev = process.env.NODE_ENV !== 'production'
+const devLog = (...args: any[]) => {
+  if (isDev) console.log(...args)
+}
+const devWarn = (...args: any[]) => {
+  if (isDev) console.warn(...args)
+}
+
 interface RequestWithStore {
   id: string
   store_id: string
@@ -155,22 +163,20 @@ export default function RequestsPage() {
       const response = await fetch('/api/staff/requests')
       const data = await response.json()
 
-      console.log('[Client] API Response:', JSON.stringify(data, null, 2)) // 전체 API 응답 확인
-
       if (!response.ok) {
         throw new Error(data.error || '요청란을 불러오는데 실패했습니다.')
       }
 
       // 모든 요청을 가져오되, 출근한 매장이 있으면 해당 매장의 요청만 표시
       let filteredRequests = data.data || []
-      console.log('[Client] Before filtering:', filteredRequests.length, 'requests')
+      devLog('[Requests] Loaded:', filteredRequests.length)
       
       // 관리 시작 시: 해당 매장의 요청만 표시
       if (attendanceStoreId && isClockedIn) {
         filteredRequests = filteredRequests.filter(
           (req: RequestWithStore) => req.store_id === attendanceStoreId
         )
-        console.log('[Client] After filtering (clocked in):', filteredRequests.length, 'requests')
+        devLog('[Requests] Filtered (clocked in):', filteredRequests.length)
       }
       
       // 정렬: 관리 종료된 매장의 요청은 맨 아래로
@@ -198,13 +204,13 @@ export default function RequestsPage() {
               .maybeSingle()
             
             if (!userError && userData) {
-              console.log(`[Client] Successfully fetched user for request ${r.id}:`, userData)
+              devLog(`[Requests] Fetched created_by_user for request ${r.id}`)
               return {
                 ...r,
                 created_by_user: userData
               }
             } else {
-              console.warn(`[Client] Failed to fetch user for request ${r.id}:`, userError)
+              devWarn(`[Requests] Failed to fetch created_by_user for request ${r.id}:`, userError)
             }
           } catch (error) {
             console.error(`[Client] Error fetching user for request ${r.id}:`, error)
@@ -213,37 +219,7 @@ export default function RequestsPage() {
         return r
       }))
 
-      // 디버깅: created_by_user 정보 확인
-      console.log('[Client] Loaded requests count:', requestsWithUser.length)
-      requestsWithUser.forEach((r: RequestWithStore, index: number) => {
-        const hasCreatedBy = !!r.created_by
-        const hasCreatedByUser = !!r.created_by_user
-        const role = r.created_by_user?.role
-        const isStoreManager = role === 'store_manager'
-        
-        console.log(`[Client] Request ${index + 1} (${r.id}):`, {
-          title: r.title,
-          created_by: r.created_by,
-          hasCreatedBy: hasCreatedBy,
-          created_by_user: r.created_by_user,
-          hasCreatedByUser: hasCreatedByUser,
-          role: role,
-          roleType: typeof role,
-          isStoreManager: isStoreManager,
-          created_by_user_keys: r.created_by_user ? Object.keys(r.created_by_user) : [],
-          fullRequest: JSON.stringify(r, null, 2)
-        })
-        
-        if (!hasCreatedBy) {
-          console.warn(`[Client] ⚠️ Request ${r.id} has no created_by field!`)
-        }
-        if (hasCreatedBy && !hasCreatedByUser) {
-          console.warn(`[Client] ⚠️ Request ${r.id} has created_by (${r.created_by}) but no created_by_user!`)
-        }
-        if (hasCreatedByUser && !role) {
-          console.warn(`[Client] ⚠️ Request ${r.id} has created_by_user but no role! created_by_user:`, r.created_by_user)
-        }
-      })
+      devLog('[Requests] Final count:', requestsWithUser.length)
       
       setRequests(requestsWithUser)
       setError(null)
@@ -317,7 +293,7 @@ export default function RequestsPage() {
         stream = await navigator.mediaDevices.getUserMedia(exactConstraints)
       } catch (exactError) {
         // exact가 실패하면 ideal로 시도
-        console.log('exact environment failed, trying ideal:', exactError)
+        devLog('exact environment failed, trying ideal:', exactError)
         try {
           const idealConstraints: MediaStreamConstraints = {
             video: {
@@ -329,7 +305,7 @@ export default function RequestsPage() {
           stream = await navigator.mediaDevices.getUserMedia(idealConstraints)
         } catch (idealError) {
           // ideal도 실패하면 facingMode 없이 시도 (최후의 수단)
-          console.log('ideal environment failed, trying without facingMode:', idealError)
+          devLog('ideal environment failed, trying without facingMode:', idealError)
           const fallbackConstraints: MediaStreamConstraints = {
             video: {
               width: { ideal: 1920 },
@@ -544,7 +520,7 @@ export default function RequestsPage() {
 
     try {
       const apiUrl = `/api/business/requests/${rejectingRequestId}/status`
-      console.log('Rejecting request:', { requestId: rejectingRequestId, apiUrl })
+      devLog('Rejecting request:', { requestId: rejectingRequestId, apiUrl })
       
       const response = await fetch(apiUrl, {
         method: 'PATCH',
@@ -557,15 +533,14 @@ export default function RequestsPage() {
           rejection_description: rejectionDescription.trim(),
         }),
       })
-
-      console.log('Reject response status:', response.status, response.statusText)
+      devLog('Reject response status:', response.status, response.statusText)
 
       if (response.status === 404) {
         throw new Error('API 엔드포인트를 찾을 수 없습니다. 서버를 재시작해주세요.')
       }
 
       const data = await response.json()
-      console.log('Reject response data:', data)
+      devLog('Reject response data:', data)
 
       if (!response.ok) {
         throw new Error(data.error || data.message || '반려 처리에 실패했습니다.')

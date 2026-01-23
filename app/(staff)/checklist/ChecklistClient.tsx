@@ -20,6 +20,11 @@ const ChecklistCalendar = dynamic(
 import { calculateChecklistProgress } from '@/lib/utils/checklist'
 import { getTodayDateKST, getYesterdayDateKST } from '@/lib/utils/date'
 
+const isDev = process.env.NODE_ENV !== 'production'
+const devLog = (...args: any[]) => {
+  if (isDev) console.log(...args)
+}
+
 // ChecklistCamera 컴포넌트를 Dynamic Import로 로드 (카메라 기능이 필요할 때만 로드)
 const ChecklistCamera = dynamic(
   () => import('@/components/ChecklistCamera').then(mod => ({ default: mod.ChecklistCamera })),
@@ -71,18 +76,18 @@ export default function ChecklistClient() {
       return
     }
 
-    console.log('=== Checklist Load Debug ===')
-    console.log('User ID:', session.user.id)
-    console.log('Active Store IDs:', activeStoreIds)
-    console.log('Is Clocked In:', isClockedIn)
-    console.log('Attendance Loading:', attendanceLoading)
+    devLog('=== Checklist Load Debug ===')
+    devLog('User ID:', session.user.id)
+    devLog('Active Store IDs:', activeStoreIds)
+    devLog('Is Clocked In:', isClockedIn)
+    devLog('Attendance Loading:', attendanceLoading)
 
     // 출근한 매장이 있으면 해당 매장들의 체크리스트만 조회
     const today = getTodayDateKST() // 한국 시간대 기준 오늘 날짜
     const yesterday = getYesterdayDateKST()
     
-    console.log('Today (YYYY-MM-DD, KST):', today)
-    console.log('Current time:', new Date().toISOString())
+    devLog('Today (YYYY-MM-DD, KST):', today)
+    devLog('Current time:', new Date().toISOString())
     
     // 출근 중인 매장 목록 및 work_date 가져오기
     let storeIdsToCheck: string[] = []
@@ -105,8 +110,8 @@ export default function ChecklistClient() {
         })
       }
       
-      console.log('✅ Using active store IDs:', storeIdsToCheck)
-      console.log('✅ Store work dates:', storeWorkDates)
+      devLog('✅ Using active store IDs:', storeIdsToCheck)
+      devLog('✅ Store work dates:', storeWorkDates)
     } else if (isClockedIn) {
       // 출근 중이지만 activeStoreIds가 없는 경우 - 모든 배정 매장 확인
       const { data: storeAssignments } = await supabase
@@ -133,16 +138,16 @@ export default function ChecklistClient() {
         }
       }
       
-      console.log('⚠️ Clocked in but no active stores - checking assigned stores:', storeIdsToCheck)
+      devLog('⚠️ Clocked in but no active stores - checking assigned stores:', storeIdsToCheck)
     } else {
-      console.log('❌ Not clocked in - cannot load checklists')
+      devLog('❌ Not clocked in - cannot load checklists')
       setLoading(false)
       return
     }
 
     // 출근한 매장에 대해 새로운 템플릿 체크리스트가 있는지 확인하고 자동 생성
     if (storeIdsToCheck.length > 0) {
-      console.log('🔍 Checking for new template checklists for stores:', storeIdsToCheck)
+      devLog('🔍 Checking for new template checklists for stores:', storeIdsToCheck)
       
       for (const storeId of storeIdsToCheck) {
         try {
@@ -160,11 +165,11 @@ export default function ChecklistClient() {
           }
 
           if (!templateChecklists || templateChecklists.length === 0) {
-            console.log(`📋 No templates found for store ${storeId}`)
+            devLog(`📋 No templates found for store ${storeId}`)
             continue
           }
 
-          console.log(`📋 Found ${templateChecklists.length} template(s) for store ${storeId}`)
+          devLog(`📋 Found ${templateChecklists.length} template(s) for store ${storeId}`)
 
           // 2. 출근 기록의 work_date로 이미 생성된 체크리스트 확인
           const workDateForStore = storeWorkDates[storeId] || today // 출근 기록의 work_date 사용, 없으면 today

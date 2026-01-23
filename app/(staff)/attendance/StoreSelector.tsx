@@ -16,6 +16,14 @@ interface StoreSelectorProps {
 // StoreSelector에서 사용하는 최소 필드 타입
 type StoreSelectorStore = Pick<Store, 'id' | 'name' | 'company_id' | 'deleted_at' | 'management_days' | 'is_night_shift' | 'work_start_hour' | 'work_end_hour'>
 
+const isDev = process.env.NODE_ENV !== 'production'
+const devLog = (...args: any[]) => {
+  if (isDev) console.log(...args)
+}
+const devWarn = (...args: any[]) => {
+  if (isDev) console.warn(...args)
+}
+
 export default function StoreSelector({ selectedStoreId: propSelectedStoreId, onSelectStore, disabled = false, excludeStoreIds = [], showOnlyTodayManagement = true }: StoreSelectorProps) {
   const [stores, setStores] = useState<StoreSelectorStore[]>([])
   const [selectedStoreId, setSelectedStoreId] = useState<string>(propSelectedStoreId)
@@ -35,22 +43,22 @@ export default function StoreSelector({ selectedStoreId: propSelectedStoreId, on
     if (!session) return
 
     // 배정된 매장 조회
-    console.log('=== StoreSelector Debug ===')
-    console.log('User ID:', session.user.id)
-    console.log('User Email:', session.user.email)
+    devLog('=== StoreSelector Debug ===')
+    devLog('User ID:', session.user.id)
+    devLog('User Email:', session.user.email)
     
     const { data: assignments, error: assignError } = await supabase
       .from('store_assign')
       .select('store_id, id, created_at')
       .eq('user_id', session.user.id)
 
-    console.log('Store Assign Query Result:')
-    console.log('  - Data:', assignments)
-    console.log('  - Error:', assignError)
-    console.log('  - Error Code:', assignError?.code)
-    console.log('  - Error Message:', assignError?.message)
-    console.log('  - Error Details:', assignError?.details)
-    console.log('  - Error Hint:', assignError?.hint)
+    devLog('Store Assign Query Result:')
+    devLog('  - Data:', assignments)
+    devLog('  - Error:', assignError)
+    devLog('  - Error Code:', assignError?.code)
+    devLog('  - Error Message:', assignError?.message)
+    devLog('  - Error Details:', assignError?.details)
+    devLog('  - Error Hint:', assignError?.hint)
 
     if (assignError) {
       console.error('Error fetching store assignments:', assignError)
@@ -60,19 +68,19 @@ export default function StoreSelector({ selectedStoreId: propSelectedStoreId, on
     }
 
     if (!assignments || assignments.length === 0) {
-      console.log('No store assignments found for user:', session.user.id)
+      devLog('No store assignments found for user:', session.user.id)
       setLoading(false)
       return
     }
 
-    console.log('Found store assignments:', assignments)
+    devLog('Found store assignments:', assignments)
 
     const storeIds = assignments.map((a) => a.store_id)
-    console.log('Store IDs to fetch:', storeIds)
-    console.log('Number of store IDs:', storeIds.length)
+    devLog('Store IDs to fetch:', storeIds)
+    devLog('Number of store IDs:', storeIds.length)
     
     if (storeIds.length === 0) {
-      console.log('No store IDs to fetch')
+      devLog('No store IDs to fetch')
       setLoading(false)
       return
     }
@@ -83,19 +91,19 @@ export default function StoreSelector({ selectedStoreId: propSelectedStoreId, on
       .in('id', storeIds)
       .is('deleted_at', null)
 
-    console.log('=== Stores Query Result ===')
-    console.log('  - Data:', storesData)
-    console.log('  - Data Length:', storesData?.length || 0)
-    console.log('  - Error:', storesError)
-    console.log('  - Error Code:', storesError?.code)
-    console.log('  - Error Message:', storesError?.message)
-    console.log('  - Error Details:', storesError?.details)
-    console.log('  - Error Hint:', storesError?.hint)
+    devLog('=== Stores Query Result ===')
+    devLog('  - Data:', storesData)
+    devLog('  - Data Length:', storesData?.length || 0)
+    devLog('  - Error:', storesError)
+    devLog('  - Error Code:', storesError?.code)
+    devLog('  - Error Message:', storesError?.message)
+    devLog('  - Error Details:', storesError?.details)
+    devLog('  - Error Hint:', storesError?.hint)
     
     if (storesData && storesData.length > 0) {
-      console.log('✅ Successfully fetched stores:', storesData.map(s => ({ id: s.id, name: s.name })))
+      devLog('✅ Successfully fetched stores:', storesData.map(s => ({ id: s.id, name: s.name })))
     } else if (!storesError) {
-      console.warn('⚠️ No stores returned, but no error. Possible RLS issue.')
+      devWarn('⚠️ No stores returned, but no error. Possible RLS issue.')
     }
 
     if (storesError) {
@@ -105,7 +113,7 @@ export default function StoreSelector({ selectedStoreId: propSelectedStoreId, on
       return
     }
 
-    console.log('Final stores:', storesData)
+    devLog('Final stores:', storesData)
 
     // 오늘의 요일 확인
     const today = new Date()
@@ -157,7 +165,7 @@ export default function StoreSelector({ selectedStoreId: propSelectedStoreId, on
         
         checkDayName = dayNames[dateToCheck.getDay()]
         const workDate = dateToCheck.toISOString().split('T')[0]
-        console.log(`🌙 야간 매장 ${store.name}: work_end_hour(${endHour}) 기준 → work_date(${workDate}, ${checkDayName}요일)`)
+        devLog(`🌙 야간 매장 ${store.name}: work_end_hour(${endHour}) 기준 → work_date(${workDate}, ${checkDayName}요일)`)
       }
       
       // management_days에서 확인할 요일이 포함되어 있는지 확인
@@ -184,9 +192,9 @@ export default function StoreSelector({ selectedStoreId: propSelectedStoreId, on
       }
     })
 
-    console.log('Today:', todayDayName)
-    console.log('Filtered stores:', filteredStores)
-    console.log('showOnlyTodayManagement:', showOnlyTodayManagement)
+    devLog('Today:', todayDayName)
+    devLog('Filtered stores:', filteredStores)
+    devLog('showOnlyTodayManagement:', showOnlyTodayManagement)
 
     // excludeStoreIds에는 이미 출근한 매장만 포함 (퇴근 완료된 매장은 제외하지 않음)
     // 따라서 퇴근 완료된 매장은 다시 출근 가능

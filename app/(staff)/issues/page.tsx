@@ -9,6 +9,14 @@ import { useToast } from '@/components/Toast'
 
 type TabType = 'store_problem' | 'vending_machine' | 'lost_item'
 
+const isDev = process.env.NODE_ENV !== 'production'
+const devLog = (...args: any[]) => {
+  if (isDev) console.log(...args)
+}
+const devWarn = (...args: any[]) => {
+  if (isDev) console.warn(...args)
+}
+
 interface PhotoItem {
   id: string
   url: string
@@ -117,30 +125,30 @@ export default function IssuesPage() {
   }, [showCamera])
 
   const handlePhotoUpload = async (files: FileList | null, tab: TabType) => {
-    console.log('🔍 handlePhotoUpload called:', { filesCount: files?.length, tab })
+    devLog('🔍 handlePhotoUpload called:', { filesCount: files?.length, tab })
     
     if (!files || files.length === 0) {
-      console.log('❌ No files provided')
+      devLog('❌ No files provided')
       return
     }
     
     if (!attendanceStoreId) {
-      console.error('❌ No attendance store ID')
+      devWarn('No attendance store ID')
       alert('출근한 매장이 없습니다.')
       return
     }
 
-    console.log('🔍 Getting session...')
+    devLog('🔍 Getting session...')
     const supabase = createClient()
     const { data: { session } } = await supabase.auth.getSession()
     
     if (!session) {
-      console.error('❌ No session found')
+      devWarn('No session found')
       alert('로그인이 필요합니다.')
       return
     }
 
-    console.log('✅ Session found, user:', session.user.id)
+    devLog('✅ Session found, user:', session.user.id)
 
     // 파일 배열 준비
     const fileArray = Array.from(files)
@@ -181,12 +189,11 @@ export default function IssuesPage() {
     }
 
     if (previewPhotos.length === 0) {
-      console.log('❌ No valid photos to add')
+      devLog('❌ No valid photos to add')
       return
     }
 
-    console.log('📸 Adding preview photos:', previewPhotos.length, 'photos')
-    console.log('📸 Preview photo URLs:', previewPhotos.map(p => ({ id: p.id, url: p.url.substring(0, 50) + '...' })))
+    devLog('📸 Adding preview photos:', previewPhotos.length, 'photos')
     
     // 미리보기 사진을 즉시 상태에 추가
     // 함수형 업데이트를 사용하여 이전 상태를 정확히 참조
@@ -196,8 +203,7 @@ export default function IssuesPage() {
         const currentCount = prev.photos.length
         const newPhotos = [...prev.photos, ...previewPhotos]
         newPhotoCount = newPhotos.length
-        console.log('📸 Store problem photos updated:', currentCount, '->', newPhotoCount, 'total photos')
-        console.log('📸 All photo IDs:', newPhotos.map(p => p.id))
+        devLog('📸 Store problem photos updated:', currentCount, '->', newPhotoCount, 'total photos')
         // 상태 업데이트 후 강제로 리렌더링을 트리거하기 위해 새로운 배열 참조 반환
         return { ...prev, photos: newPhotos }
       })
@@ -211,8 +217,7 @@ export default function IssuesPage() {
         const currentCount = prev.photos.length
         const newPhotos = [...prev.photos, ...previewPhotos]
         newPhotoCount = newPhotos.length
-        console.log('📸 Lost item photos updated:', currentCount, '->', newPhotoCount, 'total photos')
-        console.log('📸 All photo IDs:', newPhotos.map(p => p.id))
+        devLog('📸 Lost item photos updated:', currentCount, '->', newPhotoCount, 'total photos')
         // 상태 업데이트 후 강제로 리렌더링을 트리거하기 위해 새로운 배열 참조 반환
         return { ...prev, photos: newPhotos }
       })
@@ -297,7 +302,7 @@ export default function IssuesPage() {
   }
 
   const handleCameraClick = () => {
-    console.log('📷 Camera button clicked')
+    devLog('📷 Camera button clicked')
     setCameraTab(activeTab)
     setShowCamera(true)
     // 브라우저 히스토리에 엔트리 추가 (뒤로가기 감지용)
@@ -322,7 +327,7 @@ export default function IssuesPage() {
         stream = await navigator.mediaDevices.getUserMedia(exactConstraints)
       } catch (exactError) {
         // exact가 실패하면 ideal로 시도
-        console.log('exact environment failed, trying ideal:', exactError)
+        devLog('exact environment failed, trying ideal:', exactError)
         try {
           const idealConstraints: MediaStreamConstraints = {
             video: {
@@ -334,7 +339,7 @@ export default function IssuesPage() {
           stream = await navigator.mediaDevices.getUserMedia(idealConstraints)
         } catch (idealError) {
           // ideal도 실패하면 facingMode 없이 시도 (최후의 수단)
-          console.log('ideal environment failed, trying without facingMode:', idealError)
+          devLog('ideal environment failed, trying without facingMode:', idealError)
           const fallbackConstraints: MediaStreamConstraints = {
             video: {
               width: { ideal: 1920 },
@@ -433,29 +438,29 @@ export default function IssuesPage() {
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files
-    console.log('📁 File selected:', files?.length, 'files', files ? Array.from(files).map(f => ({ name: f.name, type: f.type, size: f.size })) : 'no files')
+    devLog('📁 File selected:', files?.length)
     
     if (!files || files.length === 0) {
-      console.log('❌ No files selected')
+      devLog('❌ No files selected')
       return
     }
 
     // 파일을 배열로 복사 (input 초기화 전에 해야 함!)
     const filesArray = Array.from(files)
-    console.log('📦 Files copied to array:', filesArray.length, 'files')
+    devLog('📦 Files copied to array:', filesArray.length, 'files')
 
     const currentTab = activeTab
-    console.log('📋 Current tab:', currentTab)
+    devLog('📋 Current tab:', currentTab)
 
     // input 즉시 초기화 (다음 촬영을 위해)
     const inputElement = e.target
     if (inputElement) {
       inputElement.value = ''
-      console.log('🔄 Input cleared immediately for next capture')
+      devLog('🔄 Input cleared immediately for next capture')
     }
 
     // 사진 업로드 처리 (비동기로 진행, 즉시 미리보기 표시)
-    console.log('🚀 Starting photo upload process...')
+    devLog('🚀 Starting photo upload process...')
     
     // FileList 대신 배열을 사용하기 위해 임시 FileList 생성
     const dataTransfer = new DataTransfer()
@@ -469,7 +474,7 @@ export default function IssuesPage() {
     // 사진 업로드 처리 (비동기로 진행, 즉시 미리보기 표시)
     handlePhotoUpload(fileList, currentTab)
       .then(() => {
-        console.log('✅ Photo upload process completed successfully')
+        devLog('✅ Photo upload process completed successfully')
       })
       .catch(error => {
         console.error('❌ Photo upload error:', error)

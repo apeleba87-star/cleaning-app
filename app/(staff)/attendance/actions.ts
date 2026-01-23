@@ -12,6 +12,11 @@ export interface ServerActionResponse<T = unknown> {
   error?: string
 }
 
+const isDev = process.env.NODE_ENV !== 'production'
+const devLog = (...args: any[]) => {
+  if (isDev) console.log(...args)
+}
+
 export async function clockInAction(
   store_id: string,
   location: GPSLocation,
@@ -68,7 +73,7 @@ export async function clockInAction(
       store.work_end_hour || 10 // work_end_hour 추가
     )
 
-    console.log('📅 Work date calculation:', {
+    devLog('📅 Work date calculation:', {
       store_id: validated.store_id,
       is_night_shift: store.is_night_shift,
       work_start_hour: store.work_start_hour,
@@ -162,7 +167,7 @@ export async function clockInAction(
       return { success: false, error: '이미 해당 매장에 출근하셨습니다.' }
     }
 
-    console.log('Clock-in attempt:', {
+    devLog('Clock-in attempt:', {
       user_id: user.id,
       store_id: validated.store_id,
       location: validated.location,
@@ -205,7 +210,7 @@ export async function clockInAction(
       return { success: false, error: error.message || '출근 기록 저장 실패' }
     }
 
-    console.log('Clock-in success:', data)
+    devLog('Clock-in success:', data)
 
     // 출근 성공 후 체크리스트 자동 생성
     // 매장에 배정된 체크리스트 템플릿을 오늘 날짜로 생성
@@ -214,9 +219,9 @@ export async function clockInAction(
     try {
       // 1. 해당 매장에 배정된 체크리스트 템플릿 조회
       // 템플릿: assigned_user_id가 null이고, work_date가 '2000-01-01'인 것 (템플릿 날짜)
-      console.log('🔍 Checking for template checklists for store:', validated.store_id)
-      console.log('🔍 Today:', today)
-      console.log('🔍 User ID:', user.id)
+      devLog('🔍 Checking for template checklists for store:', validated.store_id)
+      devLog('🔍 Today:', today)
+      devLog('🔍 User ID:', user.id)
       
       const { data: templateChecklists, error: templateError } = await supabase
         .from('checklist')
@@ -225,12 +230,12 @@ export async function clockInAction(
         .is('assigned_user_id', null)
         .eq('work_date', '2000-01-01') // 템플릿 날짜
 
-      console.log('📋 Template checklists found:', templateChecklists?.length || 0)
+      devLog('📋 Template checklists found:', templateChecklists?.length || 0)
       if (templateError) {
         console.error('❌ Template error:', templateError)
       }
       if (templateChecklists && templateChecklists.length > 0) {
-        console.log('Template checklist IDs:', templateChecklists.map((t: any) => t.id))
+        devLog('Template checklist IDs:', templateChecklists.map((t: any) => t.id))
       }
 
       if (!templateError && templateChecklists && templateChecklists.length > 0) {
@@ -263,7 +268,7 @@ export async function clockInAction(
             work_date: workDate, // 계산된 work_date 사용 (야간 매장 고려)
           }))
 
-        console.log('📝 Checklists to create:', checklistsToCreate.length)
+        devLog('📝 Checklists to create:', checklistsToCreate.length)
 
         if (checklistsToCreate.length > 0) {
           const { data: createdData, error: createError } = await supabase
@@ -272,8 +277,8 @@ export async function clockInAction(
             .select()
 
           if (!createError) {
-            console.log('✅ Checklists created:', createdData?.length || 0)
-            console.log('Created checklist IDs:', createdData?.map((c: any) => c.id))
+            devLog('✅ Checklists created:', createdData?.length || 0)
+            devLog('Created checklist IDs:', createdData?.map((c: any) => c.id))
           } else {
             console.error('❌ Error creating checklists:', createError)
             console.error('Error details:', {
@@ -284,11 +289,11 @@ export async function clockInAction(
             })
           }
         } else {
-          console.log('ℹ️ All checklists already created for today')
-          console.log('Existing checklist keys:', Array.from(existingTemplateIds))
+          devLog('ℹ️ All checklists already created for today')
+          devLog('Existing checklist keys:', Array.from(existingTemplateIds))
         }
       } else {
-        console.log('ℹ️ No template checklists found for store:', validated.store_id)
+        devLog('ℹ️ No template checklists found for store:', validated.store_id)
       }
     } catch (checklistError) {
       // 체크리스트 생성 실패는 출근 성공을 막지 않음
@@ -392,7 +397,7 @@ export async function clockOutAction(
 
     if (!checklists || checklists.length === 0) {
       // 체크리스트가 없으면 퇴근 가능
-      console.log('No checklists found, allowing clock-out')
+      devLog('No checklists found, allowing clock-out')
     } else {
       // calculateChecklistProgress 함수를 사용하여 완료 여부 확인
       const { calculateChecklistProgress } = await import('@/lib/utils/checklist')
@@ -424,7 +429,7 @@ export async function clockOutAction(
       }
     }
 
-    console.log('Clock-out attempt:', {
+    devLog('Clock-out attempt:', {
       attendance_id: attendance.data.id,
       location: validated.location,
     })
@@ -452,7 +457,7 @@ export async function clockOutAction(
       return { success: false, error: error.message || '퇴근 기록 저장 실패' }
     }
 
-    console.log('Clock-out success:', data)
+    devLog('Clock-out success:', data)
 
     revalidatePath('/attendance')
     return { success: true, data }
