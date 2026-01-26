@@ -84,6 +84,8 @@ export async function GET(
     const staff: any[] = []
     const storeManagers: any[] = []
     const managers: any[] = []
+    const subcontractIndividuals: any[] = []
+    const subcontractCompanies: any[] = []
 
     assignments?.forEach((assign: any) => {
       const user = assign.users
@@ -97,6 +99,10 @@ export async function GET(
         staff.push(user)
       } else if (user.role === 'manager') {
         managers.push(user)
+      } else if (user.role === 'subcontract_individual') {
+        subcontractIndividuals.push(user)
+      } else if (user.role === 'subcontract_company') {
+        subcontractCompanies.push(user)
       }
     })
 
@@ -105,6 +111,8 @@ export async function GET(
       store_managers: storeManagers,
       staff: staff,
       managers: managers,
+      subcontract_individuals: subcontractIndividuals,
+      subcontract_companies: subcontractCompanies,
     })
   } catch (error: any) {
     console.error('Error in GET /api/business/stores/[id]/users:', error)

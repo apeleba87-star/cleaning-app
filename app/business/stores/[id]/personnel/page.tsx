@@ -10,6 +10,8 @@ interface StorePersonnel {
   store_managers: User[]
   staff: User[]
   managers: User[]
+  subcontract_individuals: User[]
+  subcontract_companies: User[]
 }
 
 export default function StorePersonnelPage() {
@@ -23,6 +25,8 @@ export default function StorePersonnelPage() {
     store_managers: [],
     staff: [],
     managers: [],
+    subcontract_individuals: [],
+    subcontract_companies: [],
   })
   const [allUsers, setAllUsers] = useState<User[]>([])
   const [selectedUserIds, setSelectedUserIds] = useState<string[]>([])
@@ -68,6 +72,8 @@ export default function StorePersonnelPage() {
         ...data.store_managers.map((u: User) => u.id),
         ...data.staff.map((u: User) => u.id),
         ...data.managers.map((u: User) => u.id),
+        ...(data.subcontract_individuals || []).map((u: User) => u.id),
+        ...(data.subcontract_companies || []).map((u: User) => u.id),
       ])
     } catch (err: any) {
       setError(err.message)
@@ -133,6 +139,8 @@ export default function StorePersonnelPage() {
       store_manager: '매장 관리자(점주)',
       staff: '직원',
       manager: '매니저',
+      subcontract_individual: '도급(개인)',
+      subcontract_company: '도급(업체)',
     }
     return labels[role] || role
   }
@@ -196,6 +204,8 @@ export default function StorePersonnelPage() {
                 <option value="store_manager">매장 관리자(점주)</option>
                 <option value="staff">직원</option>
                 <option value="manager">매니저</option>
+                <option value="subcontract_individual">도급(개인)</option>
+                <option value="subcontract_company">도급(업체)</option>
               </select>
             </div>
           </div>
@@ -321,10 +331,46 @@ export default function StorePersonnelPage() {
             </div>
           )}
 
+          {/* 도급(개인) */}
+          {personnel.subcontract_individuals && personnel.subcontract_individuals.length > 0 && (
+            <div className="bg-white rounded-lg shadow-md p-6">
+              <h2 className="text-lg font-semibold mb-4">도급(개인)</h2>
+              <div className="space-y-2">
+                {personnel.subcontract_individuals.map((user) => (
+                  <div key={user.id} className="flex items-center justify-between p-3 bg-gray-50 rounded">
+                    <div>
+                      <div className="font-medium">{user.name}</div>
+                      {user.phone && <div className="text-sm text-gray-500">{user.phone}</div>}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* 도급(업체) */}
+          {personnel.subcontract_companies && personnel.subcontract_companies.length > 0 && (
+            <div className="bg-white rounded-lg shadow-md p-6">
+              <h2 className="text-lg font-semibold mb-4">도급(업체)</h2>
+              <div className="space-y-2">
+                {personnel.subcontract_companies.map((user) => (
+                  <div key={user.id} className="flex items-center justify-between p-3 bg-gray-50 rounded">
+                    <div>
+                      <div className="font-medium">{user.name}</div>
+                      {user.phone && <div className="text-sm text-gray-500">{user.phone}</div>}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           {personnel.franchise_managers.length === 0 &&
             personnel.store_managers.length === 0 &&
             personnel.managers.length === 0 &&
-            personnel.staff.length === 0 && (
+            personnel.staff.length === 0 &&
+            (!personnel.subcontract_individuals || personnel.subcontract_individuals.length === 0) &&
+            (!personnel.subcontract_companies || personnel.subcontract_companies.length === 0) && (
               <div className="bg-white rounded-lg shadow-md p-6 text-center text-gray-500">
                 배정된 인원이 없습니다.
               </div>
