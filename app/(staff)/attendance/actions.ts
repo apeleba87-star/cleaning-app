@@ -34,7 +34,7 @@ export async function clockInAction(
     }
     
     const user = await getServerUser()
-    if (!user || user.role !== 'staff') {
+    if (!user || (user.role !== 'staff' && user.role !== 'subcontract_individual' && user.role !== 'subcontract_company')) {
       return { success: false, error: 'Unauthorized' }
     }
 
@@ -318,7 +318,7 @@ export async function clockOutAction(
 ): Promise<ServerActionResponse> {
   try {
     const user = await getServerUser()
-    if (!user || user.role !== 'staff') {
+    if (!user || (user.role !== 'staff' && user.role !== 'subcontract_individual' && user.role !== 'subcontract_company')) {
       return { success: false, error: 'Unauthorized' }
     }
 

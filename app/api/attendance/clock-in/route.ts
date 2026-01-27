@@ -17,8 +17,8 @@ export async function POST(request: NextRequest) {
       throw new UnauthorizedError('Authentication required')
     }
 
-    if (user.role !== 'staff') {
-      throw new ForbiddenError('Only staff can clock in')
+    if (user.role !== 'staff' && user.role !== 'subcontract_individual' && user.role !== 'subcontract_company') {
+      throw new ForbiddenError('Only staff or subcontract users can clock in')
     }
 
     const body = await request.json()
