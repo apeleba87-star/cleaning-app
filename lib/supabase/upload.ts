@@ -25,19 +25,19 @@ export async function uploadPhoto(
   const bucket = getStorageBucket(entity)
   const filePath = generateFilePath(storeId, entity, actualUserId)
 
-  // 이미지 리사이징 (500KB 이하로 압축)
+  // 이미지 리사이징 (400KB 이하로 압축, WebP)
   let fileToUpload = file
   if (file.type.startsWith('image/')) {
     try {
       const originalSizeKB = file.size / 1024
       console.log(`📸 원본 이미지 크기: ${originalSizeKB.toFixed(2)}KB`)
       
-      // 항상 리사이징 적용 (500KB 이하로 최적화)
+      // 항상 리사이징 적용 (400KB 이하 WebP로 최적화)
       // 원본이 작아도 최적화를 통해 일관된 품질 유지 및 저장 공간 절약
-      fileToUpload = await resizeImageToFile(file, 500)
+      fileToUpload = await resizeImageToFile(file, 400)
       const resizedSizeKB = fileToUpload.size / 1024
       
-      if (originalSizeKB > 500) {
+      if (originalSizeKB > 400) {
         console.log(`✅ 리사이징 완료: ${resizedSizeKB.toFixed(2)}KB (${((1 - resizedSizeKB / originalSizeKB) * 100).toFixed(1)}% 감소)`)
       } else {
         console.log(`✅ 이미지 최적화 완료: ${resizedSizeKB.toFixed(2)}KB (원본: ${originalSizeKB.toFixed(2)}KB)`)

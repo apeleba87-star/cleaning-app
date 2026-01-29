@@ -1,14 +1,14 @@
 /**
- * 이미지를 최대 500KB 이하로 리사이징하는 함수 (WebP 형식)
+ * 이미지를 최대 400KB 이하로 리사이징하는 함수 (WebP 형식)
  * @param file 원본 이미지 파일
- * @param maxSizeKB 최대 파일 크기 (KB, 기본값: 500)
+ * @param maxSizeKB 최대 파일 크기 (KB, 기본값: 400)
  * @param maxWidth 최대 너비 (기본값: 1920)
  * @param maxHeight 최대 높이 (기본값: 1920)
  * @returns 리사이징된 Blob (WebP 형식)
  */
 export async function resizeImage(
   file: File,
-  maxSizeKB: number = 500,
+  maxSizeKB: number = 400,
   maxWidth: number = 1920,
   maxHeight: number = 1920
 ): Promise<Blob> {
@@ -46,7 +46,7 @@ export async function resizeImage(
         ctx.imageSmoothingQuality = 'high'
         ctx.drawImage(img, 0, 0, width, height)
         
-        // 품질 조정하여 500KB 이하로 압축 (이진 탐색 방식으로 효율성 향상)
+        // 품질 조정하여 목표 KB 이하로 압축 (이진 탐색 방식으로 효율성 향상)
         let minQuality = 0.1
         let maxQuality = 0.9
         let bestBlob: Blob | null = null
@@ -105,12 +105,12 @@ export async function resizeImage(
 /**
  * 이미지 파일을 리사이징하여 File 객체로 반환 (WebP 형식)
  * @param file 원본 이미지 파일
- * @param maxSizeKB 최대 파일 크기 (KB, 기본값: 500)
+ * @param maxSizeKB 최대 파일 크기 (KB, 기본값: 400)
  * @returns 리사이징된 File 객체 (WebP 형식)
  */
 export async function resizeImageToFile(
   file: File,
-  maxSizeKB: number = 500
+  maxSizeKB: number = 400
 ): Promise<File> {
   const blob = await resizeImage(file, maxSizeKB)
   
