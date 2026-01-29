@@ -2214,6 +2214,19 @@ export default function FranchiseStoresStatusPage() {
                                 {status.staff_name}
                               </span>
                             )}
+                            {status.is_work_day && status.clock_in_time && (
+                              <span className="flex items-center gap-1">
+                                <span className="w-1 h-1 bg-gray-400 rounded-full"></span>
+                                <span className="text-gray-600">관리시작</span>
+                                <span className="font-medium text-blue-600">
+                                  {new Date(status.clock_in_time).toLocaleTimeString('ko-KR', {
+                                    hour: '2-digit',
+                                    minute: '2-digit',
+                                    hour12: false,
+                                  })}
+                                </span>
+                              </span>
+                            )}
                             <span className="flex items-center gap-1">
                               <span className="w-1 h-1 bg-gray-400 rounded-full"></span>
                               {formatTimeAgo(status.last_update_time)}
@@ -2577,6 +2590,19 @@ export default function FranchiseStoresStatusPage() {
                               {getStatusLabel(status)}
                             </span>
                           </div>
+                          {/* 관리시작 시간 (관리일이고 출근한 경우만) */}
+                          {status.is_work_day && status.clock_in_time && (
+                            <div className="flex items-center gap-1 text-xs">
+                              <span className="text-gray-500">관리시작</span>
+                              <span className="font-medium text-blue-600">
+                                {new Date(status.clock_in_time).toLocaleTimeString('ko-KR', {
+                                  hour: '2-digit',
+                                  minute: '2-digit',
+                                  hour12: false,
+                                })}
+                              </span>
+                            </div>
+                          )}
                           {/* 매장상황 건수 */}
                           <div className="flex items-center gap-2">
                             <span className="text-xs text-gray-600">매장상황:</span>

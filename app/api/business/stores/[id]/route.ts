@@ -176,3 +176,57 @@ export async function PATCH(
   }
 }
 
+// 매장 삭제 (soft delete)
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  try {
+    const user = await getServerUser()
+    if (!user) {
+      throw new UnauthorizedError('Authentication required')
+    }
+
+    if (user.role !== 'business_owner') {
+      throw new ForbiddenError('Only business owners can delete stores')
+    }
+
+    if (!user.company_id) {
+      throw new ForbiddenError('Company ID is required')
+    }
+
+    const supabase = await createServerSupabaseClient()
+
+    // 매장이 회사에 속해있는지 확인
+    const { data: existingStore, error: checkError } = await supabase
+      .from('stores')
+      .select('id')
+      .eq('id', params.id)
+      .eq('company_id', user.company_id)
+      .is('deleted_at', null)
+      .single()
+
+    if (checkError || !existingStore) {
+      throw new ForbiddenError('Store not found or access denied')
+    }
+
+    // Soft delete
+    const { error } = await supabase
+      .from('stores')
+      .update({
+        deleted_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', params.id)
+
+    if (error) {
+      throw new Error(`Failed to delete store: ${error.message}`)
+    }
+
+    return Response.json({
+      success: true,
+    })
+  } catch (error: any) {
+    return handleApiError(error)
+  }
+}

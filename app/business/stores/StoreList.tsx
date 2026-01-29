@@ -50,15 +50,45 @@ export default function StoreList({ initialStores, franchises, categoryTemplates
         method: 'DELETE',
       })
 
-      const data = await response.json()
-
       if (!response.ok) {
-        throw new Error(data.error || '삭제에 실패했습니다.')
+        // 응답이 비어있을 수 있으므로 안전하게 처리
+        let errorMessage = '삭제에 실패했습니다.'
+        try {
+          const contentType = response.headers.get('content-type')
+          if (contentType && contentType.includes('application/json')) {
+            const data = await response.json()
+            errorMessage = data.error || errorMessage
+          } else {
+            errorMessage = `삭제 실패: ${response.status} ${response.statusText}`
+          }
+        } catch (parseError) {
+          errorMessage = `삭제 실패: ${response.status} ${response.statusText}`
+        }
+        throw new Error(errorMessage)
       }
 
-      setStores(stores.filter((s) => s.id !== storeId))
+      // 성공 응답 파싱 (응답이 비어있을 수 있으므로 안전하게 처리)
+      let data: any = { success: true }
+      try {
+        const contentType = response.headers.get('content-type')
+        if (contentType && contentType.includes('application/json')) {
+          const text = await response.text()
+          if (text.trim()) {
+            data = JSON.parse(text)
+          }
+        }
+      } catch (parseError) {
+        // JSON 파싱 실패해도 성공으로 간주 (200 OK이므로)
+        console.warn('Failed to parse delete response, but status is OK:', parseError)
+      }
+
+      if (data.success !== false) {
+        setStores(stores.filter((s) => s.id !== storeId))
+      } else {
+        throw new Error(data.error || '삭제에 실패했습니다.')
+      }
     } catch (err: any) {
-      setError(err.message)
+      setError(err.message || '삭제 중 오류가 발생했습니다.')
     } finally {
       setLoading(false)
     }
