@@ -1,5 +1,6 @@
 import { NextRequest } from 'next/server'
 import { createServerSupabaseClient, getServerUser } from '@/lib/supabase/server'
+import { assertBusinessFeature } from '@/lib/plan-features-server'
 import { handleApiError, UnauthorizedError, ForbiddenError } from '@/lib/errors'
 import { encrypt } from '@/lib/utils/encryption'
 import { createClient } from '@supabase/supabase-js'
@@ -18,6 +19,11 @@ export async function GET(request: NextRequest) {
 
     if (!user.company_id) {
       throw new ForbiddenError('Company ID is required')
+    }
+
+    const feature = await assertBusinessFeature(user.company_id, 'payrolls')
+    if (!feature.allowed) {
+      throw new ForbiddenError(feature.message)
     }
 
     const supabase = await createServerSupabaseClient()
@@ -227,6 +233,11 @@ export async function POST(request: NextRequest) {
 
     if (!user.company_id) {
       throw new ForbiddenError('Company ID is required')
+    }
+
+    const feature = await assertBusinessFeature(user.company_id, 'payrolls')
+    if (!feature.allowed) {
+      throw new ForbiddenError(feature.message)
     }
 
     const body = await request.json()

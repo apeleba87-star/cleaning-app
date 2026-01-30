@@ -4,12 +4,18 @@ import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { useEffect, useState, useRef } from 'react'
+import type { BusinessFeatureKey } from '@/lib/plan-features'
+import { getAllowedFeatures } from '@/lib/plan-features'
 
 interface NavRoleSwitchProps {
   userRole: 'staff' | 'manager' | 'admin' | 'business_owner' | 'platform_admin' | 'franchise_manager' | 'store_manager'
   userName?: string
   onRefresh?: () => void
   isRefreshing?: boolean
+  /** 업체관리자 요금 플랜 (시스템관리자에서 설정, 메뉴/기능 제어용) */
+  subscriptionPlan?: 'free' | 'basic' | 'premium'
+  /** 업체 구독 상태 (active가 아니면 기능 제한) */
+  subscriptionStatus?: 'active' | 'suspended' | 'cancelled'
 }
 
 interface NavItem {
@@ -17,6 +23,8 @@ interface NavItem {
   label: string
   icon?: string
   badge?: number // 배지에 표시할 숫자
+  /** 요금 플랜 기능 키 (business_owner일 때만 사용) */
+  feature?: BusinessFeatureKey
 }
 
 interface NavGroup {
@@ -24,9 +32,11 @@ interface NavGroup {
   href?: string // 단일 링크가 있는 경우
   items?: NavItem[] // 드롭다운 항목
   icon?: string
+  /** 그룹 전체가 하나의 기능에 묶인 경우 (예: 매장) */
+  feature?: BusinessFeatureKey
 }
 
-export function NavRoleSwitch({ userRole, userName, onRefresh, isRefreshing }: NavRoleSwitchProps) {
+export function NavRoleSwitch({ userRole, userName, onRefresh, isRefreshing, subscriptionPlan = 'free', subscriptionStatus = 'active' }: NavRoleSwitchProps) {
   const pathname = usePathname()
   const router = useRouter()
   const [isClient, setIsClient] = useState(false)
@@ -160,44 +170,66 @@ export function NavRoleSwitch({ userRole, userName, onRefresh, isRefreshing }: N
     { href: '/admin/reports', label: '리포트' },
   ]
 
-        // 업체 관리자 메뉴 - 그룹화된 구조
-        const businessOwnerNav: (NavItem | NavGroup)[] = [
-          { href: '/business/dashboard', label: '대시보드' },
-          { href: '/business/attendance-report', label: '미관리 매장 확인' },
+        // 업체 관리자 메뉴 - 그룹화된 구조 (요금 플랜별 기능 키 매핑)
+        const businessOwnerNavRaw: (NavItem | NavGroup)[] = [
+          { href: '/business/dashboard', label: '대시보드', feature: 'dashboard' },
+          { href: '/business/attendance-report', label: '미관리 매장 확인', feature: 'attendance_report' },
           {
             label: '매장',
+            feature: 'stores',
             items: [
-              { href: '/business/stores', label: '매장 관리' },
-              { href: '/business/stores/status', label: '매장 상태' },
-              { href: '/business/franchises', label: '프렌차이즈 관리' },
+              { href: '/business/stores', label: '매장 관리', feature: 'stores' },
+              { href: '/business/stores/status', label: '매장 상태', feature: 'stores_status' },
+              { href: '/business/franchises', label: '프렌차이즈 관리', feature: 'franchises' },
             ],
           },
-          { href: '/business/payrolls', label: '인건비 관리' },
+          { href: '/business/payrolls', label: '인건비 관리', feature: 'payrolls' },
           {
             label: '재무',
+            feature: 'receivables',
             items: [
-              { href: '/business/receivables', label: '수금/미수금 관리' },
-              { href: '/business/financial', label: '재무 현황' },
+              { href: '/business/receivables', label: '수금/미수금 관리', feature: 'receivables' },
+              { href: '/business/financial', label: '재무 현황', feature: 'financial' },
             ],
           },
-          { href: '/business/users', label: '사용자 관리', badge: pendingUserCount },
+          { href: '/business/users', label: '사용자 관리', badge: pendingUserCount, feature: 'users' },
           {
             label: '운영',
+            feature: 'products',
             items: [
-              { href: '/business/products', label: '바코드 제품 등록' },
-              { href: '/business/checklists', label: '체크리스트' },
-              { href: '/business/announcements', label: '공지사항 관리' },
-              { href: '/business/reports', label: '리포트' },
-              { href: '/business/supply-requests', label: '물품 요청' },
+              { href: '/business/products', label: '바코드 제품 등록', feature: 'products' },
+              { href: '/business/checklists', label: '체크리스트', feature: 'checklists' },
+              { href: '/business/announcements', label: '공지사항 관리', feature: 'announcements' },
+              { href: '/business/reports', label: '리포트', feature: 'reports' },
+              { href: '/business/supply-requests', label: '물품 요청', feature: 'supply_requests' },
             ],
           },
           {
             label: '설정',
+            feature: 'company',
             items: [
-              { href: '/business/company', label: '회사 관리' },
+              { href: '/business/company', label: '회사 관리', feature: 'company' },
             ],
           },
         ]
+
+        // 요금 플랜에 따라 허용된 메뉴만 표시 (단, 미관리 매장/프렌차이즈/바코드 제품은 베이직에서도 메뉴에 표시하고, 접근 시 업그레이드 안내)
+        const allowedFeatures = getAllowedFeatures(subscriptionPlan, subscriptionStatus)
+        const menuAlwaysVisible: BusinessFeatureKey[] = ['attendance_report', 'franchises', 'products']
+        const hasFeature = (key?: BusinessFeatureKey) =>
+          key != null && (allowedFeatures.includes(key) || menuAlwaysVisible.includes(key))
+        const businessOwnerNav: (NavItem | NavGroup)[] = businessOwnerNavRaw
+          .map((entry) => {
+            if ('items' in entry && entry.items) {
+              const group = entry as NavGroup
+              const allowedItems = group.items!.filter((item) => hasFeature((item as NavItem).feature))
+              if (allowedItems.length === 0) return null
+              return { ...group, items: allowedItems }
+            }
+            const item = entry as NavItem
+            return hasFeature(item.feature) ? item : null
+          })
+          .filter((x): x is NavItem | NavGroup => x != null)
 
         const franchiseManagerNav = [
           { href: '/franchise/stores/status', label: '매장 관리 현황' },

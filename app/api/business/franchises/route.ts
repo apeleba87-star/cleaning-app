@@ -1,6 +1,7 @@
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerUser } from '@/lib/supabase/server'
+import { assertBusinessFeature } from '@/lib/plan-features-server'
 
 // 프렌차이즈 목록 조회
 export async function GET(request: NextRequest) {
@@ -19,6 +20,13 @@ export async function GET(request: NextRequest) {
         { error: '회사 정보가 없습니다.' },
         { status: 400 }
       )
+    }
+
+    if (user.role === 'business_owner' && user.company_id) {
+      const feature = await assertBusinessFeature(user.company_id, 'franchises')
+      if (!feature.allowed) {
+        return NextResponse.json({ error: feature.message }, { status: 403 })
+      }
     }
 
     const supabase = await createServerSupabaseClient()

@@ -1,5 +1,6 @@
 import { NextRequest } from 'next/server'
 import { createServerSupabaseClient, getServerUser } from '@/lib/supabase/server'
+import { assertBusinessFeature } from '@/lib/plan-features-server'
 import { handleApiError, UnauthorizedError, ForbiddenError } from '@/lib/errors'
 import { createClient } from '@supabase/supabase-js'
 
@@ -17,6 +18,11 @@ export async function GET(request: NextRequest) {
 
     if (!user.company_id) {
       throw new ForbiddenError('Company ID is required')
+    }
+
+    const feature = await assertBusinessFeature(user.company_id, 'receivables')
+    if (!feature.allowed) {
+      throw new ForbiddenError(feature.message)
     }
 
     // RLS 우회를 위해 서비스 역할 키 사용

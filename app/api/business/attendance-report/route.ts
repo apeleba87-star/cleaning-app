@@ -61,6 +61,12 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: '회사 정보가 없습니다.' }, { status: 400 })
     }
 
+    const { assertBusinessFeature } = await import('@/lib/plan-features-server')
+    const planFeature = await assertBusinessFeature(user.company_id, 'attendance_report')
+    if (!planFeature.allowed) {
+      return NextResponse.json({ error: planFeature.message }, { status: 403 })
+    }
+
     const supabase = await createServerSupabaseClient()
     const { searchParams } = new URL(request.url)
     const includeNightShift = searchParams.get('include_night_shift') === 'true'

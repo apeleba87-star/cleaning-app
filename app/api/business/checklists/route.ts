@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient, getServerUser } from '@/lib/supabase/server'
+import { assertBusinessFeature } from '@/lib/plan-features-server'
 
 // GET: 회사 내 매장별 체크리스트 목록
 export async function GET(request: NextRequest) {
@@ -8,6 +9,13 @@ export async function GET(request: NextRequest) {
 
     if (!user || (user.role !== 'business_owner' && user.role !== 'platform_admin')) {
       return NextResponse.json({ error: '권한이 없습니다.' }, { status: 403 })
+    }
+
+    if (user.role === 'business_owner' && user.company_id) {
+      const feature = await assertBusinessFeature(user.company_id, 'checklists')
+      if (!feature.allowed) {
+        return NextResponse.json({ error: feature.message }, { status: 403 })
+      }
     }
 
     const { searchParams } = new URL(request.url)
@@ -62,6 +70,13 @@ export async function POST(request: NextRequest) {
 
     if (!user || (user.role !== 'business_owner' && user.role !== 'platform_admin')) {
       return NextResponse.json({ error: '권한이 없습니다.' }, { status: 403 })
+    }
+
+    if (user.role === 'business_owner' && user.company_id) {
+      const feature = await assertBusinessFeature(user.company_id, 'checklists')
+      if (!feature.allowed) {
+        return NextResponse.json({ error: feature.message }, { status: 403 })
+      }
     }
 
     const body = await request.json()

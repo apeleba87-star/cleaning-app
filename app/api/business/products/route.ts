@@ -1,5 +1,6 @@
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { getServerUser } from '@/lib/supabase/server'
+import { assertBusinessFeature } from '@/lib/plan-features-server'
 import { NextRequest, NextResponse } from 'next/server'
 
 // 바코드 정규화 함수 (모든 공백, 특수문자 제거, 숫자만 남기기)
@@ -20,6 +21,13 @@ export async function GET(request: NextRequest) {
         { error: '권한이 없습니다.' },
         { status: 403 }
       )
+    }
+
+    if (user.role === 'business_owner' && user.company_id) {
+      const feature = await assertBusinessFeature(user.company_id, 'products')
+      if (!feature.allowed) {
+        return NextResponse.json({ error: feature.message }, { status: 403 })
+      }
     }
 
     const supabase = await createServerSupabaseClient()

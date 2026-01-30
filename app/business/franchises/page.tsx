@@ -1,5 +1,7 @@
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { getServerUser } from '@/lib/supabase/server'
+import { assertBusinessFeature } from '@/lib/plan-features-server'
+import { PlanUpgradeRequiredView } from '@/components/PlanFeatureGuard'
 import { redirect } from 'next/navigation'
 import FranchiseList from './FranchiseList'
 
@@ -9,6 +11,13 @@ export default async function BusinessFranchisesPage() {
 
   if (!user || !user.company_id) {
     redirect('/business/dashboard')
+  }
+
+  if (user.role === 'business_owner') {
+    const feature = await assertBusinessFeature(user.company_id, 'franchises')
+    if (!feature.allowed) {
+      return <PlanUpgradeRequiredView />
+    }
   }
 
   const { data: franchises, error } = await supabase

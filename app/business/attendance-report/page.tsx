@@ -1,7 +1,9 @@
 import DailyAttendanceReport from '../dashboard/DailyAttendanceReport'
+import { PlanFeatureGuard } from '@/components/PlanFeatureGuard'
 
 export default function AttendanceReportPage() {
   return (
+    <PlanFeatureGuard feature="attendance_report">
     <div className="max-w-6xl mx-auto px-4 sm:px-6">
       <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 mb-6">
         <div className="flex-1">
@@ -20,5 +22,6 @@ export default function AttendanceReportPage() {
 
       <DailyAttendanceReport />
     </div>
+    </PlanFeatureGuard>
   )
 }

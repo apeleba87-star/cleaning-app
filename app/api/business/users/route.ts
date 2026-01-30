@@ -1,6 +1,7 @@
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerUser } from '@/lib/supabase/server'
+import { assertBusinessFeature } from '@/lib/plan-features-server'
 import { UserRole } from '@/types/db'
 import { createClient } from '@supabase/supabase-js'
 
@@ -15,6 +16,13 @@ export async function GET(request: NextRequest) {
         { error: '권한이 없습니다.' },
         { status: 403 }
       )
+    }
+
+    if (user.role === 'business_owner' && user.company_id) {
+      const feature = await assertBusinessFeature(user.company_id, 'users')
+      if (!feature.allowed) {
+        return NextResponse.json({ error: feature.message }, { status: 403 })
+      }
     }
 
     // Service role key를 사용하여 auth.users에서 이메일 가져오기

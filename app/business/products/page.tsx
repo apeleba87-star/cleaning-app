@@ -1,5 +1,7 @@
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { getServerUser } from '@/lib/supabase/server'
+import { assertBusinessFeature } from '@/lib/plan-features-server'
+import { PlanUpgradeRequiredView } from '@/components/PlanFeatureGuard'
 import { redirect } from 'next/navigation'
 import ProductUploadClient from './ProductUploadClient'
 import ProductMasterSection from './ProductMasterSection'
@@ -12,6 +14,13 @@ export default async function ProductsPage() {
 
   if (!user || (user.role !== 'business_owner' && user.role !== 'platform_admin')) {
     redirect('/')
+  }
+
+  if (user.role === 'business_owner' && user.company_id) {
+    const feature = await assertBusinessFeature(user.company_id, 'products')
+    if (!feature.allowed) {
+      return <PlanUpgradeRequiredView />
+    }
   }
 
   // 매장 목록 조회 (업체관리자는 자신의 회사 매장만)

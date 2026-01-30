@@ -1,5 +1,6 @@
 import { NextRequest } from 'next/server'
 import { createServerSupabaseClient, getServerUser } from '@/lib/supabase/server'
+import { assertBusinessFeature } from '@/lib/plan-features-server'
 import { handleApiError, UnauthorizedError, ForbiddenError } from '@/lib/errors'
 import { getTodayDateKST, adjustPaymentDayToLastDay, isTodayPaymentDay } from '@/lib/utils/date'
 
@@ -17,6 +18,11 @@ export async function GET(request: NextRequest) {
 
     if (!user.company_id) {
       throw new ForbiddenError('Company ID is required')
+    }
+
+    const feature = await assertBusinessFeature(user.company_id, 'financial')
+    if (!feature.allowed) {
+      throw new ForbiddenError(feature.message)
     }
 
     const supabase = await createServerSupabaseClient()
