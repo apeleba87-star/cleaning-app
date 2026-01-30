@@ -62,7 +62,7 @@ export default function StoreStatusSection() {
   const loadStoreStatus = useCallback(async () => {
     try {
       setLoading(true)
-      const response = await fetch('/api/business/stores/status')
+      const response = await fetch('/api/business/stores/status?for_dashboard=1')
       if (!response.ok) {
         throw new Error('매장 상태를 불러올 수 없습니다.')
       }

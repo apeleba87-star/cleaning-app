@@ -1,11 +1,10 @@
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { getServerUser } from '@/lib/supabase/server'
 import { Suspense } from 'react'
-import FinancialSummarySection from './FinancialSummarySection'
 import InitialSetupGuide from './InitialSetupGuide'
 import QuickActionsSection from './QuickActionsSection'
 import CategoryGroupedSectionsLazy from './CategoryGroupedSectionsLazy'
-import TodayTasksWrapperClient from './TodayTasksWrapperClient'
+import DashboardExpandableSections from './DashboardExpandableSections'
 import StoreStatusSection from './StoreStatusSection'
 import MonthlyGrowthRateCard from './MonthlyGrowthRateCard'
 import { FinancialDataProvider } from './FinancialDataContext'
@@ -168,32 +167,9 @@ export default async function BusinessOwnerDashboardPage() {
         <StoreStatusSection />
       </Suspense>
 
-      {/* 재무 데이터 Provider로 감싸서 데이터 공유 */}
+      {/* 오늘의 작업 / 재무 현황 - 닫은 상태로 표시, 클릭 시 열리면서 API 호출 */}
       <FinancialDataProvider>
-        {/* 오늘의 작업 섹션 - Context에서 데이터를 가져와 사용 */}
-        <Suspense fallback={
-          <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-            <div className="text-center py-4">
-              <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600 mx-auto mb-2"></div>
-              <p className="text-sm text-gray-500">오늘의 작업을 불러오는 중...</p>
-            </div>
-          </div>
-        }>
-          <TodayTasksWrapperClient companyId={user.company_id} />
-        </Suspense>
-
-        {/* 재무 지표 섹션 - 먼저 로드하여 데이터를 Context에 저장 */}
-        <Suspense fallback={
-          <div className="bg-white rounded-lg shadow-md p-6 mb-8">
-            <h2 className="text-xl font-semibold mb-4">재무 현황</h2>
-            <div className="text-center py-8">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-2"></div>
-              <p className="text-sm text-gray-500">재무 데이터를 불러오는 중...</p>
-            </div>
-          </div>
-        }>
-          <FinancialSummarySection companyId={user.company_id} />
-        </Suspense>
+        <DashboardExpandableSections companyId={user.company_id} />
       </FinancialDataProvider>
 
       {/* 빠른 등록 섹션 - 즉시 표시 */}

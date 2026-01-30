@@ -58,7 +58,7 @@ const FinancialDataContext = createContext<FinancialDataContextType | undefined>
 
 export function FinancialDataProvider({ children }: { children: ReactNode }) {
   const [financialData, setFinancialData] = useState<FinancialData | null>(null)
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading] = useState(false) // 대시보드 초기 로드 시 API 호출 안 함(열 때만 로드)
 
   const loadFinancialData = async () => {
     try {

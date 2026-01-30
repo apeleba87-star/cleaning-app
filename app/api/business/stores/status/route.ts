@@ -10,7 +10,8 @@ const cache = new Map<string, { data: any; timestamp: number }>()
 const CACHE_TTL = 5 * 60 * 1000 // 5분 (밀리초)
 
 // 데이터를 가져오는 함수 (캐싱 대상)
-async function fetchStoreStatusData(companyId: string) {
+// forDashboard: true면 체크리스트·관리전후 사진 조회 생략 (대시보드용 경량 응답)
+async function fetchStoreStatusData(companyId: string, forDashboard = false) {
   try {
     const supabase = await createServerSupabaseClient()
     
@@ -131,7 +132,8 @@ async function fetchStoreStatusData(companyId: string) {
     const allAssignedUserIds = Array.from(new Set(Array.from(assignsByStore.values()).flat()))
 
     // Promise.allSettled 사용: 일부 쿼리 실패해도 나머지 데이터 반환 보장
-    const results = await Promise.allSettled([
+    // forDashboard면 체크리스트·cleaning_photos 조회 생략 (대시보드용 경량화)
+    const basePromises = [
       supabase
         .from('problem_reports')
         .select('id, store_id, category, status, title, created_at, business_confirmed_at')
@@ -154,31 +156,33 @@ async function fetchStoreStatusData(companyId: string) {
         .select('id, store_id, status')
         .in('store_id', storeIds)
         .in('status', ['received', 'in_progress', 'manager_in_progress']),
-      supabase
-        .from('checklist')
-        .select('id, store_id, items, updated_at, work_date, assigned_user_id')
-        .in('store_id', storeIds)
-        .or(`work_date.eq.${todayDateKST},work_date.eq.${todayDateUTC},work_date.eq.2000-01-01`),
-      supabase
-        .from('cleaning_photos')
-        .select('id, store_id, kind, created_at, area_category')
-        .in('store_id', storeIds)
-        .neq('area_category', 'inventory')
-        .gte('created_at', todayStart.toISOString())
-        .lte('created_at', todayEnd.toISOString()),
-      // 모든 매장의 출근 기록을 한 번에 조회
-      // work_date와 clock_in_at 범위 둘 다 사용 (다른 API와 동일한 방식)
+    ]
+    const optionalPromises = forDashboard
+      ? []
+      : [
+          supabase
+            .from('checklist')
+            .select('id, store_id, items, updated_at, work_date, assigned_user_id')
+            .in('store_id', storeIds)
+            .or(`work_date.eq.${todayDateKST},work_date.eq.${todayDateUTC},work_date.eq.2000-01-01`),
+          supabase
+            .from('cleaning_photos')
+            .select('id, store_id, kind, created_at, area_category')
+            .in('store_id', storeIds)
+            .neq('area_category', 'inventory')
+            .gte('created_at', todayStart.toISOString())
+            .lte('created_at', todayEnd.toISOString()),
+        ]
+    const tailPromises = [
       attendanceClient
         .from('attendance')
         .select('store_id, user_id, work_date, clock_in_at, clock_out_at')
         .in('store_id', storeIds)
         .or(`work_date.eq.${todayDateKST},work_date.eq.${todayDateUTC},clock_in_at.gte.${todayStart.toISOString()},clock_in_at.lte.${todayEnd.toISOString()}`)
         .order('clock_in_at', { ascending: false }),
-      // 모든 매장의 제품 입고/보관 사진을 한 번에 조회 (3일 범위로 최적화, 타임아웃 방지)
-      // 타임아웃 방지를 위해 별도 Promise로 래핑
       (async (): Promise<{ data: any[] | null; error: any }> => {
         try {
-          const timeoutPromise = new Promise<{ data: any[] | null; error: any }>((resolve) => 
+          const timeoutPromise = new Promise<{ data: any[] | null; error: any }>((resolve) =>
             setTimeout(() => resolve({ data: [], error: { message: 'Product photos query timeout' } }), 3000)
           )
           const queryPromise = supabase
@@ -189,13 +193,13 @@ async function fetchStoreStatusData(companyId: string) {
             .gte('created_at', threeDaysAgo.toISOString())
             .lte('created_at', todayEnd.toISOString())
             .then((result) => ({ data: result.data, error: result.error }))
-          
           return await Promise.race([queryPromise, timeoutPromise])
         } catch (error: any) {
           return { data: [], error: { message: 'Product photos query timeout or error' } }
         }
       })(),
-    ])
+    ]
+    const results = await Promise.allSettled([...basePromises, ...optionalPromises, ...tailPromises])
 
     // Promise.allSettled 결과 처리: 에러가 있어도 데이터 추출
     const extractData = <T>(result: PromiseSettledResult<{ data: T | null; error: any }>, name: string): { data: T | null; error: any } => {
@@ -214,10 +218,12 @@ async function fetchStoreStatusData(companyId: string) {
     const { data: allLostItems, error: allLostItemsError } = extractData(results[1], 'lost_items')
     const { data: allRequests, error: allRequestsError } = extractData(results[2], 'requests')
     const { data: allSupplyRequests, error: allSupplyRequestsError } = extractData(results[3], 'supply_requests')
-    const { data: allChecklists, error: allChecklistsError } = extractData(results[4], 'checklist')
-    const { data: allCleaningPhotos, error: allCleaningPhotosError } = extractData(results[5], 'cleaning_photos')
-    const { data: allAttendances, error: allAttendancesError } = extractData(results[6], 'attendance')
-    const { data: allProductPhotos, error: allProductPhotosError } = extractData(results[7], 'product_photos')
+    const attendanceIndex = forDashboard ? 4 : 6
+    const productPhotosIndex = forDashboard ? 5 : 7
+    const { data: allChecklists } = forDashboard ? { data: [] as any[] | null } : extractData(results[4], 'checklist')
+    const { data: allCleaningPhotos } = forDashboard ? { data: [] as any[] | null } : extractData(results[5], 'cleaning_photos')
+    const { data: allAttendances, error: allAttendancesError } = extractData(results[attendanceIndex], 'attendance')
+    const { data: allProductPhotos, error: allProductPhotosError } = extractData(results[productPhotosIndex], 'product_photos')
 
     // attendance 조회 결과 에러만 로깅
     if (allAttendancesError) {
@@ -854,12 +860,13 @@ export async function GET(request: NextRequest) {
       throw new ForbiddenError('Company ID is required')
     }
 
-    // refresh 쿼리 파라미터 확인
+    // refresh, for_dashboard 쿼리 파라미터 확인
     const { searchParams } = new URL(request.url)
     const forceRefresh = searchParams.get('refresh') === 'true'
+    const forDashboard = searchParams.get('for_dashboard') === '1' || searchParams.get('for_dashboard') === 'true'
 
-    // 캐시 키 생성 (company_id별)
-    const cacheKey = `store-status-${user.company_id}`
+    // 캐시 키 생성 (company_id + 대시보드 여부별 분리)
+    const cacheKey = `store-status-${user.company_id}-${forDashboard ? 'dashboard' : 'full'}`
 
     // 캐시 확인 (forceRefresh가 false이고 캐시가 유효한 경우)
     if (!forceRefresh) {
@@ -871,7 +878,7 @@ export async function GET(request: NextRequest) {
     }
 
     // 캐시 미스 또는 forceRefresh인 경우 데이터 가져오기
-    const result = await fetchStoreStatusData(user.company_id!)
+    const result = await fetchStoreStatusData(user.company_id!, forDashboard)
 
     // 캐시에 저장
     cache.set(cacheKey, {
