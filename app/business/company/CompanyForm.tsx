@@ -376,35 +376,46 @@ export default function CompanyForm({ company }: CompanyFormProps) {
           </div>
         </div>
 
-        <div className="bg-gray-50 rounded-lg p-4">
-          <h3 className="font-semibold mb-2">요금제 정보</h3>
-          <div className="space-y-2 text-sm">
-            <div className="flex justify-between">
-              <span className="text-gray-600">현재 요금제:</span>
-              <span className="font-medium">{company.subscription_plan}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-gray-600">상태:</span>
-              <span className="font-medium">{company.subscription_status}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-gray-600">베이직 결제 수:</span>
-              <span className="font-medium">{Number(company.basic_units ?? 0)}개</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-gray-600">프리미엄 결제 수:</span>
-              <span className="font-medium">{Number(company.premium_units ?? 0)}개</span>
-            </div>
-            {company.trial_ends_at && (
-              <div className="flex justify-between">
-                <span className="text-gray-600">무료체험 종료일:</span>
-                <span className="font-medium">
-                  {new Date(company.trial_ends_at).toLocaleDateString('ko-KR')}
-                </span>
-              </div>
-            )}
+        {/* 요금제 정보 - 2026 스타일 */}
+        <div className="rounded-xl border border-slate-200 bg-gradient-to-br from-slate-50 to-white p-5 shadow-sm">
+          <div className="flex items-center gap-2 mb-4">
+            <h3 className="text-lg font-bold text-slate-800">요금제 정보</h3>
+            <span className="rounded-full bg-slate-200/80 px-2 py-0.5 text-xs font-medium text-slate-600">2026</span>
           </div>
-          <p className="mt-3 text-xs text-gray-500">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="rounded-lg bg-white border border-slate-100 p-4 shadow-sm">
+              <p className="text-xs font-medium text-slate-500 uppercase tracking-wide mb-1">현재 요금제</p>
+              <p className="text-xl font-bold text-slate-800 capitalize">{company.subscription_plan}</p>
+            </div>
+            <div className="rounded-lg bg-white border border-slate-100 p-4 shadow-sm">
+              <p className="text-xs font-medium text-slate-500 uppercase tracking-wide mb-1">상태</p>
+              <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-sm font-semibold ${
+                company.subscription_status === 'active' || company.subscription_status === 'trial'
+                  ? 'bg-emerald-100 text-emerald-700'
+                  : 'bg-slate-100 text-slate-600'
+              }`}>
+                {company.subscription_status === 'active' || company.subscription_status === 'trial' ? '활성' : '비활성'}
+              </span>
+            </div>
+            <div className="rounded-lg bg-blue-50/80 border border-blue-100 p-4">
+              <p className="text-xs font-medium text-blue-600 uppercase tracking-wide mb-1">베이직 결제 수</p>
+              <p className="text-2xl font-bold text-blue-700">{Number(company.basic_units ?? 0)}<span className="text-base font-semibold text-blue-600 ml-0.5">개</span></p>
+            </div>
+            <div className="rounded-lg bg-violet-50/80 border border-violet-100 p-4">
+              <p className="text-xs font-medium text-violet-600 uppercase tracking-wide mb-1">프리미엄 결제 수</p>
+              <p className="text-2xl font-bold text-violet-700">{Number(company.premium_units ?? 0)}<span className="text-base font-semibold text-violet-600 ml-0.5">개</span></p>
+            </div>
+          </div>
+          {company.trial_ends_at && (
+            <div className="mt-4 rounded-lg bg-amber-50 border border-amber-100 px-4 py-3">
+              <p className="text-xs font-medium text-amber-700 uppercase tracking-wide mb-0.5">무료체험 종료일</p>
+              <p className="text-sm font-semibold text-amber-800">
+                {new Date(company.trial_ends_at).toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric' })}
+              </p>
+            </div>
+          )}
+          <p className="mt-4 text-xs text-slate-500 flex items-center gap-1.5">
+            <span className="inline-block w-1 h-1 rounded-full bg-slate-400" />
             요금제·결제 수 변경은 시스템 관리자에게 문의하세요.
           </p>
         </div>
