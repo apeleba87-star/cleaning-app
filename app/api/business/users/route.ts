@@ -1,7 +1,7 @@
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerUser } from '@/lib/supabase/server'
-import { assertBusinessFeature } from '@/lib/plan-features-server'
+import { assertBusinessFeature, getCompanyPlan, getCompanyEmployeeCount, getCompanyStoreManagerCount } from '@/lib/plan-features-server'
 import { UserRole } from '@/types/db'
 import { createClient } from '@supabase/supabase-js'
 
@@ -217,6 +217,38 @@ export async function POST(request: NextRequest) {
           { error: '유효하지 않은 프렌차이즈입니다.' },
           { status: 400 }
         )
+      }
+    }
+
+    // 베이직/프리미엄 한도 검사 (업체관리자만)
+    if (user.role === 'business_owner' && targetCompanyId) {
+      const plan = await getCompanyPlan(targetCompanyId)
+      const basicUnits = plan?.basic_units ?? 0
+      const premiumUnits = plan?.premium_units ?? 0
+      const employeeRoles = ['staff', 'manager', 'subcontract_individual', 'subcontract_company']
+      if (employeeRoles.includes(role)) {
+        const currentEmployees = await getCompanyEmployeeCount(targetCompanyId)
+        if (currentEmployees >= basicUnits) {
+          return NextResponse.json(
+            { error: '직원 수가 한도를 초과했습니다. 추가 결제를 진행해주세요.' },
+            { status: 403 }
+          )
+        }
+      }
+      if (role === 'store_manager') {
+        if (premiumUnits < 1) {
+          return NextResponse.json(
+            { error: '점주/현장관리자 추가는 프리미엄 결제가 필요합니다. 시스템 관리자에게 문의하세요.' },
+            { status: 403 }
+          )
+        }
+        const currentStoreManagers = await getCompanyStoreManagerCount(targetCompanyId)
+        if (currentStoreManagers >= premiumUnits) {
+          return NextResponse.json(
+            { error: '점주/현장관리자 한도를 초과했습니다. 프리미엄 추가 결제를 진행해주세요.' },
+            { status: 403 }
+          )
+        }
       }
     }
 

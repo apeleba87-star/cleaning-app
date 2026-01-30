@@ -93,6 +93,14 @@ export default async function BusinessUsersPage() {
     .from('store_assign')
     .select('user_id, store_id')
 
+  // 회사 프리미엄 결제 수 (프렌차이즈·매장관리자 등 프리미엄 기능 제어)
+  const { data: companyPlan } = await supabase
+    .from('companies')
+    .select('premium_units')
+    .eq('id', user.company_id)
+    .single()
+  const premiumUnits = Number(companyPlan?.premium_units ?? 0)
+
   if (usersError || storesError || franchisesError || assignsError) {
     console.error('Error fetching data:', { usersError, storesError, franchisesError, assignsError })
     return (
@@ -135,6 +143,7 @@ export default async function BusinessUsersPage() {
         userStoreMap={userStoreMap}
         companyId={user.company_id}
         currentUserRole={user.role}
+        premiumUnits={premiumUnits}
       />
     </div>
   )

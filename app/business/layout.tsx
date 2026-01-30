@@ -29,6 +29,7 @@ export default async function BusinessLayout({
         userName={user.name}
         subscriptionPlan={companyPlan?.subscription_plan ?? 'free'}
         subscriptionStatus={companyPlan?.subscription_status ?? 'active'}
+        subscriptionPremiumUnits={companyPlan?.premium_units ?? 0}
       />
       <main className="container mx-auto px-4 py-8">{children}</main>
     </div>

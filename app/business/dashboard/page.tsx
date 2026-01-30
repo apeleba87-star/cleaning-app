@@ -45,6 +45,8 @@ export default async function BusinessOwnerDashboardPage() {
   const company = companyResult.data
   const totalStores = storesResult.count || 0
   const totalUsers = usersResult.count || 0
+  // 초기 설정 가이드용: 업체관리자 본인 제외한 직원 수 (직원 초대 완료는 '초대한 직원이 1명 이상'으로 판단)
+  const employeeCount = (usersResult.data || []).filter((u: { role?: string }) => u.role !== 'business_owner').length
 
   // 역할별 사용자 카운트 계산 (이미 조회한 데이터 사용)
   const usersByRole = (usersResult.data || []).reduce((acc: Record<string, number>, user: any) => {
@@ -110,7 +112,7 @@ export default async function BusinessOwnerDashboardPage() {
       <InitialSetupGuide
         hasCompany={!!company}
         storeCount={totalStores}
-        userCount={totalUsers}
+        employeeCount={employeeCount}
       />
 
       {/* 통계 카드 - 즉시 표시 (필수 데이터만) */}

@@ -387,6 +387,14 @@ export default function CompanyForm({ company }: CompanyFormProps) {
               <span className="text-gray-600">상태:</span>
               <span className="font-medium">{company.subscription_status}</span>
             </div>
+            <div className="flex justify-between">
+              <span className="text-gray-600">베이직 결제 수:</span>
+              <span className="font-medium">{Number(company.basic_units ?? 0)}개</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-gray-600">프리미엄 결제 수:</span>
+              <span className="font-medium">{Number(company.premium_units ?? 0)}개</span>
+            </div>
             {company.trial_ends_at && (
               <div className="flex justify-between">
                 <span className="text-gray-600">무료체험 종료일:</span>
@@ -397,7 +405,7 @@ export default function CompanyForm({ company }: CompanyFormProps) {
             )}
           </div>
           <p className="mt-3 text-xs text-gray-500">
-            요금제 변경은 시스템 관리자에게 문의하세요.
+            요금제·결제 수 변경은 시스템 관리자에게 문의하세요.
           </p>
         </div>
 

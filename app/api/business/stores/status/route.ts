@@ -880,6 +880,15 @@ export async function GET(request: NextRequest) {
     // 캐시 미스 또는 forceRefresh인 경우 데이터 가져오기
     const result = await fetchStoreStatusData(user.company_id!, forDashboard)
 
+    // 프리미엄 결제 수 (전체 요청접수 등 UI 제어용)
+    const supabase = await createServerSupabaseClient()
+    const { data: companyRow } = await supabase
+      .from('companies')
+      .select('premium_units')
+      .eq('id', user.company_id)
+      .single()
+    ;(result as any).premium_units = Number(companyRow?.premium_units ?? 0)
+
     // 캐시에 저장
     cache.set(cacheKey, {
       data: result,

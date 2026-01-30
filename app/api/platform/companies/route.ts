@@ -22,6 +22,8 @@ export async function POST(request: NextRequest) {
       subscription_plan,
       subscription_status,
       trial_ends_at,
+      basic_units,
+      premium_units,
     } = body
 
     if (!name || typeof name !== 'string' || name.trim().length === 0) {
@@ -65,6 +67,8 @@ export async function POST(request: NextRequest) {
       subscription_plan: subscription_plan,
       subscription_status: subscription_status,
       trial_ends_at: trial_ends_at || null,
+      basic_units: typeof basic_units === 'number' ? Math.max(0, basic_units) : 0,
+      premium_units: typeof premium_units === 'number' ? Math.max(0, premium_units) : 0,
     }
 
     // ID가 제공된 경우 추가

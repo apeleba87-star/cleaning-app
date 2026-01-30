@@ -182,7 +182,7 @@ export default function CategoryTemplatesPage() {
                 onChange={(e) => setFormCategory(e.target.value)}
                 required
                 className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="예: 무인매장, 서울형키즈카페"
+                placeholder="예: 무인매장, 사무실"
               />
             </div>
             <div>

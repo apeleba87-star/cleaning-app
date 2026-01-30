@@ -110,6 +110,7 @@ interface InventoryPhoto {
 
 export default function BusinessStoresStatusPage() {
   const [storeStatuses, setStoreStatuses] = useState<StoreStatus[]>([])
+  const [premiumUnits, setPremiumUnits] = useState(0)
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState<Set<string>>(new Set())
   const [showInventoryModal, setShowInventoryModal] = useState(false)
@@ -326,7 +327,7 @@ export default function BusinessStoresStatusPage() {
     
     loadStoreStatuses()
 
-    // 자동 새로고침 설정 (30분마다, 8시~23시만)
+    // 자동 새로고침 설정 (2시간마다, 8시~23시만)
     const setupAutoRefresh = () => {
       if (intervalRef.current) {
         clearInterval(intervalRef.current)
@@ -337,7 +338,7 @@ export default function BusinessStoresStatusPage() {
           if (isWithinRefreshHours()) {
             loadStoreStatuses()
           }
-        }, 30 * 60 * 1000) // 30분
+        }, 2 * 60 * 60 * 1000) // 2시간
       }
     }
 
@@ -445,6 +446,7 @@ export default function BusinessStoresStatusPage() {
         })
         
         setStoreStatuses(storesWithConfirmed)
+        setPremiumUnits(Number(data.premium_units ?? 0))
       } else {
         console.error('API Error:', data)
       }
@@ -2291,7 +2293,7 @@ export default function BusinessStoresStatusPage() {
               <span className="absolute -top-1 -right-1 text-red-500 text-xs">⚠</span>
             </div>
             <p className="text-sm text-blue-800 flex-1">
-              <strong>새로고침을 해야 출근 상태가 정확합니다.</strong> 자동 새로고침은 30분마다 실행됩니다, 오전 8시부터 저녁 11시까지만 작동합니다.
+              <strong>새로고침을 해야 출근 상태가 정확합니다.</strong> 자동 새로고침은 2시간에 한번씩 실행됩니다, 오전 8시부터 저녁 11시까지만 작동합니다.
             </p>
           </div>
         </div>
@@ -2415,18 +2417,30 @@ export default function BusinessStoresStatusPage() {
             </button>
           ))}
         </div>
-        <div className="flex items-center justify-between flex-wrap gap-2 text-sm text-gray-600">
-          <div>오늘: {now}</div>
-          <button
-            onClick={() => {
-              setBroadcastMode(true)
-              setSelectedStore(null)
-              setShowRequestCreateModal(true)
-            }}
-            className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
-          >
-            전체 요청접수
-          </button>
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 text-sm text-gray-600">
+          <div className="order-2 sm:order-1">오늘: {now}</div>
+          <div className="order-1 sm:order-2 flex flex-col gap-1.5 w-full sm:w-auto">
+            <button
+              type="button"
+              onClick={() => {
+                if (premiumUnits < 1) return
+                setBroadcastMode(true)
+                setSelectedStore(null)
+                setShowRequestCreateModal(true)
+              }}
+              disabled={premiumUnits < 1}
+              className={`w-full sm:w-auto min-h-[44px] px-4 py-2.5 sm:py-2 rounded-lg transition-colors touch-manipulation text-base sm:text-sm font-medium ${
+                premiumUnits >= 1
+                  ? 'bg-indigo-600 text-white hover:bg-indigo-700 active:bg-indigo-800'
+                  : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+              }`}
+            >
+              전체 요청접수
+            </button>
+            {premiumUnits < 1 && (
+              <p className="text-xs text-gray-500 text-center sm:text-right">전체 요청접수는 프리미엄 버전에서 사용 가능합니다.</p>
+            )}
+          </div>
         </div>
       </div>
 

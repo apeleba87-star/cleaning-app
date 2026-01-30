@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server'
 import { createServerSupabaseClient, getServerUser } from '@/lib/supabase/server'
-import { assertBusinessFeature } from '@/lib/plan-features-server'
+import { assertBusinessFeature, getCompanyPlan, getCompanyStoreCount } from '@/lib/plan-features-server'
 import { handleApiError, UnauthorizedError, ForbiddenError } from '@/lib/errors'
 
 // 매장 목록 조회
@@ -65,6 +65,15 @@ export async function POST(request: NextRequest) {
     const feature = await assertBusinessFeature(user.company_id, 'stores')
     if (!feature.allowed) {
       throw new ForbiddenError(feature.message)
+    }
+
+    const plan = await getCompanyPlan(user.company_id)
+    const basicUnits = plan?.basic_units ?? 0
+    const currentStoreCount = await getCompanyStoreCount(user.company_id)
+    if (currentStoreCount >= basicUnits) {
+      throw new ForbiddenError(
+        '매장생성이 초과되었습니다. 매장 추가 생성 결제를 진행해주세요. 혹은 기존 매장 삭제 후 다시 시도해주세요.'
+      )
     }
 
     const body = await request.json()

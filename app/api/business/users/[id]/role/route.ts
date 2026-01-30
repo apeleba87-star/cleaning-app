@@ -1,6 +1,7 @@
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerUser } from '@/lib/supabase/server'
+import { getCompanyPlan, getCompanyEmployeeCount, getCompanyStoreManagerCount } from '@/lib/plan-features-server'
 import { UserRole } from '@/types/db'
 
 export async function PATCH(
@@ -19,13 +20,15 @@ export async function PATCH(
 
     const supabase = await createServerSupabaseClient()
 
-    // business_owner와 franchise_manager는 자신의 회사 직원만 역할 변경 가능
+    // business_owner와 franchise_manager는 자신의 회사 직원만 역할 변경 가능 (역할 한도 검사용으로 role도 조회)
+    let targetUser: { company_id: string | null; role?: string } | null = null
     if (user.role === 'business_owner' || user.role === 'franchise_manager') {
-      const { data: targetUser } = await supabase
+      const { data: target } = await supabase
         .from('users')
-        .select('company_id')
+        .select('company_id, role')
         .eq('id', params.id)
         .single()
+      targetUser = target ?? null
 
       if (!targetUser || targetUser.company_id !== user.company_id) {
         return NextResponse.json(
@@ -95,14 +98,50 @@ export async function PATCH(
       )
     }
 
-    // business_owner나 platform_admin은 역할 변경 불가
-    const { data: targetUser } = await supabase
+    const employeeRoles: UserRole[] = ['staff', 'manager', 'subcontract_individual', 'subcontract_company']
+
+    // 직원 역할로 변경 시 베이직 한도 검사 (대상 사용자가 현재 직원이 아닐 때, 예: 점주→직원)
+    if (employeeRoles.includes(role as UserRole) && user.role === 'business_owner' && user.company_id) {
+      const plan = await getCompanyPlan(user.company_id)
+      const basicUnits = plan?.basic_units ?? 0
+      const currentEmployees = await getCompanyEmployeeCount(user.company_id)
+      if (targetUser?.role != null && !employeeRoles.includes(targetUser.role as UserRole)) {
+        if (currentEmployees >= basicUnits) {
+          return NextResponse.json(
+            { error: '직원 수가 한도를 초과했습니다. 추가 결제를 진행해주세요.' },
+            { status: 403 }
+          )
+        }
+      }
+    }
+
+    // 점주/현장관리자로 변경 시 프리미엄 한도 검사 (업체관리자만)
+    if (role === 'store_manager' && user.role === 'business_owner' && user.company_id) {
+      const plan = await getCompanyPlan(user.company_id)
+      const premiumUnits = plan?.premium_units ?? 0
+      if (premiumUnits < 1) {
+        return NextResponse.json(
+          { error: '점주/현장관리자로 변경하려면 프리미엄 결제가 필요합니다. 시스템 관리자에게 문의하세요.' },
+          { status: 403 }
+        )
+      }
+      const currentStoreManagers = await getCompanyStoreManagerCount(user.company_id)
+      if (currentStoreManagers >= premiumUnits) {
+        return NextResponse.json(
+          { error: '점주/현장관리자 한도를 초과했습니다. 프리미엄 추가 결제를 진행해주세요.' },
+          { status: 403 }
+        )
+      }
+    }
+
+    // business_owner나 platform_admin은 역할 변경 불가 (targetUser는 이미 조회됐을 수 있음, role만 필요하면 재조회)
+    const { data: targetForRole } = await supabase
       .from('users')
       .select('role')
       .eq('id', params.id)
       .single()
 
-    if (targetUser && (targetUser.role === 'business_owner' || targetUser.role === 'platform_admin')) {
+    if (targetForRole && (targetForRole.role === 'business_owner' || targetForRole.role === 'platform_admin')) {
       return NextResponse.json(
         { error: '이 역할은 변경할 수 없습니다.' },
         { status: 403 }

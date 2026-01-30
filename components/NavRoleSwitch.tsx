@@ -16,6 +16,8 @@ interface NavRoleSwitchProps {
   subscriptionPlan?: 'free' | 'basic' | 'premium'
   /** 업체 구독 상태 (active가 아니면 기능 제한) */
   subscriptionStatus?: 'active' | 'suspended' | 'cancelled'
+  /** 프리미엄 결제 수 (1 이상이면 프리미엄 기능 오픈) */
+  subscriptionPremiumUnits?: number
 }
 
 interface NavItem {
@@ -36,7 +38,7 @@ interface NavGroup {
   feature?: BusinessFeatureKey
 }
 
-export function NavRoleSwitch({ userRole, userName, onRefresh, isRefreshing, subscriptionPlan = 'free', subscriptionStatus = 'active' }: NavRoleSwitchProps) {
+export function NavRoleSwitch({ userRole, userName, onRefresh, isRefreshing, subscriptionPlan = 'free', subscriptionStatus = 'active', subscriptionPremiumUnits = 0 }: NavRoleSwitchProps) {
   const pathname = usePathname()
   const router = useRouter()
   const [isClient, setIsClient] = useState(false)
@@ -213,8 +215,8 @@ export function NavRoleSwitch({ userRole, userName, onRefresh, isRefreshing, sub
           },
         ]
 
-        // 요금 플랜에 따라 허용된 메뉴만 표시 (단, 미관리 매장/프렌차이즈/바코드 제품은 베이직에서도 메뉴에 표시하고, 접근 시 업그레이드 안내)
-        const allowedFeatures = getAllowedFeatures(subscriptionPlan, subscriptionStatus)
+        // 요금 플랜에 따라 허용된 메뉴만 표시 (premium_units >= 1 이면 프리미엄 기능도 표시)
+        const allowedFeatures = getAllowedFeatures(subscriptionPlan, subscriptionStatus, subscriptionPremiumUnits)
         const menuAlwaysVisible: BusinessFeatureKey[] = ['attendance_report', 'franchises', 'products']
         const hasFeature = (key?: BusinessFeatureKey) =>
           key != null && (allowedFeatures.includes(key) || menuAlwaysVisible.includes(key))

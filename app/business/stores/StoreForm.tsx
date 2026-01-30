@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, FormEvent, useEffect } from 'react'
+import { useState, FormEvent, useEffect, useRef } from 'react'
 import { Store, Franchise, CategoryTemplate, StoreContact, StoreFile } from '@/types/db'
 import { DocumentUploader } from '@/components/DocumentUploader'
 import MonthlyScheduleModal from '@/components/MonthlyScheduleModal'
@@ -14,12 +14,16 @@ interface StoreFormProps {
   franchises: StoreFormFranchise[]
   categoryTemplates: StoreFormCategoryTemplate[]
   companyId: string
+  /** 프리미엄 결제 수 (1 이상이면 프렌차이즈·상위매장명 필드 활성화) */
+  premiumUnits?: number
   onSuccess: (store: Store) => void
   onCancel: () => void
   basePath?: string // 기본 경로 (예: '/business' 또는 '/franchise')
 }
 
-export default function StoreForm({ store, franchises, categoryTemplates, companyId, onSuccess, onCancel, basePath = '/business' }: StoreFormProps) {
+export default function StoreForm({ store, franchises, categoryTemplates, companyId, premiumUnits = 0, onSuccess, onCancel, basePath = '/business' }: StoreFormProps) {
+  const hasPremium = premiumUnits >= 1
+  const formRef = useRef<HTMLFormElement>(null)
   const [parentStoreName, setParentStoreName] = useState(store?.parent_store_name || '')
   const [name, setName] = useState(store?.name || '')
   const [selectedFranchiseId, setSelectedFranchiseId] = useState(store?.franchise_id || '')
@@ -96,7 +100,7 @@ export default function StoreForm({ store, franchises, categoryTemplates, compan
   const [settlementCycle, setSettlementCycle] = useState(store?.settlement_cycle || '')
   const [paymentDay, setPaymentDay] = useState(store?.payment_day?.toString() || '')
   const [taxInvoiceRequired, setTaxInvoiceRequired] = useState(store?.tax_invoice_required ?? false)
-  const [unpaidTrackingEnabled, setUnpaidTrackingEnabled] = useState(store?.unpaid_tracking_enabled ?? false)
+  const [unpaidTrackingEnabled, setUnpaidTrackingEnabled] = useState(store?.unpaid_tracking_enabled ?? true)
   const [billingMemo, setBillingMemo] = useState(store?.billing_memo || '')
   
   // 거래처 담당자 (최대 3개)
@@ -497,9 +501,9 @@ export default function StoreForm({ store, franchises, categoryTemplates, compan
         </div>
       )}
 
-      {/* 탭 메뉴 */}
-      <div className="border-b border-gray-200 mb-4">
-        <nav className="flex space-x-4">
+      {/* 탭 메뉴 - 모바일에서 가로 스크롤 */}
+      <div className="border-b border-gray-200 mb-4 -mx-1 px-1">
+        <nav className="flex overflow-x-auto gap-1 pb-2 overscroll-x-contain" style={{ scrollbarWidth: 'thin', WebkitOverflowScrolling: 'touch' } as React.CSSProperties}>
           {[
             { id: 'basic', label: '기본 정보' },
             { id: 'payment', label: '결제/정산' },
@@ -511,7 +515,7 @@ export default function StoreForm({ store, franchises, categoryTemplates, compan
               key={tab.id}
               type="button"
               onClick={() => setActiveTab(tab.id as any)}
-              className={`py-2 px-4 border-b-2 font-medium text-sm ${
+              className={`flex-shrink-0 py-2.5 px-3 border-b-2 font-medium text-sm whitespace-nowrap touch-manipulation ${
                 activeTab === tab.id
                   ? 'border-blue-500 text-blue-600'
                   : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
@@ -523,7 +527,7 @@ export default function StoreForm({ store, franchises, categoryTemplates, compan
         </nav>
       </div>
 
-      <form onSubmit={handleSubmit} className="space-y-4">
+      <form ref={formRef} onSubmit={handleSubmit} className="space-y-4">
         {/* 기본 정보 탭 내용 */}
         {activeTab === 'basic' && (
           <>
@@ -531,33 +535,45 @@ export default function StoreForm({ store, franchises, categoryTemplates, compan
           <label htmlFor="franchise" className="block text-sm font-medium text-gray-700 mb-1">
             프렌차이즈
           </label>
-          <select
-            id="franchise"
-            value={selectedFranchiseId}
-            onChange={(e) => setSelectedFranchiseId(e.target.value)}
-            className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-          >
-            <option value="">프렌차이즈 선택 (선택사항)</option>
-            {franchises.map((franchise) => (
-              <option key={franchise.id} value={franchise.id}>
-                {franchise.name}
-              </option>
-            ))}
-          </select>
+          {hasPremium ? (
+            <select
+              id="franchise"
+              value={selectedFranchiseId}
+              onChange={(e) => setSelectedFranchiseId(e.target.value)}
+              className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="">프렌차이즈 선택 (선택사항)</option>
+              {franchises.map((franchise) => (
+                <option key={franchise.id} value={franchise.id}>
+                  {franchise.name}
+                </option>
+              ))}
+            </select>
+          ) : (
+            <div className="w-full px-4 py-2 border border-gray-200 rounded-md bg-gray-50 text-gray-500 text-sm">
+              프리미엄 버전 사용 가능
+            </div>
+          )}
         </div>
 
         <div>
           <label htmlFor="parent_store_name" className="block text-sm font-medium text-gray-700 mb-1">
             상위매장명
           </label>
-          <input
-            id="parent_store_name"
-            type="text"
-            value={parentStoreName}
-            onChange={(e) => setParentStoreName(e.target.value)}
-            className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-            placeholder="예: 청주1, 청주3"
-          />
+          {hasPremium ? (
+            <input
+              id="parent_store_name"
+              type="text"
+              value={parentStoreName}
+              onChange={(e) => setParentStoreName(e.target.value)}
+              className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder="예: 청주1, 청주3"
+            />
+          ) : (
+            <div className="w-full px-4 py-2 border border-gray-200 rounded-md bg-gray-50 text-gray-500 text-sm">
+              프리미엄 버전 사용 가능
+            </div>
+          )}
         </div>
 
         <div>
@@ -626,7 +642,7 @@ export default function StoreForm({ store, franchises, categoryTemplates, compan
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 관리 요일 선택
               </label>
-              <div className="flex flex-wrap gap-2">
+              <div className="flex flex-wrap gap-2 w-full">
                 {['월', '화', '수', '목', '금', '토', '일'].map((day) => (
                   <button
                     key={day}
@@ -638,10 +654,10 @@ export default function StoreForm({ store, franchises, categoryTemplates, compan
                           : [...prev, day]
                       )
                     }}
-                    className={`px-4 py-2 rounded-md border transition-colors ${
+                    className={`min-w-[2.75rem] px-3 py-2.5 rounded-md border transition-colors touch-manipulation text-sm font-medium ${
                       selectedDays.includes(day)
                         ? 'bg-blue-600 text-white border-blue-600'
-                        : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                        : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50 active:bg-gray-100'
                     }`}
                   >
                     {day}
@@ -858,7 +874,7 @@ export default function StoreForm({ store, franchises, categoryTemplates, compan
             value={category}
             onChange={(e) => setCategory(e.target.value)}
             className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-            placeholder="예: 무인매장, 서울형키즈카페"
+            placeholder="예: 무인매장, 사무실"
           />
           {selectedCategoryTemplateId && (
             <p className="mt-1 text-xs text-blue-600">
@@ -1328,21 +1344,37 @@ export default function StoreForm({ store, franchises, categoryTemplates, compan
           </div>
         )}
 
-        <div className="flex justify-end space-x-3 pt-4">
-          <button
-            type="button"
-            onClick={onCancel}
-            className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50"
-          >
-            취소
-          </button>
-          <button
-            type="submit"
-            disabled={loading}
-            className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
-          >
-            {loading ? '저장 중...' : '저장'}
-          </button>
+        <div className="flex flex-wrap items-center gap-2 pt-4">
+          <div className="flex flex-wrap gap-2 order-2 sm:order-1">
+            <button
+              type="button"
+              onClick={onCancel}
+              className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50"
+            >
+              취소
+            </button>
+            {activeTab === 'basic' && (
+              <button
+                type="button"
+                onClick={() => setActiveTab('payment')}
+                className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700"
+              >
+                결제·정산 작성
+              </button>
+            )}
+            <button
+              type="submit"
+              disabled={loading}
+              className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
+            >
+              {loading ? '저장 중...' : '저장하기'}
+            </button>
+          </div>
+          {error && (
+            <p className="order-1 sm:order-2 text-red-600 text-sm flex-1 min-w-0 sm:max-w-md sm:ml-2">
+              {error}
+            </p>
+          )}
         </div>
       </form>
     </div>

@@ -83,16 +83,24 @@ export function isSubscriptionActive(status: SubscriptionStatus): boolean {
   return status === 'active'
 }
 
+/** 프리미엄 전용 기능 키 (premium_units >= 1 이면 오픈) */
+const PREMIUM_ONLY_FEATURES: BusinessFeatureKey[] = ['attendance_report', 'franchises', 'products']
+
 /**
  * 해당 플랜·상태에서 기능 사용 가능 여부
+ * premiumUnits: 1 이상이면 프리미엄 전용 기능도 허용
  */
 export function isFeatureAllowed(
   plan: SubscriptionPlan,
   status: SubscriptionStatus,
-  feature: BusinessFeatureKey
+  feature: BusinessFeatureKey,
+  premiumUnits?: number
 ): boolean {
   if (!isSubscriptionActive(status)) {
     return false
+  }
+  if (PREMIUM_ONLY_FEATURES.includes(feature) && premiumUnits != null && premiumUnits >= 1) {
+    return true
   }
   const allowed = PLAN_FEATURES[plan] ?? []
   return allowed.includes(feature)
@@ -100,15 +108,23 @@ export function isFeatureAllowed(
 
 /**
  * 플랜에 허용된 기능 목록 반환 (상태 비활성이면 빈 배열)
+ * premiumUnits: 1 이상이면 프리미엄 전용 기능도 포함
  */
 export function getAllowedFeatures(
   plan: SubscriptionPlan,
-  status: SubscriptionStatus
+  status: SubscriptionStatus,
+  premiumUnits?: number
 ): BusinessFeatureKey[] {
   if (!isSubscriptionActive(status)) {
     return []
   }
-  return PLAN_FEATURES[plan] ?? []
+  const base = PLAN_FEATURES[plan] ?? []
+  if (premiumUnits != null && premiumUnits >= 1) {
+    const withPremium = new Set(base)
+    PREMIUM_ONLY_FEATURES.forEach((f) => withPremium.add(f))
+    return Array.from(withPremium)
+  }
+  return base
 }
 
 /**

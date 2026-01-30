@@ -51,6 +51,10 @@ export interface Company {
   subscription_plan: 'free' | 'basic' | 'premium'
   subscription_status: 'active' | 'suspended' | 'cancelled'
   trial_ends_at: string | null
+  /** 베이직 결제 수: 매장 생성 상한 + 직원(도급 포함) 계정 상한 */
+  basic_units: number
+  /** 프리미엄 결제 수: 점주/현장관리자 계정 상한, 1 이상이면 프리미엄 기능 오픈 */
+  premium_units: number
   // 가입 코드 관련 필드
   signup_code: string | null
   signup_code_active: boolean

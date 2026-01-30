@@ -18,9 +18,11 @@ interface UserListProps {
   userStoreMap: Map<string, string[]>
   companyId: string
   currentUserRole: UserRole
+  /** 프리미엄 결제 수 (1 이상이면 프렌차이즈 선택·매장관리자 역할 사용 가능) */
+  premiumUnits?: number
 }
 
-export default function UserList({ initialUsers, stores, franchises, userStoreMap, companyId, currentUserRole }: UserListProps) {
+export default function UserList({ initialUsers, stores, franchises, userStoreMap, companyId, currentUserRole, premiumUnits = 0 }: UserListProps) {
   const [users, setUsers] = useState<User[]>(initialUsers)
   const [editingUser, setEditingUser] = useState<User | null>(null)
   const [assigningUser, setAssigningUser] = useState<User | null>(null)
@@ -391,6 +393,7 @@ export default function UserList({ initialUsers, stores, franchises, userStoreMa
             franchises={franchises}
             companyId={companyId}
             currentUserRole={currentUserRole}
+            premiumUnits={premiumUnits}
             onSuccess={handleCreateSuccess}
             onCancel={handleCreateCancel}
           />

@@ -5,12 +5,13 @@ import Link from 'next/link'
 interface InitialSetupGuideProps {
   hasCompany: boolean
   storeCount: number
-  userCount: number
+  /** 업체관리자 본인 제외한 직원 수 (초대한 직원이 1명 이상이면 완료) */
+  employeeCount: number
 }
 
-export default function InitialSetupGuide({ hasCompany, storeCount, userCount }: InitialSetupGuideProps) {
-  // 초기 설정 완료 여부 확인
-  const isSetupComplete = hasCompany && storeCount > 0 && userCount > 0
+export default function InitialSetupGuide({ hasCompany, storeCount, employeeCount }: InitialSetupGuideProps) {
+  // 초기 설정 완료 여부 확인 (직원 = 업체관리자 제외한 초대 직원)
+  const isSetupComplete = hasCompany && storeCount > 0 && employeeCount > 0
 
   // 설정 완료되면 표시하지 않음
   if (isSetupComplete) {
@@ -35,7 +36,7 @@ export default function InitialSetupGuide({ hasCompany, storeCount, userCount }:
     {
       id: 3,
       title: '직원 초대',
-      completed: userCount > 0,
+      completed: employeeCount > 0,
       href: '/business/users',
       description: '직원을 초대하고 권한을 설정하세요',
     },

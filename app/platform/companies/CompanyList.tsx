@@ -137,6 +137,12 @@ export default function CompanyList({ initialCompanies }: CompanyListProps) {
                 요금제
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                베이직 결제 수
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                프리미엄 결제 수
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 상태
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -156,7 +162,7 @@ export default function CompanyList({ initialCompanies }: CompanyListProps) {
           <tbody className="bg-white divide-y divide-gray-200">
             {companies.length === 0 ? (
               <tr>
-                <td colSpan={7} className="px-6 py-4 text-center text-gray-500">
+                <td colSpan={9} className="px-6 py-4 text-center text-gray-500">
                   등록된 회사가 없습니다.
                 </td>
               </tr>
@@ -177,6 +183,16 @@ export default function CompanyList({ initialCompanies }: CompanyListProps) {
                     <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-800">
                       {getPlanLabel(company.subscription_plan)}
                     </span>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="text-sm text-gray-700">
+                      {Number(company.basic_units ?? 0)}개
+                    </div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="text-sm text-gray-700">
+                      {Number(company.premium_units ?? 0)}개
+                    </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <span

@@ -30,6 +30,12 @@ export default function CompanyForm({ company, onSuccess, onCancel }: CompanyFor
   const [trialEndsAt, setTrialEndsAt] = useState(
     company?.trial_ends_at ? company.trial_ends_at.split('T')[0] : ''
   )
+  const [basicUnits, setBasicUnits] = useState(
+    typeof company?.basic_units === 'number' ? company.basic_units : 0
+  )
+  const [premiumUnits, setPremiumUnits] = useState(
+    typeof company?.premium_units === 'number' ? company.premium_units : 0
+  )
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -57,6 +63,8 @@ export default function CompanyForm({ company, onSuccess, onCancel }: CompanyFor
           subscription_plan: subscriptionPlan,
           subscription_status: subscriptionStatus,
           trial_ends_at: trialEndsAt || null,
+          basic_units: basicUnits,
+          premium_units: premiumUnits,
         }),
       })
 
@@ -226,6 +234,37 @@ export default function CompanyForm({ company, onSuccess, onCancel }: CompanyFor
             onChange={(e) => setTrialEndsAt(e.target.value)}
             className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
+        </div>
+
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label htmlFor="basic_units" className="block text-sm font-medium text-gray-700 mb-1">
+              베이직 결제 수
+            </label>
+            <input
+              id="basic_units"
+              type="number"
+              min={0}
+              value={basicUnits}
+              onChange={(e) => setBasicUnits(Math.max(0, parseInt(e.target.value, 10) || 0))}
+              className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+            <p className="mt-1 text-xs text-gray-500">매장·직원(도급 포함) 상한</p>
+          </div>
+          <div>
+            <label htmlFor="premium_units" className="block text-sm font-medium text-gray-700 mb-1">
+              프리미엄 결제 수
+            </label>
+            <input
+              id="premium_units"
+              type="number"
+              min={0}
+              value={premiumUnits}
+              onChange={(e) => setPremiumUnits(Math.max(0, parseInt(e.target.value, 10) || 0))}
+              className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+            <p className="mt-1 text-xs text-gray-500">점주/현장관리자 상한, 1 이상이면 프리미엄 기능 오픈</p>
+          </div>
         </div>
 
         <div className="flex justify-end space-x-3 pt-4">

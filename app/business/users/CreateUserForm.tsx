@@ -12,6 +12,8 @@ interface CreateUserFormProps {
   franchises: CreateUserFormFranchise[]
   companyId: string
   currentUserRole: UserRole
+  /** 프리미엄 결제 수 (1 이상이면 프렌차이즈 선택·매장관리자 역할 사용 가능) */
+  premiumUnits?: number
   onSuccess: () => void
   onCancel: () => void
 }
@@ -22,7 +24,8 @@ function validateEmail(email: string): boolean {
   return emailRegex.test(email)
 }
 
-export default function CreateUserForm({ stores, franchises, companyId, currentUserRole, onSuccess, onCancel }: CreateUserFormProps) {
+export default function CreateUserForm({ stores, franchises, companyId, currentUserRole, premiumUnits = 0, onSuccess, onCancel }: CreateUserFormProps) {
+  const hasPremium = premiumUnits >= 1
   const [email, setEmail] = useState('')
   const [emailError, setEmailError] = useState<string | null>(null)
   const [password, setPassword] = useState('')
@@ -67,6 +70,13 @@ export default function CreateUserForm({ stores, franchises, companyId, currentU
       // 자동으로 첫 번째 프렌차이즈 선택하지 않음 (사용자가 선택하도록)
     }
   }, [role, selectedFranchiseId, franchises])
+
+  // 프리미엄 미사용 시 매장관리자(점주) 선택 불가 — 다른 역할로 초기화
+  useEffect(() => {
+    if (!hasPremium && role === 'store_manager') {
+      setRole('staff')
+    }
+  }, [hasPremium, role])
 
   const handleToggleStore = (storeId: string) => {
     setSelectedStoreIds((prev) =>
@@ -292,13 +302,15 @@ export default function CreateUserForm({ stores, franchises, companyId, currentU
               id="role"
               value={role}
               onChange={(e) => {
-                setRole(e.target.value as UserRole)
+                const val = e.target.value as UserRole
+                if (!hasPremium && val === 'store_manager') return
+                setRole(val)
                 // 역할 변경 시 프렌차이즈 선택 초기화
-                if (e.target.value !== 'franchise_manager') {
+                if (val !== 'franchise_manager') {
                   setSelectedFranchiseId('')
                 }
                 // 도급 역할이 아니면 도급 관련 필드 초기화
-                if (e.target.value !== 'subcontract_individual' && e.target.value !== 'subcontract_company') {
+                if (val !== 'subcontract_individual' && val !== 'subcontract_company') {
                   setResidentRegistrationNumber('')
                   setBusinessRegistrationNumber('')
                   setPayAmount('')
@@ -310,10 +322,17 @@ export default function CreateUserForm({ stores, franchises, companyId, currentU
               <option value="staff">직원</option>
               <option value="manager">매니저</option>
               <option value="franchise_manager">프렌차이즈관리자</option>
-              <option value="store_manager">매장관리자(점주)</option>
+              {hasPremium ? (
+                <option value="store_manager">매장관리자(점주)</option>
+              ) : (
+                <option value="store_manager" disabled>매장관리자(점주) — 프리미엄</option>
+              )}
               <option value="subcontract_individual">도급(개인)</option>
               <option value="subcontract_company">도급(업체)</option>
             </select>
+            {!hasPremium && (
+              <p className="mt-1 text-xs text-gray-500">매장관리자(점주)는 프리미엄 버전에서 사용 가능합니다.</p>
+            )}
           </div>
 
           <div>
@@ -333,24 +352,35 @@ export default function CreateUserForm({ stores, franchises, companyId, currentU
           {(role === 'franchise_manager' || role === 'store_manager') && (
             <div>
               <label htmlFor="franchise" className="block text-sm font-medium text-gray-700 mb-1">
-                프렌차이즈 {role === 'franchise_manager' && <span className="text-red-500">*</span>}
+                프렌차이즈 {role === 'franchise_manager' && hasPremium && <span className="text-red-500">*</span>}
               </label>
-              <select
-                id="franchise"
-                value={selectedFranchiseId}
-                onChange={(e) => setSelectedFranchiseId(e.target.value)}
-                required={role === 'franchise_manager'}
-                className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="">프렌차이즈 선택</option>
-                {franchises.map((franchise) => (
-                  <option key={franchise.id} value={franchise.id}>
-                    {franchise.name}
-                  </option>
-                ))}
-              </select>
-              {franchises.length === 0 && (
-                <p className="mt-1 text-xs text-red-500">먼저 프렌차이즈를 등록해주세요.</p>
+              {hasPremium ? (
+                <>
+                  <select
+                    id="franchise"
+                    value={selectedFranchiseId}
+                    onChange={(e) => setSelectedFranchiseId(e.target.value)}
+                    required={role === 'franchise_manager'}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="">프렌차이즈 선택</option>
+                    {franchises.map((franchise) => (
+                      <option key={franchise.id} value={franchise.id}>
+                        {franchise.name}
+                      </option>
+                    ))}
+                  </select>
+                  {franchises.length === 0 && (
+                    <p className="mt-1 text-xs text-red-500">먼저 프렌차이즈를 등록해주세요.</p>
+                  )}
+                </>
+              ) : (
+                <>
+                  <div className="w-full px-4 py-2 border border-gray-200 rounded-md bg-gray-50 text-gray-500 text-sm">
+                    프리미엄 버전 사용 가능
+                  </div>
+                  <p className="mt-1 text-xs text-gray-500">프렌차이즈 선택은 프리미엄 버전에서 가능합니다.</p>
+                </>
               )}
             </div>
           )}
@@ -819,21 +849,28 @@ export default function CreateUserForm({ stores, franchises, companyId, currentU
           </div>
         )}
 
-        <div className="flex justify-end space-x-3 pt-4">
-          <button
-            type="button"
-            onClick={onCancel}
-            className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50"
-          >
-            취소
-          </button>
-          <button
-            type="submit"
-            disabled={loading}
-            className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
-          >
-            {loading ? '초대 중...' : '초대'}
-          </button>
+        <div className="flex flex-wrap items-center gap-2 pt-4">
+          <div className="flex flex-wrap gap-2 order-2 sm:order-1">
+            <button
+              type="button"
+              onClick={onCancel}
+              className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50"
+            >
+              취소
+            </button>
+            <button
+              type="submit"
+              disabled={loading}
+              className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
+            >
+              {loading ? '초대 중...' : '초대'}
+            </button>
+          </div>
+          {error && (
+            <p className="order-1 sm:order-2 text-red-600 text-sm flex-1 min-w-0 sm:max-w-md sm:ml-2">
+              {error}
+            </p>
+          )}
         </div>
       </form>
     </div>

@@ -13,16 +13,18 @@ interface StoreListProps {
   franchises: StoreListFranchise[]
   categoryTemplates: StoreListCategoryTemplate[]
   companyId: string
+  premiumUnits?: number
   basePath?: string // 기본 경로 (예: '/business' 또는 '/franchise')
 }
 
-export default function StoreList({ initialStores, franchises, categoryTemplates, companyId, basePath = '/business' }: StoreListProps) {
+export default function StoreList({ initialStores, franchises, categoryTemplates, companyId, premiumUnits = 0, basePath = '/business' }: StoreListProps) {
   const [stores, setStores] = useState<Store[]>(initialStores)
   const [editingStore, setEditingStore] = useState<Store | null>(null)
   const [showForm, setShowForm] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [searchTerm, setSearchTerm] = useState('')
+  const [nextFormTab, setNextFormTab] = useState<'payment' | null>(null)
 
   const handleCreate = () => {
     setEditingStore(null)
@@ -102,6 +104,19 @@ export default function StoreList({ initialStores, franchises, categoryTemplates
     }
     setShowForm(false)
     setEditingStore(null)
+    setNextFormTab(null)
+    setError(null)
+  }
+
+  const handleSuccessAndContinueToPayment = (store: Store) => {
+    if (editingStore) {
+      setStores(stores.map((s) => (s.id === store.id ? store : s)))
+    } else {
+      setStores([store, ...stores])
+    }
+    setEditingStore(store)
+    setNextFormTab('payment')
+    setShowForm(true)
     setError(null)
   }
 
@@ -155,7 +170,11 @@ export default function StoreList({ initialStores, franchises, categoryTemplates
             franchises={franchises}
             categoryTemplates={categoryTemplates}
             companyId={companyId}
+            premiumUnits={premiumUnits}
             onSuccess={handleFormSuccess}
+            onSuccessAndContinueToPayment={handleSuccessAndContinueToPayment}
+            nextFormTab={nextFormTab}
+            onConsumedNextTab={() => setNextFormTab(null)}
             onCancel={handleFormCancel}
             basePath={basePath}
           />

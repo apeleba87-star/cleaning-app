@@ -11,18 +11,26 @@ export default async function BusinessStoresPage() {
     redirect('/business/dashboard')
   }
 
-  const { data: stores, error: storesError } = await supabase
-    .from('stores')
-    .select(`
-      *,
-      franchises:franchise_id (
-        id,
-        name
-      )
-    `)
-    .eq('company_id', user.company_id)
-    .is('deleted_at', null)
-    .order('created_at', { ascending: false })
+  const [
+    { data: companyPlan },
+    { data: stores, error: storesError },
+  ] = await Promise.all([
+    supabase.from('companies').select('premium_units').eq('id', user.company_id).single(),
+    supabase
+      .from('stores')
+      .select(`
+        *,
+        franchises:franchise_id (
+          id,
+          name
+        )
+      `)
+      .eq('company_id', user.company_id)
+      .is('deleted_at', null)
+      .order('created_at', { ascending: false }),
+  ])
+
+  const premiumUnits = Number(companyPlan?.premium_units ?? 0)
 
   // 회사 프렌차이즈 조회
   const { data: franchises, error: franchisesError } = await supabase
@@ -66,7 +74,8 @@ export default async function BusinessStoresPage() {
         initialStores={stores || []} 
         franchises={franchises || []} 
         categoryTemplates={categoryTemplates || []}
-        companyId={user.company_id} 
+        companyId={user.company_id}
+        premiumUnits={premiumUnits}
       />
     </div>
   )
