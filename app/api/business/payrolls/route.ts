@@ -22,7 +22,7 @@ export async function GET(request: NextRequest) {
     }
 
     const feature = await assertBusinessFeature(user.company_id, 'payrolls')
-    if (!feature.allowed) {
+    if (feature.allowed === false) {
       throw new ForbiddenError(feature.message)
     }
 
@@ -236,7 +236,7 @@ export async function POST(request: NextRequest) {
     }
 
     const feature = await assertBusinessFeature(user.company_id, 'payrolls')
-    if (!feature.allowed) {
+    if (feature.allowed === false) {
       throw new ForbiddenError(feature.message)
     }
 

@@ -24,7 +24,7 @@ export async function GET(request: NextRequest) {
 
     if (user.role === 'business_owner' && user.company_id) {
       const feature = await assertBusinessFeature(user.company_id, 'franchises')
-      if (!feature.allowed) {
+      if (feature.allowed === false) {
         return NextResponse.json({ error: feature.message }, { status: 403 })
       }
     }

@@ -21,7 +21,7 @@ export async function GET(request: NextRequest) {
     }
 
     const feature = await assertBusinessFeature(user.company_id, 'financial')
-    if (!feature.allowed) {
+    if (feature.allowed === false) {
       throw new ForbiddenError(feature.message)
     }
 

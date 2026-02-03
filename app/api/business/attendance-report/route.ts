@@ -63,7 +63,7 @@ export async function GET(request: NextRequest) {
 
     const { assertBusinessFeature } = await import('@/lib/plan-features-server')
     const planFeature = await assertBusinessFeature(user.company_id, 'attendance_report')
-    if (!planFeature.allowed) {
+    if (planFeature.allowed === false) {
       return NextResponse.json({ error: planFeature.message }, { status: 403 })
     }
 
