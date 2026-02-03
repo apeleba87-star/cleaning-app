@@ -18,39 +18,38 @@ export default function PricingClient() {
       period: '매장당 월',
       description: '직원 중심의 기본 운영',
       features: [
-        { text: '직원용 아이디 1개', included: true },
-        { text: '점주용 아이디', included: false },
-        { text: '기본 청소 관리 기능', included: true },
-        { text: '일일 리포트', included: true },
-        { text: '체크리스트 관리', included: true },
-        { text: '요청란 관리', included: true },
-        { text: '사진 업로드', included: true },
-        { text: '월간 리포트', included: false },
-        { text: '점주 대시보드', included: false },
-        { text: '알림 설정', included: false },
+        { text: '대시보드', included: true },
+        { text: '매장 관리·매장 상태', included: true },
+        { text: '인건비 관리', included: true },
+        { text: '수금/미수금·재무 현황', included: true },
+        { text: '사용자 관리', included: true },
+        { text: '체크리스트·공지·리포트·물품 요청', included: true },
+        { text: '회사 관리', included: true },
+        { text: '미관리 매장 확인', included: false },
+        { text: '프렌차이즈 관리', included: false },
       ],
       cta: '베이직 시작하기',
       popular: false,
       color: 'gray',
     },
     {
-      name: '스탠다드',
+      name: '프리미엄',
       price: '14,900',
       period: '매장당 월',
       description: '점주와 직원의 협업 운영',
+      highlight: '점주용 앱·프렌차이즈앱 사용 가능 (베이직과의 가장 큰 차이)',
       features: [
-        { text: '점주용 아이디 1개', included: true },
-        { text: '직원용 아이디 1개', included: true },
-        { text: '기본 청소 관리 기능', included: true },
-        { text: '일일 리포트', included: true },
-        { text: '체크리스트 관리', included: true },
-        { text: '요청란 관리', included: true },
-        { text: '사진 업로드', included: true },
-        { text: '월간 리포트', included: true },
-        { text: '점주 대시보드', included: true },
-        { text: '알림 설정', included: true },
+        { text: '대시보드', included: true },
+        { text: '매장 관리·매장 상태', included: true },
+        { text: '인건비 관리', included: true },
+        { text: '수금/미수금·재무 현황', included: true },
+        { text: '사용자 관리', included: true },
+        { text: '체크리스트·공지·리포트·물품 요청', included: true },
+        { text: '회사 관리', included: true },
+        { text: '미관리 매장 확인', included: true },
+        { text: '프렌차이즈 관리', included: true },
       ],
-      cta: '스탠다드 시작하기',
+      cta: '프리미엄 시작하기',
       popular: true,
       color: 'blue',
     },
@@ -192,22 +191,22 @@ export default function PricingClient() {
                   }}></div>
                 </div>
 
-                {/* 인기 배지 */}
-                {plan.popular && (
-                  <div className="absolute -top-4 left-1/2 transform -translate-x-1/2 z-20">
-                    <div className="relative">
-                      <div className="absolute inset-0 bg-gradient-to-r from-yellow-400 to-orange-500 rounded-full blur-lg opacity-75"></div>
-                      <span className="relative bg-gradient-to-r from-yellow-400 to-orange-500 text-white px-6 py-2 rounded-full text-sm font-bold shadow-xl flex items-center gap-2">
-                        <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                          <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-                        </svg>
-                        가장 인기
-                      </span>
+                <div className={`relative p-8 lg:p-10 ${plan.popular ? 'pt-14 lg:pt-16' : ''}`}>
+                  {/* 인기 배지 - 카드 안쪽에 배치해 잘리지 않도록 */}
+                  {plan.popular && (
+                    <div className="absolute top-4 left-1/2 transform -translate-x-1/2 z-20">
+                      <div className="relative">
+                        <div className="absolute inset-0 bg-gradient-to-r from-yellow-400 to-orange-500 rounded-full blur-lg opacity-75"></div>
+                        <span className="relative bg-gradient-to-r from-yellow-400 to-orange-500 text-white px-6 py-2 rounded-full text-sm font-bold shadow-xl flex items-center gap-2">
+                          <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                            <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                          </svg>
+                          가장 인기
+                        </span>
+                      </div>
                     </div>
-                  </div>
-                )}
+                  )}
 
-                <div className="relative p-8 lg:p-10">
                   {/* 플랜 아이콘 */}
                   <div className={`mb-6 inline-flex p-4 rounded-2xl ${
                     plan.popular
@@ -231,11 +230,18 @@ export default function PricingClient() {
                     }`}>
                       {plan.name}
                     </h3>
-                    <p className={`text-base lg:text-lg mb-6 ${
+                    <p className={`text-base lg:text-lg ${'highlight' in plan && plan.highlight ? 'mb-2' : 'mb-6'} ${
                       plan.popular ? 'text-blue-100' : 'text-gray-600'
                     }`}>
                       {plan.description}
                     </p>
+                    {'highlight' in plan && plan.highlight && (
+                      <p className={`text-sm lg:text-base mb-6 font-medium ${
+                        plan.popular ? 'text-amber-200' : 'text-gray-700'
+                      }`}>
+                        ✓ {plan.highlight}
+                      </p>
+                    )}
                     <div className="flex items-baseline gap-2 mb-2">
                       <span className={`text-5xl lg:text-6xl font-extrabold ${
                         plan.popular ? 'text-white' : 'text-gray-900'

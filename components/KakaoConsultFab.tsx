@@ -1,8 +1,7 @@
 'use client'
 
 import { usePathname } from 'next/navigation'
-
-const KAKAO_CHAT_URL = 'https://pf.kakao.com/_llyhX/chat'
+import { KAKAO_CHAT_URL } from '@/lib/constants'
 
 const PUBLIC_PATHS = ['/', '/pricing', '/features', '/case-studies']
 

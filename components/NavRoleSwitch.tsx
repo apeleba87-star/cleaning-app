@@ -217,7 +217,7 @@ export function NavRoleSwitch({ userRole, userName, onRefresh, isRefreshing, sub
 
         // 요금 플랜에 따라 허용된 메뉴만 표시 (premium_units >= 1 이면 프리미엄 기능도 표시)
         const allowedFeatures = getAllowedFeatures(subscriptionPlan, subscriptionStatus, subscriptionPremiumUnits)
-        const menuAlwaysVisible: BusinessFeatureKey[] = ['attendance_report', 'franchises', 'products']
+        const menuAlwaysVisible: BusinessFeatureKey[] = ['attendance_report', 'franchises']
         const hasFeature = (key?: BusinessFeatureKey) =>
           key != null && (allowedFeatures.includes(key) || menuAlwaysVisible.includes(key))
         const businessOwnerNav: (NavItem | NavGroup)[] = businessOwnerNavRaw

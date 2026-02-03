@@ -2,6 +2,7 @@
 
 import Link from 'next/link'
 import { useState, useEffect } from 'react'
+import { KAKAO_CHAT_URL } from '@/lib/constants'
 import HeroSlider from './HeroSlider'
 
 interface HeroSettings {
@@ -130,21 +131,25 @@ export default function LandingPageClient({ heroImages, heroSettings, caseStudie
             <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
               {/* 메인 CTA 버튼 - 파란색, 아이콘 포함 */}
               {heroSettings.ctaButton1.visible && (
-                <Link
-                  href={heroSettings.ctaButton1.link}
+                <a
+                  href={KAKAO_CHAT_URL}
+                  target="_blank"
+                  rel="noopener noreferrer"
                   className="inline-flex items-center justify-center gap-3 px-8 py-4 bg-blue-600 hover:bg-blue-700 text-white text-base sm:text-lg font-semibold rounded-lg transition-all duration-200 shadow-lg hover:shadow-xl min-w-[200px]"
                 >
                   <span className="w-7 h-7 rounded-full bg-white/20 flex items-center justify-center flex-shrink-0">
                     <span className="text-white text-sm font-bold">m</span>
                   </span>
                   {heroSettings.ctaButton1.text}
-                </Link>
+                </a>
               )}
 
               {/* 보조 CTA 버튼 - 흰색, 문서 아이콘 */}
               {heroSettings.ctaButton2.visible && (
-                <Link
-                  href={heroSettings.ctaButton2.link}
+                <a
+                  href={KAKAO_CHAT_URL}
+                  target="_blank"
+                  rel="noopener noreferrer"
                   className="inline-flex items-center justify-center gap-3 px-8 py-4 bg-white/10 hover:bg-white/20 backdrop-blur-sm text-white text-base sm:text-lg font-semibold rounded-lg transition-all duration-200 border border-white/30 min-w-[200px]"
                 >
                   <svg
@@ -159,7 +164,7 @@ export default function LandingPageClient({ heroImages, heroSettings, caseStudie
                     <path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                   </svg>
                   {heroSettings.ctaButton2.text}
-                </Link>
+                </a>
               )}
             </div>
           </div>

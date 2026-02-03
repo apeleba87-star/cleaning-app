@@ -1,4 +1,5 @@
 import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { KAKAO_CHAT_URL } from '@/lib/constants'
 import LandingPageClient from './LandingPageClient'
 
 // 기본 설정 (DB에 데이터가 없을 때 사용)
@@ -10,12 +11,12 @@ const defaultHeroSettings = {
   subtitle: '무인 플레이스 청소 관리 솔루션',
   ctaButton1: {
     text: '운영 구조 상담받기',
-    link: '/login',
+    link: KAKAO_CHAT_URL,
     visible: true,
   },
   ctaButton2: {
     text: '가볍게 상담 받기',
-    link: '/login',
+    link: KAKAO_CHAT_URL,
     visible: true,
   },
   sliderInterval: 5000,
