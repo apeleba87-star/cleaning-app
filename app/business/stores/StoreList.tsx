@@ -24,7 +24,6 @@ export default function StoreList({ initialStores, franchises, categoryTemplates
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [searchTerm, setSearchTerm] = useState('')
-  const [nextFormTab, setNextFormTab] = useState<'payment' | null>(null)
 
   const handleCreate = () => {
     setEditingStore(null)
@@ -104,19 +103,6 @@ export default function StoreList({ initialStores, franchises, categoryTemplates
     }
     setShowForm(false)
     setEditingStore(null)
-    setNextFormTab(null)
-    setError(null)
-  }
-
-  const handleSuccessAndContinueToPayment = (store: Store) => {
-    if (editingStore) {
-      setStores(stores.map((s) => (s.id === store.id ? store : s)))
-    } else {
-      setStores([store, ...stores])
-    }
-    setEditingStore(store)
-    setNextFormTab('payment')
-    setShowForm(true)
     setError(null)
   }
 
@@ -172,9 +158,6 @@ export default function StoreList({ initialStores, franchises, categoryTemplates
             companyId={companyId}
             premiumUnits={premiumUnits}
             onSuccess={handleFormSuccess}
-            onSuccessAndContinueToPayment={handleSuccessAndContinueToPayment}
-            nextFormTab={nextFormTab}
-            onConsumedNextTab={() => setNextFormTab(null)}
             onCancel={handleFormCancel}
             basePath={basePath}
           />
