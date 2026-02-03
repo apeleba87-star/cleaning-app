@@ -231,7 +231,7 @@ export function NavRoleSwitch({ userRole, userName, onRefresh, isRefreshing, sub
             const item = entry as NavItem
             return hasFeature(item.feature) ? item : null
           })
-          .filter((x): x is NavItem | NavGroup => x != null)
+          .filter((x): x is NonNullable<typeof x> => x != null)
 
         const franchiseManagerNav = [
           { href: '/franchise/stores/status', label: '매장 관리 현황' },
