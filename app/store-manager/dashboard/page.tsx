@@ -418,8 +418,11 @@ export default function StoreManagerDashboardPage() {
       
       if (response.ok) {
         const data = await response.json()
-        if (data.success && data.data) {
-          setAttendanceData(data.data)
+        if (data.success && Array.isArray(data.data)) {
+          setAttendanceData((prev) => {
+            const withoutThisMonth = prev.filter((a) => a.date < startDate || a.date > endDate)
+            return [...withoutThisMonth, ...data.data]
+          })
         }
       } else {
         console.error('Error loading attendance data:', response.statusText)
@@ -428,6 +431,32 @@ export default function StoreManagerDashboardPage() {
       console.error('Error loading attendance data:', error)
     } finally {
       setLoadingAttendance(false)
+    }
+  }
+
+  /** 달력에서 월을 바꿀 때 해당 월 출근 데이터 로드 후 기존 데이터에 병합 (스피너 없이 백그라운드 로드) */
+  const loadAttendanceForMonth = async (year: number, month: number) => {
+    if (storeStatuses.length === 0) return
+    const monthStart = `${year}-${String(month).padStart(2, '0')}-01`
+    const lastDay = new Date(year, month, 0).getDate()
+    const monthEnd = `${year}-${String(month).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`
+    const storeIds = storeStatuses.map(s => s.store_id)
+
+    try {
+      const response = await fetch(
+        `/api/store-manager/attendance/monthly?start_date=${monthStart}&end_date=${monthEnd}&store_ids=${storeIds.join(',')}`
+      )
+      if (response.ok) {
+        const data = await response.json()
+        if (data.success && Array.isArray(data.data)) {
+          setAttendanceData((prev) => {
+            const withoutThisMonth = prev.filter((a) => a.date < monthStart || a.date > monthEnd)
+            return [...withoutThisMonth, ...data.data]
+          })
+        }
+      }
+    } catch (error) {
+      console.error('Error loading attendance for month:', error)
     }
   }
 
@@ -1252,6 +1281,7 @@ export default function StoreManagerDashboardPage() {
             storeStatuses={storeStatuses.map(s => ({ store_id: s.store_id, store_name: s.store_name }))}
             onDateSelect={handleDateSelect}
             selectedDate={selectedDate || undefined}
+            onMonthChange={loadAttendanceForMonth}
           />
         )}
       </div>

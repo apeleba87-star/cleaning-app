@@ -76,6 +76,13 @@ interface Request {
   } | null
 }
 
+interface AttendanceInfo {
+  work_date: string
+  clock_in_at: string | null
+  clock_out_at: string | null
+  user_name: string | null
+}
+
 interface StoreDetailData {
   before_after_photos: BeforeAfterPhoto[]
   product_inflow_photos: ProductInflowPhoto[]
@@ -83,6 +90,7 @@ interface StoreDetailData {
   problem_reports: ProblemReport[]
   lost_items: LostItem[]
   requests: Request[]
+  attendance_by_date?: { [date: string]: AttendanceInfo[] }
 }
 
 export default function StoreDetailPage() {
@@ -94,7 +102,7 @@ export default function StoreDetailPage() {
   const [storeName, setStoreName] = useState('')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [activeTab, setActiveTab] = useState<'7days' | '30days' | 'thisMonth' | 'custom' | 'monthlyReport'>('7days')
+  const [activeTab, setActiveTab] = useState<'7days' | '30days' | 'thisMonth' | 'custom' | 'monthlyReport'>('30days')
   const [customStartDate, setCustomStartDate] = useState('')
   const [customEndDate, setCustomEndDate] = useState('')
   const [detailData, setDetailData] = useState<StoreDetailData>({
@@ -104,6 +112,7 @@ export default function StoreDetailPage() {
     problem_reports: [],
     lost_items: [],
     requests: [],
+    attendance_by_date: {},
   })
   const [selectedImage, setSelectedImage] = useState<string | null>(null)
   const [selectedImageInfo, setSelectedImageInfo] = useState<{
@@ -168,8 +177,9 @@ export default function StoreDetailPage() {
     let startDate: Date
 
     if (activeTab === '7days') {
+      // 점주용: 최근 7일 탭 비공개 → 30일과 동일하게 처리
       startDate = new Date(today)
-      startDate.setDate(startDate.getDate() - 7)
+      startDate.setDate(startDate.getDate() - 30)
     } else if (activeTab === '30days') {
       startDate = new Date(today)
       startDate.setDate(startDate.getDate() - 30)
@@ -230,6 +240,7 @@ export default function StoreDetailPage() {
         problem_reports: [],
         lost_items: [],
         requests: [],
+        attendance_by_date: {},
       })
       setError(null)
     } catch (err: any) {
@@ -303,6 +314,7 @@ export default function StoreDetailPage() {
         problem_reports: ProblemReport[]
         lost_items: LostItem[]
         requests: Request[]
+        attendance: AttendanceInfo[]
       }
     } = {}
 
@@ -321,6 +333,7 @@ export default function StoreDetailPage() {
           problem_reports: [],
           lost_items: [],
           requests: [],
+          attendance: [],
         }
       }
       grouped[dateKey].before_after_photos.push(photo)
@@ -337,6 +350,7 @@ export default function StoreDetailPage() {
           problem_reports: [],
           lost_items: [],
           requests: [],
+          attendance: [],
         }
       }
       grouped[dateKey].product_inflow_photos.push(photo)
@@ -353,6 +367,7 @@ export default function StoreDetailPage() {
           problem_reports: [],
           lost_items: [],
           requests: [],
+          attendance: [],
         }
       }
       grouped[dateKey].storage_photos.push(photo)
@@ -369,6 +384,7 @@ export default function StoreDetailPage() {
           problem_reports: [],
           lost_items: [],
           requests: [],
+          attendance: [],
         }
       }
       grouped[dateKey].problem_reports.push(problem)
@@ -385,6 +401,7 @@ export default function StoreDetailPage() {
           problem_reports: [],
           lost_items: [],
           requests: [],
+          attendance: [],
         }
       }
       grouped[dateKey].lost_items.push(item)
@@ -401,10 +418,29 @@ export default function StoreDetailPage() {
           problem_reports: [],
           lost_items: [],
           requests: [],
+          attendance: [],
         }
       }
       grouped[dateKey].requests.push(request)
     })
+
+    // 출퇴근 기록 추가 (출근만 한 날도 목록에 포함)
+    if (detailData.attendance_by_date) {
+      Object.keys(detailData.attendance_by_date).forEach((dateKey) => {
+        if (!grouped[dateKey]) {
+          grouped[dateKey] = {
+            before_after_photos: [],
+            product_inflow_photos: [],
+            storage_photos: [],
+            problem_reports: [],
+            lost_items: [],
+            requests: [],
+            attendance: [],
+          }
+        }
+        grouped[dateKey].attendance = detailData.attendance_by_date[dateKey] || []
+      })
+    }
 
     // 날짜순으로 정렬 (최신순)
     return Object.entries(grouped).sort((a, b) => b[0].localeCompare(a[0]))
@@ -439,108 +475,77 @@ export default function StoreDetailPage() {
         </div>
       </div>
 
-      {/* 기간별 탭 - 요청 상태 필터링 시 숨김 */}
+      {/* 기간별 탭 - 모바일 최적화 (2025 스타일) */}
       {!requestStatus && (
-        <div className="bg-white rounded-lg shadow-md p-3 md:p-4 mb-4 md:mb-6">
-          <div className="flex gap-2 md:gap-4 border-b overflow-x-auto">
-            <button
-              onClick={() => setActiveTab('7days')}
-              className={`px-2 md:px-4 py-2 font-medium text-xs md:text-sm whitespace-nowrap ${
-                activeTab === '7days'
-                  ? 'text-blue-600 border-b-2 border-blue-600'
-                  : 'text-gray-600 hover:text-gray-900'
-              }`}
-            >
-              최근 7일
-            </button>
-            <button
-              onClick={() => setActiveTab('30days')}
-              className={`px-2 md:px-4 py-2 font-medium text-xs md:text-sm whitespace-nowrap ${
-                activeTab === '30days'
-                  ? 'text-blue-600 border-b-2 border-blue-600'
-                  : 'text-gray-600 hover:text-gray-900'
-              }`}
-            >
-              최근 30일
-            </button>
-            <button
-              onClick={() => setActiveTab('thisMonth')}
-              className={`px-2 md:px-4 py-2 font-medium text-xs md:text-sm whitespace-nowrap ${
-                activeTab === 'thisMonth'
-                  ? 'text-blue-600 border-b-2 border-blue-600'
-                  : 'text-gray-600 hover:text-gray-900'
-              }`}
-            >
-              이번달
-            </button>
-            <button
-              onClick={() => setActiveTab('custom')}
-              className={`px-2 md:px-4 py-2 font-medium text-xs md:text-sm whitespace-nowrap ${
-                activeTab === 'custom'
-                  ? 'text-blue-600 border-b-2 border-blue-600'
-                  : 'text-gray-600 hover:text-gray-900'
-              }`}
-            >
-              기간 선택
-            </button>
-            <button
-              onClick={() => setActiveTab('monthlyReport')}
-              className={`px-2 md:px-4 py-2 font-medium text-xs md:text-sm whitespace-nowrap ${
-                activeTab === 'monthlyReport'
-                  ? 'text-blue-600 border-b-2 border-blue-600'
-                  : 'text-gray-600 hover:text-gray-900'
-              }`}
-            >
-              월간 리포트
-            </button>
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-3 md:p-4 mb-4 md:mb-6">
+          <div
+            className="flex gap-2 overflow-x-auto pb-1 -mx-1 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
+            style={{ WebkitOverflowScrolling: 'touch' }}
+          >
+            {[
+              { id: '30days' as const, label: '최근 30일' },
+              { id: 'thisMonth' as const, label: '이번달' },
+              { id: 'custom' as const, label: '기간 선택' },
+              { id: 'monthlyReport' as const, label: '월간 리포트' },
+            ].map((tab) => (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => setActiveTab(tab.id)}
+                className={`min-h-[44px] min-w-[72px] px-4 py-2.5 rounded-xl font-medium text-sm whitespace-nowrap transition-all duration-200 touch-manipulation ${
+                  activeTab === tab.id
+                    ? 'bg-blue-600 text-white shadow-md shadow-blue-600/25'
+                    : 'bg-gray-100 text-gray-600 active:bg-gray-200'
+                }`}
+              >
+                {tab.label}
+              </button>
+            ))}
           </div>
           {activeTab === 'custom' && (
-          <div className="flex flex-col md:flex-row gap-4 items-end pt-4">
-            <div>
-              <label className="block text-sm text-gray-600 mb-1">시작일</label>
-              <input
-                type="date"
-                value={customStartDate}
-                onChange={(e) => {
-                  setCustomStartDate(e.target.value)
-                  setError(null)
-                }}
-                max={new Date().toISOString().split('T')[0]}
-                className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
+            <div className="flex flex-col gap-4 pt-4 mt-3 border-t border-gray-100">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">시작일</label>
+                  <input
+                    type="date"
+                    value={customStartDate}
+                    onChange={(e) => {
+                      setCustomStartDate(e.target.value)
+                      setError(null)
+                    }}
+                    max={new Date().toISOString().split('T')[0]}
+                    className="w-full min-h-[44px] px-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-base touch-manipulation"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">종료일</label>
+                  <input
+                    type="date"
+                    value={customEndDate}
+                    onChange={(e) => {
+                      setCustomEndDate(e.target.value)
+                      setError(null)
+                      if (customStartDate && e.target.value < customStartDate) {
+                        setError('종료일은 시작일보다 이후여야 합니다.')
+                      }
+                      if (customStartDate) {
+                        const start = new Date(customStartDate)
+                        const end = new Date(e.target.value)
+                        const diffDays = Math.ceil(Math.abs(end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24))
+                        if (diffDays > 90) {
+                          setError('날짜 범위는 최대 3개월(90일)까지 선택 가능합니다.')
+                        }
+                      }
+                    }}
+                    min={customStartDate || undefined}
+                    max={new Date().toISOString().split('T')[0]}
+                    className="w-full min-h-[44px] px-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-base touch-manipulation"
+                  />
+                </div>
+              </div>
+              <p className="text-xs text-gray-500">최대 3개월(90일)까지 선택 가능</p>
             </div>
-            <div>
-              <label className="block text-sm text-gray-600 mb-1">종료일</label>
-              <input
-                type="date"
-                value={customEndDate}
-                onChange={(e) => {
-                  setCustomEndDate(e.target.value)
-                  setError(null)
-                  // 시작일보다 이전 날짜 선택 방지
-                  if (customStartDate && e.target.value < customStartDate) {
-                    setError('종료일은 시작일보다 이후여야 합니다.')
-                  }
-                  // 최대 3개월 체크
-                  if (customStartDate) {
-                    const start = new Date(customStartDate)
-                    const end = new Date(e.target.value)
-                    const diffTime = Math.abs(end.getTime() - start.getTime())
-                    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
-                    if (diffDays > 90) {
-                      setError('날짜 범위는 최대 3개월(90일)까지 선택 가능합니다.')
-                    }
-                  }
-                }}
-                min={customStartDate || undefined}
-                max={new Date().toISOString().split('T')[0]}
-                className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
-            <div className="text-xs text-gray-500 self-end pb-2">
-              최대 3개월(90일)까지 선택 가능
-            </div>
-          </div>
           )}
         </div>
       )}
@@ -578,28 +583,37 @@ export default function StoreDetailPage() {
                    data.storage_photos.length > 0 ||
                    data.problem_reports.length > 0 ||
                    data.lost_items.length > 0 ||
-                   data.requests.length > 0)
+                   data.requests.length > 0 ||
+                   (data.attendance && data.attendance.length > 0))
 
               if (!hasData) return null
 
+              const summaryItems = [
+                { label: '관리전후', count: data.before_after_photos.length },
+                { label: '제품입고', count: data.product_inflow_photos.length },
+                { label: '보관', count: data.storage_photos.length },
+                { label: '문제', count: data.problem_reports.length },
+                { label: '분실물', count: data.lost_items.length },
+                { label: '요청', count: data.requests.length },
+              ].filter((item) => item.count > 0)
+              const summaryText = summaryItems.length > 0
+                ? summaryItems.map((item) => `${item.label} ${item.count}건`).join(', ')
+                : ''
+
               return (
-                <div key={date} className="bg-white rounded-lg shadow-md overflow-hidden">
+                <div key={date} className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
                   <button
+                    type="button"
                     onClick={() => toggleDateExpansion(date)}
-                    className="w-full px-6 py-4 flex items-center justify-between hover:bg-gray-50 transition-colors"
+                    className="w-full px-4 md:px-6 py-4 flex items-center justify-between hover:bg-gray-50/80 active:bg-gray-50 transition-colors text-left min-h-[60px] touch-manipulation"
                   >
-                    <div className="flex items-center gap-3">
-                      <span className="text-lg font-semibold text-gray-900">{formatDate(date)}</span>
-                      <span className="text-sm text-gray-500">
-                        (관리전후 {data.before_after_photos.length}건, 
-                        제품입고 {data.product_inflow_photos.length}건, 
-                        보관 {data.storage_photos.length}건, 
-                        문제 {data.problem_reports.length}건, 
-                        분실물 {data.lost_items.length}건, 
-                        요청 {data.requests.length}건)
-                      </span>
+                    <div className="flex flex-col gap-1 min-w-0 flex-1">
+                      <span className="text-base md:text-lg font-semibold text-gray-900">{formatDate(date)}</span>
+                      {summaryText ? (
+                        <span className="text-sm text-gray-500 truncate">{summaryText}</span>
+                      ) : null}
                     </div>
-                    <span className="text-gray-400 text-xl">{isExpanded ? '▼' : '▶'}</span>
+                    <span className="text-gray-400 text-lg shrink-0 ml-2" aria-hidden>{isExpanded ? '▼' : '▶'}</span>
                   </button>
 
                   {isExpanded && (

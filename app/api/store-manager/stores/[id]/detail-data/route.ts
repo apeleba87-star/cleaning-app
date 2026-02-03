@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient, getServerUser } from '@/lib/supabase/server'
-import { getTodayDateKST } from '@/lib/utils/date'
+import { createClient } from '@supabase/supabase-js'
 
 export async function GET(
   request: NextRequest,
@@ -34,6 +34,17 @@ export async function GET(
       return NextResponse.json({ error: '매장을 찾을 수 없습니다.' }, { status: 404 })
     }
 
+    // RLS 정책 문제로 인해 attendance 조회 시 서비스 역할 키 사용
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+    let adminSupabase: ReturnType<typeof createClient> | null = null
+    if (serviceRoleKey && supabaseUrl) {
+      adminSupabase = createClient(supabaseUrl, serviceRoleKey, {
+        auth: { autoRefreshToken: false, persistSession: false },
+      })
+    }
+    const attendanceClient = adminSupabase || supabase
+
     const start = new Date(startDate)
     start.setHours(0, 0, 0, 0)
     const end = new Date(endDate)
@@ -48,14 +59,16 @@ export async function GET(
       .lte('work_date', endDate)
       .order('work_date', { ascending: false })
 
-    const beforeAfterPhotos: Array<{
-      id: string
-      before_photo_url: string | null
-      after_photo_url: string | null
-      area: string
-      created_at: string
-      work_date: string
-    }> = []
+    // 1-2. 관리전후 사진 (cleaning_photos 테이블 - 업체관리자와 동일)
+    const { data: cleaningPhotos } = await supabase
+      .from('cleaning_photos')
+      .select('id, area_category, kind, photo_url, created_at')
+      .eq('store_id', params.id)
+      .neq('area_category', 'inventory')
+      .gte('created_at', start.toISOString())
+      .lte('created_at', end.toISOString())
+      .order('created_at', { ascending: false })
+
     const beforeAfterPhotosMap = new Map<string, {
       id: string
       before_photo_url: string | null
@@ -69,9 +82,14 @@ export async function GET(
       checklists.forEach((checklist: any) => {
         const items = checklist.items || []
         items.forEach((item: any, index: number) => {
-          if (item.type === 'photo' && (item.before_photo_url || item.after_photo_url)) {
+          const isPhotoType = item.type === 'photo' ||
+            item.type === 'before_photo' ||
+            item.type === 'after_photo' ||
+            item.type === 'before_after_photo'
+          if (isPhotoType && (item.before_photo_url || item.after_photo_url)) {
             const area = item.area || `구역${index}`
-            const key = `${area}-${checklist.work_date}`
+            const workDate = checklist.work_date || checklist.created_at?.split('T')[0] || ''
+            const key = `${area}-${workDate}`
             if (!beforeAfterPhotosMap.has(key)) {
               beforeAfterPhotosMap.set(key, {
                 id: `checklist-${checklist.id}-photo-${index}`,
@@ -79,13 +97,56 @@ export async function GET(
                 after_photo_url: item.after_photo_url || null,
                 area: area,
                 created_at: checklist.created_at,
-                work_date: checklist.work_date || checklist.created_at?.split('T')[0] || '',
+                work_date: workDate,
               })
             }
           }
         })
       })
     }
+
+    if (cleaningPhotos && cleaningPhotos.length > 0) {
+      const photosByArea = new Map<string, { before?: any; after?: any }>()
+      cleaningPhotos.forEach((photo: any) => {
+        const areaKey = photo.area_category || '구역'
+        const photoDate = photo.created_at?.split('T')[0] || ''
+        const key = `${areaKey}-${photoDate}`
+        if (!photosByArea.has(key)) {
+          photosByArea.set(key, {})
+        }
+        const areaData = photosByArea.get(key)!
+        if (photo.kind === 'before') {
+          areaData.before = photo
+        } else if (photo.kind === 'after') {
+          areaData.after = photo
+        }
+      })
+      photosByArea.forEach((areaData, key) => {
+        if (beforeAfterPhotosMap.has(key)) {
+          const existing = beforeAfterPhotosMap.get(key)!
+          if (!existing.before_photo_url && areaData.before?.photo_url) {
+            existing.before_photo_url = areaData.before.photo_url
+          }
+          if (!existing.after_photo_url && areaData.after?.photo_url) {
+            existing.after_photo_url = areaData.after.photo_url
+          }
+        } else {
+          const photoDate = areaData.before?.created_at?.split('T')[0] ||
+            areaData.after?.created_at?.split('T')[0] || ''
+          const areaKey = areaData.before?.area_category ||
+            areaData.after?.area_category || '구역'
+          beforeAfterPhotosMap.set(key, {
+            id: `cleaning-${key}-${Date.now()}`,
+            before_photo_url: areaData.before?.photo_url || null,
+            after_photo_url: areaData.after?.photo_url || null,
+            area: areaKey,
+            created_at: areaData.before?.created_at || areaData.after?.created_at || new Date().toISOString(),
+            work_date: photoDate,
+          })
+        }
+      })
+    }
+
     const beforeAfterPhotosArray = Array.from(beforeAfterPhotosMap.values())
 
     // 2. 제품입고 및 보관 사진
@@ -185,6 +246,34 @@ export async function GET(
       .lte('created_at', end.toISOString())
       .order('created_at', { ascending: false })
 
+    // 5. 출퇴근 기록 (attendance)
+    const { data: attendances } = await attendanceClient
+      .from('attendance')
+      .select('id, work_date, clock_in_at, clock_out_at, user_id, users:user_id(id, name)')
+      .eq('store_id', params.id)
+      .gte('work_date', startDate)
+      .lte('work_date', endDate)
+      .order('work_date', { ascending: false })
+
+    const attendanceByDate: { [date: string]: Array<{
+      work_date: string
+      clock_in_at: string | null
+      clock_out_at: string | null
+      user_name: string | null
+    }> } = {}
+    ;(attendances || []).forEach((attendance: any) => {
+      const date = attendance.work_date
+      if (!attendanceByDate[date]) {
+        attendanceByDate[date] = []
+      }
+      attendanceByDate[date].push({
+        work_date: date,
+        clock_in_at: attendance.clock_in_at,
+        clock_out_at: attendance.clock_out_at,
+        user_name: attendance.users?.name || null,
+      })
+    })
+
     return NextResponse.json({
       data: {
         before_after_photos: beforeAfterPhotosArray,
@@ -193,6 +282,7 @@ export async function GET(
         problem_reports: problemReports || [],
         lost_items: lostItems || [],
         requests: requests || [],
+        attendance_by_date: attendanceByDate,
       },
     })
   } catch (error: any) {

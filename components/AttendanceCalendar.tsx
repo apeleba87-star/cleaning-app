@@ -14,9 +14,11 @@ interface AttendanceCalendarProps {
   storeStatuses: Array<{ store_id: string; store_name: string }>
   onDateSelect?: (date: string) => void
   selectedDate?: string
+  /** 달력에서 표시 중인 월이 바뀔 때 호출 (year: 연도, month: 1~12) */
+  onMonthChange?: (year: number, month: number) => void
 }
 
-export function AttendanceCalendar({ attendanceData, storeStatuses, onDateSelect, selectedDate }: AttendanceCalendarProps) {
+export function AttendanceCalendar({ attendanceData, storeStatuses, onDateSelect, selectedDate, onMonthChange }: AttendanceCalendarProps) {
   const [mounted, setMounted] = useState(false)
   const [currentMonth, setCurrentMonth] = useState(() => {
     const today = new Date()
@@ -26,6 +28,12 @@ export function AttendanceCalendar({ attendanceData, storeStatuses, onDateSelect
   useEffect(() => {
     setMounted(true)
   }, [])
+
+  const notifyMonthChange = (date: Date) => {
+    if (onMonthChange) {
+      onMonthChange(date.getFullYear(), date.getMonth() + 1)
+    }
+  }
 
   // 출근 데이터를 날짜별로 그룹화
   const attendanceByDate = useMemo(() => {
@@ -89,16 +97,22 @@ export function AttendanceCalendar({ attendanceData, storeStatuses, onDateSelect
   }
 
   const goToPreviousMonth = () => {
-    setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1, 1))
+    const next = new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1, 1)
+    setCurrentMonth(next)
+    notifyMonthChange(next)
   }
 
   const goToNextMonth = () => {
-    setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 1))
+    const next = new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 1)
+    setCurrentMonth(next)
+    notifyMonthChange(next)
   }
 
   const goToToday = () => {
     const today = new Date()
-    setCurrentMonth(new Date(today.getFullYear(), today.getMonth(), 1))
+    const next = new Date(today.getFullYear(), today.getMonth(), 1)
+    setCurrentMonth(next)
+    notifyMonthChange(next)
   }
 
   const weekDays = ['일', '월', '화', '수', '목', '금', '토']

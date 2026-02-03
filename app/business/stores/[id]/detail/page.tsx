@@ -481,106 +481,76 @@ export default function StoreDetailPage() {
         </div>
       </div>
 
-      {/* 기간별 탭 */}
-      <div className="bg-white rounded-lg shadow-md p-4 mb-6">
-        <div className="flex gap-4 border-b">
-          <button
-            onClick={() => setActiveTab('7days')}
-            className={`px-4 py-2 font-medium ${
-              activeTab === '7days'
-                ? 'text-blue-600 border-b-2 border-blue-600'
-                : 'text-gray-600 hover:text-gray-900'
-            }`}
-          >
-            최근 7일
-          </button>
-          <button
-            onClick={() => setActiveTab('30days')}
-            className={`px-4 py-2 font-medium ${
-              activeTab === '30days'
-                ? 'text-blue-600 border-b-2 border-blue-600'
-                : 'text-gray-600 hover:text-gray-900'
-            }`}
-          >
-            최근 30일
-          </button>
-          <button
-            onClick={() => setActiveTab('thisMonth')}
-            className={`px-4 py-2 font-medium ${
-              activeTab === 'thisMonth'
-                ? 'text-blue-600 border-b-2 border-blue-600'
-                : 'text-gray-600 hover:text-gray-900'
-            }`}
-          >
-            이번달
-          </button>
-          <button
-            onClick={() => setActiveTab('custom')}
-            className={`px-4 py-2 font-medium ${
-              activeTab === 'custom'
-                ? 'text-blue-600 border-b-2 border-blue-600'
-                : 'text-gray-600 hover:text-gray-900'
-            }`}
-          >
-            기간 선택
-          </button>
-          <button
-            onClick={() => setActiveTab('monthlyReport')}
-            className={`px-4 py-2 font-medium ${
-              activeTab === 'monthlyReport'
-                ? 'text-blue-600 border-b-2 border-blue-600'
-                : 'text-gray-600 hover:text-gray-900'
-            }`}
-          >
-            월간 리포트
-          </button>
+      {/* 기간별 탭 - 모바일 최적화 */}
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-3 md:p-4 mb-4 md:mb-6">
+        <div
+          className="flex gap-2 overflow-x-auto pb-1 -mx-1 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
+          style={{ WebkitOverflowScrolling: 'touch' }}
+        >
+          {[
+            { id: '7days' as const, label: '최근 7일' },
+            { id: '30days' as const, label: '최근 30일' },
+            { id: 'thisMonth' as const, label: '이번달' },
+            { id: 'custom' as const, label: '기간 선택' },
+            { id: 'monthlyReport' as const, label: '월간 리포트' },
+          ].map((tab) => (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => setActiveTab(tab.id)}
+              className={`min-h-[44px] min-w-[72px] px-4 py-2.5 rounded-xl font-medium text-sm whitespace-nowrap transition-all duration-200 touch-manipulation ${
+                activeTab === tab.id
+                  ? 'bg-blue-600 text-white shadow-md shadow-blue-600/25'
+                  : 'bg-gray-100 text-gray-600 active:bg-gray-200'
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
         </div>
         {activeTab === 'custom' && (
-          <div className="flex flex-col md:flex-row gap-4 items-end pt-4">
-            <div>
-              <label className="block text-sm text-gray-600 mb-1">시작일</label>
-              <input
-                type="date"
-                value={customStartDate}
-                onChange={(e) => {
-                  setCustomStartDate(e.target.value)
-                  setError(null)
-                }}
-                max={new Date().toISOString().split('T')[0]}
-                className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
-            <div>
-              <label className="block text-sm text-gray-600 mb-1">종료일</label>
-              <input
-                type="date"
-                value={customEndDate}
-                onChange={(e) => {
-                  setCustomEndDate(e.target.value)
-                  setError(null)
-                  // 시작일보다 이전 날짜 선택 방지
-                  if (customStartDate && e.target.value < customStartDate) {
-                    setError('종료일은 시작일보다 이후여야 합니다.')
-                  }
-                  // 최대 3개월 체크
-                  if (customStartDate) {
-                    const start = new Date(customStartDate)
-                    const end = new Date(e.target.value)
-                    const diffTime = Math.abs(end.getTime() - start.getTime())
-                    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
-                    if (diffDays > 90) {
-                      setError('날짜 범위는 최대 3개월(90일)까지 선택 가능합니다.')
+          <div className="flex flex-col gap-4 pt-4 mt-3 border-t border-gray-100">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">시작일</label>
+                <input
+                  type="date"
+                  value={customStartDate}
+                  onChange={(e) => {
+                    setCustomStartDate(e.target.value)
+                    setError(null)
+                  }}
+                  max={new Date().toISOString().split('T')[0]}
+                  className="w-full min-h-[44px] px-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-base touch-manipulation"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">종료일</label>
+                <input
+                  type="date"
+                  value={customEndDate}
+                  onChange={(e) => {
+                    setCustomEndDate(e.target.value)
+                    setError(null)
+                    if (customStartDate && e.target.value < customStartDate) {
+                      setError('종료일은 시작일보다 이후여야 합니다.')
                     }
-                  }
-                }}
-                min={customStartDate || undefined}
-                max={new Date().toISOString().split('T')[0]}
-                className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
+                    if (customStartDate) {
+                      const start = new Date(customStartDate)
+                      const end = new Date(e.target.value)
+                      const diffDays = Math.ceil(Math.abs(end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24))
+                      if (diffDays > 90) {
+                        setError('날짜 범위는 최대 3개월(90일)까지 선택 가능합니다.')
+                      }
+                    }
+                  }}
+                  min={customStartDate || undefined}
+                  max={new Date().toISOString().split('T')[0]}
+                  className="w-full min-h-[44px] px-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-base touch-manipulation"
+                />
+              </div>
             </div>
-            <div className="text-xs text-gray-500 self-end pb-2">
-              최대 3개월(90일)까지 선택 가능
-            </div>
+            <p className="text-xs text-gray-500">최대 3개월(90일)까지 선택 가능</p>
           </div>
         )}
       </div>
@@ -617,46 +587,45 @@ export default function StoreDetailPage() {
 
               if (!hasData) return null
 
+              const summaryItems = [
+                { label: '관리전후', count: data.before_after_photos.length },
+                { label: '제품입고', count: data.product_inflow_photos.length },
+                { label: '보관', count: data.storage_photos.length },
+                { label: '문제', count: data.problem_reports.length },
+                { label: '분실물', count: data.lost_items.length },
+                { label: '요청', count: data.requests.length },
+              ].filter((item) => item.count > 0)
+              const summaryText = summaryItems.length > 0
+                ? summaryItems.map((item) => `${item.label} ${item.count}건`).join(', ')
+                : ''
+
               return (
-                <div key={date} className="bg-white rounded-lg shadow-md overflow-hidden">
+                <div key={date} className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
                   <button
+                    type="button"
                     onClick={() => toggleDateExpansion(date)}
-                    className="w-full px-6 py-4 flex items-center justify-between hover:bg-gray-50 transition-colors"
+                    className="w-full px-4 md:px-6 py-4 flex items-center justify-between hover:bg-gray-50/80 active:bg-gray-50 transition-colors text-left min-h-[60px] touch-manipulation"
                   >
-                    <div className="flex items-center gap-3 flex-wrap">
-                      <span className="text-lg font-semibold text-gray-900">{formatDate(date)}</span>
-                      {/* 출퇴근 시간 표시 */}
+                    <div className="flex flex-col gap-1 min-w-0 flex-1">
+                      <span className="text-base md:text-lg font-semibold text-gray-900">{formatDate(date)}</span>
                       {data.attendance && data.attendance.length > 0 && (
-                        <div className="flex items-center gap-2 text-xs">
+                        <div className="flex items-center gap-2 text-xs flex-wrap">
                           {data.attendance.map((att, idx) => (
-                            <div key={idx} className="flex items-center gap-1">
-                              {att.clock_in_at && (
-                                <span className="text-gray-600">
-                                  출근 <span className="font-medium text-blue-600">{formatTime(att.clock_in_at)}</span>
-                                </span>
-                              )}
+                            <span key={idx} className="text-gray-600">
+                              출근 <span className="font-medium text-blue-600">{formatTime(att.clock_in_at)}</span>
                               {att.clock_out_at && (
-                                <span className="text-gray-600 ml-1">
-                                  퇴근 <span className="font-medium text-green-600">{formatTime(att.clock_out_at)}</span>
-                                </span>
+                                <> 퇴근 <span className="font-medium text-green-600">{formatTime(att.clock_out_at)}</span></>
                               )}
-                              {att.user_name && (
-                                <span className="text-gray-400 ml-1">({att.user_name})</span>
-                              )}
-                            </div>
+                              {att.user_name && <span className="text-gray-400"> ({att.user_name})</span>}
+                            </span>
                           ))}
                         </div>
                       )}
-                      <span className="text-sm text-gray-500">
-                        (관리전후 {data.before_after_photos.length}건, 
-                        제품입고 {data.product_inflow_photos.length}건, 
-                        보관 {data.storage_photos.length}건, 
-                        문제 {data.problem_reports.length}건, 
-                        분실물 {data.lost_items.length}건, 
-                        요청 {data.requests.length}건)
-                      </span>
+                      {summaryText ? (
+                        <span className="text-sm text-gray-500 truncate">{summaryText}</span>
+                      ) : null}
                     </div>
-                    <span className="text-gray-400 text-xl">{isExpanded ? '▼' : '▶'}</span>
+                    <span className="text-gray-400 text-lg shrink-0 ml-2" aria-hidden>{isExpanded ? '▼' : '▶'}</span>
                   </button>
 
                   {isExpanded && (

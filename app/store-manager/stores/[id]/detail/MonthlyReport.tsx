@@ -264,13 +264,7 @@ export default function MonthlyReport({ storeId, storeName }: MonthlyReportProps
               <span>🔗</span>
               <span>공유</span>
             </button>
-            <button
-              onClick={handleDownloadPDF}
-              className="px-4 py-2 bg-white text-purple-600 rounded-md hover:bg-gray-100 transition-colors font-semibold flex items-center gap-2"
-            >
-              <span>📥</span>
-              <span>PDF 다운로드</span>
-            </button>
+            {/* 점주용: PDF 다운로드 비공개 */}
           </div>
         </div>
       </div>
