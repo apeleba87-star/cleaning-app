@@ -390,11 +390,11 @@ export default function CompanyForm({ company }: CompanyFormProps) {
             <div className="rounded-lg bg-white border border-slate-100 p-4 shadow-sm">
               <p className="text-xs font-medium text-slate-500 uppercase tracking-wide mb-1">상태</p>
               <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-sm font-semibold ${
-                company.subscription_status === 'active' || company.subscription_status === 'trial'
+                company.subscription_status === 'active'
                   ? 'bg-emerald-100 text-emerald-700'
                   : 'bg-slate-100 text-slate-600'
               }`}>
-                {company.subscription_status === 'active' || company.subscription_status === 'trial' ? '활성' : '비활성'}
+                {company.subscription_status === 'active' ? '활성' : '비활성'}
               </span>
             </div>
             <div className="rounded-lg bg-blue-50/80 border border-blue-100 p-4">
