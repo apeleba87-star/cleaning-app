@@ -70,6 +70,7 @@ export default function RootLayout({
         <meta name="twitter:card" content="summary" />
         <meta name="twitter:title" content="무플 청소 관리 솔루션" />
         <meta name="twitter:description" content="새로운 현장을 늘리는 것보다, 지금의 현장을 지켜내는 게 더 중요합니다." />
+        <meta name="naver-site-verification" content="dd8aa4e731fa35e5850c8e12fcd0e3eb39fd36ab" />
       </head>
       <body className={inter.className}>
         <PWARegister />
