@@ -67,14 +67,15 @@ export default function ProductSearchPage() {
 
       setUser(userData)
 
-      // 배정된 매장 조회
+      // 배정된 매장 조회 (비활성 매장 제외)
       const { data: storeAssignments } = await supabase
         .from('store_assign')
         .select(`
           store_id,
           stores:store_id (
             id,
-            name
+            name,
+            service_active
           )
         `)
         .eq('user_id', session.user.id)
@@ -82,7 +83,7 @@ export default function ProductSearchPage() {
       if (storeAssignments) {
         const storesData = storeAssignments
           .map((assignment: any) => assignment.stores)
-          .filter((store: any) => store !== null) as Store[]
+          .filter((store: any) => store != null && store.service_active !== false) as Store[]
 
         setStores(storesData)
 

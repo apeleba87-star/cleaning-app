@@ -375,7 +375,8 @@ export default function MobileDashboardPage() {
               management_days,
               is_night_shift,
               work_start_hour,
-              work_end_hour
+              work_end_hour,
+              service_active
             )
           `)
           .eq('user_id', session.user.id)
@@ -440,7 +441,7 @@ export default function MobileDashboardPage() {
         )
           .map((assignment: any) => {
             const store = assignment.stores
-            if (!store) return null
+            if (!store || store.service_active === false) return null
             
             let attendanceStatus: 'not_clocked_in' | 'clocked_in' | 'clocked_out' = 'not_clocked_in'
             let attendanceWorkDate: string | null = null

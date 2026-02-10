@@ -87,7 +87,7 @@ export default function StoreSelector({ selectedStoreId: propSelectedStoreId, on
     
     const { data: storesData, error: storesError } = await supabase
       .from('stores')
-      .select('id, name, company_id, deleted_at, management_days, is_night_shift, work_start_hour, work_end_hour')
+      .select('id, name, company_id, deleted_at, management_days, is_night_shift, work_start_hour, work_end_hour, service_active')
       .in('id', storeIds)
       .is('deleted_at', null)
 
@@ -132,6 +132,8 @@ export default function StoreSelector({ selectedStoreId: propSelectedStoreId, on
     
     // showOnlyTodayManagement에 따라 필터링
     const filteredStores = (storesData || []).filter((store) => {
+      // 비활성 매장은 직원앱에서 제외
+      if (store.service_active === false) return false
       // management_days가 없으면 모든 요일 허용 (기존 매장 호환성)
       if (!store.management_days || store.management_days.trim() === '') {
         // management_days가 없으면 showOnlyTodayManagement가 false일 때만 포함

@@ -72,14 +72,15 @@ export default function ProfilePage() {
           email: authUser.user?.email,
         })
 
-        // 배정된 매장 조회
+        // 배정된 매장 조회 (비활성 매장 제외)
         const { data: storeAssignments, error: assignError } = await supabase
           .from('store_assign')
           .select(`
             store_id,
             stores:store_id (
               id,
-              name
+              name,
+              service_active
             )
           `)
           .eq('user_id', session.user.id)
@@ -89,7 +90,7 @@ export default function ProfilePage() {
         } else {
           const stores: Store[] = (storeAssignments || [])
             .map((assignment: any) => assignment.stores)
-            .filter((store: any): store is Store => store !== null && store !== undefined)
+            .filter((store: any): store is Store => store != null && store !== undefined && store.service_active !== false)
             .sort((a: Store, b: Store) => a.name.localeCompare(b.name))
           
           setAssignedStores(stores)

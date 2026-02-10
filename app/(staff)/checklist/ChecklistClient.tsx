@@ -113,13 +113,23 @@ export default function ChecklistClient() {
       devLog('✅ Using active store IDs:', storeIdsToCheck)
       devLog('✅ Store work dates:', storeWorkDates)
     } else if (isClockedIn) {
-      // 출근 중이지만 activeStoreIds가 없는 경우 - 모든 배정 매장 확인
+      // 출근 중이지만 activeStoreIds가 없는 경우 - 모든 배정 매장 중 활성 매장만 확인
       const { data: storeAssignments } = await supabase
         .from('store_assign')
         .select('store_id')
         .eq('user_id', session.user.id)
       
-      storeIdsToCheck = storeAssignments?.map(sa => sa.store_id) || []
+      const assignedStoreIds = storeAssignments?.map(sa => sa.store_id) || []
+      if (assignedStoreIds.length > 0) {
+        const { data: activeStores } = await supabase
+          .from('stores')
+          .select('id')
+          .in('id', assignedStoreIds)
+          .or('service_active.eq.true,service_active.is.null')
+        storeIdsToCheck = activeStores?.map((s: { id: string }) => s.id) || []
+      } else {
+        storeIdsToCheck = []
+      }
       
       // 출근 기록에서 work_date 조회
       if (storeIdsToCheck.length > 0) {
