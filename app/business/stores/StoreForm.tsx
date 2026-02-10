@@ -897,15 +897,31 @@ export default function StoreForm({ store, franchises, categoryTemplates, compan
         </div>
 
         <div>
-          <label className="flex items-center space-x-2">
-            <input
-              type="checkbox"
-              checked={serviceActive}
-              onChange={(e) => setServiceActive(e.target.checked)}
-              className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-            />
-            <span className="text-sm font-medium text-gray-700">서비스 진행 여부</span>
-          </label>
+          <span className="block text-sm font-medium text-gray-700 mb-2">서비스 진행 여부</span>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => setServiceActive(true)}
+              className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                serviceActive
+                  ? 'bg-green-600 text-white'
+                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              }`}
+            >
+              활성
+            </button>
+            <button
+              type="button"
+              onClick={() => setServiceActive(false)}
+              className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                !serviceActive
+                  ? 'bg-red-600 text-white'
+                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              }`}
+            >
+              비활성
+            </button>
+          </div>
         </div>
 
         {/* 야간 매장 설정 */}

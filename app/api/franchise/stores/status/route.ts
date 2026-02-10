@@ -54,7 +54,7 @@ export async function GET(request: NextRequest) {
     // 프렌차이즈에 속한 모든 매장 조회
     const { data: stores, error: storesError } = await supabase
       .from('stores')
-      .select('id, name, address, management_days, updated_at')
+      .select('id, name, address, management_days, updated_at, service_active')
       .eq('franchise_id', userFranchiseId)
       .is('deleted_at', null)
 
@@ -482,6 +482,7 @@ export async function GET(request: NextRequest) {
             management_days: store.management_days,
             work_day: store.management_days,
             is_work_day: isWorkDay,
+            service_active: store.service_active !== false,
             attendance_status: attendanceStatus,
             clock_in_time: clockInTime,
             clock_out_time: clockOutTime,
@@ -522,6 +523,7 @@ export async function GET(request: NextRequest) {
             management_days: store.management_days,
             work_day: store.management_days,
             is_work_day: false,
+            service_active: store.service_active !== false,
             attendance_status: 'not_clocked_in' as const,
             clock_in_time: null,
             clock_out_time: null,

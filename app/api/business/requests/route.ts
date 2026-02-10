@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient, getServerUser } from '@/lib/supabase/server'
+import { assertStoreActive } from '@/lib/store-active'
 
 // 요청 목록 조회 (아카이브 필터링 지원)
 export async function GET(request: NextRequest) {
@@ -194,6 +195,7 @@ export async function POST(request: NextRequest) {
     if (storeError || !store || store.company_id !== user.company_id) {
       return NextResponse.json({ error: 'Store not found' }, { status: 404 })
     }
+    await assertStoreActive(supabase, store_id)
 
     // 업체관리자가 작성하면 즉시 처리중으로 저장
     const insertData = {

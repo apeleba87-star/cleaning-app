@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server'
 import { createServerSupabaseClient, getServerUser } from '@/lib/supabase/server'
 import { clockOutSchema } from '@/zod/schemas'
 import { handleApiError, ValidationError, UnauthorizedError, ForbiddenError, NotFoundError } from '@/lib/errors'
+import { assertStoreActive } from '@/lib/store-active'
 import { getTodayDateKST, getYesterdayDateKST } from '@/lib/utils/date'
 
 export async function POST(request: NextRequest) {
@@ -24,6 +25,7 @@ export async function POST(request: NextRequest) {
 
     const { store_id, location } = validated.data
     const supabase = await createServerSupabaseClient()
+    await assertStoreActive(supabase, store_id)
 
     // 특정 매장의 출근 기록 찾기 (오늘 날짜로 먼저 검색)
     const today = getTodayDateKST()

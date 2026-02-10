@@ -1,6 +1,7 @@
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerUser } from '@/lib/supabase/server'
+import { assertStoreActive } from '@/lib/store-active'
 
 // 매장에 배정된 사용자 조회
 export async function GET(
@@ -178,6 +179,7 @@ export async function PUT(
       }
       userFranchiseId = userData.franchise_id
     }
+    await assertStoreActive(supabase, params.id)
 
     const body = await request.json()
     const { user_ids } = body

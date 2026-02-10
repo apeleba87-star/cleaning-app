@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { getServerUser } from '@/lib/supabase/server'
+import { assertStoreActive } from '@/lib/store-active'
 import { z } from 'zod'
 
 const createSupplyRequestSchema = z.object({
@@ -48,6 +49,7 @@ export async function POST(request: NextRequest) {
         { status: 403 }
       )
     }
+    await assertStoreActive(supabase, validated.store_id)
 
     // 물품 요청 생성
     const insertData: any = {

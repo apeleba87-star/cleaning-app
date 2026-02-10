@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient, getServerUser } from '@/lib/supabase/server'
+import { assertStoreActive } from '@/lib/store-active'
 
 // 점주용 요청 생성 (접수 상태로 생성)
 export async function POST(request: NextRequest) {
@@ -31,6 +32,7 @@ export async function POST(request: NextRequest) {
     if (storeError || !store) {
       return NextResponse.json({ error: 'Store not found' }, { status: 404 })
     }
+    await assertStoreActive(supabase, store_id)
 
     // 점주가 작성하면 접수 상태로 저장
     const insertData = {

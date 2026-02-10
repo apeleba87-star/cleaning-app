@@ -35,7 +35,7 @@ async function fetchStoreStatusData(companyId: string, forDashboard = false) {
     // 회사에 속한 모든 매장 조회
     const { data: stores, error: storesError } = await supabase
       .from('stores')
-      .select('id, name, address, management_days, is_night_shift, work_start_hour, work_end_hour, updated_at')
+      .select('id, name, address, management_days, is_night_shift, work_start_hour, work_end_hour, updated_at, service_active')
       .eq('company_id', companyId)
       .is('deleted_at', null)
 
@@ -711,6 +711,7 @@ async function fetchStoreStatusData(companyId: string, forDashboard = false) {
           management_days: store.management_days,
           work_day: store.management_days, // 정렬을 위해 추가
           is_work_day: isWorkDay,
+          service_active: store.service_active !== false,
           is_night_shift: store.is_night_shift || false, // 야간매장 여부
           status_label: statusLabel, // 야간매장 상태 메시지
           attendance_status: attendanceStatus,
@@ -760,6 +761,7 @@ async function fetchStoreStatusData(companyId: string, forDashboard = false) {
             store_address: store.address,
             management_days: store.management_days,
             work_day: store.management_days,
+            service_active: store.service_active !== false,
             is_work_day: store.management_days
               ? store.management_days.split(',').map((d: string) => d.trim()).includes(todayDayName)
               : false,

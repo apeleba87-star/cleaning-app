@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient, getServerUser } from '@/lib/supabase/server'
 import { assertBusinessFeature } from '@/lib/plan-features-server'
+import { assertStoreActive } from '@/lib/store-active'
 
 // GET: 회사 내 매장별 체크리스트 목록
 export async function GET(request: NextRequest) {
@@ -91,7 +92,7 @@ export async function POST(request: NextRequest) {
 
     const supabase = await createServerSupabaseClient()
 
-    // business_owner는 자신의 회사 매장만 생성 가능
+    // business_owner는 자신의 회사 매장만 생성 가능 + 비활성 매장 차단
     if (user.role === 'business_owner') {
       const { data: storeCheck } = await supabase
         .from('stores')
@@ -103,6 +104,7 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: '권한이 없습니다.' }, { status: 403 })
       }
     }
+    await assertStoreActive(supabase, store_id)
 
     // 템플릿 체크리스트 생성: work_date를 과거 날짜로 설정하여 템플릿임을 표시
     // 출근 시 이 템플릿을 복사하여 오늘 날짜로 생성

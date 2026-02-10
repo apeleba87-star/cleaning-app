@@ -100,6 +100,8 @@ export default function StoreDetailPage() {
   const requestStatus = searchParams.get('requestStatus') as 'received' | 'in_progress' | 'completed' | null
 
   const [storeName, setStoreName] = useState('')
+  const [serviceActive, setServiceActive] = useState(true)
+  const [serviceActiveUpdating, setServiceActiveUpdating] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<'7days' | '30days' | 'thisMonth' | 'custom' | 'monthlyReport'>('30days')
@@ -163,9 +165,31 @@ export default function StoreDetailPage() {
 
       if (response.ok && data.data) {
         setStoreName(data.data.name || '')
+        setServiceActive(data.data.service_active !== false)
       }
     } catch (err) {
       console.error('Error loading store info:', err)
+    }
+  }
+
+  const updateServiceActive = async (active: boolean) => {
+    if (serviceActiveUpdating) return
+    setServiceActiveUpdating(true)
+    try {
+      const res = await fetch(`/api/store-manager/stores/${storeId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ service_active: active }),
+      })
+      if (res.ok) setServiceActive(active)
+      else {
+        const d = await res.json().catch(() => ({}))
+        setError(d.error || '설정 변경에 실패했습니다.')
+      }
+    } catch (err) {
+      setError('설정 변경에 실패했습니다.')
+    } finally {
+      setServiceActiveUpdating(false)
     }
   }
 
@@ -473,7 +497,34 @@ export default function StoreDetailPage() {
             ← 대시보드로
           </Link>
         </div>
+        <div className="flex items-center gap-3">
+          <span className="text-sm font-medium text-gray-700">서비스 진행 여부</span>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              disabled={serviceActiveUpdating}
+              onClick={() => updateServiceActive(true)}
+              className={`px-3 py-1.5 rounded-md text-sm font-medium ${serviceActive ? 'bg-green-600 text-white' : 'bg-gray-100 text-gray-600'}`}
+            >
+              활성
+            </button>
+            <button
+              type="button"
+              disabled={serviceActiveUpdating}
+              onClick={() => updateServiceActive(false)}
+              className={`px-3 py-1.5 rounded-md text-sm font-medium ${!serviceActive ? 'bg-red-600 text-white' : 'bg-gray-100 text-gray-600'}`}
+            >
+              비활성
+            </button>
+          </div>
+        </div>
       </div>
+
+      {!serviceActive && (
+        <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-lg text-amber-800 text-sm">
+          이 매장은 현재 비활성 상태입니다. 출퇴근·체크리스트·요청 등이 제한됩니다. 위에서 활성을 선택하면 사용할 수 있습니다.
+        </div>
+      )}
 
       {/* 기간별 탭 - 모바일 최적화 (2025 스타일) */}
       {!requestStatus && (

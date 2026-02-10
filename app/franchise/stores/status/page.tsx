@@ -12,6 +12,7 @@ interface StoreStatus {
   store_address: string | null
   work_day: string | null
   is_work_day: boolean
+  service_active?: boolean // false면 비활성 매장
   attendance_status: 'not_clocked_in' | 'clocked_in' | 'clocked_out'
   clock_in_time: string | null
   clock_out_time: string | null
@@ -462,6 +463,7 @@ export default function FranchiseStoresStatusPage() {
         
         // getStatusLabel 함수를 먼저 정의해야 함
         const getStatusLabelForLog = (store: any): string => {
+          if (store.service_active === false) return '비활성'
           if (!store.is_work_day) return '휴무'
           if (store.attendance_status === 'clocked_out') return '퇴근완료'
           if (store.attendance_status === 'clocked_in') return '출근중'
@@ -509,15 +511,12 @@ export default function FranchiseStoresStatusPage() {
     return [...storeStatuses].sort((a, b) => {
       // 출근 상태 우선순위: 출근중 > 출근전 > 퇴근완료 > 휴무
       const getStatusPriority = (store: StoreStatus): number => {
-        // 휴무는 가장 마지막
-        if (!store.is_work_day) return 4
-        
-        // 출근 상태에 따라 우선순위 결정
+        if (store.service_active === false) return 5  // 비활성은 맨 뒤
+        if (!store.is_work_day) return 4  // 휴무
         if (store.attendance_status === 'clocked_in') return 1  // 출근중
         if (store.attendance_status === 'not_clocked_in') return 2  // 출근전
         if (store.attendance_status === 'clocked_out') return 3  // 퇴근완료
-        
-        return 4  // 기본값 (휴무)
+        return 4
       }
       
       const aPriority = getStatusPriority(a)
@@ -1740,6 +1739,7 @@ export default function FranchiseStoresStatusPage() {
   }
 
   const getStatusLabel = (status: StoreStatus): string => {
+    if (status.service_active === false) return '비활성'
     if (!status.is_work_day) return '휴무'
     if (status.attendance_status === 'clocked_out') return '퇴근완료'
     if (status.attendance_status === 'clocked_in') return '출근중'
@@ -1747,6 +1747,7 @@ export default function FranchiseStoresStatusPage() {
   }
 
   const getStatusColor = (status: StoreStatus): string => {
+    if (status.service_active === false) return 'bg-red-100 text-red-700'
     if (!status.is_work_day) return 'bg-gray-100 text-gray-700'
     if (status.attendance_status === 'clocked_out') return 'bg-green-100 text-green-700'
     if (status.attendance_status === 'clocked_in') return 'bg-orange-100 text-orange-700'
@@ -2148,6 +2149,7 @@ export default function FranchiseStoresStatusPage() {
             {filteredStores
               .filter((status) => expandedStores.has(status.store_id))
               .map((status) => {
+                const isInactive = status.service_active === false
                 // 24시간 이내 항목만 카운트 (미확인 + 확인)
                 const totalStoreProblems = (status.unprocessed_store_problems || 0) + (status.completed_store_problems || 0)
                 const totalVendingProblems = (status.unconfirmed_vending_problems || 0) + (status.confirmed_vending_problems || 0)
@@ -2159,21 +2161,23 @@ export default function FranchiseStoresStatusPage() {
                 return (
                   <div
                     key={status.store_id}
-                    className={`bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow border-l-4 mb-4 ${
-                      !status.is_work_day
-                        ? 'border-gray-300 opacity-60'
+                    className={`rounded-lg shadow-md p-6 transition-shadow border-l-4 mb-4 ${
+                      isInactive
+                        ? 'bg-gray-200 border-gray-400 opacity-90'
+                        : !status.is_work_day
+                        ? 'bg-white border-gray-300 opacity-60 hover:shadow-lg'
                         : status.has_problem
-                        ? 'border-red-500'
+                        ? 'bg-white border-red-500 hover:shadow-lg'
                         : status.attendance_status === 'clocked_out'
-                        ? 'border-green-500'
-                        : 'border-blue-500'
+                        ? 'bg-white border-green-500 hover:shadow-lg'
+                        : 'bg-white border-blue-500 hover:shadow-lg'
                     }`}
                   >
                     {/* 펼친 상태: 기존 상세 정보 표시 */}
                     <div className="flex items-start justify-between mb-4">
                         <div className="flex-1">
                           <div className="flex items-center gap-3 mb-2">
-                            <h3 className="text-xl font-bold text-gray-900">{status.store_name}</h3>
+                            <h3 className={`text-xl font-bold ${isInactive ? 'text-gray-600' : 'text-gray-900'}`}>{status.store_name}</h3>
                             <span 
                               className={`px-3 py-1 rounded-full text-sm font-semibold ${getStatusColor(status)}`}
                               title={`출근상태: ${status.attendance_status}, 작업일: ${status.is_work_day ? '예' : '아니오'}`}
@@ -2238,12 +2242,13 @@ export default function FranchiseStoresStatusPage() {
                       {/* 전체 진행률 */}
                       <div className="mb-4">
                         <div className="flex items-center justify-between mb-2">
-                          <span className="text-sm font-medium text-gray-700">전체 진행률</span>
-                          <span className="text-sm font-bold text-blue-600">{status.checklist_completion_rate}%</span>
+                          <span className={`text-sm font-medium ${isInactive ? 'text-gray-500' : 'text-gray-700'}`}>전체 진행률</span>
+                          <span className={`text-sm font-bold ${isInactive ? 'text-gray-500' : 'text-blue-600'}`}>{status.checklist_completion_rate}%</span>
                         </div>
                         <div className="w-full bg-gray-200 rounded-full h-3">
                           <div
                             className={`h-3 rounded-full transition-all ${
+                              isInactive ? 'bg-gray-400' :
                               status.checklist_completion_rate >= 70 ? 'bg-blue-600' : 
                               status.checklist_completion_rate >= 40 ? 'bg-orange-500' : 'bg-red-500'
                             }`}
@@ -2256,10 +2261,13 @@ export default function FranchiseStoresStatusPage() {
                         {/* 관리전후 상태 */}
                         <div
                           onClick={() => {
+                            if (isInactive) return
                             setSelectedStore(status)
                             setShowBeforeAfterModal(true)
                           }}
-                          className="border rounded-lg p-4 cursor-pointer transition-colors border-gray-200 hover:bg-gray-50"
+                          className={`border rounded-lg p-4 transition-colors border-gray-200 ${
+                            isInactive ? 'cursor-not-allowed bg-gray-100 opacity-75' : 'cursor-pointer hover:bg-gray-50'
+                          }`}
                         >
                           <h3 className="text-sm font-medium text-gray-700 mb-3 flex items-center gap-2">
                             <span>📸</span>
@@ -2310,8 +2318,10 @@ export default function FranchiseStoresStatusPage() {
 
                         {/* 제품입고 및 보관 상태 */}
                         <div
-                          onClick={() => handleOpenInventoryModal(status)}
-                          className="border rounded-lg p-4 cursor-pointer transition-colors border-gray-200 hover:bg-gray-50"
+                          onClick={() => { if (!isInactive) handleOpenInventoryModal(status) }}
+                          className={`border rounded-lg p-4 transition-colors border-gray-200 ${
+                            isInactive ? 'cursor-not-allowed bg-gray-100 opacity-75' : 'cursor-pointer hover:bg-gray-50'
+                          }`}
                         >
                     <h3 className="text-sm font-medium text-gray-700 mb-3 flex items-center gap-2">
                       <span>📦</span>
@@ -2320,8 +2330,10 @@ export default function FranchiseStoresStatusPage() {
                     <div className="space-y-2">
                       {status.has_product_inflow_today && (
                         <div 
-                          className="space-y-1 bg-green-50 rounded p-2 -mx-2 cursor-pointer hover:bg-green-100 transition-colors"
-                          onClick={() => handleOpenInventoryModal(status)}
+                          className={`space-y-1 rounded p-2 -mx-2 transition-colors ${
+                            isInactive ? 'bg-gray-100 cursor-not-allowed' : 'bg-green-50 cursor-pointer hover:bg-green-100'
+                          }`}
+                          onClick={(e) => { e.stopPropagation(); if (!isInactive) handleOpenInventoryModal(status) }}
                         >
                           <div className="flex items-center gap-2">
                             <div className="w-2 h-2 bg-green-500 rounded-full flex-shrink-0"></div>
@@ -2369,11 +2381,9 @@ export default function FranchiseStoresStatusPage() {
 
                     {/* 매장 상황 */}
                       <div
-                        onClick={() => handleOpenProblemModal(status)}
-                        className={`border rounded-lg p-4 cursor-pointer transition-colors ${
-                          totalProblems > 0
-                            ? 'border-gray-200 hover:bg-gray-50'
-                            : 'border-gray-200 hover:bg-gray-50'
+                        onClick={() => { if (!isInactive) handleOpenProblemModal(status) }}
+                        className={`border rounded-lg p-4 transition-colors ${
+                          isInactive ? 'cursor-not-allowed bg-gray-100 opacity-75 border-gray-200' : 'cursor-pointer border-gray-200 hover:bg-gray-50'
                         }`}
                       >
                     <h3 className="text-sm font-medium text-gray-700 mb-3 flex items-center gap-2">
@@ -2439,17 +2449,21 @@ export default function FranchiseStoresStatusPage() {
                     {/* 요청란 상황 */}
                     <div className="border rounded-lg p-4">
                     <div className="flex items-center justify-between mb-3">
-                      <h3 className="text-sm font-medium text-gray-700">
+                      <h3 className={`text-sm font-medium ${isInactive ? 'text-gray-500' : 'text-gray-700'}`}>
                         요청란 상황
                       </h3>
                       <button
                         onClick={(e) => {
                           e.stopPropagation()
+                          if (isInactive) return
                           setSelectedStore(status)
                           setBroadcastMode(false)
                           setShowRequestCreateModal(true)
                         }}
-                        className="px-3 py-1 bg-blue-600 text-white text-xs rounded hover:bg-blue-700 transition-colors"
+                        disabled={isInactive}
+                        className={`px-3 py-1 text-xs rounded transition-colors ${
+                          isInactive ? 'bg-gray-300 text-gray-500 cursor-not-allowed' : 'bg-blue-600 text-white hover:bg-blue-700'
+                        }`}
                       >
                         요청접수
                       </button>
@@ -2511,9 +2525,13 @@ export default function FranchiseStoresStatusPage() {
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation()
+                                  if (isInactive) return
                                   handleOpenRequestModal(status)
                                 }}
-                                className="w-full mt-2 px-3 py-1.5 bg-blue-600 text-white text-xs rounded hover:bg-blue-700 transition-colors"
+                                disabled={isInactive}
+                                className={`w-full mt-2 px-3 py-1.5 text-xs rounded transition-colors ${
+                                  isInactive ? 'bg-gray-300 text-gray-500 cursor-not-allowed' : 'bg-blue-600 text-white hover:bg-blue-700'
+                                }`}
                               >
                                 전체 보기
                               </button>
@@ -2526,12 +2544,16 @@ export default function FranchiseStoresStatusPage() {
                   </div>
                     {/* 매장 상세 링크 */}
                     <div className="mt-4 pt-4 border-t border-gray-200">
-                      <Link
-                        href={`/franchise/stores/${status.store_id}/detail`}
-                        className="text-blue-600 hover:text-blue-800 text-sm font-medium"
-                      >
-                        매장 상세 보기 →
-                      </Link>
+                      {isInactive ? (
+                        <span className="text-gray-400 text-sm cursor-not-allowed">매장 상세 보기 → (비활성 매장)</span>
+                      ) : (
+                        <Link
+                          href={`/franchise/stores/${status.store_id}/detail`}
+                          className="text-blue-600 hover:text-blue-800 text-sm font-medium"
+                        >
+                          매장 상세 보기 →
+                        </Link>
+                      )}
                     </div>
                   </div>
                 )
@@ -2542,6 +2564,7 @@ export default function FranchiseStoresStatusPage() {
               {filteredStores
                 .filter((status) => !expandedStores.has(status.store_id))
                 .map((status) => {
+                  const isInactive = status.service_active === false
                   // 매장상황 건수: 미처리/미확인 항목들의 합계
                   const storeSituationCount = (status.unprocessed_store_problems || 0) + 
                                              (status.unconfirmed_vending_problems || 0) + 
@@ -2550,20 +2573,23 @@ export default function FranchiseStoresStatusPage() {
                   return (
                     <div
                       key={status.store_id}
-                      className={`bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow border-l-4 p-4 ${
-                        !status.is_work_day
-                          ? 'border-gray-300 opacity-60'
+                      className={`rounded-lg shadow-md transition-shadow border-l-4 p-4 ${
+                        isInactive
+                          ? 'bg-gray-200 border-gray-400'
+                          : !status.is_work_day
+                          ? 'bg-white border-gray-300 opacity-60 hover:shadow-lg'
                           : status.has_problem
-                          ? 'border-red-500'
+                          ? 'bg-white border-red-500 hover:shadow-lg'
                           : status.attendance_status === 'clocked_out'
-                          ? 'border-green-500'
-                          : 'border-blue-500'
+                          ? 'bg-white border-green-500 hover:shadow-lg'
+                          : 'bg-white border-blue-500 hover:shadow-lg'
                       }`}
                     >
                       {/* 접힌 상태: 간략 정보만 표시 */}
                       <div 
-                        className="cursor-pointer"
+                        className={isInactive ? 'cursor-not-allowed' : 'cursor-pointer'}
                         onClick={() => {
+                          if (isInactive) return
                           setExpandedStores((prev) => {
                             const newSet = new Set(prev)
                             newSet.add(status.store_id)
@@ -2573,12 +2599,12 @@ export default function FranchiseStoresStatusPage() {
                       >
                         <div className="flex flex-col gap-2">
                           {/* 매장 이름 */}
-                          <h3 className="text-base font-bold text-gray-900 truncate" title={status.store_name}>
+                          <h3 className={`text-base font-bold truncate ${isInactive ? 'text-gray-600' : 'text-gray-900'}`} title={status.store_name}>
                             {status.store_name}
                           </h3>
                           {/* 관리 요일 */}
                           {status.work_day && (
-                            <div className="text-xs text-gray-600">
+                            <div className={`text-xs ${isInactive ? 'text-gray-500' : 'text-gray-600'}`}>
                               {formatWorkDaysCompact(status.work_day)}
                             </div>
                           )}
@@ -2590,8 +2616,8 @@ export default function FranchiseStoresStatusPage() {
                               {getStatusLabel(status)}
                             </span>
                           </div>
-                          {/* 관리시작 시간 (관리일이고 출근한 경우만) */}
-                          {status.is_work_day && status.clock_in_time && (
+                          {/* 관리시작 시간 (관리일이고 출근한 경우만, 비활성 제외) */}
+                          {!isInactive && status.is_work_day && status.clock_in_time && (
                             <div className="flex items-center gap-1 text-xs">
                               <span className="text-gray-500">관리시작</span>
                               <span className="font-medium text-blue-600">
@@ -2605,16 +2631,18 @@ export default function FranchiseStoresStatusPage() {
                           )}
                           {/* 매장상황 건수 */}
                           <div className="flex items-center gap-2">
-                            <span className="text-xs text-gray-600">매장상황:</span>
+                            <span className={`text-xs ${isInactive ? 'text-gray-500' : 'text-gray-600'}`}>매장상황:</span>
                             <span className={`text-xs font-semibold ${
-                              storeSituationCount > 0 ? 'text-red-600' : 'text-gray-400'
+                              isInactive ? 'text-gray-500' : storeSituationCount > 0 ? 'text-red-600' : 'text-gray-400'
                             }`}>
                               {storeSituationCount}건
                             </span>
                           </div>
-                          {/* 펼치기 아이콘 */}
+                          {/* 펼치기 아이콘 (비활성은 펼치기 불가) */}
                           <div className="flex justify-end mt-1">
-                            <span className="text-gray-400 text-xs">▼ 펼치기</span>
+                            <span className="text-xs text-gray-400">
+                              {isInactive ? '비활성 매장' : '▼ 펼치기'}
+                            </span>
                           </div>
                         </div>
                       </div>

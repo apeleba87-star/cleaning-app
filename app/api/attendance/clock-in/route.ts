@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server'
 import { createServerSupabaseClient, getServerUser, ensureValidSession } from '@/lib/supabase/server'
 import { clockInSchema } from '@/zod/schemas'
 import { handleApiError, ValidationError, UnauthorizedError, ForbiddenError } from '@/lib/errors'
+import { assertStoreActive } from '@/lib/store-active'
 import { getTodayDateKST, getYesterdayDateKST, calculateWorkDate, getCurrentHourKST } from '@/lib/utils/date'
 
 export async function POST(request: NextRequest) {
@@ -31,7 +32,8 @@ export async function POST(request: NextRequest) {
     const { store_id, location, selfie_url, attendance_type, scheduled_date, problem_report_id, change_reason } = validated.data
     const supabase = await createServerSupabaseClient()
 
-    // 매장 정보 조회 (야간 매장 여부 확인)
+    // 매장 정보 조회 (야간 매장 여부 확인) + 비활성 매장 출근 차단
+    await assertStoreActive(supabase, store_id)
     const { data: store, error: storeError } = await supabase
       .from('stores')
       .select('id, is_night_shift, work_start_hour, work_end_hour')
