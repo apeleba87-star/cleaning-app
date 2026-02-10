@@ -22,6 +22,7 @@ export default function StoreList({ initialStores, franchises, categoryTemplates
   const [editingStore, setEditingStore] = useState<Store | null>(null)
   const [showForm, setShowForm] = useState(false)
   const [loading, setLoading] = useState(false)
+  const [deletingStoreId, setDeletingStoreId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [searchTerm, setSearchTerm] = useState('')
 
@@ -38,11 +39,16 @@ export default function StoreList({ initialStores, franchises, categoryTemplates
   }
 
   const handleDelete = async (storeId: string) => {
-    if (!confirm('정말 이 매장을 삭제하시겠습니까?')) {
+    const confirmMessage =
+      basePath === '/business'
+        ? '이 매장과 연결된 모든 데이터(사진, 기록 등)가 함께 삭제되며 복구할 수 없습니다. 정말 삭제하시겠습니까?'
+        : '정말 이 매장을 삭제하시겠습니까?'
+    if (!confirm(confirmMessage)) {
       return
     }
 
     setLoading(true)
+    setDeletingStoreId(storeId)
     setError(null)
 
     try {
@@ -92,6 +98,7 @@ export default function StoreList({ initialStores, franchises, categoryTemplates
       setError(err.message || '삭제 중 오류가 발생했습니다.')
     } finally {
       setLoading(false)
+      setDeletingStoreId(null)
     }
   }
 
@@ -142,6 +149,13 @@ export default function StoreList({ initialStores, franchises, categoryTemplates
           />
         </div>
       </div>
+
+      {loading && (
+        <div className="mb-4 bg-blue-50 border border-blue-200 rounded-lg p-3 flex items-center gap-2">
+          <div className="animate-spin rounded-full h-4 w-4 border-2 border-blue-600 border-t-transparent flex-shrink-0" />
+          <p className="text-blue-800 text-sm">매장을 삭제하는 중입니다. 데이터 양에 따라 최대 1분까지 걸릴 수 있습니다. 잠시만 기다려 주세요.</p>
+        </div>
+      )}
 
       {error && (
         <div className="mb-4 bg-red-50 border border-red-200 rounded-lg p-3">
@@ -271,9 +285,16 @@ export default function StoreList({ initialStores, franchises, categoryTemplates
                       <button
                         onClick={() => handleDelete(store.id)}
                         disabled={loading}
-                        className="text-red-600 hover:text-red-900 disabled:text-gray-400"
+                        className="text-red-600 hover:text-red-900 disabled:text-gray-400 disabled:cursor-not-allowed inline-flex items-center gap-1.5"
                       >
-                        삭제
+                        {loading && deletingStoreId === store.id ? (
+                          <>
+                            <span className="inline-block animate-spin rounded-full h-4 w-4 border-2 border-red-500 border-t-transparent" />
+                            삭제 중...
+                          </>
+                        ) : (
+                          '삭제'
+                        )}
                       </button>
                     </td>
                   </tr>
@@ -372,9 +393,16 @@ export default function StoreList({ initialStores, franchises, categoryTemplates
                     <button
                       onClick={() => handleDelete(store.id)}
                       disabled={loading}
-                      className="flex-1 px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors text-sm font-medium"
+                      className="flex-1 px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors text-sm font-medium inline-flex items-center justify-center gap-2"
                     >
-                      삭제
+                      {loading && deletingStoreId === store.id ? (
+                        <>
+                          <span className="inline-block animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent" />
+                          삭제 중...
+                        </>
+                      ) : (
+                        '삭제'
+                      )}
                     </button>
                   </div>
                 </div>

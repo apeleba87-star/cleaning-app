@@ -1,6 +1,8 @@
 import { NextRequest } from 'next/server'
+import { createClient } from '@supabase/supabase-js'
 import { createServerSupabaseClient, getServerUser } from '@/lib/supabase/server'
 import { handleApiError, UnauthorizedError, ForbiddenError } from '@/lib/errors'
+import { deleteStoreData } from '@/lib/store-delete'
 
 // 매장 정보 조회
 export async function GET(
@@ -176,7 +178,7 @@ export async function PATCH(
   }
 }
 
-// 매장 삭제 (soft delete)
+// 매장 삭제: 관련 Storage·DB 정리 후 소프트 삭제 (검증된 storeId만 사용)
 export async function DELETE(
   request: NextRequest,
   { params }: { params: { id: string } }
@@ -197,7 +199,7 @@ export async function DELETE(
 
     const supabase = await createServerSupabaseClient()
 
-    // 매장이 회사에 속해있는지 확인
+    // 매장이 회사에 속해있는지 확인 후, 이후 모든 작업은 이 storeId만 사용
     const { data: existingStore, error: checkError } = await supabase
       .from('stores')
       .select('id')
@@ -210,17 +212,33 @@ export async function DELETE(
       throw new ForbiddenError('Store not found or access denied')
     }
 
-    // Soft delete
-    const { error } = await supabase
-      .from('stores')
-      .update({
-        deleted_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', params.id)
+    const storeId = existingStore.id as string
 
-    if (error) {
-      throw new Error(`Failed to delete store: ${error.message}`)
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+    if (!serviceRoleKey || !supabaseUrl) {
+      throw new Error('Server configuration error: Service role key is required for store deletion')
+    }
+
+    const adminSupabase = createClient(supabaseUrl, serviceRoleKey, {
+      auth: { autoRefreshToken: false, persistSession: false },
+    })
+
+    const url = new URL(request.url)
+    const dryRun = url.searchParams.get('dryRun') === 'true'
+
+    const result = await deleteStoreData(adminSupabase, storeId, dryRun)
+
+    if (!result.success) {
+      throw new Error(result.error || '매장 삭제에 실패했습니다.')
+    }
+
+    if (result.preview) {
+      return Response.json({
+        success: true,
+        dryRun: true,
+        preview: result.preview,
+      })
     }
 
     return Response.json({
