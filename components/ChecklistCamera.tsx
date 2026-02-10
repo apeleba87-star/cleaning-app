@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { ChecklistItem } from '@/types/db'
 import { Capacitor } from '@capacitor/core'
+import { clearAppCache } from '@/lib/clear-app-cache'
 
 interface ChecklistCameraProps {
   items: ChecklistItem[]
@@ -1023,13 +1024,31 @@ export function ChecklistCamera({ items, mode, storeId, checklistId, onComplete,
         </div>
       )}
       
-      {/* 상단: 현재 촬영 중인 항목 표시 */}
-      <div className="absolute top-0 left-0 right-0 bg-black bg-opacity-70 text-white p-4 z-10">
-        <div className="text-center">
-          <div className="text-xl font-semibold">
+      {/* 상단: 현재 촬영 중인 항목 표시 + 캐시 삭제 (촬영 반복 시) */}
+      <div className="absolute top-0 left-0 right-0 bg-black bg-opacity-70 text-white p-4 z-10 flex items-center justify-between gap-2">
+        <div className="flex-1 text-center min-w-0">
+          <div className="text-xl font-semibold truncate">
             {modeText} ({currentItem?.area || ''})
           </div>
         </div>
+        <button
+          type="button"
+          onClick={async () => {
+            const message = '저장하지 않은 사진은 사라질 수 있습니다.\n캐시를 삭제하고 새로고침할까요?'
+            if (!window.confirm(message)) return
+            try {
+              await clearAppCache()
+              window.location.reload()
+            } catch (e) {
+              console.error('캐시 삭제 실패:', e)
+              window.alert('캐시 삭제에 실패했습니다. 페이지를 새로고침해 보세요.')
+            }
+          }}
+          className="flex-shrink-0 text-xs text-gray-300 hover:text-white underline py-1 px-2 rounded"
+          title="사진이 같은 화면으로 반복될 때 사용"
+        >
+          촬영이 안 될 때
+        </button>
       </div>
 
       {/* 카메라 에러 표시 */}
