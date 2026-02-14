@@ -1,8 +1,8 @@
 import { NextRequest } from 'next/server'
 import { createServerSupabaseClient, getServerUser } from '@/lib/supabase/server'
+import { createClient } from '@supabase/supabase-js'
 import { handleApiError, UnauthorizedError, ForbiddenError } from '@/lib/errors'
 
-// 요청란 상태 변경
 export async function PATCH(
   req: NextRequest,
   { params }: { params: { id: string } }
@@ -21,9 +21,13 @@ export async function PATCH(
     }
 
     const supabase = await createServerSupabaseClient()
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+    const dataClient = serviceRoleKey && supabaseUrl
+      ? createClient(supabaseUrl, serviceRoleKey, { auth: { autoRefreshToken: false, persistSession: false } })
+      : supabase
 
-    // 요청란 조회
-    const { data: requestData, error: requestError } = await supabase
+    const { data: requestData, error: requestError } = await dataClient
       .from('requests')
       .select(`
         *,
@@ -54,10 +58,8 @@ export async function PATCH(
         }
       }
     } else if (user.role === 'staff') {
-      // 직원은 처리중인 요청란을 완료 처리 또는 반려 처리 가능
       if ((status === 'completed' || status === 'rejected') && requestData.status === 'in_progress') {
-        // 배정된 매장인지 확인
-        const { data: storeAssign } = await supabase
+        const { data: storeAssign } = await dataClient
           .from('store_assign')
           .select('id')
           .eq('user_id', user.id)
@@ -148,7 +150,7 @@ export async function PATCH(
       }
     }
 
-    let { data: updatedRequest, error } = await supabase
+    let { data: updatedRequest, error } = await dataClient
       .from('requests')
       .update(basicUpdateData)
       .eq('id', params.id)
@@ -187,7 +189,7 @@ export async function PATCH(
         
         // rejection 컬럼이 있으면 업데이트 시도
         if (Object.keys(rejectionUpdateData).length > 0) {
-          const { error: rejectionError } = await supabase
+          const { error: rejectionError } = await dataClient
             .from('requests')
             .update(rejectionUpdateData)
             .eq('id', params.id)
@@ -206,7 +208,7 @@ export async function PATCH(
               rejection_description: rejection_description ? '있음' : '없음'
             })
             // 성공하면 업데이트된 데이터 다시 조회
-            const { data: updatedWithRejection } = await supabase
+            const { data: updatedWithRejection } = await dataClient
               .from('requests')
               .select('*')
               .eq('id', params.id)
@@ -227,7 +229,7 @@ export async function PATCH(
     let completedByUser = null
     if (updatedRequest && (updatedRequest as any).completed_by) {
       try {
-        const { data: userData } = await supabase
+        const { data: userData } = await dataClient
           .from('users')
           .select('id, name')
           .eq('id', (updatedRequest as any).completed_by)

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient, getServerUser } from '@/lib/supabase/server'
+import { createClient } from '@supabase/supabase-js'
 import { handleApiError, UnauthorizedError, ForbiddenError } from '@/lib/errors'
 
 export async function POST(
@@ -21,10 +22,15 @@ export async function POST(
     }
 
     const supabase = await createServerSupabaseClient()
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+    const dataClient = serviceRoleKey && supabaseUrl
+      ? createClient(supabaseUrl, serviceRoleKey, { auth: { autoRefreshToken: false, persistSession: false } })
+      : supabase
+
     const requestId = params.id
 
-    // 요청 존재 확인 및 권한 확인 (회사 매장의 요청인지 확인)
-    const { data: supplyRequest, error: fetchError } = await supabase
+    const { data: supplyRequest, error: fetchError } = await dataClient
       .from('supply_requests')
       .select(`
         *,
@@ -55,8 +61,7 @@ export async function POST(
       )
     }
 
-    // 상태를 'manager_in_progress'로 변경
-    const { error: updateError } = await supabase
+    const { error: updateError } = await dataClient
       .from('supply_requests')
       .update({ 
         status: 'manager_in_progress',

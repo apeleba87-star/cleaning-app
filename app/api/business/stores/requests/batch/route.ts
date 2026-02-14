@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient, getServerUser } from '@/lib/supabase/server'
+import { createClient } from '@supabase/supabase-js'
 import { handleApiError, UnauthorizedError, ForbiddenError } from '@/lib/errors'
 
-// 배치 API: 여러 매장의 completed/rejected 요청을 한 번에 조회
 export async function GET(request: NextRequest) {
   try {
     const user = await getServerUser()
@@ -32,9 +32,13 @@ export async function GET(request: NextRequest) {
     }
 
     const supabase = await createServerSupabaseClient()
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+    const dataClient = serviceRoleKey && supabaseUrl
+      ? createClient(supabaseUrl, serviceRoleKey, { auth: { autoRefreshToken: false, persistSession: false } })
+      : supabase
 
-    // 매장이 회사에 속해있는지 확인
-    const { data: stores, error: storesError } = await supabase
+    const { data: stores, error: storesError } = await dataClient
       .from('stores')
       .select('id')
       .eq('company_id', user.company_id)
@@ -51,9 +55,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ data: {} })
     }
 
-    // 모든 매장의 completed/rejected 요청을 한 번에 조회
-    // completed_by와 rejected_by 컬럼은 존재하지 않을 수 있으므로 제외
-    const { data: allRequests, error: requestsError } = await supabase
+    const { data: allRequests, error: requestsError } = await dataClient
       .from('requests')
       .select(`
         id,

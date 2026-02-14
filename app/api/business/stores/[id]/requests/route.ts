@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient, getServerUser } from '@/lib/supabase/server'
+import { createClient } from '@supabase/supabase-js'
 
 export async function GET(
   request: NextRequest,
@@ -12,9 +13,14 @@ export async function GET(
     }
 
     const supabase = await createServerSupabaseClient()
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+    const dataClient = serviceRoleKey && supabaseUrl
+      ? createClient(supabaseUrl, serviceRoleKey, { auth: { autoRefreshToken: false, persistSession: false } })
+      : supabase
 
     // 매장이 사용자의 회사에 속하는지 확인
-    const { data: store, error: storeError } = await supabase
+    const { data: store, error: storeError } = await dataClient
       .from('stores')
       .select('id, company_id')
       .eq('id', params.id)
@@ -30,9 +36,7 @@ export async function GET(
     thirtyDaysAgo.setHours(0, 0, 0, 0)
 
     // 모든 요청 조회 (날짜 제한 없음) - status 필터링은 클라이언트에서 처리
-    // enum 오류를 피하기 위해 모든 요청을 가져온 후 필터링
-    // rejection_photo_url은 컬럼이 없을 수 있으므로 별도로 조회
-    const { data: allRequestsData, error: allRequestsError } = await supabase
+    const { data: allRequestsData, error: allRequestsError } = await dataClient
       .from('requests')
       .select(`
         id, 
@@ -85,7 +89,7 @@ export async function GET(
     
     try {
       // completed_by, completion_photo_url, completion_description, storage_location이 있는지 확인
-      const { data: completedDetails, error: detailsError } = await supabase
+      const { data: completedDetails, error: detailsError } = await dataClient
         .from('requests')
         .select(`
           id,
@@ -153,7 +157,7 @@ export async function GET(
     try {
       const rejectedIds = rejectedRequests.map(r => r.id)
       if (rejectedIds.length > 0) {
-        const { data: rejectedDetails, error: rejectedDetailsError } = await supabase
+        const { data: rejectedDetails, error: rejectedDetailsError } = await dataClient
           .from('requests')
           .select(`
             id,

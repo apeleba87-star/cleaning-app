@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient, getServerUser } from '@/lib/supabase/server'
+import { createClient } from '@supabase/supabase-js'
 
-// GET: 직원용 공지사항 조회
 export async function GET(request: NextRequest) {
   try {
     const user = await getServerUser()
@@ -15,9 +15,13 @@ export async function GET(request: NextRequest) {
     }
 
     const supabase = await createServerSupabaseClient()
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+    const dataClient = serviceRoleKey && supabaseUrl
+      ? createClient(supabaseUrl, serviceRoleKey, { auth: { autoRefreshToken: false, persistSession: false } })
+      : supabase
 
-    // 직원용 공지사항 조회
-    const { data: announcements, error } = await supabase
+    const { data: announcements, error } = await dataClient
       .from('announcements')
       .select('*')
       .eq('company_id', user.company_id)
@@ -29,10 +33,9 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: '공지사항 조회에 실패했습니다.' }, { status: 500 })
     }
 
-    // 각 공지사항의 읽음 여부 확인
     const announcementsWithReadStatus = await Promise.all(
       (announcements || []).map(async (announcement) => {
-        const { data: readData } = await supabase
+        const { data: readData } = await dataClient
           .from('announcement_reads')
           .select('read_at')
           .eq('announcement_id', announcement.id)
@@ -71,9 +74,13 @@ export async function POST(request: NextRequest) {
     }
 
     const supabase = await createServerSupabaseClient()
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+    const dataClient = serviceRoleKey && supabaseUrl
+      ? createClient(supabaseUrl, serviceRoleKey, { auth: { autoRefreshToken: false, persistSession: false } })
+      : supabase
 
-    // 공지사항이 직원용인지 확인
-    const { data: announcement, error: announcementError } = await supabase
+    const { data: announcement, error: announcementError } = await dataClient
       .from('announcements')
       .select('id, type, company_id')
       .eq('id', announcement_id)
@@ -91,8 +98,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: '권한이 없습니다.' }, { status: 403 })
     }
 
-    // 읽음 표시 생성 (이미 있으면 업데이트)
-    const { error: readError } = await supabase
+    const { error: readError } = await dataClient
       .from('announcement_reads')
       .upsert(
         {
