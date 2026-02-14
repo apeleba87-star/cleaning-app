@@ -198,41 +198,26 @@ export default function MobileDashboardPage() {
     return `${period} ${displayHours}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`
   }, [])
 
-  // 단일 매장의 체크리스트 진행율을 로드하는 함수
-  const loadChecklistProgressForStore = useCallback(async (storeId: string, workDate: string, userId: string) => {
-    const supabase = createClient()
-    const { data: checklists, error } = await supabase
-      .from('checklist')
-      .select('id, store_id, items')
-      .eq('store_id', storeId)
-      .eq('work_date', workDate)
-      .eq('assigned_user_id', userId)
-
-    if (error) {
-      console.error('Error loading checklist progress:', error)
-      return
+  // 체크리스트 진행률 및 미완료 건수 API 호출 (RLS 우회)
+  const fetchChecklistProgress = useCallback(async () => {
+    try {
+      const res = await fetch('/api/staff/checklist-progress')
+      const json = await res.json()
+      if (json.success && json.data) {
+        setChecklistProgress(json.data.progress || {})
+        setIncompleteChecklists(json.data.incompleteChecklists || {})
+        setIncompleteRequests(json.data.incompleteRequests || {})
+      } else {
+        setChecklistProgress({})
+        setIncompleteChecklists({})
+        setIncompleteRequests({})
+      }
+    } catch (err) {
+      console.error('Error loading checklist progress:', err)
+      setChecklistProgress({})
+      setIncompleteChecklists({})
+      setIncompleteRequests({})
     }
-
-    if (!checklists || checklists.length === 0) {
-      return
-    }
-
-    // calculateChecklistProgress 함수 사용 (모든 항목 타입 올바르게 처리)
-    let totalCompleted = 0
-    let totalItems = 0
-
-    checklists.forEach((checklist: any) => {
-      const progress = calculateChecklistProgress(checklist)
-      totalCompleted += progress.completedItems
-      totalItems += progress.totalItems
-    })
-
-    const percentage = totalItems > 0 ? Math.round((totalCompleted / totalItems) * 100) : 0
-    
-    setChecklistProgress((prev) => ({
-      ...prev,
-      [storeId]: { completed: totalCompleted, total: totalItems, percentage }
-    }))
   }, [])
 
   const loadAnnouncements = useCallback(async () => {
@@ -462,151 +447,42 @@ export default function MobileDashboardPage() {
         // 공지사항 로드
         loadPromises.push(loadAnnouncements())
 
-        // 물품 요청 상태 로드 (1주일 이내의 completed 포함)
+        // 물품 요청 상태 로드 (API 사용 - RLS 우회)
         loadPromises.push(
-          (async () => {
-            try {
-              const oneWeekAgo = new Date()
-              oneWeekAgo.setDate(oneWeekAgo.getDate() - 7)
-              const oneWeekAgoISO = oneWeekAgo.toISOString().split('T')[0]
-
-              // 처리 완료가 아닌 요청 조회
-              const { data: nonCompletedData, error: nonCompletedError } = await supabase
-                .from('supply_requests')
-                .select(`
-                  id,
-                  store_id,
-                  title,
-                  category,
-                  status,
-                  created_at,
-                  completed_at,
-                  stores:store_id (
-                    id,
-                    name
-                  )
-                `)
-                .eq('user_id', session.user.id)
-                .neq('status', 'completed')
-
-              // 처리 완료된 요청 중 1주일 이내만 조회
-              const { data: completedData, error: completedError } = await supabase
-                .from('supply_requests')
-                .select(`
-                  id,
-                  store_id,
-                  title,
-                  category,
-                  status,
-                  created_at,
-                  completed_at,
-                  stores:store_id (
-                    id,
-                    name
-                  )
-                `)
-                .eq('user_id', session.user.id)
-                .eq('status', 'completed')
-                .gte('completed_at', oneWeekAgoISO)
-
-              // 두 결과 합치기
-              let allData = [...(nonCompletedData || [])]
-              if (!completedError && completedData) {
-                allData = [...allData, ...completedData]
-              }
-
-              // 정렬 (completed는 맨 아래)
-              allData.sort((a: any, b: any) => {
-                if (a.status === 'completed' && b.status !== 'completed') return 1
-                if (a.status !== 'completed' && b.status === 'completed') return -1
-                return new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-              })
-
-              const supplyRequestsList = allData.map((req: any) => ({
-                id: req.id,
-                store_id: req.store_id,
-                store_name: req.stores?.name || '',
-                title: req.title,
-                category: req.category,
-                status: req.status,
-                created_at: req.created_at,
-                completed_at: req.completed_at,
-              }))
-              setSupplyRequests(supplyRequestsList)
-            } catch (error) {
-              console.error('Error loading supply requests:', error)
-            }
-          })()
-        )
-
-        // 체크리스트 진행율 및 미완료 건수 로드
-        if (storeIds.length > 0) {
-          loadPromises.push(
-            loadChecklistProgress(storesData, session.user.id, today, supabase)
-          )
-          
-          // 미완료 건수 로드 (병렬 처리)
-          const clockedInStores = storesData.filter(s => s.attendanceStatus === 'clocked_in')
-          
-          if (clockedInStores.length > 0) {
-            const incompletePromises = clockedInStores.map(async (store) => {
-              const checklistDate = store.attendanceWorkDate || today
-              
-              // 병렬로 체크리스트와 요청 조회
-              const [checklistsResult, requestsResult] = await Promise.all([
-                supabase
-                  .from('checklist')
-                  .select('id, items')
-                  .eq('store_id', store.id)
-                  .eq('work_date', checklistDate)
-                  .eq('assigned_user_id', session.user.id),
-                supabase
-                  .from('requests')
-                  .select('id, status')
-                  .eq('store_id', store.id)
-                  .eq('status', 'in_progress')
-              ])
-
-              const checklists = checklistsResult.data
-              let incompleteCount = 0
-              if (checklists) {
-                checklists.forEach((checklist: any) => {
-                  const validItems = (checklist.items as any[]).filter((item: any) => item.area?.trim())
-                  if (validItems.length === 0) {
-                    incompleteCount++
-                    return
-                  }
-                  // calculateChecklistProgress 함수를 사용하여 완료 여부 확인
-                  const progress = calculateChecklistProgress(checklist)
-                  const allCompleted = progress.percentage === 100
-                  if (!allCompleted) {
-                    incompleteCount++
-                  }
-                })
-              }
-
-              return {
-                storeId: store.id,
-                incompleteChecklist: incompleteCount,
-                incompleteRequest: requestsResult.data?.length || 0,
+          fetch('/api/staff/supply-requests')
+            .then(async (res) => {
+              const json = await res.json()
+              if (json.success && json.data) {
+                const supplyRequestsList = json.data.map((req: any) => ({
+                  id: req.id,
+                  store_id: req.store_id,
+                  store_name: req.stores?.name || '',
+                  title: req.title,
+                  category: req.category,
+                  status: req.status,
+                  created_at: req.created_at,
+                  completed_at: req.completed_at,
+                }))
+                setSupplyRequests(supplyRequestsList)
               }
             })
+            .catch((err) => {
+              console.error('Error loading supply requests:', err)
+            })
+        )
 
-            loadPromises.push(
-              Promise.all(incompletePromises).then((results) => {
-                const incompleteChecklistsMap: Record<string, number> = {}
-                const incompleteRequestsMap: Record<string, number> = {}
-                
-                results.forEach((result) => {
-                  incompleteChecklistsMap[result.storeId] = result.incompleteChecklist
-                  incompleteRequestsMap[result.storeId] = result.incompleteRequest
-                })
-
-                setIncompleteChecklists(incompleteChecklistsMap)
-                setIncompleteRequests(incompleteRequestsMap)
-              })
-            )
-          }
+        // 체크리스트 진행율 및 미완료 건수 로드 (API 사용 - RLS 우회)
+        if (storeIds.length > 0) {
+          loadPromises.push(fetch('/api/staff/checklist-progress').then(async (res) => {
+            const json = await res.json()
+            if (json.success && json.data) {
+              setChecklistProgress(json.data.progress || {})
+              setIncompleteChecklists(json.data.incompleteChecklists || {})
+              setIncompleteRequests(json.data.incompleteRequests || {})
+            }
+          }).catch((err) => {
+            console.error('Error loading checklist progress:', err)
+          }))
         }
 
         // 모든 데이터를 병렬로 로딩
@@ -621,244 +497,6 @@ export default function MobileDashboardPage() {
       }
     }
 
-    const loadTodayWorkStats = async (storesData: StoreWithAssignment[], userId: string, today: string, supabase: any) => {
-      const todayStart = new Date(today + 'T00:00:00')
-      const todayEnd = new Date(today + 'T23:59:59')
-
-      // 모든 매장의 통계를 병렬로 조회
-      const statsPromises = storesData.map(async (store) => {
-        const checklistDate = store.attendanceStatus === 'clocked_in' && store.attendanceWorkDate
-          ? store.attendanceWorkDate
-          : today
-
-        // 병렬로 모든 데이터 조회
-        const [
-          checklistsResult,
-          completedRequestsResult,
-          storeProblemsResult,
-          vendingProblemsResult,
-          productInflowResult,
-          storagePhotosResult
-        ] = await Promise.all([
-          supabase
-          .from('checklist')
-          .select('*')
-          .eq('store_id', store.id)
-          .eq('work_date', checklistDate)
-            .eq('assigned_user_id', userId),
-          supabase
-          .from('requests')
-          .select('id')
-          .eq('store_id', store.id)
-          .eq('status', 'completed')
-          .gte('updated_at', todayStart.toISOString())
-            .lte('updated_at', todayEnd.toISOString()),
-          supabase
-          .from('problem_reports')
-          .select('id')
-          .eq('store_id', store.id)
-          .eq('category', 'other')
-          .like('title', '매장 문제%')
-          .gte('created_at', todayStart.toISOString())
-            .lte('created_at', todayEnd.toISOString()),
-          supabase
-          .from('problem_reports')
-          .select('id')
-          .eq('store_id', store.id)
-          .not('vending_machine_number', 'is', null)
-          .gte('created_at', todayStart.toISOString())
-            .lte('created_at', todayEnd.toISOString()),
-          supabase
-          .from('product_photos')
-          .select('id')
-          .eq('store_id', store.id)
-          .eq('type', 'receipt')
-          .gte('created_at', todayStart.toISOString())
-          .lte('created_at', todayEnd.toISOString())
-            .limit(1),
-          supabase
-          .from('product_photos')
-          .select('id')
-          .eq('store_id', store.id)
-          .eq('type', 'storage')
-          .gte('created_at', todayStart.toISOString())
-          .lte('created_at', todayEnd.toISOString())
-          .limit(1)
-        ])
-
-        const checklists = checklistsResult.data
-        let checklistCompleted = 0
-        if (checklists) {
-          checklists.forEach((checklist: any) => {
-            const progress = calculateChecklistProgress(checklist)
-            if (progress.percentage === 100) {
-              checklistCompleted++
-            }
-          })
-        }
-
-        return {
-          store_id: store.id,
-          store_name: store.name,
-          checklist_completed: checklistCompleted,
-          request_completed: completedRequestsResult.data?.length || 0,
-          store_problem_count: storeProblemsResult.data?.length || 0,
-          vending_problem_count: vendingProblemsResult.data?.length || 0,
-          has_product_inflow: (productInflowResult.data?.length || 0) > 0,
-          has_storage_photo: (storagePhotosResult.data?.length || 0) > 0,
-        }
-      })
-
-      const stats = await Promise.all(statsPromises)
-      setTodayWorkStats(stats)
-    }
-
-    const loadChecklistProgress = async (storesData: StoreWithAssignment[], userId: string, today: string, supabase: any) => {
-      // 출근 중인 매장만 체크리스트 진행율 표시
-      const clockedInStores = storesData.filter(s => s.attendanceStatus === 'clocked_in')
-      
-      if (clockedInStores.length === 0) {
-        setChecklistProgress({})
-        return
-      }
-      
-      // 병렬로 모든 매장의 체크리스트 진행율 조회
-      const progressPromises = clockedInStores.map(async (store) => {
-        const checklistDate = store.attendanceWorkDate || today
-        
-        const { data: checklists, error } = await supabase
-          .from('checklist')
-          .select('id, store_id, items')
-          .eq('store_id', store.id)
-          .eq('work_date', checklistDate)
-          .eq('assigned_user_id', userId)
-
-        if (error) {
-          console.error('Error loading checklist progress:', error)
-          return { storeId: store.id, progress: null }
-        }
-
-        if (!checklists || checklists.length === 0) {
-          return { storeId: store.id, progress: null }
-        }
-
-        // calculateChecklistProgress 함수 사용 (모든 항목 타입 올바르게 처리)
-        let totalCompleted = 0
-        let totalItems = 0
-
-        checklists.forEach((checklist: any) => {
-          const progress = calculateChecklistProgress(checklist)
-          totalCompleted += progress.completedItems
-          totalItems += progress.totalItems
-        })
-
-        const percentage = totalItems > 0 ? Math.round((totalCompleted / totalItems) * 100) : 0
-        return {
-          storeId: store.id,
-          progress: { completed: totalCompleted, total: totalItems, percentage }
-        }
-      })
-
-      const results = await Promise.all(progressPromises)
-      const progress: Record<string, { completed: number; total: number; percentage: number }> = {}
-      
-      results.forEach((result) => {
-        if (result.progress) {
-          progress[result.storeId] = result.progress
-        }
-      })
-
-      setChecklistProgress(progress)
-    }
-
-
-
-    const loadWeeklyWorkStats = async (storesData: StoreWithAssignment[], userId: string, supabase: any) => {
-      const oneWeekAgo = new Date()
-      oneWeekAgo.setDate(oneWeekAgo.getDate() - 7)
-      const oneWeekAgoStr = oneWeekAgo.toISOString().split('T')[0]
-      const today = new Date().toISOString().split('T')[0]
-      const oneWeekAgoISO = oneWeekAgo.toISOString()
-
-      // 모든 매장의 통계를 병렬로 조회
-      const statsPromises = storesData.map(async (store) => {
-        // 병렬로 모든 데이터 조회
-        const [
-          checklistsResult,
-          storeProblemsResult,
-          completedRequestsResult,
-          productInflowResult,
-          vendingProblemsResult,
-          lostItemsResult
-        ] = await Promise.all([
-          supabase
-          .from('checklist')
-          .select('work_date')
-          .eq('store_id', store.id)
-          .eq('assigned_user_id', userId)
-          .gte('work_date', oneWeekAgoStr)
-            .lte('work_date', today),
-          supabase
-          .from('problem_reports')
-          .select('id')
-          .eq('store_id', store.id)
-          .eq('category', 'other')
-          .like('title', '매장 문제%')
-            .gte('created_at', oneWeekAgoISO),
-          supabase
-          .from('requests')
-          .select('id')
-          .eq('store_id', store.id)
-          .eq('status', 'completed')
-            .gte('updated_at', oneWeekAgoISO),
-          supabase
-          .from('product_photos')
-          .select('id')
-          .eq('store_id', store.id)
-          .eq('type', 'receipt')
-            .gte('created_at', oneWeekAgoISO),
-          supabase
-          .from('problem_reports')
-          .select('id')
-          .eq('store_id', store.id)
-          .not('vending_machine_number', 'is', null)
-            .gte('created_at', oneWeekAgoISO),
-          supabase
-          .from('lost_items')
-          .select('id')
-          .eq('store_id', store.id)
-            .gte('created_at', oneWeekAgoISO)
-        ])
-
-        const checklists = checklistsResult.data
-        const dailyChecklists: { [key: string]: number } = {}
-        if (checklists) {
-          checklists.forEach((cl: any) => {
-            const date = cl.work_date
-            dailyChecklists[date] = (dailyChecklists[date] || 0) + 1
-          })
-        }
-
-        const dailyChecklistArray = Object.entries(dailyChecklists)
-          .map(([date, count]) => ({ date, count }))
-          .sort((a, b) => b.date.localeCompare(a.date))
-
-        return {
-          store_id: store.id,
-          store_name: store.name,
-          daily_checklists: dailyChecklistArray,
-          store_problem_count: storeProblemsResult.data?.length || 0,
-          request_completed: completedRequestsResult.data?.length || 0,
-          product_inflow_count: productInflowResult.data?.length || 0,
-          vending_problem_count: vendingProblemsResult.data?.length || 0,
-          lost_item_count: lostItemsResult.data?.length || 0,
-        }
-      })
-
-      const stats = await Promise.all(statsPromises)
-      setWeeklyWorkStats(stats)
-    }
-
     loadDashboardData()
 
     return () => {
@@ -866,203 +504,19 @@ export default function MobileDashboardPage() {
     }
   }, [router])
 
-  // 최근 업무 기록 섹션이 펼쳐질 때만 데이터 로드
+  // 최근 업무 기록 섹션이 펼쳐질 때만 데이터 로드 (API 사용 - RLS 우회)
   useEffect(() => {
     if (isWorkHistoryExpanded && !workHistoryDataLoaded && stores.length > 0 && user) {
       const loadWorkHistoryData = async () => {
         try {
-          const supabase = createClient()
-          const {
-            data: { session },
-          } = await supabase.auth.getSession()
+          const res = await fetch('/api/staff/work-stats')
+          const json = await res.json()
 
-          if (!session) return
+          if (!res.ok || !json.success) return
 
-          const today = getTodayDateKST()
-          
-          // loadTodayWorkStats 함수 정의
-          const loadTodayWorkStats = async (storesData: StoreWithAssignment[], userId: string, today: string, supabase: any) => {
-            const todayStart = new Date(today + 'T00:00:00')
-            const todayEnd = new Date(today + 'T23:59:59')
-
-            const statsPromises = storesData.map(async (store) => {
-              const checklistDate = store.attendanceStatus === 'clocked_in' && store.attendanceWorkDate
-                ? store.attendanceWorkDate
-                : today
-
-              const [
-                checklistsResult,
-                completedRequestsResult,
-                storeProblemsResult,
-                vendingProblemsResult,
-                productInflowResult,
-                storagePhotosResult
-              ] = await Promise.all([
-                supabase
-                  .from('checklist')
-                  .select('*')
-                  .eq('store_id', store.id)
-                  .eq('work_date', checklistDate)
-                  .eq('assigned_user_id', userId),
-                supabase
-                  .from('requests')
-                  .select('id')
-                  .eq('store_id', store.id)
-                  .eq('status', 'completed')
-                  .gte('updated_at', todayStart.toISOString())
-                  .lte('updated_at', todayEnd.toISOString()),
-                supabase
-                  .from('problem_reports')
-                  .select('id')
-                  .eq('store_id', store.id)
-                  .eq('category', 'other')
-                  .like('title', '매장 문제%')
-                  .gte('created_at', todayStart.toISOString())
-                  .lte('created_at', todayEnd.toISOString()),
-                supabase
-                  .from('problem_reports')
-                  .select('id')
-                  .eq('store_id', store.id)
-                  .not('vending_machine_number', 'is', null)
-                  .gte('created_at', todayStart.toISOString())
-                  .lte('created_at', todayEnd.toISOString()),
-                supabase
-                  .from('product_photos')
-                  .select('id')
-                  .eq('store_id', store.id)
-                  .eq('type', 'receipt')
-                  .gte('created_at', todayStart.toISOString())
-                  .lte('created_at', todayEnd.toISOString())
-                  .limit(1),
-                supabase
-                  .from('product_photos')
-                  .select('id')
-                  .eq('store_id', store.id)
-                  .eq('type', 'storage')
-                  .gte('created_at', todayStart.toISOString())
-                  .lte('created_at', todayEnd.toISOString())
-                  .limit(1)
-              ])
-
-              const checklists = checklistsResult.data
-              let checklistCompleted = 0
-              if (checklists) {
-                checklists.forEach((checklist: any) => {
-                  const progress = calculateChecklistProgress(checklist)
-                  if (progress.percentage === 100) {
-                    checklistCompleted++
-                  }
-                })
-              }
-
-              return {
-                store_id: store.id,
-                store_name: store.name,
-                checklist_completed: checklistCompleted,
-                request_completed: completedRequestsResult.data?.length || 0,
-                store_problem_count: storeProblemsResult.data?.length || 0,
-                vending_problem_count: vendingProblemsResult.data?.length || 0,
-                has_product_inflow: (productInflowResult.data?.length || 0) > 0,
-                has_storage_photo: (storagePhotosResult.data?.length || 0) > 0,
-              }
-            })
-
-            const stats = await Promise.all(statsPromises)
-            setTodayWorkStats(stats)
-          }
-
-          // loadWeeklyWorkStats 함수 정의
-          const loadWeeklyWorkStats = async (storesData: StoreWithAssignment[], userId: string, supabase: any) => {
-            const now = new Date()
-            const koreaTime = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Seoul' }))
-            const sevenDaysAgo = new Date(koreaTime)
-            sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7)
-            sevenDaysAgo.setHours(0, 0, 0, 0)
-
-            const statsPromises = storesData.map(async (store) => {
-              const [
-                checklistsResult,
-                completedRequestsResult,
-                storeProblemsResult,
-                productInflowResult,
-                vendingProblemsResult,
-                lostItemsResult
-              ] = await Promise.all([
-                supabase
-                  .from('checklist')
-                  .select('work_date')
-                  .eq('store_id', store.id)
-                  .eq('assigned_user_id', userId)
-                  .gte('work_date', sevenDaysAgo.toISOString().split('T')[0]),
-                supabase
-                  .from('requests')
-                  .select('id')
-                  .eq('store_id', store.id)
-                  .eq('status', 'completed')
-                  .gte('updated_at', sevenDaysAgo.toISOString()),
-                supabase
-                  .from('problem_reports')
-                  .select('id')
-                  .eq('store_id', store.id)
-                  .eq('category', 'other')
-                  .like('title', '매장 문제%')
-                  .gte('created_at', sevenDaysAgo.toISOString()),
-                supabase
-                  .from('product_photos')
-                  .select('id')
-                  .eq('store_id', store.id)
-                  .eq('type', 'receipt')
-                  .gte('created_at', sevenDaysAgo.toISOString()),
-                supabase
-                  .from('problem_reports')
-                  .select('id')
-                  .eq('store_id', store.id)
-                  .not('vending_machine_number', 'is', null)
-                  .gte('created_at', sevenDaysAgo.toISOString()),
-                supabase
-                  .from('lost_items')
-                  .select('id')
-                  .eq('store_id', store.id)
-                  .gte('created_at', sevenDaysAgo.toISOString())
-              ])
-
-              const checklists = checklistsResult.data || []
-              const dailyChecklists: { date: string; count: number }[] = []
-              const checklistMap = new Map<string, number>()
-
-              checklists.forEach((checklist: any) => {
-                const date = checklist.work_date
-                checklistMap.set(date, (checklistMap.get(date) || 0) + 1)
-              })
-
-              checklistMap.forEach((count, date) => {
-                dailyChecklists.push({ date, count })
-              })
-
-              dailyChecklists.sort((a, b) => a.date.localeCompare(b.date))
-
-              return {
-                store_id: store.id,
-                store_name: store.name,
-                daily_checklists: dailyChecklists,
-                store_problem_count: storeProblemsResult.data?.length || 0,
-                request_completed: completedRequestsResult.data?.length || 0,
-                product_inflow_count: productInflowResult.data?.length || 0,
-                vending_problem_count: vendingProblemsResult.data?.length || 0,
-                lost_item_count: lostItemsResult.data?.length || 0,
-              }
-            })
-
-            const stats = await Promise.all(statsPromises)
-            setWeeklyWorkStats(stats)
-          }
-          
-          // 오늘 업무 통계 로드
-          await loadTodayWorkStats(stores, user.id, today, supabase)
-          
-          // 최근 1주일 업무 통계 로드
-          await loadWeeklyWorkStats(stores, user.id, supabase)
-          
+          const { todayStats, weeklyStats } = json.data || {}
+          if (todayStats) setTodayWorkStats(todayStats)
+          if (weeklyStats) setWeeklyWorkStats(weeklyStats)
           setWorkHistoryDataLoaded(true)
         } catch (error) {
           console.error('Error loading work history data:', error)
@@ -1071,125 +525,14 @@ export default function MobileDashboardPage() {
 
       loadWorkHistoryData()
     }
-  }, [isWorkHistoryExpanded, workHistoryDataLoaded, stores, user])
+  }, [isWorkHistoryExpanded, workHistoryDataLoaded, stores.length, user])
 
-  // 체크리스트 업데이트 이벤트 리스너 (통합 및 최적화)
+
+  // 체크리스트 업데이트 이벤트 리스너 (API 사용 - RLS 우회)
   const handleChecklistUpdate = useCallback(async () => {
     if (stores.length === 0) return
-    
-    const supabase = createClient()
-    const { data: { session } } = await supabase.auth.getSession()
-    
-    if (!session) return
-
-    const today = getTodayDateKST()
-    
-    // 출근 중인 매장만 확인
-    const clockedInStores = stores.filter(s => s.attendanceStatus === 'clocked_in')
-    
-    if (clockedInStores.length === 0) {
-      setChecklistProgress({})
-      setIncompleteChecklists({})
-      setIncompleteRequests({})
-      return
-    }
-    
-    // 병렬로 모든 매장의 데이터 조회
-    const storePromises = clockedInStores.map(async (store) => {
-      const checklistDate = store.attendanceWorkDate || today
-      
-      // 병렬로 체크리스트와 요청 조회
-      const [checklistsResult, requestsResult] = await Promise.all([
-        supabase
-          .from('checklist')
-          .select('id, store_id, items')
-          .eq('store_id', store.id)
-          .eq('work_date', checklistDate)
-          .eq('assigned_user_id', session.user.id),
-        supabase
-          .from('requests')
-          .select('id, status')
-          .eq('store_id', store.id)
-          .eq('status', 'in_progress')
-      ])
-
-      const checklists = checklistsResult.data
-      
-      // 진행율 계산
-      let totalCompleted = 0
-      let totalItems = 0
-      let incompleteCount = 0
-
-      if (checklists) {
-        checklists.forEach((checklist: any) => {
-          const validItems = (checklist.items as any[]).filter((item: any) => item.area?.trim())
-          const total = validItems.length
-          
-          if (total === 0) {
-            incompleteCount++
-            return
-          }
-
-          const completed = validItems.filter((item: any) => {
-            if (item.type === 'check') {
-              if (!item.checked) return false
-              if (item.status === 'bad' && !item.comment?.trim()) return false
-              return true
-            } else if (item.type === 'photo') {
-              return !!(item.before_photo_url && item.after_photo_url)
-            }
-            return false
-          }).length
-
-          totalCompleted += completed
-          totalItems += total
-
-          // 미완료 체크
-          const allCompleted = validItems.every((item: any) => {
-            if (item.type === 'check') {
-              if (!item.checked) return false
-              if (item.status === 'bad' && !item.comment?.trim()) return false
-              return true
-            } else if (item.type === 'photo') {
-              return !!(item.before_photo_url && item.after_photo_url)
-            }
-            return false
-          })
-
-          if (!allCompleted) {
-            incompleteCount++
-          }
-        })
-      }
-
-      const percentage = totalItems > 0 ? Math.round((totalCompleted / totalItems) * 100) : 0
-
-      return {
-        storeId: store.id,
-        progress: { completed: totalCompleted, total: totalItems, percentage },
-        incompleteChecklist: incompleteCount,
-        incompleteRequest: requestsResult.data?.length || 0,
-      }
-    })
-
-    // 모든 매장 데이터를 병렬로 처리
-    const results = await Promise.all(storePromises)
-
-    // 결과를 state에 반영
-    const progressMap: Record<string, { completed: number; total: number; percentage: number }> = {}
-    const incompleteChecklistsMap: Record<string, number> = {}
-    const incompleteRequestsMap: Record<string, number> = {}
-
-    results.forEach((result) => {
-      progressMap[result.storeId] = result.progress
-      incompleteChecklistsMap[result.storeId] = result.incompleteChecklist
-      incompleteRequestsMap[result.storeId] = result.incompleteRequest
-    })
-
-    setChecklistProgress(progressMap)
-    setIncompleteChecklists(incompleteChecklistsMap)
-    setIncompleteRequests(incompleteRequestsMap)
-  }, [stores])
+    await fetchChecklistProgress()
+  }, [stores, fetchChecklistProgress])
 
   useEffect(() => {
     window.addEventListener('checklistUpdated', handleChecklistUpdate)
@@ -1396,13 +739,7 @@ export default function MobileDashboardPage() {
                         )
                       )
                       // 출근 후 체크리스트 진행율 등 데이터 다시 로드
-                      const supabase = createClient()
-                      supabase.auth.getSession().then(({ data: { session } }) => {
-                        if (session) {
-                          // 체크리스트 진행율 다시 로드 (출근일 기준)
-                          loadChecklistProgressForStore(targetStore.id, workDate, session.user.id)
-                        }
-                      })
+                      fetchChecklistProgress()
                     } else {
                       alert(result.error || '관리시작 처리에 실패했습니다.')
                     }
@@ -2368,13 +1705,7 @@ export default function MobileDashboardPage() {
                       )
                     )
                     // 출근 후 체크리스트 진행율 등 데이터 다시 로드
-                    const supabase = createClient()
-                    supabase.auth.getSession().then(({ data: { session } }) => {
-                      if (session) {
-                        // 체크리스트 진행율 다시 로드 (출근일 기준)
-                        loadChecklistProgressForStore(targetStore.id, workDate, session.user.id)
-                      }
-                    })
+                    fetchChecklistProgress()
                   } else {
                     alert(result.error || '관리시작 처리에 실패했습니다.')
                   }

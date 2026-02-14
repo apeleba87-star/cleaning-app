@@ -18,7 +18,8 @@ export async function GET(request: NextRequest) {
       throw new UnauthorizedError('Authentication required')
     }
 
-    if (user.role !== 'staff') {
+    const allowedRoles = ['staff', 'subcontract_individual', 'subcontract_company']
+    if (!allowedRoles.includes(user.role)) {
       throw new ForbiddenError('Only staff can view assigned stores')
     }
 

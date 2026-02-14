@@ -1,10 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient, getServerUser } from '@/lib/supabase/server'
+import { createClient } from '@supabase/supabase-js'
 
 export async function POST(request: NextRequest) {
   try {
     const user = await getServerUser()
-    if (!user || user.role !== 'staff') {
+    const allowedRoles = ['staff', 'subcontract_individual', 'subcontract_company']
+    if (!user || !allowedRoles.includes(user.role)) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
@@ -19,6 +21,24 @@ export async function POST(request: NextRequest) {
     }
 
     const supabase = await createServerSupabaseClient()
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+    const dataClient =
+      serviceRoleKey && supabaseUrl
+        ? createClient(supabaseUrl, serviceRoleKey, {
+            auth: { autoRefreshToken: false, persistSession: false },
+          })
+        : supabase
+
+    const { data: storeAssign } = await dataClient
+      .from('store_assign')
+      .select('id')
+      .eq('user_id', user.id)
+      .eq('store_id', store_id)
+      .maybeSingle()
+    if (!storeAssign) {
+      return NextResponse.json({ error: '해당 매장에 대한 권한이 없습니다.' }, { status: 403 })
+    }
 
     // photo_urls 배열이 있으면 사용, 없으면 photo_url 사용 (하위 호환성)
     const photos = photo_urls && Array.isArray(photo_urls) && photo_urls.length > 0 
@@ -38,7 +58,7 @@ export async function POST(request: NextRequest) {
       user_id: user.id,
     }
 
-    const { data, error } = await supabase
+    const { data, error } = await dataClient
       .from('lost_items')
       .insert(insertData)
       .select()

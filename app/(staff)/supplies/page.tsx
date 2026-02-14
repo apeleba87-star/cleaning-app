@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from 'react'
 import { SupplyList } from '@/components/SupplyList'
-import { createClient } from '@/lib/supabase/client'
 import { SupplyRequest, SupplyRequestStatus, SupplyRequestCategory } from '@/types/db'
 import { PhotoUploader } from '@/components/PhotoUploader'
 import { useTodayAttendance } from '@/contexts/AttendanceContext'
@@ -45,15 +44,11 @@ export default function SuppliesPage() {
 
   const loadStoreName = async (storeId: string) => {
     try {
-      const supabase = createClient()
-      const { data, error } = await supabase
-        .from('stores')
-        .select('name')
-        .eq('id', storeId)
-        .single()
-      
-      if (!error && data) {
-        setStoreName(data.name)
+      const res = await fetch('/api/staff/assigned-stores')
+      const json = await res.json()
+      if (json.success && json.data) {
+        const store = json.data.find((s: any) => s.id === storeId)
+        if (store?.name) setStoreName(store.name)
       }
     } catch (error) {
       console.error('Error loading store name:', error)
@@ -61,67 +56,26 @@ export default function SuppliesPage() {
   }
 
   const loadSupplies = async () => {
-    const supabase = createClient()
-    const {
-      data: { session },
-    } = await supabase.auth.getSession()
+    try {
+      const params = new URLSearchParams()
+      if (attendanceStoreId && isClockedIn) {
+        params.set('store_id', attendanceStoreId)
+      }
+      const res = await fetch(`/api/staff/supply-requests?${params}`)
+      const json = await res.json()
 
-    if (!session) {
+      if (!res.ok) {
+        throw new Error(json.error || '물품 요청을 불러올 수 없습니다.')
+      }
+
+      const allData = json.data || []
+      setSupplies(allData)
+    } catch (error: any) {
+      console.error('Error loading supplies:', error)
+      setSupplies([])
+    } finally {
       setLoading(false)
-      return
     }
-
-    // 처리 완료된 요청은 1주일 이내만 표시
-    const oneWeekAgo = new Date()
-    oneWeekAgo.setDate(oneWeekAgo.getDate() - 7)
-    const oneWeekAgoISO = oneWeekAgo.toISOString().split('T')[0]
-
-    // 처리 완료가 아닌 요청과 완료된 요청을 병렬로 조회 (속도 최적화)
-    let nonCompletedQuery = supabase
-      .from('supply_requests')
-      .select('id, store_id, user_id, category_id, item_name, quantity, title, description, category, photo_url, status, manager_comment, completion_photo_url, completion_description, completed_at, created_at, updated_at')
-      .eq('user_id', session.user.id)
-      .neq('status', 'completed')
-
-    let completedQuery = supabase
-      .from('supply_requests')
-      .select('id, store_id, user_id, category_id, item_name, quantity, title, description, category, photo_url, status, manager_comment, completion_photo_url, completion_description, completed_at, created_at, updated_at')
-      .eq('user_id', session.user.id)
-      .eq('status', 'completed')
-      .gte('completed_at', oneWeekAgoISO)
-
-    // 출근한 매장이 있으면 해당 매장의 요청만 조회
-    if (attendanceStoreId && isClockedIn) {
-      nonCompletedQuery = nonCompletedQuery.eq('store_id', attendanceStoreId)
-      completedQuery = completedQuery.eq('store_id', attendanceStoreId)
-    }
-
-    // 병렬 쿼리 실행
-    const [nonCompletedResult, completedResult] = await Promise.all([
-      nonCompletedQuery,
-      completedQuery
-    ])
-
-    const nonCompletedData = nonCompletedResult.data
-    const nonCompletedError = nonCompletedResult.error
-    const completedData = completedResult.data
-    const completedError = completedResult.error
-
-    // 두 결과 합치기 및 정렬 (completed는 맨 아래)
-    let allData = [...(nonCompletedData || [])]
-    if (!completedError && completedData) {
-      allData = [...allData, ...completedData]
-    }
-
-    // 정렬
-    allData.sort((a, b) => {
-      if (a.status === 'completed' && b.status !== 'completed') return 1
-      if (a.status !== 'completed' && b.status === 'completed') return -1
-      return new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-    })
-
-    setSupplies(allData)
-    setLoading(false)
   }
 
   const handleSubmit = async () => {

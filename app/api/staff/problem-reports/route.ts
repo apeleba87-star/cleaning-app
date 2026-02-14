@@ -1,10 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient, getServerUser } from '@/lib/supabase/server'
+import { createClient } from '@supabase/supabase-js'
 
 export async function POST(request: NextRequest) {
   try {
     const user = await getServerUser()
-    if (!user || user.role !== 'staff') {
+    const allowedRoles = ['staff', 'subcontract_individual', 'subcontract_company']
+    if (!user || !allowedRoles.includes(user.role)) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
@@ -19,6 +21,25 @@ export async function POST(request: NextRequest) {
     }
 
     const supabase = await createServerSupabaseClient()
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+    const dataClient =
+      serviceRoleKey && supabaseUrl
+        ? createClient(supabaseUrl, serviceRoleKey, {
+            auth: { autoRefreshToken: false, persistSession: false },
+          })
+        : supabase
+
+    // 매장 배정 확인
+    const { data: storeAssign } = await dataClient
+      .from('store_assign')
+      .select('id')
+      .eq('user_id', user.id)
+      .eq('store_id', store_id)
+      .maybeSingle()
+    if (!storeAssign) {
+      return NextResponse.json({ error: '해당 매장에 대한 권한이 없습니다.' }, { status: 403 })
+    }
 
     // 데이터베이스의 category 컬럼은 체크 제약 조건이 있어서 'other'만 허용하는 것으로 보임
     // 실제 분류는 title과 description으로 처리
@@ -51,7 +72,7 @@ export async function POST(request: NextRequest) {
       insertData.product_number = product_number
     }
 
-    const { data, error } = await supabase
+    const { data, error } = await dataClient
       .from('problem_reports')
       .insert(insertData)
       .select()

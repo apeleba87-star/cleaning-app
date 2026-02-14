@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient, getServerUser } from '@/lib/supabase/server'
+import { createClient } from '@supabase/supabase-js'
 import { getTodayDateKST, getYesterdayDateKST } from '@/lib/utils/date'
 
 // PATCH: 스태프가 배정된 체크리스트를 수행 완료 (전후 사진, 비고 포함)
@@ -48,9 +49,19 @@ export async function PATCH(
 
     const supabase = await createServerSupabaseClient()
 
+    // RLS 우회: checklist, store_assign, attendance 조회/수정 시 서비스 역할 사용
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+    let adminSupabase: ReturnType<typeof createClient> | null = null
+    if (serviceRoleKey && supabaseUrl) {
+      adminSupabase = createClient(supabaseUrl, serviceRoleKey, {
+        auth: { autoRefreshToken: false, persistSession: false },
+      })
+    }
+    const dataClient = adminSupabase || supabase
+
     // 배정된 체크리스트인지 확인
-    // assigned_user_id가 본인이거나, 또는 assigned_user_id가 null이면서 본인이 배정받은 매장의 체크리스트인 경우
-    const { data: checklist, error: checklistError } = await supabase
+    const { data: checklist, error: checklistError } = await dataClient
       .from('checklist')
       .select('id, assigned_user_id, store_id')
       .eq('id', params.id)
@@ -61,13 +72,11 @@ export async function PATCH(
       return NextResponse.json({ error: '체크리스트를 찾을 수 없습니다.' }, { status: 404 })
     }
 
-    // 직접 배정된 경우
     const isDirectlyAssigned = checklist.assigned_user_id === user.id
-    
-    // assigned_user_id가 null이면서 본인이 배정받은 매장의 체크리스트인지 확인
+
     let isStoreAssigned = false
     if (!checklist.assigned_user_id) {
-      const { data: storeAssign, error: assignError } = await supabase
+      const { data: storeAssign, error: assignError } = await dataClient
         .from('store_assign')
         .select('id')
         .eq('user_id', user.id)
@@ -89,7 +98,7 @@ export async function PATCH(
     const yesterday = getYesterdayDateKST()
     
     // 체크리스트의 work_date 확인
-    const { data: checklistCheck, error: checkError } = await supabase
+    const { data: checklistCheck, error: checkError } = await dataClient
       .from('checklist')
       .select('work_date, store_id')
       .eq('id', params.id)
@@ -100,7 +109,7 @@ export async function PATCH(
     }
 
     // 해당 매장의 출근 기록 조회 (오늘 또는 어제 날짜)
-    const { data: attendance, error: attendanceError } = await supabase
+    const { data: attendance, error: attendanceError } = await dataClient
       .from('attendance')
       .select('work_date')
       .eq('user_id', user.id)
@@ -198,7 +207,7 @@ export async function PATCH(
       hasAfterPhoto: items.some((item: any) => item.after_photo_url)
     })
 
-    const { error, data } = await supabase
+    const { error, data } = await dataClient
       .from('checklist')
       .update(updateData)
       .eq('id', params.id)

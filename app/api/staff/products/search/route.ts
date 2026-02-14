@@ -1,11 +1,10 @@
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { getServerUser } from '@/lib/supabase/server'
+import { createClient } from '@supabase/supabase-js'
 import { NextRequest, NextResponse } from 'next/server'
 
-// 바코드 정규화 함수 (모든 공백, 특수문자 제거, 숫자만 남기기)
 function normalizeBarcode(barcode: string | null | undefined): string | null {
   if (!barcode) return null
-  // 모든 공백, 작은따옴표, 큰따옴표, 특수문자 제거하고 숫자만 남기기
   const normalized = barcode.replace(/\s+/g, '').replace(/'/g, '').replace(/"/g, '').replace(/[^\d]/g, '')
   return normalized.length > 0 ? normalized : null
 }
@@ -14,7 +13,8 @@ export async function GET(request: NextRequest) {
   try {
     const user = await getServerUser()
 
-    if (!user || user.role !== 'staff') {
+    const allowedRoles = ['staff', 'subcontract_individual', 'subcontract_company']
+    if (!user || !allowedRoles.includes(user.role)) {
       return NextResponse.json(
         { error: '권한이 없습니다.' },
         { status: 403 }
@@ -22,6 +22,15 @@ export async function GET(request: NextRequest) {
     }
 
     const supabase = await createServerSupabaseClient()
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+    const dataClient =
+      serviceRoleKey && supabaseUrl
+        ? createClient(supabaseUrl, serviceRoleKey, {
+            auth: { autoRefreshToken: false, persistSession: false },
+          })
+        : supabase
+
     const { searchParams } = new URL(request.url)
     const barcode = searchParams.get('barcode')
     const name = searchParams.get('name')
@@ -34,8 +43,7 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    // 매장 배정 확인
-    const { data: storeAssignment, error: assignError } = await supabase
+    const { data: storeAssignment, error: assignError } = await dataClient
       .from('store_assign')
       .select('store_id')
       .eq('store_id', storeId)
@@ -49,7 +57,7 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    let productQuery = supabase
+    let productQuery = dataClient
       .from('products')
       .select('id, name, barcode, image_url, category_1, category_2')
       .is('deleted_at', null)
@@ -68,7 +76,7 @@ export async function GET(request: NextRequest) {
       }
       
       // 정규화된 바코드로 검색 (DB에 저장된 값도 정규화되어 있으므로 정확 일치 검색)
-      const { data: products, error: productError } = await supabase
+      const { data: products, error: productError } = await dataClient
         .from('products')
         .select('id, name, barcode, image_url, category_1, category_2')
         .is('deleted_at', null)
@@ -86,7 +94,7 @@ export async function GET(request: NextRequest) {
       
       // 제품이 없으면 빈 배열 반환
       if (uniqueProducts.length === 0) {
-        const { count: totalProducts } = await supabase
+        const { count: totalProducts } = await dataClient
           .from('products')
           .select('*', { count: 'exact', head: true })
           .is('deleted_at', null)
@@ -102,7 +110,7 @@ export async function GET(request: NextRequest) {
       
       // 위치 정보 조회를 위해 productIds 설정
       const productIds = uniqueProducts.map((p: any) => p.id)
-      const { data: locations, error: locationError } = await supabase
+      const { data: locations, error: locationError } = await dataClient
         .from('store_product_locations')
         .select('product_id, vending_machine_number, position_number, stock_quantity, is_available')
         .eq('store_id', storeId)
@@ -169,7 +177,7 @@ export async function GET(request: NextRequest) {
         : normalizedSearch
       
       // 검색어의 앞부분으로 시작하는 제품들을 먼저 가져오기
-      const { data: allProducts, error: productError } = await supabase
+      const { data: allProducts, error: productError } = await dataClient
         .from('products')
         .select('id, name, barcode, image_url, category_1, category_2')
         .is('deleted_at', null)
@@ -191,7 +199,7 @@ export async function GET(request: NextRequest) {
       
       // 필터링된 제품이 없으면 빈 배열 반환
       if (filteredProducts.length === 0) {
-        const { count: totalProducts } = await supabase
+        const { count: totalProducts } = await dataClient
           .from('products')
           .select('*', { count: 'exact', head: true })
           .is('deleted_at', null)
@@ -207,7 +215,7 @@ export async function GET(request: NextRequest) {
       
       // 위치 정보 조회를 위해 productIds 설정
       const productIds = filteredProducts.map((p: any) => p.id)
-      const { data: locations, error: locationError } = await supabase
+      const { data: locations, error: locationError } = await dataClient
         .from('store_product_locations')
         .select('product_id, vending_machine_number, position_number, stock_quantity, is_available')
         .eq('store_id', storeId)

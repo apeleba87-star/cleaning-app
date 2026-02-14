@@ -3,7 +3,6 @@
 import { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { Attendance } from '@/types/db'
-import { getTodayDateKST, getYesterdayDateKST } from '@/lib/utils/date'
 
 interface AttendanceContextType {
   attendances: Attendance[]
@@ -35,47 +34,26 @@ export function AttendanceProvider({ children }: { children: ReactNode }) {
       return
     }
 
-    const today = getTodayDateKST()
-    const yesterday = getYesterdayDateKST()
-    
-    // 오늘과 어제 출근 기록을 병렬로 조회 (속도 최적화)
-    const [todayResult, yesterdayResult] = await Promise.all([
-      // 오늘 출근 기록 조회
-      supabase
-        .from('attendance')
-        .select('id, user_id, store_id, work_date, clock_in_at, clock_in_latitude, clock_in_longitude, clock_out_at, clock_out_latitude, clock_out_longitude, selfie_url, attendance_type, scheduled_date, problem_report_id, change_reason, created_at, updated_at')
-        .eq('user_id', session.user.id)
-        .eq('work_date', today),
-      // 어제 날짜의 미퇴근 기록도 조회 (출근일 변경 케이스 및 날짜 경계를 넘는 야간 근무 고려)
-      supabase
-        .from('attendance')
-        .select('id, user_id, store_id, work_date, clock_in_at, clock_in_latitude, clock_in_longitude, clock_out_at, clock_out_latitude, clock_out_longitude, selfie_url, attendance_type, scheduled_date, problem_report_id, change_reason, created_at, updated_at')
-        .eq('user_id', session.user.id)
-        .eq('work_date', yesterday)
-        .is('clock_out_at', null) // 미퇴근 기록만
-    ])
-    
-    const todayData = todayResult.data
-    const todayError = todayResult.error
-    const yesterdayData = yesterdayResult.data
-    const yesterdayError = yesterdayResult.error
-    
-    // 오늘 기록과 어제 미퇴근 기록 합치기
-    const allData = [
-      ...(todayData || []),
-      ...(yesterdayData || [])
-    ].sort((a, b) => {
-      const dateA = new Date(a.clock_in_at).getTime()
-      const dateB = new Date(b.clock_in_at).getTime()
-      return dateB - dateA // 내림차순 (최신순)
-    })
-    
-    if (todayError || yesterdayError) {
-      console.error('Error loading attendance:', todayError || yesterdayError)
-      setError((todayError || yesterdayError)?.message || '출근 정보를 불러올 수 없습니다.')
-    } else {
-      setAttendances(allData)
-      setError(null)
+    // RLS 우회: API를 통해 서비스 역할로 attendance 조회
+    try {
+      const res = await fetch('/api/staff/attendance')
+      const json = await res.json()
+
+      if (!res.ok) {
+        throw new Error(json.error || '출근 정보를 불러올 수 없습니다.')
+      }
+
+      if (json.success && json.data) {
+        setAttendances(json.data)
+        setError(null)
+      } else {
+        setAttendances([])
+        setError(json.error || null)
+      }
+    } catch (err: any) {
+      console.error('Error loading attendance:', err)
+      setError(err?.message || '출근 정보를 불러올 수 없습니다.')
+      setAttendances([])
     }
     setLoading(false)
   }, [])

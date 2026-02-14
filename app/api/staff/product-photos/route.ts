@@ -1,10 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient, getServerUser } from '@/lib/supabase/server'
+import { createClient } from '@supabase/supabase-js'
 
 export async function POST(request: NextRequest) {
   try {
     const user = await getServerUser()
-    if (!user || user.role !== 'staff') {
+    const allowedRoles = ['staff', 'subcontract_individual', 'subcontract_company']
+    if (!user || !allowedRoles.includes(user.role)) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
@@ -25,7 +27,6 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // 제품 입고(type='receipt')일 때 photo_type이 필요함
     if (type === 'receipt' && photo_type && photo_type !== 'product' && photo_type !== 'order_sheet') {
       return NextResponse.json(
         { error: 'photo_type must be either "product" or "order_sheet" when type is "receipt"' },
@@ -34,6 +35,24 @@ export async function POST(request: NextRequest) {
     }
 
     const supabase = await createServerSupabaseClient()
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+    const dataClient =
+      serviceRoleKey && supabaseUrl
+        ? createClient(supabaseUrl, serviceRoleKey, {
+            auth: { autoRefreshToken: false, persistSession: false },
+          })
+        : supabase
+
+    const { data: storeAssign } = await dataClient
+      .from('store_assign')
+      .select('id')
+      .eq('user_id', user.id)
+      .eq('store_id', store_id)
+      .maybeSingle()
+    if (!storeAssign) {
+      return NextResponse.json({ error: '해당 매장에 대한 권한이 없습니다.' }, { status: 403 })
+    }
 
     // product_photos 테이블에 저장
     // type='receipt'일 때는 photo_type으로 구분 (product 또는 order_sheet)
@@ -50,7 +69,7 @@ export async function POST(request: NextRequest) {
       insertData.photo_type = photo_type
     }
 
-    const { data, error } = await supabase
+    const { data, error } = await dataClient
       .from('product_photos')
       .insert(insertData)
       .select()

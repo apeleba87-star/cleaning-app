@@ -1,6 +1,7 @@
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { getServerUser } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
+import { createClient } from '@supabase/supabase-js'
 import ChecklistList from './ChecklistList'
 
 export default async function BusinessChecklistsPage() {
@@ -11,8 +12,19 @@ export default async function BusinessChecklistsPage() {
     redirect('/business/dashboard')
   }
 
+  // RLS 우회: 서비스 역할로 stores, users 조회
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+  let adminSupabase: ReturnType<typeof createClient> | null = null
+  if (serviceRoleKey && supabaseUrl) {
+    adminSupabase = createClient(supabaseUrl, serviceRoleKey, {
+      auth: { autoRefreshToken: false, persistSession: false },
+    })
+  }
+  const dataClient = adminSupabase || supabase
+
   // 회사 매장 목록 조회
-  const { data: stores, error: storesError } = await supabase
+  const { data: stores, error: storesError } = await dataClient
     .from('stores')
     .select('*')
     .eq('company_id', user.company_id)
@@ -29,7 +41,7 @@ export default async function BusinessChecklistsPage() {
   }
 
   // 회사 직원 목록 조회 (staff 역할만)
-  const { data: staffUsers, error: usersError } = await supabase
+  const { data: staffUsers, error: usersError } = await dataClient
     .from('users')
     .select('id, name, phone, role')
     .eq('company_id', user.company_id)

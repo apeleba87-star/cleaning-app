@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createServerSupabaseClient } from '@/lib/supabase/server'
-import { getServerUser } from '@/lib/supabase/server'
+import { createServerSupabaseClient, getServerUser } from '@/lib/supabase/server'
+import { handleApiError, UnauthorizedError, ForbiddenError } from '@/lib/errors'
 import { assertStoreActive } from '@/lib/store-active'
+import { createClient } from '@supabase/supabase-js'
 import { z } from 'zod'
 
 const createSupplyRequestSchema = z.object({
@@ -12,10 +13,76 @@ const createSupplyRequestSchema = z.object({
   photo_url: z.union([z.string().url(), z.null(), z.literal('')]).optional(),
 })
 
+/** GET: 물품 요청 목록 조회 (RLS 우회) */
+export async function GET(request: NextRequest) {
+  try {
+    const user = await getServerUser()
+    if (!user) throw new UnauthorizedError('Authentication required')
+
+    const allowedRoles = ['staff', 'subcontract_individual', 'subcontract_company']
+    if (!allowedRoles.includes(user.role)) {
+      return NextResponse.json({ error: '권한이 없습니다.' }, { status: 403 })
+    }
+
+    const supabase = await createServerSupabaseClient()
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+    const dataClient =
+      serviceRoleKey && supabaseUrl
+        ? createClient(supabaseUrl, serviceRoleKey, {
+            auth: { autoRefreshToken: false, persistSession: false },
+          })
+        : supabase
+
+    const { searchParams } = new URL(request.url)
+    const storeId = searchParams.get('store_id')
+
+    const oneWeekAgo = new Date()
+    oneWeekAgo.setDate(oneWeekAgo.getDate() - 7)
+    const oneWeekAgoStr = oneWeekAgo.toISOString().split('T')[0]
+
+    let nonCompletedQuery = dataClient
+      .from('supply_requests')
+      .select('*, stores:store_id (id, name)')
+      .eq('user_id', user.id)
+      .neq('status', 'completed')
+
+    let completedQuery = dataClient
+      .from('supply_requests')
+      .select('*, stores:store_id (id, name)')
+      .eq('user_id', user.id)
+      .eq('status', 'completed')
+      .gte('completed_at', oneWeekAgoStr)
+
+    if (storeId) {
+      nonCompletedQuery = nonCompletedQuery.eq('store_id', storeId)
+      completedQuery = completedQuery.eq('store_id', storeId)
+    }
+
+    const [nonCompletedRes, completedRes] = await Promise.all([
+      nonCompletedQuery.order('created_at', { ascending: false }),
+      completedQuery.order('completed_at', { ascending: false }),
+    ])
+
+    const nonCompleted = nonCompletedRes.data || []
+    const completed = completedRes.data || []
+    const allData = [...nonCompleted, ...completed].sort((a, b) => {
+      const aTime = (a.completed_at || a.created_at) || ''
+      const bTime = (b.completed_at || b.created_at) || ''
+      return new Date(bTime).getTime() - new Date(aTime).getTime()
+    })
+
+    return NextResponse.json({ success: true, data: allData })
+  } catch (err) {
+    return handleApiError(err)
+  }
+}
+
 export async function POST(request: NextRequest) {
   try {
     const user = await getServerUser()
-    if (!user || user.role !== 'staff') {
+    const allowedRoles = ['staff', 'subcontract_individual', 'subcontract_company']
+    if (!user || !allowedRoles.includes(user.role)) {
       return NextResponse.json({ error: '권한이 없습니다.' }, { status: 403 })
     }
 
@@ -34,9 +101,16 @@ export async function POST(request: NextRequest) {
     const validated = createSupplyRequestSchema.parse(body)
 
     const supabase = await createServerSupabaseClient()
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+    const dataClient =
+      serviceRoleKey && supabaseUrl
+        ? createClient(supabaseUrl, serviceRoleKey, {
+            auth: { autoRefreshToken: false, persistSession: false },
+          })
+        : supabase
 
-    // 매장 소유권 확인 (사용자가 해당 매장에 배정되어 있는지 확인)
-    const { data: storeAssignment, error: assignmentError } = await supabase
+    const { data: storeAssignment, error: assignmentError } = await dataClient
       .from('store_assign')
       .select('store_id')
       .eq('user_id', user.id)
@@ -49,9 +123,8 @@ export async function POST(request: NextRequest) {
         { status: 403 }
       )
     }
-    await assertStoreActive(supabase, validated.store_id)
+    await assertStoreActive(dataClient, validated.store_id)
 
-    // 물품 요청 생성
     const insertData: any = {
       store_id: validated.store_id,
       user_id: user.id,
@@ -63,7 +136,7 @@ export async function POST(request: NextRequest) {
       status: 'received', // 초기 상태는 '접수'
     }
 
-    const { data: supplyRequest, error: insertError } = await supabase
+    const { data: supplyRequest, error: insertError } = await dataClient
       .from('supply_requests')
       .insert(insertData)
       .select()

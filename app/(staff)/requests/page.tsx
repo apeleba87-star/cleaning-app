@@ -114,36 +114,20 @@ export default function RequestsPage() {
 
   const loadStoreAttendanceStatus = async (requestStoreIds?: string[]) => {
     try {
-      const supabase = createClient()
-      const {
-        data: { session },
-      } = await supabase.auth.getSession()
-
-      if (!session) return
+      const res = await fetch('/api/staff/attendance')
+      const json = await res.json()
+      if (!json.success || !json.data) return
 
       const today = getTodayDateKST()
-      const { data: attendances } = await supabase
-        .from('attendance')
-        .select('store_id, clock_out_at, work_date')
-        .eq('user_id', session.user.id)
-        .eq('work_date', today) // 오늘 날짜의 출근 기록만 조회
+      const attendances = json.data
 
       const attendanceMap = new Map<string, 'not_clocked_in' | 'clocked_in' | 'clocked_out'>()
-      
-      if (attendances) {
-        attendances.forEach((attendance: any) => {
-          // 오늘 날짜의 출근 기록만 처리
-          if (attendance.work_date === today) {
-            if (attendance.clock_out_at) {
-              attendanceMap.set(attendance.store_id, 'clocked_out')
-            } else {
-              attendanceMap.set(attendance.store_id, 'clocked_in')
-            }
-          }
-        })
-      }
+      attendances.forEach((attendance: any) => {
+        if (attendance.work_date === today) {
+          attendanceMap.set(attendance.store_id, attendance.clock_out_at ? 'clocked_out' : 'clocked_in')
+        }
+      })
 
-      // 요청에 있는 모든 매장에 대해 출근 상태 설정
       const allStoreIds = requestStoreIds || requests.map(r => r.store_id)
       allStoreIds.forEach(storeId => {
         if (!attendanceMap.has(storeId)) {

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient, getServerUser } from '@/lib/supabase/server'
+import { createClient } from '@supabase/supabase-js'
 import { assertBusinessFeature } from '@/lib/plan-features-server'
 import { assertStoreActive } from '@/lib/store-active'
 
@@ -24,9 +25,20 @@ export async function GET(request: NextRequest) {
 
     const supabase = await createServerSupabaseClient()
 
+    // RLS 우회: stores, checklist 조회 시 서비스 역할 사용
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+    let adminSupabase: ReturnType<typeof createClient> | null = null
+    if (serviceRoleKey && supabaseUrl) {
+      adminSupabase = createClient(supabaseUrl, serviceRoleKey, {
+        auth: { autoRefreshToken: false, persistSession: false },
+      })
+    }
+    const dataClient = adminSupabase || supabase
+
     // business_owner인 경우 자신의 회사 매장만 조회
     if (user.role === 'business_owner' && storeId) {
-      const { data: storeCheck } = await supabase
+      const { data: storeCheck } = await dataClient
         .from('stores')
         .select('company_id')
         .eq('id', storeId)
@@ -39,7 +51,7 @@ export async function GET(request: NextRequest) {
 
     // 업체 관리자 앱에서는 템플릿 체크리스트만 조회
     // 템플릿: work_date가 '2000-01-01'이고 assigned_user_id가 null
-    let query = supabase
+    let query = dataClient
       .from('checklist')
       .select('*')
       .eq('work_date', '2000-01-01') // 템플릿 날짜
@@ -92,9 +104,20 @@ export async function POST(request: NextRequest) {
 
     const supabase = await createServerSupabaseClient()
 
+    // RLS 우회: stores, checklist 조회/생성 시 서비스 역할 사용
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+    let adminSupabase: ReturnType<typeof createClient> | null = null
+    if (serviceRoleKey && supabaseUrl) {
+      adminSupabase = createClient(supabaseUrl, serviceRoleKey, {
+        auth: { autoRefreshToken: false, persistSession: false },
+      })
+    }
+    const dataClient = adminSupabase || supabase
+
     // business_owner는 자신의 회사 매장만 생성 가능 + 비활성 매장 차단
     if (user.role === 'business_owner') {
-      const { data: storeCheck } = await supabase
+      const { data: storeCheck } = await dataClient
         .from('stores')
         .select('company_id')
         .eq('id', store_id)
@@ -104,13 +127,13 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: '권한이 없습니다.' }, { status: 403 })
       }
     }
-    await assertStoreActive(supabase, store_id)
+    await assertStoreActive(dataClient, store_id)
 
     // 템플릿 체크리스트 생성: work_date를 과거 날짜로 설정하여 템플릿임을 표시
     // 출근 시 이 템플릿을 복사하여 오늘 날짜로 생성
     const templateDate = '2000-01-01' // 템플릿임을 나타내는 과거 날짜
-    
-    const { data, error } = await supabase
+
+    const { data, error } = await dataClient
       .from('checklist')
       .insert({
         store_id,

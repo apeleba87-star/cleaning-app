@@ -76,240 +76,35 @@ export default function ChecklistClient() {
       return
     }
 
-    devLog('=== Checklist Load Debug ===')
-    devLog('User ID:', session.user.id)
-    devLog('Active Store IDs:', activeStoreIds)
-    devLog('Is Clocked In:', isClockedIn)
-    devLog('Attendance Loading:', attendanceLoading)
-
-    // 출근한 매장이 있으면 해당 매장들의 체크리스트만 조회
-    const today = getTodayDateKST() // 한국 시간대 기준 오늘 날짜
-    const yesterday = getYesterdayDateKST()
-    
-    devLog('Today (YYYY-MM-DD, KST):', today)
-    devLog('Current time:', new Date().toISOString())
-    
-    // 출근 중인 매장 목록 및 work_date 가져오기
-    let storeIdsToCheck: string[] = []
-    const storeWorkDates: Record<string, string> = {} // 매장별 work_date 매핑
-    
-    if (activeStoreIds && activeStoreIds.length > 0 && isClockedIn) {
-      // 출근 기록에서 각 매장의 work_date 조회
-      const { data: attendances } = await supabase
-        .from('attendance')
-        .select('store_id, work_date')
-        .eq('user_id', session.user.id)
-        .in('store_id', activeStoreIds)
-        .is('clock_out_at', null)
-        .or(`work_date.eq.${today},work_date.eq.${yesterday}`) // 오늘 또는 어제 날짜
-      
-      if (attendances) {
-        attendances.forEach((att: any) => {
-          storeIdsToCheck.push(att.store_id)
-          storeWorkDates[att.store_id] = att.work_date
-        })
-      }
-      
-      devLog('✅ Using active store IDs:', storeIdsToCheck)
-      devLog('✅ Store work dates:', storeWorkDates)
-    } else if (isClockedIn) {
-      // 출근 중이지만 activeStoreIds가 없는 경우 - API로 배정 매장 조회 (RLS 우회)
-      const assignRes = await fetch('/api/staff/assigned-stores')
-      const assignJson = await assignRes.json()
-      const assignedStores = assignJson.success && assignJson.data ? assignJson.data : []
-      storeIdsToCheck = assignedStores.map((s: { id: string }) => s.id)
-      
-      // 출근 기록에서 work_date 조회
-      if (storeIdsToCheck.length > 0) {
-        const { data: attendances } = await supabase
-          .from('attendance')
-          .select('store_id, work_date')
-          .eq('user_id', session.user.id)
-          .in('store_id', storeIdsToCheck)
-          .is('clock_out_at', null)
-          .or(`work_date.eq.${today},work_date.eq.${yesterday}`)
-        
-        if (attendances) {
-          attendances.forEach((att: any) => {
-            storeWorkDates[att.store_id] = att.work_date
-          })
-        }
-      }
-      
-      devLog('⚠️ Clocked in but no active stores - checking assigned stores:', storeIdsToCheck)
-    } else {
+    if (!isClockedIn) {
       devLog('❌ Not clocked in - cannot load checklists')
       setLoading(false)
       return
     }
 
-    // 출근한 매장에 대해 새로운 템플릿 체크리스트가 있는지 확인하고 자동 생성
-    if (storeIdsToCheck.length > 0) {
-      devLog('🔍 Checking for new template checklists for stores:', storeIdsToCheck)
-      
-      for (const storeId of storeIdsToCheck) {
-        try {
-          // 1. 해당 매장의 템플릿 체크리스트 조회
-          const { data: templateChecklists, error: templateError } = await supabase
-            .from('checklist')
-            .select('*')
-            .eq('store_id', storeId)
-            .is('assigned_user_id', null)
-            .eq('work_date', '2000-01-01') // 템플릿 날짜
+    // API로 체크리스트 조회 (RLS 우회 - attendance, checklist, stores)
+    try {
+      const res = await fetch('/api/staff/checklists')
+      const json = await res.json()
 
-          if (templateError) {
-            console.error(`❌ Error loading templates for store ${storeId}:`, templateError)
-            continue
-          }
-
-          if (!templateChecklists || templateChecklists.length === 0) {
-            devLog(`📋 No templates found for store ${storeId}`)
-            continue
-          }
-
-          devLog(`📋 Found ${templateChecklists.length} template(s) for store ${storeId}`)
-
-          // 2. 출근 기록의 work_date로 이미 생성된 체크리스트 확인
-          const workDateForStore = storeWorkDates[storeId] || today // 출근 기록의 work_date 사용, 없으면 today
-          const { data: existingChecklists } = await supabase
-            .from('checklist')
-            .select('id, user_id, store_id')
-            .eq('store_id', storeId)
-            .eq('work_date', workDateForStore) // 출근 기록의 work_date 사용
-            .eq('assigned_user_id', session.user.id)
-
-          // clockInAction과 동일한 방식으로 중복 체크
-          const existingTemplateIds = new Set(
-            (existingChecklists || []).map((c: any) => c.user_id + '_' + c.store_id)
-          )
-
-          // 3. 출근 기록의 work_date로 체크리스트 생성 (템플릿 기반, 중복 체크)
-          const checklistsToCreate = templateChecklists
-            .filter((template: any) => {
-              const templateKey = template.user_id + '_' + template.store_id
-              return !existingTemplateIds.has(templateKey)
-            })
-            .map((template: any) => ({
-              store_id: template.store_id,
-              user_id: template.user_id, // 원본 생성자 (업체 관리자)
-              assigned_user_id: session.user.id, // 현재 사용자에게 배정
-              // items 초기화: 체크 상태와 사진 URL을 초기값으로 설정
-              items: Array.isArray(template.items) ? template.items.map((item: any) => ({
-                ...item,
-                checked: false, // 체크 항목은 미완료 상태로 초기화
-                before_photo_url: null, // 관리전 사진 URL 초기화
-                after_photo_url: null, // 관리후 사진 URL 초기화
-                comment: item.comment || null, // 코멘트는 템플릿 값을 유지 (업체 관리자가 설정한 코멘트)
-              })) : [],
-              note: template.note,
-              requires_photos: template.requires_photos || false,
-              review_status: 'pending' as const,
-              work_date: workDateForStore, // 출근 기록의 work_date 사용 (야간 매장 고려)
-            }))
-
-          console.log(`📝 Checklists to create for store ${storeId}:`, checklistsToCreate.length)
-
-          if (checklistsToCreate.length > 0) {
-            const { data: createdData, error: createError } = await supabase
-              .from('checklist')
-              .insert(checklistsToCreate)
-              .select()
-
-            if (!createError) {
-              console.log(`✅ Checklists created for store ${storeId}:`, createdData?.length || 0)
-              console.log('Created checklist IDs:', createdData?.map((c: any) => c.id))
-            } else {
-              console.error(`❌ Error creating checklists for store ${storeId}:`, createError)
-              console.error('Error details:', {
-                message: createError.message,
-                code: createError.code,
-                details: createError.details,
-                hint: createError.hint
-              })
-            }
-          } else {
-            console.log(`ℹ️ All checklists already created for store ${storeId} today`)
-          }
-        } catch (error: any) {
-          console.error(`❌ Error processing templates for store ${storeId}:`, error)
-        }
+      if (!res.ok) {
+        throw new Error(json.error || '체크리스트를 불러올 수 없습니다.')
       }
-      
-      // 템플릿에서 체크리스트를 생성했으면 잠시 대기 후 계속 진행
-      // (Supabase가 새로 생성된 데이터를 인덱싱할 시간을 줌)
-      if (storeIdsToCheck.length > 0) {
-        await new Promise(resolve => setTimeout(resolve, 500))
-      }
-    }
 
-    // 출근 기록의 work_date에 해당하는 체크리스트 로드
-    let todayQuery = supabase
-      .from('checklist')
-      .select(`
-        *,
-        stores:store_id (
-          id,
-          name
-        )
-      `)
-
-    if (storeIdsToCheck.length > 0) {
-      // 각 매장의 work_date에 해당하는 체크리스트 조회
-      const workDates = Object.values(storeWorkDates).filter((date, index, self) => self.indexOf(date) === index)
-      if (workDates.length > 0) {
-        todayQuery = todayQuery
-          .in('store_id', storeIdsToCheck)
-          .in('work_date', workDates) // 출근 기록의 work_date들
-          .eq('assigned_user_id', session.user.id) // 본인에게 배정된 체크리스트만
-        console.log('✅ Filtering by store IDs and work dates:', storeIdsToCheck, workDates)
+      if (json.success && json.data) {
+        setChecklists(json.data.checklists || [])
+        setCompletedChecklists(json.data.completedChecklists || [])
+        setError(null)
+        devLog('✅ Loaded checklists:', json.data.checklists?.length || 0, 'completed:', json.data.completedChecklists?.length || 0)
       } else {
-        // work_date가 없는 경우 오늘/어제 날짜로 조회 (하위 호환성)
-        todayQuery = todayQuery
-          .in('store_id', storeIdsToCheck)
-          .or(`work_date.eq.${today},work_date.eq.${yesterday}`)
-          .eq('assigned_user_id', session.user.id)
-        console.log('✅ Filtering by store IDs and today/yesterday (fallback):', storeIdsToCheck)
+        setChecklists([])
+        setCompletedChecklists([])
       }
-    }
-
-    const { data: todayData, error: todayError } = await todayQuery.order('created_at', { ascending: false })
-
-    // 완료된 체크리스트 로드 (이전 날짜 포함)
-    let completedQuery = supabase
-      .from('checklist')
-      .select(`
-        *,
-        stores:store_id (
-          id,
-          name
-        )
-      `)
-
-    if (storeIdsToCheck.length > 0) {
-      completedQuery = completedQuery
-        .in('store_id', storeIdsToCheck)
-        .lte('work_date', today) // 오늘 이전 날짜 포함
-        .eq('assigned_user_id', session.user.id) // 본인에게 배정된 체크리스트만
-    }
-
-    const { data: allData, error: allError } = await completedQuery.order('work_date', { ascending: false })
-
-    if (todayError || allError) {
-      console.error('❌ Error loading checklists:', todayError || allError)
-      setError(`체크리스트를 불러오는 중 오류가 발생했습니다: ${(todayError || allError)?.message}`)
-    } else {
-      console.log('✅ Loaded today checklists:', todayData?.length || 0)
-      console.log('✅ Loaded all checklists:', allData?.length || 0)
-      
-      // 오늘 날짜의 체크리스트
-      setChecklists(todayData || [])
-      
-      // 완료된 체크리스트 (100% 완료된 것만)
-      const completed = (allData || []).filter((cl: Checklist) => {
-        const progress = calculateChecklistProgress(cl)
-        return progress.percentage === 100
-      })
-      setCompletedChecklists(completed)
+    } catch (err: any) {
+      console.error('❌ Error loading checklists:', err)
+      setError(err?.message || '체크리스트를 불러오는 중 오류가 발생했습니다.')
+      setChecklists([])
+      setCompletedChecklists([])
     }
     setLoading(false)
   }

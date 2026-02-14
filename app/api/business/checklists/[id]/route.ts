@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient, getServerUser } from '@/lib/supabase/server'
+import { createClient } from '@supabase/supabase-js'
 
 // PATCH: 체크리스트 수정 (업체관리자/플랫폼관리자)
 export async function PATCH(
@@ -25,8 +26,18 @@ export async function PATCH(
 
     const supabase = await createServerSupabaseClient()
 
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+    let adminSupabase: ReturnType<typeof createClient> | null = null
+    if (serviceRoleKey && supabaseUrl) {
+      adminSupabase = createClient(supabaseUrl, serviceRoleKey, {
+        auth: { autoRefreshToken: false, persistSession: false },
+      })
+    }
+    const dataClient = adminSupabase || supabase
+
     // 기존 체크리스트 조회
-    const { data: existingChecklist, error: fetchError } = await supabase
+    const { data: existingChecklist, error: fetchError } = await dataClient
       .from('checklist')
       .select('id, store_id')
       .eq('id', params.id)
@@ -38,8 +49,7 @@ export async function PATCH(
 
     // business_owner는 자신의 회사 매장만 수정 가능
     if (user.role === 'business_owner') {
-      // 체크리스트의 매장이 사용자의 회사에 속하는지 확인
-      const { data: existingStore, error: existingStoreError } = await supabase
+      const { data: existingStore, error: existingStoreError } = await dataClient
         .from('stores')
         .select('company_id')
         .eq('id', existingChecklist.store_id)
@@ -49,8 +59,7 @@ export async function PATCH(
         return NextResponse.json({ error: '권한이 없습니다.' }, { status: 403 })
       }
 
-      // 수정하려는 store_id도 권한 확인
-      const { data: newStore, error: newStoreError } = await supabase
+      const { data: newStore, error: newStoreError } = await dataClient
         .from('stores')
         .select('company_id')
         .eq('id', store_id)
@@ -72,7 +81,7 @@ export async function PATCH(
       // work_date와 assigned_user_id는 업데이트하지 않음 (템플릿 상태 유지 또는 기존 값 유지)
     }
     
-    const { data, error } = await supabase
+    const { data, error } = await dataClient
       .from('checklist')
       .update(updateData)
       .eq('id', params.id)
@@ -105,8 +114,18 @@ export async function DELETE(
 
     const supabase = await createServerSupabaseClient()
 
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+    let adminSupabase: ReturnType<typeof createClient> | null = null
+    if (serviceRoleKey && supabaseUrl) {
+      adminSupabase = createClient(supabaseUrl, serviceRoleKey, {
+        auth: { autoRefreshToken: false, persistSession: false },
+      })
+    }
+    const dataClient = adminSupabase || supabase
+
     // 기존 체크리스트 조회
-    const { data: existingChecklist, error: fetchError } = await supabase
+    const { data: existingChecklist, error: fetchError } = await dataClient
       .from('checklist')
       .select('id, store_id')
       .eq('id', params.id)
@@ -118,8 +137,7 @@ export async function DELETE(
 
     // business_owner는 자신의 회사 매장만 삭제 가능
     if (user.role === 'business_owner') {
-      // 체크리스트의 매장이 사용자의 회사에 속하는지 확인
-      const { data: storeCheck, error: storeCheckError } = await supabase
+      const { data: storeCheck, error: storeCheckError } = await dataClient
         .from('stores')
         .select('company_id')
         .eq('id', existingChecklist.store_id)
@@ -131,7 +149,7 @@ export async function DELETE(
     }
 
     // 체크리스트 삭제
-    const { error } = await supabase
+    const { error } = await dataClient
       .from('checklist')
       .delete()
       .eq('id', params.id)
