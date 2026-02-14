@@ -94,56 +94,17 @@ export async function clockInAction(
       calculated_work_date: workDate
     })
 
-    // 출근 중인 매장 확인 - 병렬 처리로 최적화
+    // 출근 중인 매장 확인 - 병렬 처리로 최적화 (dataClient 사용: store_assign RLS 무한재귀 회피)
     const [activeAttendanceResults, existingResults] = await Promise.allSettled([
-      // 출근 중인 매장 확인 (work_date, today, yesterday 병렬 조회)
       Promise.allSettled([
-        supabase
-          .from('attendance')
-          .select('id, store_id, clock_out_at, work_date')
-          .eq('user_id', user.id)
-          .eq('work_date', workDate)
-          .is('clock_out_at', null)
-          .maybeSingle(),
-        supabase
-          .from('attendance')
-          .select('id, store_id, clock_out_at, work_date')
-          .eq('user_id', user.id)
-          .eq('work_date', today)
-          .is('clock_out_at', null)
-          .maybeSingle(),
-        supabase
-          .from('attendance')
-          .select('id, store_id, clock_out_at, work_date')
-          .eq('user_id', user.id)
-          .eq('work_date', yesterday)
-          .is('clock_out_at', null)
-          .maybeSingle(),
+        dataClient.from('attendance').select('id, store_id, clock_out_at, work_date').eq('user_id', user.id).eq('work_date', workDate).is('clock_out_at', null).maybeSingle(),
+        dataClient.from('attendance').select('id, store_id, clock_out_at, work_date').eq('user_id', user.id).eq('work_date', today).is('clock_out_at', null).maybeSingle(),
+        dataClient.from('attendance').select('id, store_id, clock_out_at, work_date').eq('user_id', user.id).eq('work_date', yesterday).is('clock_out_at', null).maybeSingle(),
       ]),
-      // 동일 매장의 중복 출근 확인 (work_date, today, yesterday 병렬 조회)
       Promise.allSettled([
-        supabase
-          .from('attendance')
-          .select('id, work_date')
-          .eq('user_id', user.id)
-          .eq('store_id', validated.store_id)
-          .eq('work_date', workDate)
-          .maybeSingle(),
-        supabase
-          .from('attendance')
-          .select('id, work_date')
-          .eq('user_id', user.id)
-          .eq('store_id', validated.store_id)
-          .eq('work_date', today)
-          .maybeSingle(),
-        supabase
-          .from('attendance')
-          .select('id, work_date')
-          .eq('user_id', user.id)
-          .eq('store_id', validated.store_id)
-          .eq('work_date', yesterday)
-          .is('clock_out_at', null)
-          .maybeSingle(),
+        dataClient.from('attendance').select('id, work_date').eq('user_id', user.id).eq('store_id', validated.store_id).eq('work_date', workDate).maybeSingle(),
+        dataClient.from('attendance').select('id, work_date').eq('user_id', user.id).eq('store_id', validated.store_id).eq('work_date', today).maybeSingle(),
+        dataClient.from('attendance').select('id, work_date').eq('user_id', user.id).eq('store_id', validated.store_id).eq('work_date', yesterday).is('clock_out_at', null).maybeSingle(),
       ]),
     ])
 
@@ -192,8 +153,8 @@ export async function clockInAction(
       problem_report_id: validated.problem_report_id,
     })
 
-    // DECIMAL 타입 호환성을 위해 문자열로 변환
-    const { data, error } = await supabase
+    // DECIMAL 타입 호환성을 위해 문자열로 변환 (dataClient 사용: RLS 무한재귀 회피)
+    const { data, error } = await dataClient
       .from('attendance')
       .insert({
         user_id: user.id,
@@ -344,36 +305,20 @@ export async function clockOutAction(
     const today = getTodayDateKST()
     const yesterday = getYesterdayDateKST()
 
+    // RLS 우회: attendance/checklist 조회 시 dataClient 사용 (store_assign 무한재귀 회피)
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+    let adminSupabase: ReturnType<typeof createClient> | null = null
+    if (serviceRoleKey && supabaseUrl) {
+      adminSupabase = createClient(supabaseUrl, serviceRoleKey, { auth: { autoRefreshToken: false, persistSession: false } })
+    }
+    const dataClient = adminSupabase || supabase
+
     // 특정 매장의 출근 기록 찾기 - 병렬 처리로 최적화
     const attendanceResults = await Promise.allSettled([
-      // 오늘 날짜로 먼저 검색
-      supabase
-        .from('attendance')
-        .select('id, clock_out_at, store_id, work_date')
-        .eq('user_id', user.id)
-        .eq('store_id', store_id)
-        .eq('work_date', today)
-        .is('clock_out_at', null)
-        .maybeSingle(),
-      // 어제 날짜의 미퇴근 기록 확인 (날짜 경계를 넘는 야간 근무 고려)
-      supabase
-        .from('attendance')
-        .select('id, clock_out_at, store_id, work_date')
-        .eq('user_id', user.id)
-        .eq('store_id', store_id)
-        .eq('work_date', yesterday)
-        .is('clock_out_at', null)
-        .maybeSingle(),
-      // work_date와 관계없이 해당 매장의 미퇴근 기록 확인 (야간 매장 고려)
-      supabase
-        .from('attendance')
-        .select('id, clock_out_at, store_id, work_date')
-        .eq('user_id', user.id)
-        .eq('store_id', store_id)
-        .is('clock_out_at', null)
-        .order('clock_in_at', { ascending: false })
-        .limit(1)
-        .maybeSingle(),
+      dataClient.from('attendance').select('id, clock_out_at, store_id, work_date').eq('user_id', user.id).eq('store_id', store_id).eq('work_date', today).is('clock_out_at', null).maybeSingle(),
+      dataClient.from('attendance').select('id, clock_out_at, store_id, work_date').eq('user_id', user.id).eq('store_id', store_id).eq('work_date', yesterday).is('clock_out_at', null).maybeSingle(),
+      dataClient.from('attendance').select('id, clock_out_at, store_id, work_date').eq('user_id', user.id).eq('store_id', store_id).is('clock_out_at', null).order('clock_in_at', { ascending: false }).limit(1).maybeSingle(),
     ])
 
     // 결과 중 첫 번째로 찾은 데이터 사용
@@ -395,7 +340,7 @@ export async function clockOutAction(
 
     // 퇴근 전 체크리스트 완료 여부 확인 (출근일 기준으로 조회)
     const checklistWorkDate = attendance.data.work_date
-    const { data: checklists, error: checklistError } = await supabase
+    const { data: checklists, error: checklistError } = await dataClient
       .from('checklist')
       .select('id, items')
       .eq('store_id', store_id)
@@ -446,8 +391,8 @@ export async function clockOutAction(
       location: validated.location,
     })
 
-    // DECIMAL 타입 호환성을 위해 문자열로 변환
-    const { data, error } = await supabase
+    // DECIMAL 타입 호환성을 위해 문자열로 변환 (dataClient 사용: RLS 무한재귀 회피)
+    const { data, error } = await dataClient
       .from('attendance')
       .update({
         clock_out_at: new Date().toISOString(),
