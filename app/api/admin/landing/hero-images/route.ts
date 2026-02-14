@@ -7,9 +7,14 @@ import { createClient } from '@supabase/supabase-js'
 export async function GET(request: NextRequest) {
   try {
     const supabase = await createServerSupabaseClient()
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+    const dataClient = serviceRoleKey && supabaseUrl
+      ? createClient(supabaseUrl, serviceRoleKey, { auth: { autoRefreshToken: false, persistSession: false } })
+      : supabase
 
     // 공개 조회이므로 인증 불필요
-    const { data: images, error } = await supabase
+    const { data: images, error } = await dataClient
       .from('hero_images')
       .select('*')
       .eq('is_active', true)
@@ -59,9 +64,14 @@ export async function DELETE(request: NextRequest) {
     }
 
     const supabase = await createServerSupabaseClient()
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+    const dataClient = serviceRoleKey && supabaseUrl
+      ? createClient(supabaseUrl, serviceRoleKey, { auth: { autoRefreshToken: false, persistSession: false } })
+      : supabase
 
     // 이미지 정보 조회
-    const { data: image, error: fetchError } = await supabase
+    const { data: image, error: fetchError } = await dataClient
       .from('hero_images')
       .select('image_url')
       .eq('id', imageId)
@@ -75,28 +85,18 @@ export async function DELETE(request: NextRequest) {
     }
 
     // Storage에서 파일 삭제
-    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-
     if (serviceRoleKey && supabaseUrl) {
-      const adminSupabase = createClient(supabaseUrl, serviceRoleKey, {
-        auth: {
-          autoRefreshToken: false,
-          persistSession: false,
-        },
-      })
-
       // URL에서 파일 경로 추출
       const urlParts = image.image_url.split('/')
       const filePath = urlParts.slice(urlParts.indexOf('hero-images')).join('/')
 
-      await adminSupabase.storage
+      await dataClient.storage
         .from('cleaning-photos')
         .remove([filePath])
     }
 
     // DB에서 삭제 (soft delete: is_active = false)
-    const { error: deleteError } = await supabase
+    const { error: deleteError } = await dataClient
       .from('hero_images')
       .update({ is_active: false })
       .eq('id', imageId)
@@ -145,10 +145,15 @@ export async function PATCH(request: NextRequest) {
     }
 
     const supabase = await createServerSupabaseClient()
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+    const dataClient = serviceRoleKey && supabaseUrl
+      ? createClient(supabaseUrl, serviceRoleKey, { auth: { autoRefreshToken: false, persistSession: false } })
+      : supabase
 
     // 각 이미지의 순서 업데이트
     const updatePromises = images.map((img: { id: string; display_order: number }) =>
-      supabase
+      dataClient
         .from('hero_images')
         .update({ display_order: img.display_order })
         .eq('id', img.id)

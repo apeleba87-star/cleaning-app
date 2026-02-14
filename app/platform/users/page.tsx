@@ -7,13 +7,18 @@ import UserList from './UserList'
 export default async function PlatformUsersPage() {
   const user = await getServerUser()
   const supabase = await createServerSupabaseClient()
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const dataClient = serviceRoleKey && supabaseUrl
+    ? createClient(supabaseUrl, serviceRoleKey, { auth: { autoRefreshToken: false, persistSession: false } })
+    : supabase
 
   if (!user || user.role !== 'platform_admin') {
     redirect('/platform/dashboard')
   }
 
-  // 모든 사용자 조회
-  const { data: users, error: usersError } = await supabase
+  // 모든 사용자 조회 (dataClient로 RLS 우회)
+  const { data: users, error: usersError } = await dataClient
     .from('users')
     .select(`
       *,
@@ -25,21 +30,21 @@ export default async function PlatformUsersPage() {
     .order('created_at', { ascending: false })
 
   // 모든 매장 조회
-  const { data: stores, error: storesError } = await supabase
+  const { data: stores, error: storesError } = await dataClient
     .from('stores')
     .select('id, name, company_id')
     .is('deleted_at', null)
     .order('name')
 
   // 모든 회사 조회
-  const { data: companies, error: companiesError } = await supabase
+  const { data: companies, error: companiesError } = await dataClient
     .from('companies')
     .select('id, name')
     .is('deleted_at', null)
     .order('name')
 
   // 매장 배정 정보 조회 (platform_admin은 모든 배정 조회 가능)
-  const { data: storeAssigns, error: assignsError } = await supabase
+  const { data: storeAssigns, error: assignsError } = await dataClient
     .from('store_assign')
     .select('user_id, store_id')
 
@@ -69,9 +74,7 @@ export default async function PlatformUsersPage() {
 
   // auth.users에서 이메일 가져오기 (Service Role Key 사용)
   let usersWithEmail = users || []
-  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-  
+
   if (serviceRoleKey && supabaseUrl) {
     try {
       const adminSupabase = createClient(supabaseUrl, serviceRoleKey, {

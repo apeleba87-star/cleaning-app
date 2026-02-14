@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerUser } from '@/lib/supabase/server'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { createClient } from '@supabase/supabase-js'
 
 // 커스텀 페이지 조회
 export async function GET(
@@ -10,8 +11,13 @@ export async function GET(
   try {
     const supabase = await createServerSupabaseClient()
     const user = await getServerUser()
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+    const dataClient = serviceRoleKey && supabaseUrl
+      ? createClient(supabaseUrl, serviceRoleKey, { auth: { autoRefreshToken: false, persistSession: false } })
+      : supabase
 
-    const { data: page, error } = await supabase
+    const { data: page, error } = await dataClient
       .from('custom_pages')
       .select('*')
       .eq('id', params.id)
@@ -66,6 +72,11 @@ export async function PATCH(
     const { slug, title, content, meta_title, meta_description, is_published, is_active } = body
 
     const supabase = await createServerSupabaseClient()
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+    const dataClient = serviceRoleKey && supabaseUrl
+      ? createClient(supabaseUrl, serviceRoleKey, { auth: { autoRefreshToken: false, persistSession: false } })
+      : supabase
 
     // 슬러그 변경 시 중복 체크
     if (slug) {
@@ -76,7 +87,7 @@ export async function PATCH(
         )
       }
 
-      const { data: existing } = await supabase
+      const { data: existing } = await dataClient
         .from('custom_pages')
         .select('id')
         .eq('slug', slug)
@@ -105,7 +116,7 @@ export async function PATCH(
     if (is_published !== undefined) updateData.is_published = is_published
     if (is_active !== undefined) updateData.is_active = is_active
 
-    const { data: page, error } = await supabase
+    const { data: page, error } = await dataClient
       .from('custom_pages')
       .update(updateData)
       .eq('id', params.id)
@@ -150,9 +161,14 @@ export async function DELETE(
     }
 
     const supabase = await createServerSupabaseClient()
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+    const dataClient = serviceRoleKey && supabaseUrl
+      ? createClient(supabaseUrl, serviceRoleKey, { auth: { autoRefreshToken: false, persistSession: false } })
+      : supabase
 
     // Soft delete (is_active = false)
-    const { error } = await supabase
+    const { error } = await dataClient
       .from('custom_pages')
       .update({ is_active: false, updated_by: user.id })
       .eq('id', params.id)

@@ -1,6 +1,7 @@
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerUser } from '@/lib/supabase/server'
+import { createClient } from '@supabase/supabase-js'
 
 export async function PATCH(
   request: NextRequest,
@@ -26,6 +27,11 @@ export async function PATCH(
     } = body
 
     const supabase = await createServerSupabaseClient()
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+    const dataClient = serviceRoleKey && supabaseUrl
+      ? createClient(supabaseUrl, serviceRoleKey, { auth: { autoRefreshToken: false, persistSession: false } })
+      : supabase
 
     const updateData: Record<string, unknown> = {
       updated_at: new Date().toISOString(),
@@ -43,7 +49,7 @@ export async function PATCH(
     if (basic_units !== undefined) updateData.basic_units = Math.max(0, Number(basic_units) || 0)
     if (premium_units !== undefined) updateData.premium_units = Math.max(0, Number(premium_units) || 0)
 
-    const { data: company, error } = await supabase
+    const { data: company, error } = await dataClient
       .from('companies')
       .update(updateData)
       .eq('id', id)

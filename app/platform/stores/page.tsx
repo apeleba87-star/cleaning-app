@@ -1,17 +1,23 @@
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { getServerUser } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
+import { createClient } from '@supabase/supabase-js'
 import StoreList from './StoreList'
 
 export default async function PlatformStoresPage() {
   const user = await getServerUser()
   const supabase = await createServerSupabaseClient()
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const dataClient = serviceRoleKey && supabaseUrl
+    ? createClient(supabaseUrl, serviceRoleKey, { auth: { autoRefreshToken: false, persistSession: false } })
+    : supabase
 
   if (!user || user.role !== 'platform_admin') {
     redirect('/platform/dashboard')
   }
 
-  const { data: stores, error: storesError } = await supabase
+  const { data: stores, error: storesError } = await dataClient
     .from('stores')
     .select(`
       *,
@@ -24,7 +30,7 @@ export default async function PlatformStoresPage() {
     .order('created_at', { ascending: false })
 
   // 모든 회사 조회
-  const { data: companies, error: companiesError } = await supabase
+  const { data: companies, error: companiesError } = await dataClient
     .from('companies')
     .select('id, name')
     .is('deleted_at', null)

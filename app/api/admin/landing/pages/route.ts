@@ -1,15 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerUser } from '@/lib/supabase/server'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { createClient } from '@supabase/supabase-js'
 
 // 커스텀 페이지 목록 조회
 export async function GET(request: NextRequest) {
   try {
     const user = await getServerUser()
     const supabase = await createServerSupabaseClient()
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+    const dataClient = serviceRoleKey && supabaseUrl
+      ? createClient(supabaseUrl, serviceRoleKey, { auth: { autoRefreshToken: false, persistSession: false } })
+      : supabase
 
     // 관리자는 모든 페이지 조회, 일반 사용자는 발행된 페이지만 조회
-    let query = supabase.from('custom_pages').select('*')
+    let query = dataClient.from('custom_pages').select('*')
 
     if (user && (user.role === 'admin' || user.role === 'platform_admin')) {
       // 관리자는 모든 페이지 조회
@@ -73,9 +79,14 @@ export async function POST(request: NextRequest) {
     }
 
     const supabase = await createServerSupabaseClient()
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+    const dataClient = serviceRoleKey && supabaseUrl
+      ? createClient(supabaseUrl, serviceRoleKey, { auth: { autoRefreshToken: false, persistSession: false } })
+      : supabase
 
     // 중복 체크
-    const { data: existing } = await supabase
+    const { data: existing } = await dataClient
       .from('custom_pages')
       .select('id')
       .eq('slug', slug)
@@ -89,7 +100,7 @@ export async function POST(request: NextRequest) {
     }
 
     // 페이지 생성
-    const { data: page, error } = await supabase
+    const { data: page, error } = await dataClient
       .from('custom_pages')
       .insert({
         slug,

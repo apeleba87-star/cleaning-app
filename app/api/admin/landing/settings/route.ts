@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerUser } from '@/lib/supabase/server'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { createClient } from '@supabase/supabase-js'
 
 // 랜딩 페이지 설정 조회
 export async function GET(request: NextRequest) {
@@ -9,8 +10,13 @@ export async function GET(request: NextRequest) {
     const section = searchParams.get('section') // 특정 섹션만 조회 가능
 
     const supabase = await createServerSupabaseClient()
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+    const dataClient = serviceRoleKey && supabaseUrl
+      ? createClient(supabaseUrl, serviceRoleKey, { auth: { autoRefreshToken: false, persistSession: false } })
+      : supabase
 
-    let query = supabase.from('landing_page_settings').select('*')
+    let query = dataClient.from('landing_page_settings').select('*')
 
     if (section) {
       query = query.eq('section', section)
@@ -70,9 +76,14 @@ export async function POST(request: NextRequest) {
     }
 
     const supabase = await createServerSupabaseClient()
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+    const dataClient = serviceRoleKey && supabaseUrl
+      ? createClient(supabaseUrl, serviceRoleKey, { auth: { autoRefreshToken: false, persistSession: false } })
+      : supabase
 
     // upsert (있으면 업데이트, 없으면 생성)
-    const { data, error } = await supabase
+    const { data, error } = await dataClient
       .from('landing_page_settings')
       .upsert(
         {

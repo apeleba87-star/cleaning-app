@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerUser } from '@/lib/supabase/server'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { createClient } from '@supabase/supabase-js'
 
 // 관리 사례 목록 조회 (관리자용 - 비활성 포함)
 export async function GET(request: NextRequest) {
@@ -15,8 +16,13 @@ export async function GET(request: NextRequest) {
     }
 
     const supabase = await createServerSupabaseClient()
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+    const dataClient = serviceRoleKey && supabaseUrl
+      ? createClient(supabaseUrl, serviceRoleKey, { auth: { autoRefreshToken: false, persistSession: false } })
+      : supabase
 
-    const { data: caseStudies, error } = await supabase
+    const { data: caseStudies, error } = await dataClient
       .from('case_studies')
       .select('*')
       .order('display_order', { ascending: true })
@@ -65,12 +71,17 @@ export async function POST(request: NextRequest) {
     }
 
     const supabase = await createServerSupabaseClient()
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+    const dataClient = serviceRoleKey && supabaseUrl
+      ? createClient(supabaseUrl, serviceRoleKey, { auth: { autoRefreshToken: false, persistSession: false } })
+      : supabase
 
     // 빈 문자열을 null로 변환
     const cleanedThumbnailUrl = thumbnail_url && thumbnail_url.trim() ? thumbnail_url.trim() : null
     const cleanedDescription = description && description.trim() ? description.trim() : null
 
-    const { data: caseStudy, error } = await supabase
+    const { data: caseStudy, error } = await dataClient
       .from('case_studies')
       .insert({
         title: title.trim(),

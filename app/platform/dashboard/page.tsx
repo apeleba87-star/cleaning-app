@@ -1,24 +1,30 @@
 import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { createClient } from '@supabase/supabase-js'
 import Link from 'next/link'
 import { SessionReplacedToast } from './SessionReplacedToast'
 
 export default async function PlatformAdminDashboardPage() {
   const supabase = await createServerSupabaseClient()
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const dataClient = serviceRoleKey && supabaseUrl
+    ? createClient(supabaseUrl, serviceRoleKey, { auth: { autoRefreshToken: false, persistSession: false } })
+    : supabase
 
-  // 전체 통계 조회
+  // 전체 통계 조회 (dataClient로 RLS 우회)
   const [companiesResult, storesResult, usersResult, issuesResult] = await Promise.all([
-    supabase
+    dataClient
       .from('companies')
       .select('id', { count: 'exact', head: true })
       .is('deleted_at', null),
-    supabase
+    dataClient
       .from('stores')
       .select('id', { count: 'exact', head: true })
       .is('deleted_at', null),
-    supabase
+    dataClient
       .from('users')
       .select('id', { count: 'exact', head: true }),
-    supabase
+    dataClient
       .from('issues')
       .select('id', { count: 'exact', head: true })
       .gte('created_at', new Date(new Date().setDate(1)).toISOString()),

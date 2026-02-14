@@ -1,10 +1,23 @@
 import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { getServerUser } from '@/lib/supabase/server'
+import { redirect } from 'next/navigation'
+import { createClient } from '@supabase/supabase-js'
 import CompanyList from './CompanyList'
 
 export default async function CompaniesPage() {
+  const user = await getServerUser()
   const supabase = await createServerSupabaseClient()
+
+  if (!user || user.role !== 'platform_admin') {
+    redirect('/platform/dashboard')
+  }
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const dataClient = serviceRoleKey && supabaseUrl
+    ? createClient(supabaseUrl, serviceRoleKey, { auth: { autoRefreshToken: false, persistSession: false } })
+    : supabase
   
-  const { data: companies, error } = await supabase
+  const { data: companies, error } = await dataClient
     .from('companies')
     .select(`
       *,
