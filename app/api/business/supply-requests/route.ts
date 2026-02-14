@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient, getServerUser } from '@/lib/supabase/server'
+import { createClient } from '@supabase/supabase-js'
 
 // 물품요청 목록 조회 (아카이브 필터링 지원)
 export async function GET(request: NextRequest) {
@@ -13,15 +14,19 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Company ID is required' }, { status: 400 })
     }
 
+    const supabase = await createServerSupabaseClient()
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+    const dataClient = serviceRoleKey && supabaseUrl
+      ? createClient(supabaseUrl, serviceRoleKey, { auth: { autoRefreshToken: false, persistSession: false } })
+      : supabase
+
     const { searchParams } = new URL(request.url)
     const includeArchived = searchParams.get('include_archived') === 'true'
     const archivedOnly = searchParams.get('archived_only') === 'true'
     const allPeriod = searchParams.get('all_period') === 'true'
 
-    const supabase = await createServerSupabaseClient()
-
-    // 회사 매장 ID 목록
-    const { data: companyStores } = await supabase
+    const { data: companyStores } = await dataClient
       .from('stores')
       .select('id, name')
       .eq('company_id', user.company_id)
@@ -44,7 +49,7 @@ export async function GET(request: NextRequest) {
     // 아카이브 필터링
     if (archivedOnly) {
       // 아카이브된 것만
-      const { data, error } = await supabase
+      const { data, error } = await dataClient
         .from('supply_requests')
         .select(`
           *,
@@ -67,7 +72,7 @@ export async function GET(request: NextRequest) {
       supplyRequests = data || []
     } else if (includeArchived || allPeriod) {
       // 아카이브 포함 (전체 기간 보기)
-      const { data, error } = await supabase
+      const { data, error } = await dataClient
         .from('supply_requests')
         .select(`
           *,
@@ -91,7 +96,7 @@ export async function GET(request: NextRequest) {
       // 기본: 아카이브되지 않은 것만
       // 완료되지 않은 요청 + 완료 후 14일 이내 요청
       const [nonCompletedResult, recentCompletedResult] = await Promise.all([
-        supabase
+        dataClient
           .from('supply_requests')
           .select(`
             *,
@@ -103,7 +108,7 @@ export async function GET(request: NextRequest) {
           .in('store_id', storeIds)
           .neq('status', 'completed')
           .order('created_at', { ascending: false }),
-        supabase
+        dataClient
           .from('supply_requests')
           .select(`
             *,

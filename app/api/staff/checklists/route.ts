@@ -112,7 +112,7 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    const workDates = [...new Set(Object.values(storeWorkDates))]
+    const workDates = Array.from(new Set(Object.values(storeWorkDates)))
     const workDatesFilter = workDates.length > 0 ? workDates : [today, yesterday]
 
     // 오늘 진행 중인 체크리스트

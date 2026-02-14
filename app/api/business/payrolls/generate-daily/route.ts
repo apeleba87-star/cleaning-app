@@ -43,8 +43,7 @@ export async function POST(request: NextRequest) {
       },
     })
 
-    // 일당 직원 조회
-    const { data: dailyEmployees, error: employeesError } = await supabase
+    const { data: dailyEmployees, error: employeesError } = await adminSupabase
       .from('users')
       .select('id, name, pay_amount')
       .eq('company_id', user.company_id)
@@ -70,8 +69,7 @@ export async function POST(request: NextRequest) {
     const lastDay = new Date(year, month, 0).getDate()
     const endDate = `${pay_period}-${String(lastDay).padStart(2, '0')}`
 
-    // 이미 생성된 인건비 확인 (중복 방지)
-    const { data: existingPayrolls } = await supabase
+    const { data: existingPayrolls } = await adminSupabase
       .from('payrolls')
       .select('id, worker_name, pay_period')
       .eq('company_id', user.company_id)

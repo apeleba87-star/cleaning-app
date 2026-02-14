@@ -20,6 +20,12 @@ export async function GET(request: NextRequest) {
     }
 
     const supabase = await createServerSupabaseClient()
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+    const dataClient = serviceRoleKey && supabaseUrl
+      ? createClient(supabaseUrl, serviceRoleKey, { auth: { autoRefreshToken: false, persistSession: false } })
+      : supabase
+
     const { searchParams } = new URL(request.url)
     const storeId = searchParams.get('store_id')
     const startDate = searchParams.get('start_date')
@@ -29,7 +35,7 @@ export async function GET(request: NextRequest) {
     const limit = parseInt(searchParams.get('limit') || '1000') // 기본값 1000 (페이지네이션 없을 때)
     const offset = (page - 1) * limit
 
-    let query = supabase
+    let query = dataClient
       .from('expenses')
       .select(`
         *,
@@ -113,11 +119,15 @@ export async function POST(request: NextRequest) {
     }
 
     const supabase = await createServerSupabaseClient()
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+    if (!serviceRoleKey || !supabaseUrl) throw new Error('Server configuration error')
+    const adminSupabase = createClient(supabaseUrl, serviceRoleKey, {
+      auth: { autoRefreshToken: false, persistSession: false },
+    })
 
-    // 매장이 회사에 속해있는지 확인 (store_id가 있는 경우)
-    // store_id가 빈 문자열이 아닌 유효한 값인지 확인
     if (store_id && store_id.trim() !== '') {
-      const { data: store } = await supabase
+      const { data: store } = await adminSupabase
         .from('stores')
         .select('id, company_id')
         .eq('id', store_id)
@@ -129,21 +139,6 @@ export async function POST(request: NextRequest) {
         throw new ForbiddenError('Store not found or access denied')
       }
     }
-
-    // RLS 우회를 위해 서비스 역할 키 사용
-    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-    
-    if (!serviceRoleKey || !supabaseUrl) {
-      throw new Error('Server configuration error: Service role key is required')
-    }
-
-    const adminSupabase = createClient(supabaseUrl, serviceRoleKey, {
-      auth: {
-        autoRefreshToken: false,
-        persistSession: false,
-      },
-    })
 
     const { data: expense, error } = await adminSupabase
       .from('expenses')

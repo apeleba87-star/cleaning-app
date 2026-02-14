@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 
 interface Announcement {
@@ -42,72 +41,18 @@ export default function AnnouncementsPage() {
 
   const loadAnnouncements = async () => {
     try {
-      const supabase = createClient()
-      const { data: { session } } = await supabase.auth.getSession()
+      const res = await fetch('/api/business/announcements')
+      const json = await res.json()
 
-      if (!session) {
-        router.push('/login')
-        return
-      }
-
-      const { data: userData } = await supabase
-        .from('users')
-        .select('company_id')
-        .eq('id', session.user.id)
-        .single()
-
-      if (!userData?.company_id) {
+      if (!res.ok) {
+        if (res.status === 401) router.push('/login')
         setLoading(false)
         return
       }
 
-      // 공지사항 조회
-      const { data: announcementsData, error } = await supabase
-        .from('announcements')
-        .select(`
-          *,
-          created_by_user:users!announcements_created_by_fkey(name)
-        `)
-        .eq('company_id', userData.company_id)
-        .order('created_at', { ascending: false })
-
-      if (error) {
-        console.error('Error loading announcements:', error)
-        setLoading(false)
-        return
+      if (json.success && json.data) {
+        setAnnouncements(json.data)
       }
-
-      // 각 공지사항의 읽음 현황 조회
-      const announcementsWithStats = await Promise.all(
-        (announcementsData || []).map(async (announcement: any) => {
-          // 직원용 공지사항의 경우 직원 수 확인
-          // 점주용 공지사항의 경우 점주(manager) 수 확인
-          const { data: usersData } = await supabase
-            .from('users')
-            .select('id')
-            .eq('company_id', userData.company_id)
-            .eq('role', announcement.type === 'staff' ? 'staff' : 'manager')
-
-          const totalUsers = usersData?.length || 0
-
-          // 읽음 표시 수 확인
-          const { data: readsData } = await supabase
-            .from('announcement_reads')
-            .select('id')
-            .eq('announcement_id', announcement.id)
-
-          const readCount = readsData?.length || 0
-
-          return {
-            ...announcement,
-            created_by_name: announcement.created_by_user?.name || '알 수 없음',
-            read_count: readCount,
-            total_users: totalUsers,
-          }
-        })
-      )
-
-      setAnnouncements(announcementsWithStats)
       setLoading(false)
     } catch (error) {
       console.error('Error loading announcements:', error)
@@ -122,38 +67,19 @@ export default function AnnouncementsPage() {
     }
 
     try {
-      const supabase = createClient()
-      const { data: { session } } = await supabase.auth.getSession()
-
-      if (!session) {
-        alert('로그인이 필요합니다.')
-        return
-      }
-
-      const { data: userData } = await supabase
-        .from('users')
-        .select('company_id')
-        .eq('id', session.user.id)
-        .single()
-
-      if (!userData?.company_id) {
-        alert('회사 정보를 찾을 수 없습니다.')
-        return
-      }
-
-      const { error } = await supabase
-        .from('announcements')
-        .insert({
-          company_id: userData.company_id,
+      const res = await fetch('/api/business/announcements', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
           title: formData.title.trim(),
           content: formData.content.trim(),
           type: formData.type,
-          created_by: session.user.id,
-        })
+        }),
+      })
 
-      if (error) {
-        console.error('Error creating announcement:', error)
-        alert('공지사항 생성에 실패했습니다.')
+      const json = await res.json()
+      if (!res.ok) {
+        alert(json.error || '공지사항 생성에 실패했습니다.')
         return
       }
 
@@ -168,43 +94,17 @@ export default function AnnouncementsPage() {
 
   const handleViewReadStatus = async (announcement: Announcement) => {
     try {
-      const supabase = createClient()
-      const { data: { session } } = await supabase.auth.getSession()
-
-      if (!session) return
-
-      const { data: userData } = await supabase
-        .from('users')
-        .select('company_id')
-        .eq('id', session.user.id)
-        .single()
-
-      if (!userData?.company_id) return
-
-      // 해당 타입의 모든 사용자 조회
-      const { data: usersData } = await supabase
-        .from('users')
-        .select('id, name')
-        .eq('company_id', userData.company_id)
-        .eq('role', announcement.type === 'staff' ? 'staff' : 'manager')
-
-      // 읽음 표시 조회
-      const { data: readsData } = await supabase
-        .from('announcement_reads')
-        .select('user_id, read_at')
-        .eq('announcement_id', announcement.id)
-
-      const readsMap = new Map(
-        (readsData || []).map((read: any) => [read.user_id, read.read_at])
+      const res = await fetch(
+        `/api/business/announcements/read-status?announcement_id=${announcement.id}&type=${announcement.type}`
       )
+      const json = await res.json()
 
-      const statuses: ReadStatus[] = (usersData || []).map((user: any) => ({
-        user_id: user.id,
-        user_name: user.name,
-        read_at: readsMap.get(user.id) || null,
-      }))
+      if (!res.ok || !json.success) {
+        alert('확인 현황을 불러오는데 실패했습니다.')
+        return
+      }
 
-      setReadStatuses(statuses)
+      setReadStatuses(json.data || [])
       setSelectedAnnouncement(announcement)
       setShowReadStatusModal(true)
     } catch (error) {
@@ -217,15 +117,11 @@ export default function AnnouncementsPage() {
     if (!confirm('정말 삭제하시겠습니까?')) return
 
     try {
-      const supabase = createClient()
-      const { error } = await supabase
-        .from('announcements')
-        .delete()
-        .eq('id', id)
+      const res = await fetch(`/api/business/announcements?id=${id}`, { method: 'DELETE' })
+      const json = await res.json()
 
-      if (error) {
-        console.error('Error deleting announcement:', error)
-        alert('공지사항 삭제에 실패했습니다.')
+      if (!res.ok) {
+        alert(json.error || '공지사항 삭제에 실패했습니다.')
         return
       }
 

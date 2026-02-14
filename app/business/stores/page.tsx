@@ -1,11 +1,17 @@
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { getServerUser } from '@/lib/supabase/server'
+import { createClient } from '@supabase/supabase-js'
 import { redirect } from 'next/navigation'
 import StoreList from './StoreList'
 
 export default async function BusinessStoresPage() {
   const user = await getServerUser()
   const supabase = await createServerSupabaseClient()
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const dataClient = serviceRoleKey && supabaseUrl
+    ? createClient(supabaseUrl, serviceRoleKey, { auth: { autoRefreshToken: false, persistSession: false } })
+    : supabase
 
   if (!user || !user.company_id) {
     redirect('/business/dashboard')
@@ -15,8 +21,8 @@ export default async function BusinessStoresPage() {
     { data: companyPlan },
     { data: stores, error: storesError },
   ] = await Promise.all([
-    supabase.from('companies').select('premium_units').eq('id', user.company_id).single(),
-    supabase
+    dataClient.from('companies').select('premium_units').eq('id', user.company_id).single(),
+    dataClient
       .from('stores')
       .select(`
         *,
@@ -32,8 +38,7 @@ export default async function BusinessStoresPage() {
 
   const premiumUnits = Number(companyPlan?.premium_units ?? 0)
 
-  // 회사 프렌차이즈 조회
-  const { data: franchises, error: franchisesError } = await supabase
+  const { data: franchises, error: franchisesError } = await dataClient
     .from('franchises')
     .select('id, name')
     .eq('company_id', user.company_id)
@@ -41,8 +46,7 @@ export default async function BusinessStoresPage() {
     .eq('status', 'active')
     .order('name')
 
-  // 카테고리 템플릿 조회
-  const { data: categoryTemplates, error: templatesError } = await supabase
+  const { data: categoryTemplates, error: templatesError } = await dataClient
     .from('category_templates')
     .select('id, name, category')
     .eq('company_id', user.company_id)

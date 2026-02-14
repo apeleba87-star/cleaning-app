@@ -31,16 +31,13 @@ export async function GET(request: NextRequest) {
 
     let adminSupabase: any = null
     if (serviceRoleKey && supabaseUrl) {
-      const { createClient } = await import('@supabase/supabase-js')
       adminSupabase = createClient(supabaseUrl, serviceRoleKey, {
-        auth: {
-          autoRefreshToken: false,
-          persistSession: false,
-        },
+        auth: { autoRefreshToken: false, persistSession: false },
       })
     }
+    const dataClient = adminSupabase || supabase
 
-    let query = supabase
+    let query = dataClient
       .from('users')
       .select('*')
       .eq('employment_active', true)
@@ -49,7 +46,7 @@ export async function GET(request: NextRequest) {
       query = query.eq('company_id', user.company_id)
     } else if (user.role === 'franchise_manager') {
       // franchise_manager의 경우 franchise_id를 별도로 조회
-      const { data: userData, error: userDataError } = await supabase
+      const { data: userData, error: userDataError } = await dataClient
         .from('users')
         .select('franchise_id')
         .eq('id', user.id)
@@ -195,10 +192,15 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // franchise_id가 있으면 해당 프렌차이즈가 회사에 속하는지 확인
+    const supabase = await createServerSupabaseClient()
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+    const adminSupabase = (serviceRoleKey && supabaseUrl)
+      ? createClient(supabaseUrl, serviceRoleKey, { auth: { autoRefreshToken: false, persistSession: false } })
+      : supabase
+
     if (franchise_id) {
-      const supabase = await createServerSupabaseClient()
-      const { data: franchise, error: franchiseError } = await supabase
+      const { data: franchise, error: franchiseError } = await adminSupabase
         .from('franchises')
         .select('company_id')
         .eq('id', franchise_id)
@@ -252,32 +254,12 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Service role key를 사용하여 admin API 접근
-    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-    if (!serviceRoleKey) {
-      console.error('SUPABASE_SERVICE_ROLE_KEY is not set')
+    if (!serviceRoleKey || !supabaseUrl) {
       return NextResponse.json(
-        { error: '서버 설정 오류입니다. SUPABASE_SERVICE_ROLE_KEY 환경 변수가 설정되지 않았습니다.' },
+        { error: '서버 설정 오류입니다. 환경 변수가 설정되지 않았습니다.' },
         { status: 500 }
       )
     }
-
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-    if (!supabaseUrl) {
-      console.error('NEXT_PUBLIC_SUPABASE_URL is not set')
-      return NextResponse.json(
-        { error: '서버 설정 오류입니다. NEXT_PUBLIC_SUPABASE_URL 환경 변수가 설정되지 않았습니다.' },
-        { status: 500 }
-      )
-    }
-
-    // Service role client 생성
-    const adminSupabase = createClient(supabaseUrl, serviceRoleKey, {
-      auth: {
-        autoRefreshToken: false,
-        persistSession: false,
-      },
-    })
 
     // 0. 이메일 중복 체크
     const trimmedEmail = email.trim().toLowerCase()

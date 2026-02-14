@@ -27,6 +27,12 @@ export async function GET(request: NextRequest) {
     }
 
     const supabase = await createServerSupabaseClient()
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+    const dataClient = serviceRoleKey && supabaseUrl
+      ? createClient(supabaseUrl, serviceRoleKey, { auth: { autoRefreshToken: false, persistSession: false } })
+      : supabase
+
     const { searchParams } = new URL(request.url)
     const userId = searchParams.get('user_id')
     const period = searchParams.get('period')
@@ -34,8 +40,7 @@ export async function GET(request: NextRequest) {
     const limit = parseInt(searchParams.get('limit') || '1000') // 기본값 1000 (페이지네이션 없을 때)
     const offset = (page - 1) * limit
 
-    // user_id가 null인 경우도 조회할 수 있도록 left join 사용
-    let query = supabase
+    let query = dataClient
       .from('payrolls')
       .select(`
         *,
@@ -134,7 +139,7 @@ export async function GET(request: NextRequest) {
             role = 'subcontract_company'
           } else if (subcontract.worker_id) {
             // users 테이블에서 가져온 경우 (subcontract_company 역할)
-            const { data: user } = await supabase
+            const { data: user } = await dataClient
               .from('users')
               .select('id, name, role')
               .eq('id', subcontract.worker_id)
@@ -160,7 +165,7 @@ export async function GET(request: NextRequest) {
             role = 'subcontract_individual'
           } else if (subcontract.worker_id) {
             // worker_id만 있고 worker 관계가 없는 경우 (직접 조회)
-            const { data: user } = await supabase
+            const { data: user } = await dataClient
               .from('users')
               .select('id, name, role')
               .eq('id', subcontract.worker_id)
@@ -260,6 +265,12 @@ export async function POST(request: NextRequest) {
     }
 
     const supabase = await createServerSupabaseClient()
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+    if (!serviceRoleKey || !supabaseUrl) throw new Error('Server configuration error')
+    const adminSupabase = createClient(supabaseUrl, serviceRoleKey, {
+      auth: { autoRefreshToken: false, persistSession: false },
+    })
 
     // 정규 직원 또는 일당 근로자 중 하나만 있어야 함
     if (user_id && worker_name) {
@@ -284,8 +295,7 @@ export async function POST(request: NextRequest) {
         throw new Error('amount is required for regular employees')
       }
 
-      // 직원이 회사에 속해있는지 확인
-      const { data: targetUser } = await supabase
+      const { data: targetUser } = await adminSupabase
         .from('users')
         .select('id, company_id')
         .eq('id', user_id)
@@ -330,24 +340,6 @@ export async function POST(request: NextRequest) {
         }
       }
     }
-
-    // Service role key를 사용하여 RLS 우회 (일당 근로자도 저장 가능하도록)
-    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-    if (!serviceRoleKey) {
-      throw new Error('Server configuration error')
-    }
-
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-    if (!supabaseUrl) {
-      throw new Error('Server configuration error')
-    }
-
-    const adminSupabase = createClient(supabaseUrl, serviceRoleKey, {
-      auth: {
-        autoRefreshToken: false,
-        persistSession: false,
-      },
-    })
 
     const { data: payroll, error } = await adminSupabase
       .from('payrolls')

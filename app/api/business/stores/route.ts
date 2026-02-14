@@ -2,6 +2,18 @@ import { NextRequest } from 'next/server'
 import { createServerSupabaseClient, getServerUser } from '@/lib/supabase/server'
 import { assertBusinessFeature, getCompanyPlan, getCompanyStoreCount } from '@/lib/plan-features-server'
 import { handleApiError, UnauthorizedError, ForbiddenError } from '@/lib/errors'
+import { createClient } from '@supabase/supabase-js'
+
+function getDataClient(supabase: Awaited<ReturnType<typeof createServerSupabaseClient>>) {
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+  if (serviceRoleKey && supabaseUrl) {
+    return createClient(supabaseUrl, serviceRoleKey, {
+      auth: { autoRefreshToken: false, persistSession: false },
+    })
+  }
+  return supabase
+}
 
 // 매장 목록 조회
 export async function GET(request: NextRequest) {
@@ -25,8 +37,9 @@ export async function GET(request: NextRequest) {
     }
 
     const supabase = await createServerSupabaseClient()
+    const dataClient = getDataClient(supabase)
 
-    const { data: stores, error } = await supabase
+    const { data: stores, error } = await dataClient
       .from('stores')
       .select('id, name, service_amount, payment_method, payment_day')
       .eq('company_id', user.company_id)
@@ -107,10 +120,10 @@ export async function POST(request: NextRequest) {
     }
 
     const supabase = await createServerSupabaseClient()
+    const dataClient = getDataClient(supabase)
 
-    // franchise_id가 있으면 해당 프렌차이즈가 회사에 속하는지 확인
     if (franchise_id) {
-      const { data: franchise } = await supabase
+      const { data: franchise } = await dataClient
         .from('franchises')
         .select('company_id')
         .eq('id', franchise_id)
@@ -153,7 +166,7 @@ export async function POST(request: NextRequest) {
       insertData.schedule_data = schedule_data
     }
 
-    const { data: store, error } = await supabase
+    const { data: store, error } = await dataClient
       .from('stores')
       .insert(insertData)
       .select()

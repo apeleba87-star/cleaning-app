@@ -20,6 +20,12 @@ export async function GET(request: NextRequest) {
     }
 
     const supabase = await createServerSupabaseClient()
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+    const dataClient = serviceRoleKey && supabaseUrl
+      ? createClient(supabaseUrl, serviceRoleKey, { auth: { autoRefreshToken: false, persistSession: false } })
+      : supabase
+
     const { searchParams } = new URL(request.url)
     const revenueId = searchParams.get('revenue_id')
     const period = searchParams.get('period') // YYYY-MM 형식
@@ -27,7 +33,7 @@ export async function GET(request: NextRequest) {
     const limit = parseInt(searchParams.get('limit') || '1000') // 기본값 1000 (페이지네이션 없을 때)
     const offset = (page - 1) * limit
 
-    let query = supabase
+    let query = dataClient
       .from('receipts')
       .select(`
         *,
@@ -51,7 +57,7 @@ export async function GET(request: NextRequest) {
     } else if (period) {
       // 새로운 로직: period로 필터링 (해당 기간의 revenue에 연결된 수금만 조회)
       // 먼저 해당 기간의 revenue_id 목록 가져오기
-      const { data: revenues } = await supabase
+      const { data: revenues } = await dataClient
         .from('revenues')
         .select('id')
         .eq('company_id', user.company_id)
@@ -128,9 +134,14 @@ export async function POST(request: NextRequest) {
     }
 
     const supabase = await createServerSupabaseClient()
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+    if (!serviceRoleKey || !supabaseUrl) throw new Error('Server configuration error')
+    const adminSupabase = createClient(supabaseUrl, serviceRoleKey, {
+      auth: { autoRefreshToken: false, persistSession: false },
+    })
 
-    // 매출이 회사에 속해있는지 확인
-    const { data: revenue } = await supabase
+    const { data: revenue } = await adminSupabase
       .from('revenues')
       .select('id, company_id, amount')
       .eq('id', revenue_id)
@@ -141,26 +152,6 @@ export async function POST(request: NextRequest) {
     if (!revenue) {
       throw new ForbiddenError('Revenue not found or access denied')
     }
-
-    // RLS 우회를 위해 서비스 역할 키 사용
-    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-    
-    if (!serviceRoleKey || !supabaseUrl) {
-      console.error('[Receipts API] Missing environment variables:', {
-        hasServiceRoleKey: !!serviceRoleKey,
-        hasSupabaseUrl: !!supabaseUrl,
-        nodeEnv: process.env.NODE_ENV,
-      })
-      throw new Error('Server configuration error: Service role key is required')
-    }
-
-    const adminSupabase = createClient(supabaseUrl, serviceRoleKey, {
-      auth: {
-        autoRefreshToken: false,
-        persistSession: false,
-      },
-    })
 
     console.log('[Receipts API] Creating receipt:', {
       revenue_id,

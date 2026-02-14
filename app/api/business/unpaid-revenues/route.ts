@@ -1,27 +1,24 @@
 import { NextRequest } from 'next/server'
 import { createServerSupabaseClient, getServerUser } from '@/lib/supabase/server'
+import { createClient } from '@supabase/supabase-js'
 import { handleApiError, UnauthorizedError, ForbiddenError } from '@/lib/errors'
 
-// 미수금 목록 조회 (최적화: 한 번의 쿼리로 모든 데이터 조회)
+// 미수금 목록 조회
 export async function GET(request: NextRequest) {
   try {
     const user = await getServerUser()
-    if (!user) {
-      throw new UnauthorizedError('Authentication required')
-    }
-
-    if (user.role !== 'business_owner') {
-      throw new ForbiddenError('Only business owners can view unpaid revenues')
-    }
-
-    if (!user.company_id) {
-      throw new ForbiddenError('Company ID is required')
-    }
+    if (!user) throw new UnauthorizedError('Authentication required')
+    if (user.role !== 'business_owner') throw new ForbiddenError('Only business owners can view unpaid revenues')
+    if (!user.company_id) throw new ForbiddenError('Company ID is required')
 
     const supabase = await createServerSupabaseClient()
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+    const dataClient = serviceRoleKey && supabaseUrl
+      ? createClient(supabaseUrl, serviceRoleKey, { auth: { autoRefreshToken: false, persistSession: false } })
+      : supabase
 
-    // 모든 매출 조회 (매장 정보 포함)
-    const { data: revenues, error: revenuesError } = await supabase
+    const { data: revenues, error: revenuesError } = await dataClient
       .from('revenues')
       .select(`
         id,
@@ -51,7 +48,7 @@ export async function GET(request: NextRequest) {
 
     // 모든 수금 조회 (한 번에)
     const revenueIds = revenues.map(r => r.id)
-    const { data: receipts, error: receiptsError } = await supabase
+    const { data: receipts, error: receiptsError } = await dataClient
       .from('receipts')
       .select('revenue_id, amount')
       .in('revenue_id', revenueIds)
