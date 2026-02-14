@@ -1,28 +1,31 @@
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { getServerUser } from '@/lib/supabase/server'
+import { createClient } from '@supabase/supabase-js'
 import { redirect } from 'next/navigation'
 import RequestsPageClient from './RequestsPageClient'
 
 export default async function BusinessRequestsPage() {
   const user = await getServerUser()
   const supabase = await createServerSupabaseClient()
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const dataClient = serviceRoleKey && supabaseUrl
+    ? createClient(supabaseUrl, serviceRoleKey, { auth: { autoRefreshToken: false, persistSession: false } })
+    : supabase
 
   if (!user || !user.company_id) {
     redirect('/business/dashboard')
   }
 
-  // 아카이브 기준: 완료 후 30일 경과
   const thirtyDaysAgo = new Date()
   thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
   const thirtyDaysAgoISO = thirtyDaysAgo.toISOString()
 
-  // 물품요청: completed가 아닌 것들 + completed인 경우 14일 이내만
   const fourteenDaysAgo = new Date()
   fourteenDaysAgo.setDate(fourteenDaysAgo.getDate() - 14)
   const fourteenDaysAgoISO = fourteenDaysAgo.toISOString().split('T')[0]
 
-  // 병렬 쿼리 실행: stores 먼저 조회 후 requests, supply_requests 동시 조회
-  const storesResult = await supabase
+  const storesResult = await dataClient
     .from('stores')
     .select('id, name')
     .eq('company_id', user.company_id)
@@ -50,8 +53,7 @@ export default async function BusinessRequestsPage() {
     // 두 개의 쿼리로 분리: 완료되지 않은 요청 + 완료 후 30일 이내 요청
     // 1. 일반 요청 (아카이브 필터는 쿼리 결과에서 처리)
     (async () => {
-      // 완료되지 않은 요청
-      let { data: nonCompleted, error: nonCompletedError } = await supabase
+      let { data: nonCompleted, error: nonCompletedError } = await dataClient
         .from('requests')
         .select(`
           *,
@@ -72,8 +74,7 @@ export default async function BusinessRequestsPage() {
         return { data: null, error: nonCompletedError }
       }
 
-      // 완료 후 30일 이내 요청
-      let { data: recentCompleted, error: recentCompletedError } = await supabase
+      let { data: recentCompleted, error: recentCompletedError } = await dataClient
         .from('requests')
         .select(`
           *,
@@ -117,9 +118,8 @@ export default async function BusinessRequestsPage() {
       return { data: uniqueRequests, error: null }
     })(),
     
-    // 2. 물품요청 (completed 제외, 아카이브되지 않은 것만)
     (async () => {
-      let { data, error } = await supabase
+      let { data, error } = await dataClient
         .from('supply_requests')
         .select(`
           *,
@@ -137,7 +137,7 @@ export default async function BusinessRequestsPage() {
       // is_archived 컬럼 관련 에러인 경우 무시 (컬럼이 없을 수 있음)
       if (error?.message?.includes('is_archived') || error?.code === 'PGRST116') {
         // 컬럼 없이 재시도
-        const retry = await supabase
+        const retry = await dataClient
           .from('supply_requests')
           .select(`
             *,
@@ -161,9 +161,8 @@ export default async function BusinessRequestsPage() {
       return { data, error }
     })(),
     
-    // 3. 물품요청 (completed, 14일 이내, 아카이브되지 않은 것만)
     (async () => {
-      let { data, error } = await supabase
+      let { data, error } = await dataClient
         .from('supply_requests')
         .select(`
           *,
@@ -180,8 +179,7 @@ export default async function BusinessRequestsPage() {
 
       // is_archived 컬럼 관련 에러인 경우 무시 (컬럼이 없을 수 있음)
       if (error?.message?.includes('is_archived') || error?.code === 'PGRST116') {
-        // 컬럼 없이 재시도
-        const retry = await supabase
+        const retry = await dataClient
           .from('supply_requests')
           .select(`
             *,

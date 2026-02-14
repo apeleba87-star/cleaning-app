@@ -37,7 +37,7 @@ export async function GET(request: NextRequest) {
       .select('store_id')
       .eq('user_id', user.id)
 
-    const storeIds = [...new Set(storeAssignments?.map((a: any) => a.store_id) || [])]
+    const storeIds = Array.from(new Set(storeAssignments?.map((a: any) => a.store_id) || []))
     if (storeIds.length === 0) {
       return Response.json({
         success: true,

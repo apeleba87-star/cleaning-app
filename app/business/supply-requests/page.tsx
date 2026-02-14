@@ -1,18 +1,23 @@
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { getServerUser } from '@/lib/supabase/server'
+import { createClient } from '@supabase/supabase-js'
 import { redirect } from 'next/navigation'
 import SupplyRequestList from './SupplyRequestList'
 
 export default async function BusinessSupplyRequestsPage() {
   const user = await getServerUser()
   const supabase = await createServerSupabaseClient()
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const dataClient = serviceRoleKey && supabaseUrl
+    ? createClient(supabaseUrl, serviceRoleKey, { auth: { autoRefreshToken: false, persistSession: false } })
+    : supabase
 
   if (!user || !user.company_id) {
     redirect('/business/dashboard')
   }
 
-  // 회사 매장 ID 목록
-  const { data: companyStores } = await supabase
+  const { data: companyStores } = await dataClient
     .from('stores')
     .select('id, name')
     .eq('company_id', user.company_id)
@@ -26,8 +31,7 @@ export default async function BusinessSupplyRequestsPage() {
   fourteenDaysAgo.setDate(fourteenDaysAgo.getDate() - 14)
   const fourteenDaysAgoISO = fourteenDaysAgo.toISOString().split('T')[0] // YYYY-MM-DD 형식
   
-  // 먼저 completed가 아닌 모든 요청 조회
-  const { data: nonCompletedRequests, error: nonCompletedError } = await supabase
+  const { data: nonCompletedRequests, error: nonCompletedError } = await dataClient
     .from('supply_requests')
     .select(`
       *,
@@ -45,8 +49,7 @@ export default async function BusinessSupplyRequestsPage() {
     .order('created_at', { ascending: false })
     .limit(100)
 
-  // completed 상태인 요청 중 14일 이내만 조회
-  const { data: completedRequests, error: completedError } = await supabase
+  const { data: completedRequests, error: completedError } = await dataClient
     .from('supply_requests')
     .select(`
       *,
