@@ -30,14 +30,13 @@ export async function GET(request: NextRequest) {
     // RLS 우회: 서비스 역할로 store_assign, stores 조회
     const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-    let dataClient: ReturnType<typeof createClient>
+    let adminSupabase: ReturnType<typeof createClient> | null = null
     if (serviceRoleKey && supabaseUrl) {
-      dataClient = createClient(supabaseUrl, serviceRoleKey, {
+      adminSupabase = createClient(supabaseUrl, serviceRoleKey, {
         auth: { autoRefreshToken: false, persistSession: false },
       })
-    } else {
-      dataClient = supabase
     }
+    const dataClient = adminSupabase || supabase
 
     const { data: storeAssignments, error: assignError } = await dataClient
       .from('store_assign')

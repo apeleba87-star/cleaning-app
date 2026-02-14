@@ -414,6 +414,7 @@ export default function MobileDashboardPage() {
 
         setStores(storesData)
 
+        const today = getTodayDateKST()
         const storeIds = storesData.map(s => s.id)
 
         // 병렬로 데이터 로딩 (성능 최적화)

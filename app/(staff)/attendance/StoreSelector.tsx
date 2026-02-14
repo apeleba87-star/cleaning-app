@@ -14,7 +14,7 @@ interface StoreSelectorProps {
 }
 
 // StoreSelector에서 사용하는 최소 필드 타입
-type StoreSelectorStore = Pick<Store, 'id' | 'name' | 'company_id' | 'deleted_at' | 'management_days' | 'is_night_shift' | 'work_start_hour' | 'work_end_hour'>
+type StoreSelectorStore = Pick<Store, 'id' | 'name' | 'company_id' | 'deleted_at' | 'management_days' | 'is_night_shift' | 'work_start_hour' | 'work_end_hour' | 'service_active'>
 
 const isDev = process.env.NODE_ENV !== 'production'
 const devLog = (...args: any[]) => {
