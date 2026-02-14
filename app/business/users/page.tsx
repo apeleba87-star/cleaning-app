@@ -19,38 +19,34 @@ export default async function BusinessUsersPage() {
   let users: any[] = []
   let usersError: any = null
   
+  // RLS 우회: 서비스 역할로 users, stores, franchises, store_assign 등 조회
+  let adminSupabase: ReturnType<typeof createClient> | null = null
   if (serviceRoleKey && supabaseUrl) {
-    const adminSupabase = createClient(supabaseUrl, serviceRoleKey, {
-      auth: {
-        autoRefreshToken: false,
-        persistSession: false,
-      },
+    adminSupabase = createClient(supabaseUrl, serviceRoleKey, {
+      auth: { autoRefreshToken: false, persistSession: false },
     })
-    
-    // users 테이블에서 조회
-    const { data: usersData, error: queryError } = await supabase
-      .from('users')
-      .select('*')
-      .eq('company_id', user.company_id)
-      .order('created_at', { ascending: false })
-    
-    if (queryError) {
-      usersError = queryError
-    } else {
-      users = usersData || []
-      
-      // auth.users에서 이메일 가져오기
+  }
+  const dataClient = adminSupabase || supabase
+
+  // users 테이블에서 조회
+  const { data: usersData, error: queryError } = await dataClient
+    .from('users')
+    .select('*')
+    .eq('company_id', user.company_id)
+    .order('created_at', { ascending: false })
+
+  if (queryError) {
+    usersError = queryError
+  } else {
+    users = usersData || []
+    if (adminSupabase) {
       try {
         const { data: authUsersData, error: authError } = await adminSupabase.auth.admin.listUsers()
-        
         if (!authError && authUsersData?.users) {
           const emailMap = new Map<string, string>()
           authUsersData.users.forEach((authUser: any) => {
-            if (authUser.email) {
-              emailMap.set(authUser.id, authUser.email)
-            }
+            if (authUser.email) emailMap.set(authUser.id, authUser.email)
           })
-          
           users = users.map((u: any) => ({
             ...u,
             email: emailMap.get(u.id) || null,
@@ -60,19 +56,10 @@ export default async function BusinessUsersPage() {
         console.error('Error fetching auth users:', authErr)
       }
     }
-  } else {
-    // Service role key가 없으면 기본 조회
-    const { data: usersData, error: queryError } = await supabase
-      .from('users')
-      .select('*')
-      .eq('company_id', user.company_id)
-      .order('created_at', { ascending: false })
-    users = usersData || []
-    usersError = queryError
   }
 
   // 회사 매장 조회
-  const { data: stores, error: storesError } = await supabase
+  const { data: stores, error: storesError } = await dataClient
     .from('stores')
     .select('id, name')
     .eq('company_id', user.company_id)
@@ -80,7 +67,7 @@ export default async function BusinessUsersPage() {
     .order('name')
 
   // 회사 프렌차이즈 조회
-  const { data: franchises, error: franchisesError } = await supabase
+  const { data: franchises, error: franchisesError } = await dataClient
     .from('franchises')
     .select('id, name')
     .eq('company_id', user.company_id)
@@ -88,13 +75,13 @@ export default async function BusinessUsersPage() {
     .eq('status', 'active')
     .order('name')
 
-  // 매장 배정 정보 조회
-  const { data: storeAssigns, error: assignsError } = await supabase
+  // 매장 배정 정보 조회 (회사 사용자에 한해 필터링은 UserList 등에서)
+  const { data: storeAssigns, error: assignsError } = await dataClient
     .from('store_assign')
     .select('user_id, store_id')
 
   // 회사 프리미엄 결제 수 (프렌차이즈·매장관리자 등 프리미엄 기능 제어)
-  const { data: companyPlan } = await supabase
+  const { data: companyPlan } = await dataClient
     .from('companies')
     .select('premium_units')
     .eq('id', user.company_id)
