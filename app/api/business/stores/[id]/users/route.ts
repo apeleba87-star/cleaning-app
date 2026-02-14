@@ -1,9 +1,9 @@
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerUser } from '@/lib/supabase/server'
+import { createClient } from '@supabase/supabase-js'
 import { assertStoreActive } from '@/lib/store-active'
 
-// 매장에 배정된 사용자 조회
 export async function GET(
   request: NextRequest,
   { params }: { params: { id: string } }
@@ -11,6 +11,11 @@ export async function GET(
   try {
     const user = await getServerUser()
     const supabase = await createServerSupabaseClient()
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+    const dataClient = serviceRoleKey && supabaseUrl
+      ? createClient(supabaseUrl, serviceRoleKey, { auth: { autoRefreshToken: false, persistSession: false } })
+      : supabase
 
     if (!user || (user.role !== 'business_owner' && user.role !== 'franchise_manager' && user.role !== 'platform_admin')) {
       return NextResponse.json(
@@ -19,8 +24,7 @@ export async function GET(
       )
     }
 
-    // 매장 정보 확인
-    const { data: store, error: storeError } = await supabase
+    const { data: store, error: storeError } = await dataClient
       .from('stores')
       .select('id, company_id, franchise_id')
       .eq('id', params.id)
@@ -42,8 +46,7 @@ export async function GET(
     }
 
     if (user.role === 'franchise_manager') {
-      // franchise_manager의 경우 franchise_id를 별도로 조회
-      const { data: userData, error: userDataError } = await supabase
+      const { data: userData, error: userDataError } = await dataClient
         .from('users')
         .select('franchise_id')
         .eq('id', user.id)
@@ -57,8 +60,7 @@ export async function GET(
       }
     }
 
-    // 매장에 배정된 사용자 조회
-    const { data: assignments, error: assignError } = await supabase
+    const { data: assignments, error: assignError } = await dataClient
       .from('store_assign')
       .select(`
         user_id,
@@ -124,7 +126,6 @@ export async function GET(
   }
 }
 
-// 매장에 사용자 배정
 export async function PUT(
   request: NextRequest,
   { params }: { params: { id: string } }
@@ -132,6 +133,11 @@ export async function PUT(
   try {
     const user = await getServerUser()
     const supabase = await createServerSupabaseClient()
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+    const dataClient = serviceRoleKey && supabaseUrl
+      ? createClient(supabaseUrl, serviceRoleKey, { auth: { autoRefreshToken: false, persistSession: false } })
+      : supabase
 
     if (!user || (user.role !== 'business_owner' && user.role !== 'franchise_manager' && user.role !== 'platform_admin')) {
       return NextResponse.json(
@@ -140,8 +146,7 @@ export async function PUT(
       )
     }
 
-    // 매장 정보 확인
-    const { data: store, error: storeError } = await supabase
+    const { data: store, error: storeError } = await dataClient
       .from('stores')
       .select('id, company_id, franchise_id')
       .eq('id', params.id)
@@ -162,10 +167,9 @@ export async function PUT(
       )
     }
 
-    // franchise_manager의 경우 franchise_id를 별도로 조회하여 저장
     let userFranchiseId: string | null = null
     if (user.role === 'franchise_manager') {
-      const { data: userData, error: userDataError } = await supabase
+      const { data: userData, error: userDataError } = await dataClient
         .from('users')
         .select('franchise_id')
         .eq('id', user.id)
@@ -179,7 +183,7 @@ export async function PUT(
       }
       userFranchiseId = userData.franchise_id
     }
-    await assertStoreActive(supabase, params.id)
+    await assertStoreActive(dataClient, params.id)
 
     const body = await request.json()
     const { user_ids } = body
@@ -191,9 +195,8 @@ export async function PUT(
       )
     }
 
-    // 사용자들이 같은 회사/프렌차이즈에 속하는지 확인
     if (user_ids.length > 0) {
-      const { data: users, error: usersError } = await supabase
+      const { data: users, error: usersError } = await dataClient
         .from('users')
         .select('id, company_id, franchise_id')
         .in('id', user_ids)
@@ -224,8 +227,7 @@ export async function PUT(
       }
     }
 
-    // 기존 배정 삭제
-    const { error: deleteError } = await supabase
+    const { error: deleteError } = await dataClient
       .from('store_assign')
       .delete()
       .eq('store_id', params.id)
@@ -245,7 +247,7 @@ export async function PUT(
         user_id: userId,
       }))
 
-      const { error: insertError } = await supabase
+      const { error: insertError } = await dataClient
         .from('store_assign')
         .insert(assignments)
 

@@ -1,6 +1,7 @@
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerUser } from '@/lib/supabase/server'
+import { createClient } from '@supabase/supabase-js'
 
 export async function PUT(
   request: NextRequest,
@@ -27,10 +28,14 @@ export async function PUT(
     }
 
     const supabase = await createServerSupabaseClient()
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+    const dataClient = serviceRoleKey && supabaseUrl
+      ? createClient(supabaseUrl, serviceRoleKey, { auth: { autoRefreshToken: false, persistSession: false } })
+      : supabase
 
-    // business_owner와 franchise_manager는 자신의 회사 직원만 배정 가능
     if (user.role === 'business_owner' || user.role === 'franchise_manager') {
-      const { data: targetUser } = await supabase
+      const { data: targetUser } = await dataClient
         .from('users')
         .select('company_id')
         .eq('id', params.id)
@@ -43,9 +48,8 @@ export async function PUT(
         )
       }
 
-      // 배정하려는 매장이 모두 자신의 회사 매장인지 확인
       if ((user.role === 'business_owner' || user.role === 'franchise_manager') && store_ids.length > 0) {
-        const { data: stores } = await supabase
+        const { data: stores } = await dataClient
           .from('stores')
           .select('id, company_id')
           .in('id', store_ids)
@@ -60,8 +64,7 @@ export async function PUT(
       }
     }
 
-    // 기존 배정 삭제
-    const { error: deleteError } = await supabase
+    const { error: deleteError } = await dataClient
       .from('store_assign')
       .delete()
       .eq('user_id', params.id)
@@ -82,7 +85,7 @@ export async function PUT(
         store_id: storeId,
       }))
 
-      const { error: insertError } = await supabase
+      const { error: insertError } = await dataClient
         .from('store_assign')
         .insert(assignments)
 
