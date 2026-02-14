@@ -1,4 +1,5 @@
 import { NextRequest } from 'next/server'
+import { createClient } from '@supabase/supabase-js'
 import { createServerSupabaseClient, getServerUser } from '@/lib/supabase/server'
 import { handleApiError, UnauthorizedError, ForbiddenError } from '@/lib/errors'
 
@@ -19,7 +20,6 @@ export async function GET(
 
     const supabase = await createServerSupabaseClient()
 
-    // franchise_manager의 경우 franchise_id를 별도로 조회
     const { data: userData, error: userDataError } = await supabase
       .from('users')
       .select('franchise_id')
@@ -32,8 +32,14 @@ export async function GET(
 
     const userFranchiseId = userData.franchise_id
 
-    // 매장이 프렌차이즈에 속해있는지 확인
-    const { data: store, error } = await supabase
+    // RLS 우회: stores 조회 (API에서 franchise_id 검증 완료)
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+    const dataClient = (serviceRoleKey && supabaseUrl)
+      ? createClient(supabaseUrl, serviceRoleKey, { auth: { autoRefreshToken: false, persistSession: false } })
+      : supabase
+
+    const { data: store, error } = await dataClient
       .from('stores')
       .select('*')
       .eq('id', params.id)

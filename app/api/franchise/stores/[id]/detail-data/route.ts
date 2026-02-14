@@ -54,8 +54,8 @@ export async function GET(
       return NextResponse.json({ error: '시작일과 종료일이 필요합니다.' }, { status: 400 })
     }
 
-    // 매장이 프렌차이즈에 속해있는지 확인
-    const { data: store, error: storeError } = await supabase
+    // 매장이 프렌차이즈에 속해있는지 확인 (API에서 franchise_id 검증 완료)
+    const { data: store, error: storeError } = await dataClient
       .from('stores')
       .select('id, name, franchise_id')
       .eq('id', params.id)

@@ -14,6 +14,13 @@ export async function GET(
     }
 
     const supabase = await createServerSupabaseClient()
+
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+    const dataClient = (serviceRoleKey && supabaseUrl)
+      ? createClient(supabaseUrl, serviceRoleKey, { auth: { autoRefreshToken: false, persistSession: false } })
+      : supabase
+
     const { searchParams } = new URL(request.url)
     const startDate = searchParams.get('start_date')
     const endDate = searchParams.get('end_date')
@@ -22,8 +29,8 @@ export async function GET(
       return NextResponse.json({ error: '시작일과 종료일이 필요합니다.' }, { status: 400 })
     }
 
-    // 매장이 store_manager/manager(점주)에게 배정되어 있는지 확인
-    const { data: storeAssign, error: storeAssignError } = await supabase
+    // 매장이 store_manager/manager(점주)에게 배정되어 있는지 확인 (API에서 user_id 검증 완료)
+    const { data: storeAssign, error: storeAssignError } = await dataClient
       .from('store_assign')
       .select('id')
       .eq('user_id', user.id)
@@ -34,24 +41,13 @@ export async function GET(
       return NextResponse.json({ error: '매장을 찾을 수 없습니다.' }, { status: 404 })
     }
 
-    // RLS 정책 문제로 인해 attendance 조회 시 서비스 역할 키 사용
-    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-    let adminSupabase: ReturnType<typeof createClient> | null = null
-    if (serviceRoleKey && supabaseUrl) {
-      adminSupabase = createClient(supabaseUrl, serviceRoleKey, {
-        auth: { autoRefreshToken: false, persistSession: false },
-      })
-    }
-    const attendanceClient = adminSupabase || supabase
-
     const start = new Date(startDate)
     start.setHours(0, 0, 0, 0)
     const end = new Date(endDate)
     end.setHours(23, 59, 59, 999)
 
     // 1. 관리전후 사진 (체크리스트에서)
-    const { data: checklists } = await supabase
+    const { data: checklists } = await dataClient
       .from('checklist')
       .select('id, items, created_at, work_date')
       .eq('store_id', params.id)
@@ -60,7 +56,7 @@ export async function GET(
       .order('work_date', { ascending: false })
 
     // 1-2. 관리전후 사진 (cleaning_photos 테이블 - 업체관리자와 동일)
-    const { data: cleaningPhotos } = await supabase
+    const { data: cleaningPhotos } = await dataClient
       .from('cleaning_photos')
       .select('id, area_category, kind, photo_url, created_at')
       .eq('store_id', params.id)
@@ -150,7 +146,7 @@ export async function GET(
     const beforeAfterPhotosArray = Array.from(beforeAfterPhotosMap.values())
 
     // 2. 제품입고 및 보관 사진
-    const { data: productPhotos } = await supabase
+    const { data: productPhotos } = await dataClient
       .from('product_photos')
       .select('id, photo_urls, type, photo_type, description, created_at')
       .eq('store_id', params.id)
@@ -199,7 +195,7 @@ export async function GET(
     }
 
     // 3. 매장상황 (문제보고, 자판기 문제, 분실물)
-    const { data: problemReports } = await supabase
+    const { data: problemReports } = await dataClient
       .from('problem_reports')
       .select('id, title, description, photo_url, status, created_at, updated_at')
       .eq('store_id', params.id)
@@ -207,7 +203,7 @@ export async function GET(
       .lte('created_at', end.toISOString())
       .order('created_at', { ascending: false })
 
-    const { data: lostItems } = await supabase
+    const { data: lostItems } = await dataClient
       .from('lost_items')
       .select('id, type, description, photo_url, status, storage_location, created_at, updated_at')
       .eq('store_id', params.id)
@@ -216,7 +212,7 @@ export async function GET(
       .order('created_at', { ascending: false })
 
     // 4. 요청란
-    const { data: requests } = await supabase
+    const { data: requests } = await dataClient
       .from('requests')
       .select(`
         id,
@@ -247,7 +243,7 @@ export async function GET(
       .order('created_at', { ascending: false })
 
     // 5. 출퇴근 기록 (attendance)
-    const { data: attendances } = await attendanceClient
+    const { data: attendances } = await dataClient
       .from('attendance')
       .select('id, work_date, clock_in_at, clock_out_at, user_id, users:user_id(id, name)')
       .eq('store_id', params.id)

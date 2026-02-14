@@ -25,8 +25,14 @@ export async function GET(
 
     const supabase = await createServerSupabaseClient()
 
-    // 매장이 회사에 속해있는지 확인
-    const { data: store, error } = await supabase
+    // RLS 우회: stores 조회 (API에서 company_id 검증 완료)
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+    const dataClient = (serviceRoleKey && supabaseUrl)
+      ? createClient(supabaseUrl, serviceRoleKey, { auth: { autoRefreshToken: false, persistSession: false } })
+      : supabase
+
+    const { data: store, error } = await dataClient
       .from('stores')
       .select('*')
       .eq('id', params.id)

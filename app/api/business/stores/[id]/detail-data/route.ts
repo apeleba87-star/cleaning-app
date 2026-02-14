@@ -19,6 +19,18 @@ export async function GET(
     }
 
     const supabase = await createServerSupabaseClient()
+
+    // RLS 우회: stores, checklist 등 데이터 조회 시 서비스 역할 사용
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+    let adminSupabase: ReturnType<typeof createClient> | null = null
+    if (serviceRoleKey && supabaseUrl) {
+      adminSupabase = createClient(supabaseUrl, serviceRoleKey, {
+        auth: { autoRefreshToken: false, persistSession: false },
+      })
+    }
+    const dataClient = adminSupabase || supabase
+
     const { searchParams } = new URL(request.url)
     const startDate = searchParams.get('start_date')
     const endDate = searchParams.get('end_date')
@@ -27,8 +39,8 @@ export async function GET(
       return NextResponse.json({ error: '시작일과 종료일이 필요합니다.' }, { status: 400 })
     }
 
-    // 매장이 회사에 속해있는지 확인
-    const { data: store, error: storeError } = await supabase
+    // 매장이 회사에 속해있는지 확인 (API에서 company_id 검증 완료)
+    const { data: store, error: storeError } = await dataClient
       .from('stores')
       .select('id, name, company_id')
       .eq('id', params.id)
@@ -45,23 +57,6 @@ export async function GET(
     const end = new Date(endDate)
     end.setHours(23, 59, 59, 999)
 
-    // RLS 정책 문제로 인해 attendance 조회 시 서비스 역할 키 사용
-    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-    let adminSupabase: ReturnType<typeof createClient> | null = null
-    
-    if (serviceRoleKey && supabaseUrl) {
-      adminSupabase = createClient(supabaseUrl, serviceRoleKey, {
-        auth: {
-          autoRefreshToken: false,
-          persistSession: false,
-        },
-      })
-    }
-    
-    // attendance 테이블 조회용 클라이언트 (서비스 역할 키 우선 사용)
-    const attendanceClient = adminSupabase || supabase
-
     // 병렬 쿼리 실행: 모든 데이터를 동시에 조회
     const [
       checklistsResult,
@@ -73,7 +68,7 @@ export async function GET(
       attendanceResult,
     ] = await Promise.all([
       // 1. 관리전후 사진 (체크리스트에서)
-      supabase
+      dataClient
         .from('checklist')
         .select('id, items, created_at, work_date')
         .eq('store_id', params.id)
@@ -82,7 +77,7 @@ export async function GET(
         .order('work_date', { ascending: false }),
 
       // 1-2. 관리전후 사진 (cleaning_photos 테이블 - created_at 기준)
-      supabase
+      dataClient
         .from('cleaning_photos')
         .select('id, area_category, kind, photo_url, created_at')
         .eq('store_id', params.id)
@@ -92,7 +87,7 @@ export async function GET(
         .order('created_at', { ascending: false }),
 
       // 2. 제품입고 및 보관 사진
-      supabase
+      dataClient
         .from('product_photos')
         .select('id, photo_urls, type, photo_type, description, created_at')
         .eq('store_id', params.id)
@@ -101,7 +96,7 @@ export async function GET(
         .order('created_at', { ascending: false }),
 
       // 3. 매장상황 - 문제보고
-      supabase
+      dataClient
         .from('problem_reports')
         .select('id, title, description, photo_url, status, created_at, updated_at')
         .eq('store_id', params.id)
@@ -110,7 +105,7 @@ export async function GET(
         .order('created_at', { ascending: false }),
 
       // 4. 매장상황 - 분실물
-      supabase
+      dataClient
         .from('lost_items')
         .select('id, type, description, photo_url, status, storage_location, created_at, updated_at')
         .eq('store_id', params.id)
@@ -119,7 +114,7 @@ export async function GET(
         .order('created_at', { ascending: false }),
 
       // 5. 요청란
-      supabase
+      dataClient
         .from('requests')
         .select(`
           id,
@@ -149,7 +144,7 @@ export async function GET(
         .order('created_at', { ascending: false }),
 
       // 6. 출퇴근 기록 (attendance)
-      attendanceClient
+      dataClient
         .from('attendance')
         .select('id, work_date, clock_in_at, clock_out_at, user_id, users:user_id(id, name)')
         .eq('store_id', params.id)

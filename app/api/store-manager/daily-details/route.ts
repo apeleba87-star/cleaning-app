@@ -1,4 +1,5 @@
 import { NextRequest } from 'next/server'
+import { createClient } from '@supabase/supabase-js'
 import { createServerSupabaseClient, getServerUser } from '@/lib/supabase/server'
 import { handleApiError, UnauthorizedError, ForbiddenError } from '@/lib/errors'
 import { getTodayDateKST } from '@/lib/utils/date'
@@ -25,8 +26,14 @@ export async function GET(request: NextRequest) {
 
     const supabase = await createServerSupabaseClient()
 
-    // 점주가 관리하는 매장 목록 조회
-    const { data: storeAssignments, error: assignmentError } = await supabase
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+    const dataClient = (serviceRoleKey && supabaseUrl)
+      ? createClient(supabaseUrl, serviceRoleKey, { auth: { autoRefreshToken: false, persistSession: false } })
+      : supabase
+
+    // 점주가 관리하는 매장 목록 조회 (RLS 우회 - API에서 user_id 검증 완료)
+    const { data: storeAssignments, error: assignmentError } = await dataClient
       .from('store_assign')
       .select('store_id')
       .eq('user_id', user.id)
@@ -67,7 +74,7 @@ export async function GET(request: NextRequest) {
     const endDateUTC = new Date(`${date}T23:59:59+09:00`).toISOString()
 
     // 1-1. 관리 전후 사진 조회 (checklist 테이블의 work_date 기준)
-    const { data: checklists, error: checklistError } = await supabase
+    const { data: checklists, error: checklistError } = await dataClient
       .from('checklist')
       .select(`
         id,
@@ -119,7 +126,7 @@ export async function GET(request: NextRequest) {
     }
 
     // 1-2. 관리 전후 사진 조회 (cleaning_photos 테이블 - created_at 기준)
-    const { data: cleaningPhotos, error: cleaningError } = await supabase
+    const { data: cleaningPhotos, error: cleaningError } = await dataClient
       .from('cleaning_photos')
       .select(`
         id,
@@ -191,7 +198,7 @@ export async function GET(request: NextRequest) {
     // 2-1. 매장 문제 조회 (problem_reports 테이블)
     let problemReports: any[] = []
     try {
-      const { data: problemReportsData, error: problemReportsError } = await supabase
+      const { data: problemReportsData, error: problemReportsError } = await dataClient
         .from('problem_reports')
         .select(`
           id,
@@ -227,7 +234,7 @@ export async function GET(request: NextRequest) {
     }
 
     // 2-2. 매장 문제 조회 (issues - category가 'store_problem'인 것만)
-    const { data: issues, error: issuesError } = await supabase
+    const { data: issues, error: issuesError } = await dataClient
       .from('issues')
       .select(`
         id,
@@ -276,7 +283,7 @@ export async function GET(request: NextRequest) {
     // product_photos 테이블이 있는지 확인하고 조회
     let productPhotos: any[] = []
     try {
-      const { data: productPhotosData, error: productPhotosError } = await supabase
+      const { data: productPhotosData, error: productPhotosError } = await dataClient
         .from('product_photos')
         .select(`
           id,
