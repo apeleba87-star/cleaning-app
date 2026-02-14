@@ -13,14 +13,14 @@ CREATE POLICY "관리자는 위치 정보 관리 가능" ON store_product_locati
   USING (
     EXISTS (
       SELECT 1 FROM users
-      WHERE users.id = auth.uid()
+      WHERE users.id = (select auth.uid())
       AND users.role IN ('business_owner', 'platform_admin', 'admin')
     )
   )
   WITH CHECK (
     EXISTS (
       SELECT 1 FROM users
-      WHERE users.id = auth.uid()
+      WHERE users.id = (select auth.uid())
       AND users.role IN ('business_owner', 'platform_admin', 'admin')
     )
   );

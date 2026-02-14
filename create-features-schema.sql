@@ -33,7 +33,7 @@ CREATE POLICY "Admins can manage features"
   USING (
     EXISTS (
       SELECT 1 FROM public.users
-      WHERE id = auth.uid()
+      WHERE id = (select auth.uid())
       AND role IN ('admin', 'platform_admin')
     )
   );

@@ -92,7 +92,7 @@ BEGIN
   ) THEN
     EXECUTE 'CREATE POLICY "Staff can view supply requests" ON supply_requests
     FOR SELECT
-    USING (auth.uid()::text = user_id::text)';
+    USING ((select auth.uid())::text = user_id::text)';
   END IF;
 END $$;
 
@@ -106,6 +106,6 @@ BEGIN
   ) THEN
     EXECUTE 'CREATE POLICY "Staff can insert supply requests" ON supply_requests
     FOR INSERT
-    WITH CHECK (auth.uid()::text = user_id::text)';
+    WITH CHECK ((select auth.uid())::text = user_id::text)';
   END IF;
 END $$;

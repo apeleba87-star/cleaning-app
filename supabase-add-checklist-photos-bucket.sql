@@ -12,28 +12,28 @@ ON CONFLICT (id) DO NOTHING;
 CREATE POLICY "Users can upload own checklist photos" ON storage.objects
     FOR INSERT WITH CHECK (
         bucket_id = 'checklist-photos' AND
-        auth.uid()::text = (storage.foldername(name))[1]
+        (select auth.uid())::text = (storage.foldername(name))[1]
     );
 
 -- 사용자는 자신의 체크리스트 사진을 읽을 수 있음
 CREATE POLICY "Users can read own checklist photos" ON storage.objects
     FOR SELECT USING (
         bucket_id = 'checklist-photos' AND
-        auth.uid()::text = (storage.foldername(name))[1]
+        (select auth.uid())::text = (storage.foldername(name))[1]
     );
 
 -- 사용자는 자신의 체크리스트 사진을 업데이트할 수 있음
 CREATE POLICY "Users can update own checklist photos" ON storage.objects
     FOR UPDATE USING (
         bucket_id = 'checklist-photos' AND
-        auth.uid()::text = (storage.foldername(name))[1]
+        (select auth.uid())::text = (storage.foldername(name))[1]
     );
 
 -- 사용자는 자신의 체크리스트 사진을 삭제할 수 있음
 CREATE POLICY "Users can delete own checklist photos" ON storage.objects
     FOR DELETE USING (
         bucket_id = 'checklist-photos' AND
-        auth.uid()::text = (storage.foldername(name))[1]
+        (select auth.uid())::text = (storage.foldername(name))[1]
     );
 
 -- 매니저/관리자는 배정된 매장의 체크리스트 사진을 읽을 수 있음
@@ -43,7 +43,7 @@ CREATE POLICY "Managers can read assigned store checklist photos" ON storage.obj
         (
             EXISTS (
                 SELECT 1 FROM public.users 
-                WHERE id = auth.uid() 
+                WHERE id = (select auth.uid()) 
                 AND role IN ('manager', 'admin', 'business_owner', 'platform_admin')
             )
         )

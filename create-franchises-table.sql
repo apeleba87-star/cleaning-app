@@ -50,7 +50,7 @@ CREATE POLICY "Business owners can view their company franchises"
     EXISTS (
       SELECT 1
       FROM public.users u
-      WHERE u.id = auth.uid()
+      WHERE u.id = (select auth.uid())
         AND u.company_id = franchises.company_id
         AND u.role IN ('business_owner', 'platform_admin')
     )
@@ -64,7 +64,7 @@ CREATE POLICY "Business owners can create franchises for their company"
     EXISTS (
       SELECT 1
       FROM public.users u
-      WHERE u.id = auth.uid()
+      WHERE u.id = (select auth.uid())
         AND u.company_id = franchises.company_id
         AND u.role IN ('business_owner', 'platform_admin')
     )
@@ -77,7 +77,7 @@ CREATE POLICY "Business owners can update their company franchises"
     EXISTS (
       SELECT 1
       FROM public.users u
-      WHERE u.id = auth.uid()
+      WHERE u.id = (select auth.uid())
         AND u.company_id = franchises.company_id
         AND u.role IN ('business_owner', 'platform_admin')
     )
@@ -90,7 +90,7 @@ CREATE POLICY "Business owners can delete their company franchises"
     EXISTS (
       SELECT 1
       FROM public.users u
-      WHERE u.id = auth.uid()
+      WHERE u.id = (select auth.uid())
         AND u.company_id = franchises.company_id
         AND u.role IN ('business_owner', 'platform_admin')
     )
@@ -104,7 +104,7 @@ CREATE POLICY "Franchise managers can view their own franchise"
     EXISTS (
       SELECT 1
       FROM public.users u
-      WHERE u.id = auth.uid()
+      WHERE u.id = (select auth.uid())
         AND u.franchise_id = franchises.id
         AND u.role = 'franchise_manager'
     )

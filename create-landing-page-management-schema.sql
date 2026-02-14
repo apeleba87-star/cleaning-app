@@ -61,7 +61,7 @@ CREATE POLICY "Admins can update landing page settings"
   USING (
     EXISTS (
       SELECT 1 FROM public.users
-      WHERE users.id = auth.uid()
+      WHERE users.id = (select auth.uid())
       AND users.role IN ('admin', 'platform_admin')
     )
   );
@@ -82,7 +82,7 @@ CREATE POLICY "Admins can manage hero images"
   USING (
     EXISTS (
       SELECT 1 FROM public.users
-      WHERE users.id = auth.uid()
+      WHERE users.id = (select auth.uid())
       AND users.role IN ('admin', 'platform_admin')
     )
   );
@@ -128,7 +128,7 @@ CREATE POLICY "Admins can manage custom pages"
   USING (
     EXISTS (
       SELECT 1 FROM public.users
-      WHERE users.id = auth.uid()
+      WHERE users.id = (select auth.uid())
       AND users.role IN ('admin', 'platform_admin')
     )
   );

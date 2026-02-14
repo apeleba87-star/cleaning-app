@@ -37,26 +37,26 @@ DROP POLICY IF EXISTS "Users can delete their own sessions" ON public.user_sessi
 CREATE POLICY "Users can view their own sessions"
   ON public.user_sessions
   FOR SELECT
-  USING (auth.uid() = user_id);
+  USING ((select auth.uid()) = user_id);
 
 -- 사용자는 자신의 세션을 생성할 수 있음
 CREATE POLICY "Users can insert their own sessions"
   ON public.user_sessions
   FOR INSERT
-  WITH CHECK (auth.uid() = user_id);
+  WITH CHECK ((select auth.uid()) = user_id);
 
 -- 사용자는 자신의 세션을 업데이트할 수 있음
 CREATE POLICY "Users can update their own sessions"
   ON public.user_sessions
   FOR UPDATE
-  USING (auth.uid() = user_id)
-  WITH CHECK (auth.uid() = user_id);
+  USING ((select auth.uid()) = user_id)
+  WITH CHECK ((select auth.uid()) = user_id);
 
 -- 사용자는 자신의 세션을 삭제할 수 있음
 CREATE POLICY "Users can delete their own sessions"
   ON public.user_sessions
   FOR DELETE
-  USING (auth.uid() = user_id);
+  USING ((select auth.uid()) = user_id);
 
 -- 만료된 세션 자동 정리 함수 (선택사항)
 CREATE OR REPLACE FUNCTION public.cleanup_expired_sessions()

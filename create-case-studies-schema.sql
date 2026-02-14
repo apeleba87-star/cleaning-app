@@ -31,7 +31,7 @@ CREATE POLICY "Admins can manage case studies"
   USING (
     EXISTS (
       SELECT 1 FROM public.users
-      WHERE id = auth.uid()
+      WHERE id = (select auth.uid())
       AND role IN ('admin', 'platform_admin')
     )
   );

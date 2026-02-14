@@ -8,7 +8,7 @@ CREATE POLICY IF NOT EXISTS "Business owners can insert their company store file
   WITH CHECK (
     company_id IN (
       SELECT company_id FROM public.users
-      WHERE id = auth.uid()
+      WHERE id = (select auth.uid())
         AND role IN ('business_owner', 'platform_admin')
         AND (is_active = true OR is_active IS NULL)
     )
@@ -21,7 +21,7 @@ CREATE POLICY IF NOT EXISTS "Business owners can delete their company store file
   USING (
     company_id IN (
       SELECT company_id FROM public.users
-      WHERE id = auth.uid()
+      WHERE id = (select auth.uid())
         AND role IN ('business_owner', 'platform_admin')
         AND (is_active = true OR is_active IS NULL)
     )

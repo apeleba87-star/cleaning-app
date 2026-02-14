@@ -14,7 +14,7 @@ BEGIN
       EXISTS (
         SELECT 1 FROM users u
         JOIN stores s ON s.id = supply_requests.store_id
-        WHERE u.id = auth.uid()
+        WHERE u.id = (select auth.uid())
         AND u.role = ''business_owner''
         AND u.company_id = s.company_id
         AND s.deleted_at IS NULL
@@ -37,7 +37,7 @@ BEGIN
       EXISTS (
         SELECT 1 FROM users u
         JOIN stores s ON s.id = supply_requests.store_id
-        WHERE u.id = auth.uid()
+        WHERE u.id = (select auth.uid())
         AND u.role = ''business_owner''
         AND u.company_id = s.company_id
         AND s.deleted_at IS NULL
@@ -47,7 +47,7 @@ BEGIN
       EXISTS (
         SELECT 1 FROM users u
         JOIN stores s ON s.id = supply_requests.store_id
-        WHERE u.id = auth.uid()
+        WHERE u.id = (select auth.uid())
         AND u.role = ''business_owner''
         AND u.company_id = s.company_id
         AND s.deleted_at IS NULL
@@ -71,7 +71,7 @@ BEGIN
         SELECT 1 FROM users u
         JOIN store_assign sa ON sa.user_id = u.id
         JOIN stores s ON s.id = sa.store_id
-        WHERE u.id = auth.uid()
+        WHERE u.id = (select auth.uid())
         AND u.role = ''store_manager''
         AND sa.store_id = supply_requests.store_id
         AND s.deleted_at IS NULL
@@ -95,7 +95,7 @@ BEGIN
         SELECT 1 FROM users u
         JOIN store_assign sa ON sa.user_id = u.id
         JOIN stores s ON s.id = sa.store_id
-        WHERE u.id = auth.uid()
+        WHERE u.id = (select auth.uid())
         AND u.role = ''store_manager''
         AND sa.store_id = supply_requests.store_id
         AND s.deleted_at IS NULL
@@ -106,7 +106,7 @@ BEGIN
         SELECT 1 FROM users u
         JOIN store_assign sa ON sa.user_id = u.id
         JOIN stores s ON s.id = sa.store_id
-        WHERE u.id = auth.uid()
+        WHERE u.id = (select auth.uid())
         AND u.role = ''store_manager''
         AND sa.store_id = supply_requests.store_id
         AND s.deleted_at IS NULL

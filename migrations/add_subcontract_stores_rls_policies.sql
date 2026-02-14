@@ -12,7 +12,7 @@ CREATE POLICY "Subcontract users can view their own store assignments"
     EXISTS (
       SELECT 1
       FROM public.users u
-      WHERE u.id = auth.uid()
+      WHERE u.id = (select auth.uid())
         AND u.role IN ('subcontract_individual', 'subcontract_company')
         AND u.id = store_assign.user_id
     )
@@ -30,7 +30,7 @@ CREATE POLICY "Subcontract users can view their assigned stores"
       SELECT 1
       FROM public.users u
       INNER JOIN public.store_assign sa ON sa.user_id = u.id
-      WHERE u.id = auth.uid()
+      WHERE u.id = (select auth.uid())
         AND u.role IN ('subcontract_individual', 'subcontract_company')
         AND sa.store_id = stores.id
     )
@@ -48,7 +48,7 @@ CREATE POLICY "Staff and subcontract users can manage their own attendance"
     EXISTS (
       SELECT 1
       FROM public.users u
-      WHERE u.id = auth.uid()
+      WHERE u.id = (select auth.uid())
         AND u.role IN ('staff', 'subcontract_individual', 'subcontract_company')
         AND u.id = attendance.user_id
     )
@@ -57,7 +57,7 @@ CREATE POLICY "Staff and subcontract users can manage their own attendance"
     EXISTS (
       SELECT 1
       FROM public.users u
-      WHERE u.id = auth.uid()
+      WHERE u.id = (select auth.uid())
         AND u.role IN ('staff', 'subcontract_individual', 'subcontract_company')
         AND u.id = attendance.user_id
     )

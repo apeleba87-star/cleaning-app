@@ -13,7 +13,7 @@ CREATE POLICY "직원은 제품 조회 가능" ON products
   USING (
     EXISTS (
       SELECT 1 FROM users
-      WHERE users.id = auth.uid()
+      WHERE users.id = (select auth.uid())
       AND users.role = 'staff'
     )
   );
@@ -24,7 +24,7 @@ CREATE POLICY "관리자는 제품 생성 가능" ON products
   WITH CHECK (
     EXISTS (
       SELECT 1 FROM users
-      WHERE users.id = auth.uid()
+      WHERE users.id = (select auth.uid())
       AND users.role IN ('business_owner', 'platform_admin', 'admin')
     )
   );
@@ -35,14 +35,14 @@ CREATE POLICY "관리자는 제품 수정 가능" ON products
   USING (
     EXISTS (
       SELECT 1 FROM users
-      WHERE users.id = auth.uid()
+      WHERE users.id = (select auth.uid())
       AND users.role IN ('business_owner', 'platform_admin', 'admin')
     )
   )
   WITH CHECK (
     EXISTS (
       SELECT 1 FROM users
-      WHERE users.id = auth.uid()
+      WHERE users.id = (select auth.uid())
       AND users.role IN ('business_owner', 'platform_admin', 'admin')
     )
   );

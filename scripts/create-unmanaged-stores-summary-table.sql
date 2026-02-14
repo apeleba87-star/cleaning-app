@@ -34,7 +34,7 @@ TO authenticated
 USING (
   EXISTS (
     SELECT 1 FROM public.users
-    WHERE users.id = auth.uid()
+    WHERE users.id = (select auth.uid())
     AND users.company_id = unmanaged_stores_summary.company_id
     AND users.role = 'business_owner'
   )

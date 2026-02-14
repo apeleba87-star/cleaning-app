@@ -25,7 +25,7 @@ CREATE POLICY "Staff can view their own product photos"
   ON public.product_photos
   FOR SELECT
   USING (
-    auth.uid() = user_id
+    (select auth.uid()) = user_id
   );
 
 -- RLS 정책: staff는 자신의 사진만 삽입 가능
@@ -33,7 +33,7 @@ CREATE POLICY "Staff can insert their own product photos"
   ON public.product_photos
   FOR INSERT
   WITH CHECK (
-    auth.uid() = user_id
+    (select auth.uid()) = user_id
   );
 
 -- RLS 정책: business_owner는 자신의 회사 매장 사진 조회 가능
@@ -46,7 +46,7 @@ CREATE POLICY "Business owners can view photos from their company stores"
       FROM public.stores s
       JOIN public.users u ON u.company_id = s.company_id
       WHERE s.id = product_photos.store_id
-        AND u.id = auth.uid()
+        AND u.id = (select auth.uid())
         AND u.role = 'business_owner'
     )
   );

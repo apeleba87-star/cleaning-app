@@ -23,7 +23,7 @@ BEGIN
       USING (
         company_id IN (
           SELECT company_id FROM public.users
-          WHERE id = auth.uid()
+          WHERE id = (select auth.uid())
             AND role IN (''business_owner'', ''platform_admin'')
             AND (is_active = true OR is_active IS NULL)
         )
@@ -46,7 +46,7 @@ BEGIN
       WITH CHECK (
         company_id IN (
           SELECT company_id FROM public.users
-          WHERE id = auth.uid()
+          WHERE id = (select auth.uid())
             AND role IN (''business_owner'', ''platform_admin'')
             AND (is_active = true OR is_active IS NULL)
         )
@@ -69,7 +69,7 @@ BEGIN
       USING (
         company_id IN (
           SELECT company_id FROM public.users
-          WHERE id = auth.uid()
+          WHERE id = (select auth.uid())
             AND role IN (''business_owner'', ''platform_admin'')
             AND (is_active = true OR is_active IS NULL)
         )

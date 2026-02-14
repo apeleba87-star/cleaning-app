@@ -11,7 +11,7 @@ CREATE POLICY "Store managers can view their own store assignments"
     EXISTS (
       SELECT 1
       FROM public.users u
-      WHERE u.id = auth.uid()
+      WHERE u.id = (select auth.uid())
         AND u.role = 'store_manager'
         AND u.id = store_assign.user_id
     )
@@ -29,7 +29,7 @@ CREATE POLICY "Store managers can view their assigned stores"
       SELECT 1
       FROM public.users u
       INNER JOIN public.store_assign sa ON sa.user_id = u.id
-      WHERE u.id = auth.uid()
+      WHERE u.id = (select auth.uid())
         AND u.role = 'store_manager'
         AND sa.store_id = stores.id
     )
@@ -48,7 +48,7 @@ CREATE POLICY "Store managers can view problem reports for their assigned stores
       SELECT 1
       FROM public.users u
       INNER JOIN public.store_assign sa ON sa.user_id = u.id
-      WHERE u.id = auth.uid()
+      WHERE u.id = (select auth.uid())
         AND u.role = 'store_manager'
         AND sa.store_id = problem_reports.store_id
     )
@@ -66,7 +66,7 @@ CREATE POLICY "Store managers can view lost items for their assigned stores"
       SELECT 1
       FROM public.users u
       INNER JOIN public.store_assign sa ON sa.user_id = u.id
-      WHERE u.id = auth.uid()
+      WHERE u.id = (select auth.uid())
         AND u.role = 'store_manager'
         AND sa.store_id = lost_items.store_id
     )
@@ -84,7 +84,7 @@ CREATE POLICY "Store managers can view requests for their assigned stores"
       SELECT 1
       FROM public.users u
       INNER JOIN public.store_assign sa ON sa.user_id = u.id
-      WHERE u.id = auth.uid()
+      WHERE u.id = (select auth.uid())
         AND u.role = 'store_manager'
         AND sa.store_id = requests.store_id
     )
@@ -102,7 +102,7 @@ CREATE POLICY "Store managers can view checklists for their assigned stores"
       SELECT 1
       FROM public.users u
       INNER JOIN public.store_assign sa ON sa.user_id = u.id
-      WHERE u.id = auth.uid()
+      WHERE u.id = (select auth.uid())
         AND u.role = 'store_manager'
         AND sa.store_id = checklist.store_id
     )
@@ -120,7 +120,7 @@ CREATE POLICY "Store managers can view cleaning photos for their assigned stores
       SELECT 1
       FROM public.users u
       INNER JOIN public.store_assign sa ON sa.user_id = u.id
-      WHERE u.id = auth.uid()
+      WHERE u.id = (select auth.uid())
         AND u.role = 'store_manager'
         AND sa.store_id = cleaning_photos.store_id
     )
@@ -138,7 +138,7 @@ CREATE POLICY "Store managers can view attendance for their assigned stores"
       SELECT 1
       FROM public.users u
       INNER JOIN public.store_assign sa ON sa.user_id = u.id
-      WHERE u.id = auth.uid()
+      WHERE u.id = (select auth.uid())
         AND u.role = 'store_manager'
         AND sa.store_id = attendance.store_id
     )
@@ -156,7 +156,7 @@ CREATE POLICY "Store managers can view product photos for their assigned stores"
       SELECT 1
       FROM public.users u
       INNER JOIN public.store_assign sa ON sa.user_id = u.id
-      WHERE u.id = auth.uid()
+      WHERE u.id = (select auth.uid())
         AND u.role = 'store_manager'
         AND sa.store_id = product_photos.store_id
     )

@@ -39,7 +39,7 @@ CREATE POLICY "Business owners can view their company announcements"
     EXISTS (
       SELECT 1
       FROM public.users u
-      WHERE u.id = auth.uid()
+      WHERE u.id = (select auth.uid())
         AND u.company_id = announcements.company_id
         AND u.role = 'business_owner'
     )
@@ -52,7 +52,7 @@ CREATE POLICY "Business owners can create announcements for their company"
     EXISTS (
       SELECT 1
       FROM public.users u
-      WHERE u.id = auth.uid()
+      WHERE u.id = (select auth.uid())
         AND u.company_id = announcements.company_id
         AND u.role = 'business_owner'
     )
@@ -65,7 +65,7 @@ CREATE POLICY "Business owners can update their company announcements"
     EXISTS (
       SELECT 1
       FROM public.users u
-      WHERE u.id = auth.uid()
+      WHERE u.id = (select auth.uid())
         AND u.company_id = announcements.company_id
         AND u.role = 'business_owner'
     )
@@ -78,7 +78,7 @@ CREATE POLICY "Business owners can delete their company announcements"
     EXISTS (
       SELECT 1
       FROM public.users u
-      WHERE u.id = auth.uid()
+      WHERE u.id = (select auth.uid())
         AND u.company_id = announcements.company_id
         AND u.role = 'business_owner'
     )
@@ -93,7 +93,7 @@ CREATE POLICY "Staff can view staff announcements from their company"
     EXISTS (
       SELECT 1
       FROM public.users u
-      WHERE u.id = auth.uid()
+      WHERE u.id = (select auth.uid())
         AND u.company_id = announcements.company_id
         AND u.role = 'staff'
     )
@@ -108,7 +108,7 @@ CREATE POLICY "Managers can view owner announcements from their company"
     EXISTS (
       SELECT 1
       FROM public.users u
-      WHERE u.id = auth.uid()
+      WHERE u.id = (select auth.uid())
         AND u.company_id = announcements.company_id
         AND u.role = 'manager'
     )
@@ -118,12 +118,12 @@ CREATE POLICY "Managers can view owner announcements from their company"
 CREATE POLICY "Users can view their own announcement reads"
   ON public.announcement_reads
   FOR SELECT
-  USING (auth.uid() = user_id);
+  USING ((select auth.uid()) = user_id);
 
 CREATE POLICY "Users can create their own announcement reads"
   ON public.announcement_reads
   FOR INSERT
-  WITH CHECK (auth.uid() = user_id);
+  WITH CHECK ((select auth.uid()) = user_id);
 
 -- RLS 정책: business_owner는 자신의 회사 공지사항의 모든 읽음 표시 조회 가능
 CREATE POLICY "Business owners can view all reads for their company announcements"
@@ -135,7 +135,7 @@ CREATE POLICY "Business owners can view all reads for their company announcement
       FROM public.announcements a
       JOIN public.users u ON u.company_id = a.company_id
       WHERE a.id = announcement_reads.announcement_id
-        AND u.id = auth.uid()
+        AND u.id = (select auth.uid())
         AND u.role = 'business_owner'
     )
   );

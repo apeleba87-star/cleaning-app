@@ -26,7 +26,7 @@ CREATE POLICY "Business owners can view their company revenues"
       SELECT 1 FROM public.stores s
       JOIN public.users u ON u.company_id = s.company_id
       WHERE s.id = revenues.store_id
-        AND u.id = auth.uid()
+        AND u.id = (select auth.uid())
         AND u.role IN ('business_owner', 'platform_admin')
         AND s.deleted_at IS NULL
         AND (u.is_active = true OR u.is_active IS NULL)
@@ -34,7 +34,7 @@ CREATE POLICY "Business owners can view their company revenues"
     -- store_id가 null인 경우: company_id로만 확인
     OR (store_id IS NULL AND company_id IN (
       SELECT company_id FROM public.users
-      WHERE id = auth.uid()
+      WHERE id = (select auth.uid())
         AND role IN ('business_owner', 'platform_admin')
         AND (is_active = true OR is_active IS NULL)
     ))
@@ -49,7 +49,7 @@ CREATE POLICY "Business owners can insert their company revenues"
   WITH CHECK (
     company_id IN (
       SELECT company_id FROM public.users
-      WHERE id = auth.uid()
+      WHERE id = (select auth.uid())
         AND role IN ('business_owner', 'platform_admin')
         AND (is_active = true OR is_active IS NULL)
     )
@@ -75,7 +75,7 @@ CREATE POLICY "Business owners can update their company revenues"
   USING (
     company_id IN (
       SELECT company_id FROM public.users
-      WHERE id = auth.uid()
+      WHERE id = (select auth.uid())
         AND role IN ('business_owner', 'platform_admin')
         AND (is_active = true OR is_active IS NULL)
     )
@@ -83,7 +83,7 @@ CREATE POLICY "Business owners can update their company revenues"
   WITH CHECK (
     company_id IN (
       SELECT company_id FROM public.users
-      WHERE id = auth.uid()
+      WHERE id = (select auth.uid())
         AND role IN ('business_owner', 'platform_admin')
         AND (is_active = true OR is_active IS NULL)
     )
@@ -98,7 +98,7 @@ CREATE POLICY "Business owners can delete their company revenues"
   USING (
     company_id IN (
       SELECT company_id FROM public.users
-      WHERE id = auth.uid()
+      WHERE id = (select auth.uid())
         AND role IN ('business_owner', 'platform_admin')
         AND (is_active = true OR is_active IS NULL)
     )

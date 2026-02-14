@@ -22,25 +22,25 @@ DROP POLICY IF EXISTS "Platform admins can manage all checklist photos" ON stora
 CREATE POLICY "Staff can upload own checklist photos" ON storage.objects
     FOR INSERT WITH CHECK (
         bucket_id = 'checklist-photos' AND
-        auth.uid()::text = (storage.foldername(name))[1]
+        (select auth.uid())::text = (storage.foldername(name))[1]
     );
 
 CREATE POLICY "Staff can read own checklist photos" ON storage.objects
     FOR SELECT USING (
         bucket_id = 'checklist-photos' AND
-        auth.uid()::text = (storage.foldername(name))[1]
+        (select auth.uid())::text = (storage.foldername(name))[1]
     );
 
 CREATE POLICY "Staff can update own checklist photos" ON storage.objects
     FOR UPDATE USING (
         bucket_id = 'checklist-photos' AND
-        auth.uid()::text = (storage.foldername(name))[1]
+        (select auth.uid())::text = (storage.foldername(name))[1]
     );
 
 CREATE POLICY "Staff can delete own checklist photos" ON storage.objects
     FOR DELETE USING (
         bucket_id = 'checklist-photos' AND
-        auth.uid()::text = (storage.foldername(name))[1]
+        (select auth.uid())::text = (storage.foldername(name))[1]
     );
 
 -- Managers: 배정받은 매장의 체크리스트 사진 조회 가능
@@ -48,9 +48,9 @@ CREATE POLICY "Managers can read assigned store checklist photos" ON storage.obj
     FOR SELECT USING (
         bucket_id = 'checklist-photos' AND
         (
-            public.is_manager(auth.uid()) OR
-            public.is_admin(auth.uid()) OR
-            public.is_platform_admin(auth.uid())
+            public.is_manager((select auth.uid())) OR
+            public.is_admin((select auth.uid())) OR
+            public.is_platform_admin((select auth.uid()))
         )
     );
 
@@ -58,14 +58,14 @@ CREATE POLICY "Managers can read assigned store checklist photos" ON storage.obj
 CREATE POLICY "Business owners can read company checklist photos" ON storage.objects
     FOR SELECT USING (
         bucket_id = 'checklist-photos' AND
-        public.is_business_owner(auth.uid())
+        public.is_business_owner((select auth.uid()))
     );
 
 -- Platform admins: 모든 체크리스트 사진 조회 가능
 CREATE POLICY "Platform admins can manage all checklist photos" ON storage.objects
     FOR ALL USING (
         bucket_id = 'checklist-photos' AND
-        public.is_platform_admin(auth.uid())
+        public.is_platform_admin((select auth.uid()))
     );
 
 -- 버킷 및 정책 확인

@@ -16,7 +16,7 @@ CREATE POLICY "Business owners can view their company subcontracts"
     EXISTS (
       SELECT 1
       FROM public.users u
-      WHERE u.id = auth.uid()
+      WHERE u.id = (select auth.uid())
         AND u.company_id = subcontracts.company_id
         AND u.role IN ('business_owner', 'platform_admin')
     )
@@ -29,7 +29,7 @@ CREATE POLICY "Business owners can create subcontracts for their company"
     EXISTS (
       SELECT 1
       FROM public.users u
-      WHERE u.id = auth.uid()
+      WHERE u.id = (select auth.uid())
         AND u.company_id = subcontracts.company_id
         AND u.role IN ('business_owner', 'platform_admin')
     )
@@ -42,7 +42,7 @@ CREATE POLICY "Business owners can update their company subcontracts"
     EXISTS (
       SELECT 1
       FROM public.users u
-      WHERE u.id = auth.uid()
+      WHERE u.id = (select auth.uid())
         AND u.company_id = subcontracts.company_id
         AND u.role IN ('business_owner', 'platform_admin')
     )
@@ -51,7 +51,7 @@ CREATE POLICY "Business owners can update their company subcontracts"
     EXISTS (
       SELECT 1
       FROM public.users u
-      WHERE u.id = auth.uid()
+      WHERE u.id = (select auth.uid())
         AND u.company_id = subcontracts.company_id
         AND u.role IN ('business_owner', 'platform_admin')
     )
@@ -64,7 +64,7 @@ CREATE POLICY "Business owners can delete their company subcontracts"
     EXISTS (
       SELECT 1
       FROM public.users u
-      WHERE u.id = auth.uid()
+      WHERE u.id = (select auth.uid())
         AND u.company_id = subcontracts.company_id
         AND u.role IN ('business_owner', 'platform_admin')
     )
@@ -85,7 +85,7 @@ CREATE POLICY "Business owners can view their company subcontract payments"
     EXISTS (
       SELECT 1
       FROM public.users u
-      WHERE u.id = auth.uid()
+      WHERE u.id = (select auth.uid())
         AND u.company_id = subcontract_payments.company_id
         AND u.role IN ('business_owner', 'platform_admin')
     )
@@ -98,7 +98,7 @@ CREATE POLICY "Business owners can create subcontract payments for their company
     EXISTS (
       SELECT 1
       FROM public.users u
-      WHERE u.id = auth.uid()
+      WHERE u.id = (select auth.uid())
         AND u.company_id = subcontract_payments.company_id
         AND u.role IN ('business_owner', 'platform_admin')
     )
@@ -111,7 +111,7 @@ CREATE POLICY "Business owners can update their company subcontract payments"
     EXISTS (
       SELECT 1
       FROM public.users u
-      WHERE u.id = auth.uid()
+      WHERE u.id = (select auth.uid())
         AND u.company_id = subcontract_payments.company_id
         AND u.role IN ('business_owner', 'platform_admin')
     )
@@ -120,7 +120,7 @@ CREATE POLICY "Business owners can update their company subcontract payments"
     EXISTS (
       SELECT 1
       FROM public.users u
-      WHERE u.id = auth.uid()
+      WHERE u.id = (select auth.uid())
         AND u.company_id = subcontract_payments.company_id
         AND u.role IN ('business_owner', 'platform_admin')
     )
@@ -133,7 +133,7 @@ CREATE POLICY "Business owners can delete their company subcontract payments"
     EXISTS (
       SELECT 1
       FROM public.users u
-      WHERE u.id = auth.uid()
+      WHERE u.id = (select auth.uid())
         AND u.company_id = subcontract_payments.company_id
         AND u.role IN ('business_owner', 'platform_admin')
     )
@@ -154,7 +154,7 @@ CREATE POLICY "Business owners can view their company recurring expenses"
     EXISTS (
       SELECT 1
       FROM public.users u
-      WHERE u.id = auth.uid()
+      WHERE u.id = (select auth.uid())
         AND u.company_id = recurring_expenses.company_id
         AND u.role IN ('business_owner', 'platform_admin')
     )
@@ -167,7 +167,7 @@ CREATE POLICY "Business owners can create recurring expenses for their company"
     EXISTS (
       SELECT 1
       FROM public.users u
-      WHERE u.id = auth.uid()
+      WHERE u.id = (select auth.uid())
         AND u.company_id = recurring_expenses.company_id
         AND u.role IN ('business_owner', 'platform_admin')
     )
@@ -180,7 +180,7 @@ CREATE POLICY "Business owners can update their company recurring expenses"
     EXISTS (
       SELECT 1
       FROM public.users u
-      WHERE u.id = auth.uid()
+      WHERE u.id = (select auth.uid())
         AND u.company_id = recurring_expenses.company_id
         AND u.role IN ('business_owner', 'platform_admin')
     )
@@ -189,7 +189,7 @@ CREATE POLICY "Business owners can update their company recurring expenses"
     EXISTS (
       SELECT 1
       FROM public.users u
-      WHERE u.id = auth.uid()
+      WHERE u.id = (select auth.uid())
         AND u.company_id = recurring_expenses.company_id
         AND u.role IN ('business_owner', 'platform_admin')
     )
@@ -202,7 +202,7 @@ CREATE POLICY "Business owners can delete their company recurring expenses"
     EXISTS (
       SELECT 1
       FROM public.users u
-      WHERE u.id = auth.uid()
+      WHERE u.id = (select auth.uid())
         AND u.company_id = recurring_expenses.company_id
         AND u.role IN ('business_owner', 'platform_admin')
     )
