@@ -1,6 +1,7 @@
 'use server'
 
 import { createServerSupabaseClient, getServerUser, ensureValidSession } from '@/lib/supabase/server'
+import { createClient } from '@supabase/supabase-js'
 import { clockInSchema, clockOutSchema } from '@/zod/schemas'
 import { revalidatePath } from 'next/cache'
 import { GPSLocation } from '@/types/db'
@@ -52,8 +53,19 @@ export async function clockInAction(
     const today = getTodayDateKST()
     const yesterday = getYesterdayDateKST()
 
+    // RLS 우회: stores 조회 시 서비스 역할 사용 (직원이 배정된 매장 정보 조회)
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+    let adminSupabase: ReturnType<typeof createClient> | null = null
+    if (serviceRoleKey && supabaseUrl) {
+      adminSupabase = createClient(supabaseUrl, serviceRoleKey, {
+        auth: { autoRefreshToken: false, persistSession: false },
+      })
+    }
+    const dataClient = adminSupabase || supabase
+
     // 매장 정보 조회 (야간 매장 여부 확인)
-    const { data: store, error: storeError } = await supabase
+    const { data: store, error: storeError } = await dataClient
       .from('stores')
       .select('id, is_night_shift, work_start_hour, work_end_hour')
       .eq('id', validated.store_id)
@@ -223,7 +235,7 @@ export async function clockInAction(
       devLog('🔍 Today:', today)
       devLog('🔍 User ID:', user.id)
       
-      const { data: templateChecklists, error: templateError } = await supabase
+      const { data: templateChecklists, error: templateError } = await dataClient
         .from('checklist')
         .select('*')
         .eq('store_id', validated.store_id)
@@ -240,7 +252,7 @@ export async function clockInAction(
 
       if (!templateError && templateChecklists && templateChecklists.length > 0) {
         // 2. 계산된 work_date로 이미 생성된 체크리스트 확인
-        const { data: existingChecklists } = await supabase
+        const { data: existingChecklists } = await dataClient
           .from('checklist')
           .select('id, user_id, store_id')
           .eq('store_id', validated.store_id)
@@ -271,7 +283,7 @@ export async function clockInAction(
         devLog('📝 Checklists to create:', checklistsToCreate.length)
 
         if (checklistsToCreate.length > 0) {
-          const { data: createdData, error: createError } = await supabase
+          const { data: createdData, error: createError } = await dataClient
             .from('checklist')
             .insert(checklistsToCreate)
             .select()
