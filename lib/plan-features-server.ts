@@ -1,9 +1,11 @@
 /**
  * 서버 전용: 업체 요금 플랜·단위 조회 및 기능 허용·한도 검사
  * API 라우트에서 사용합니다.
+ * RLS 우회를 위해 Service Role 사용 (서버 검증용 정확한 수치 필요)
  */
 
 import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { createClient } from '@supabase/supabase-js'
 import {
   type BusinessFeatureKey,
   type SubscriptionPlan,
@@ -21,12 +23,24 @@ export interface CompanyPlanInfo {
   premium_units: number
 }
 
+async function getDataClient() {
+  const supabase = await createServerSupabaseClient()
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+  if (serviceRoleKey && supabaseUrl) {
+    return createClient(supabaseUrl, serviceRoleKey, {
+      auth: { autoRefreshToken: false, persistSession: false },
+    })
+  }
+  return supabase
+}
+
 /**
  * company_id로 업체의 요금 플랜·상태·단위 조회
  */
 export async function getCompanyPlan(companyId: string | null): Promise<CompanyPlanInfo | null> {
   if (!companyId) return null
-  const supabase = await createServerSupabaseClient()
+  const supabase = await getDataClient()
   const { data, error } = await supabase
     .from('companies')
     .select('id, subscription_plan, subscription_status, basic_units, premium_units')
@@ -70,7 +84,7 @@ const EMPLOYEE_ROLES = ['staff', 'manager', 'subcontract_individual', 'subcontra
  * 회사 매장 수 (삭제되지 않은 것만)
  */
 export async function getCompanyStoreCount(companyId: string): Promise<number> {
-  const supabase = await createServerSupabaseClient()
+  const supabase = await getDataClient()
   const { count, error } = await supabase
     .from('stores')
     .select('*', { count: 'exact', head: true })
@@ -84,7 +98,7 @@ export async function getCompanyStoreCount(companyId: string): Promise<number> {
  * 회사 직원 수 (직원 역할만, employment_active)
  */
 export async function getCompanyEmployeeCount(companyId: string): Promise<number> {
-  const supabase = await createServerSupabaseClient()
+  const supabase = await getDataClient()
   const { count, error } = await supabase
     .from('users')
     .select('*', { count: 'exact', head: true })
@@ -99,7 +113,7 @@ export async function getCompanyEmployeeCount(companyId: string): Promise<number
  * 회사 점주/현장관리자 수 (store_manager, employment_active)
  */
 export async function getCompanyStoreManagerCount(companyId: string): Promise<number> {
-  const supabase = await createServerSupabaseClient()
+  const supabase = await getDataClient()
   const { count, error } = await supabase
     .from('users')
     .select('*', { count: 'exact', head: true })

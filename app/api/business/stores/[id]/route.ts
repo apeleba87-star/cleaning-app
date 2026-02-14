@@ -103,9 +103,14 @@ export async function PATCH(
     }
 
     const supabase = await createServerSupabaseClient()
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+    const dataClient = (serviceRoleKey && supabaseUrl)
+      ? createClient(supabaseUrl, serviceRoleKey, { auth: { autoRefreshToken: false, persistSession: false } })
+      : supabase
 
-    // 매장이 회사에 속해있는지 확인
-    const { data: existingStore, error: checkError } = await supabase
+    // 매장이 회사에 속해있는지 확인 (RLS 우회)
+    const { data: existingStore, error: checkError } = await dataClient
       .from('stores')
       .select('id')
       .eq('id', params.id)
@@ -119,7 +124,7 @@ export async function PATCH(
 
     // franchise_id가 있으면 해당 프렌차이즈가 회사에 속하는지 확인
     if (franchise_id) {
-      const { data: franchise } = await supabase
+      const { data: franchise } = await dataClient
         .from('franchises')
         .select('company_id')
         .eq('id', franchise_id)
@@ -161,7 +166,7 @@ export async function PATCH(
       updateData.schedule_data = schedule_data || null
     }
 
-    const { data: store, error } = await supabase
+    const { data: store, error } = await dataClient
       .from('stores')
       .update(updateData)
       .eq('id', params.id)
@@ -204,9 +209,14 @@ export async function DELETE(
     }
 
     const supabase = await createServerSupabaseClient()
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+    const dataClient = (serviceRoleKey && supabaseUrl)
+      ? createClient(supabaseUrl, serviceRoleKey, { auth: { autoRefreshToken: false, persistSession: false } })
+      : supabase
 
-    // 매장이 회사에 속해있는지 확인 후, 이후 모든 작업은 이 storeId만 사용
-    const { data: existingStore, error: checkError } = await supabase
+    // 매장이 회사에 속해있는지 확인 후, 이후 모든 작업은 이 storeId만 사용 (RLS 우회)
+    const { data: existingStore, error: checkError } = await dataClient
       .from('stores')
       .select('id')
       .eq('id', params.id)
@@ -220,20 +230,14 @@ export async function DELETE(
 
     const storeId = existingStore.id as string
 
-    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
     if (!serviceRoleKey || !supabaseUrl) {
       throw new Error('Server configuration error: Service role key is required for store deletion')
     }
 
-    const adminSupabase = createClient(supabaseUrl, serviceRoleKey, {
-      auth: { autoRefreshToken: false, persistSession: false },
-    })
-
     const url = new URL(request.url)
     const dryRun = url.searchParams.get('dryRun') === 'true'
 
-    const result = await deleteStoreData(adminSupabase, storeId, dryRun)
+    const result = await deleteStoreData(dataClient, storeId, dryRun)
 
     if (!result.success) {
       throw new Error(result.error || '매장 삭제에 실패했습니다.')
