@@ -56,10 +56,10 @@ export async function GET(request: NextRequest) {
       })
     }
     
-    const attendanceClient = adminSupabase || supabase
+    const dataClient = adminSupabase || supabase
 
-    // 매장 정보 조회
-    const { data: stores } = await supabase
+    // 매장 정보 조회 (RLS 우회 - API에서 store_ids는 store_assign 기반으로 전달됨)
+    const { data: stores } = await dataClient
       .from('stores')
       .select('id, name')
       .in('id', storeIds)
@@ -73,7 +73,7 @@ export async function GET(request: NextRequest) {
     }
 
     // 출근 데이터 조회
-    const { data: attendances, error: attendanceError } = await attendanceClient
+    const { data: attendances, error: attendanceError } = await dataClient
       .from('attendance')
       .select('work_date, store_id')
       .in('store_id', storeIds)

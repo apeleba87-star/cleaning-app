@@ -102,7 +102,11 @@ export async function GET(
       checklists.forEach((checklist: any) => {
         const items = checklist.items || []
         items.forEach((item: any, index: number) => {
-          if (item.type === 'photo' && (item.before_photo_url || item.after_photo_url)) {
+          const isPhotoType = item.type === 'photo' ||
+            item.type === 'before_photo' ||
+            item.type === 'after_photo' ||
+            item.type === 'before_after_photo'
+          if (isPhotoType && (item.before_photo_url || item.after_photo_url)) {
             const area = item.area || `구역${index}`
             const key = `${area}-${checklist.work_date}`
             if (!beforeAfterPhotosMap.has(key)) {
@@ -119,6 +123,59 @@ export async function GET(
         })
       })
     }
+
+    // 1-2. cleaning_photos 테이블에서 관리전후 사진 추출 및 병합 (업체관리자 API와 동일)
+    const { data: cleaningPhotos } = await dataClient
+      .from('cleaning_photos')
+      .select('id, area_category, kind, photo_url, created_at')
+      .eq('store_id', params.id)
+      .neq('area_category', 'inventory')
+      .gte('created_at', start.toISOString())
+      .lte('created_at', end.toISOString())
+      .order('created_at', { ascending: false })
+
+    if (cleaningPhotos && cleaningPhotos.length > 0) {
+      const photosByArea = new Map<string, { before?: any; after?: any }>()
+      cleaningPhotos.forEach((photo: any) => {
+        const areaKey = photo.area_category || '구역'
+        const photoDate = photo.created_at?.split('T')[0] || ''
+        const key = `${areaKey}-${photoDate}`
+        if (!photosByArea.has(key)) {
+          photosByArea.set(key, {})
+        }
+        const areaData = photosByArea.get(key)!
+        if (photo.kind === 'before') {
+          areaData.before = photo
+        } else if (photo.kind === 'after') {
+          areaData.after = photo
+        }
+      })
+      photosByArea.forEach((areaData, key) => {
+        if (beforeAfterPhotosMap.has(key)) {
+          const existing = beforeAfterPhotosMap.get(key)!
+          if (!existing.before_photo_url && areaData.before?.photo_url) {
+            existing.before_photo_url = areaData.before.photo_url
+          }
+          if (!existing.after_photo_url && areaData.after?.photo_url) {
+            existing.after_photo_url = areaData.after.photo_url
+          }
+        } else {
+          const photoDate = areaData.before?.created_at?.split('T')[0] ||
+            areaData.after?.created_at?.split('T')[0] || ''
+          const areaKey = areaData.before?.area_category ||
+            areaData.after?.area_category || '구역'
+          beforeAfterPhotosMap.set(key, {
+            id: `cleaning-${key}-${Date.now()}`,
+            before_photo_url: areaData.before?.photo_url || null,
+            after_photo_url: areaData.after?.photo_url || null,
+            area: areaKey,
+            created_at: areaData.before?.created_at || areaData.after?.created_at || new Date().toISOString(),
+            work_date: photoDate,
+          })
+        }
+      })
+    }
+
     const beforeAfterPhotosArray = Array.from(beforeAfterPhotosMap.values())
 
     // 2. 제품입고 및 보관 사진

@@ -1,4 +1,5 @@
 import { NextRequest } from 'next/server'
+import { createClient } from '@supabase/supabase-js'
 import { createServerSupabaseClient, getServerUser } from '@/lib/supabase/server'
 import { assertBusinessFeature } from '@/lib/plan-features-server'
 import { handleApiError, UnauthorizedError, ForbiddenError } from '@/lib/errors'
@@ -26,6 +27,13 @@ export async function GET(request: NextRequest) {
     }
 
     const supabase = await createServerSupabaseClient()
+
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+    const dataClient = (serviceRoleKey && supabaseUrl)
+      ? createClient(supabaseUrl, serviceRoleKey, { auth: { autoRefreshToken: false, persistSession: false } })
+      : supabase
+
     const { searchParams } = new URL(request.url)
     const period = searchParams.get('period') || new Date().toISOString().slice(0, 7) // YYYY-MM
 
@@ -45,37 +53,37 @@ export async function GET(request: NextRequest) {
       { data: payrolls, error: payrollsError },
       { data: subcontractPayments, error: subcontractPaymentsError },
     ] = await Promise.all([
-      supabase
+      dataClient
         .from('revenues')
         .select('amount')
         .eq('company_id', user.company_id)
         .eq('service_period', period)
         .is('deleted_at', null),
-      supabase
+      dataClient
         .from('revenues')
         .select('id')
         .eq('company_id', user.company_id)
         .eq('service_period', period)
         .is('deleted_at', null),
-      supabase
+      dataClient
         .from('revenues')
         .select('id, amount')
         .eq('company_id', user.company_id)
         .is('deleted_at', null),
-      supabase
+      dataClient
         .from('expenses')
         .select('amount, recurring_expense_id')
         .eq('company_id', user.company_id)
         .gte('date', startDate)
         .lte('date', endDate)
         .is('deleted_at', null),
-      supabase
+      dataClient
         .from('payrolls')
         .select('amount, status')
         .eq('company_id', user.company_id)
         .eq('pay_period', period)
         .is('deleted_at', null),
-      supabase
+      dataClient
         .from('subcontract_payments')
         .select('amount, status')
         .eq('company_id', user.company_id)
@@ -111,7 +119,7 @@ export async function GET(request: NextRequest) {
     let totalReceived = 0
     let receiptCount = 0
     if (revenueIds.length > 0) {
-      const { data: receipts, error: receiptsError } = await supabase
+      const { data: receipts, error: receiptsError } = await dataClient
         .from('receipts')
         .select('amount')
         .in('revenue_id', revenueIds)
@@ -132,7 +140,7 @@ export async function GET(request: NextRequest) {
     let totalAllReceived = 0
     let allReceiptsForUnpaid: Array<{ revenue_id: string; amount: number }> = []
     if (allRevenueIds.length > 0) {
-      const { data: receiptsData, error: allReceiptsForUnpaidError } = await supabase
+      const { data: receiptsData, error: allReceiptsForUnpaidError } = await dataClient
         .from('receipts')
         .select('revenue_id, amount')
         .in('revenue_id', allRevenueIds)
@@ -180,7 +188,7 @@ export async function GET(request: NextRequest) {
     const scheduledPayrollCount = regularScheduledPayrolls.length + scheduledSubcontractPayrolls.length
 
     // 미수금 상위 매장 리스트 - 배치 쿼리로 최적화
-    const { data: unpaidTrackingStores } = await supabase
+    const { data: unpaidTrackingStores } = await dataClient
       .from('stores')
       .select('id, name, payment_day')
       .eq('company_id', user.company_id)
@@ -194,7 +202,7 @@ export async function GET(request: NextRequest) {
     
     if (storeIds.length > 0) {
       // 모든 매장의 매출을 한 번에 조회
-      const { data: revenuesData, error: revenuesError } = await supabase
+      const { data: revenuesData, error: revenuesError } = await dataClient
         .from('revenues')
         .select('id, amount, store_id')
         .in('store_id', storeIds)
@@ -209,7 +217,7 @@ export async function GET(request: NextRequest) {
       // 모든 매장의 수금을 한 번에 조회
       const revenueIds = allStoreRevenues.map(r => r.id)
       if (revenueIds.length > 0) {
-        const { data: receiptsData, error: receiptsError } = await supabase
+        const { data: receiptsData, error: receiptsError } = await dataClient
           .from('receipts')
           .select('revenue_id, amount')
           .in('revenue_id', revenueIds)
@@ -276,7 +284,7 @@ export async function GET(request: NextRequest) {
     // salary_date가 숫자 타입이므로 명시적으로 숫자로 비교
     // 모든 사용자를 가져온 후 필터링하여 타입 불일치 문제 방지
     // 일당 직원 제외: pay_type이 'monthly'이거나 null이거나, salary_date가 있는 직원만
-    const { data: allUsers, error: allUsersError } = await supabase
+    const { data: allUsers, error: allUsersError } = await dataClient
       .from('users')
       .select('id, name, salary_date, salary_amount, pay_amount, pay_type, role')
       .eq('company_id', user.company_id)
@@ -337,7 +345,7 @@ export async function GET(request: NextRequest) {
         .filter(u => subcontractUserIds.includes(u.id))
         .map(u => u.name)
       
-      const { data: subcontractsData, error: subcontractsError } = await supabase
+      const { data: subcontractsData, error: subcontractsError } = await dataClient
         .from('subcontracts')
         .select('id, worker_id, worker_name, monthly_amount, tax_rate')
         .eq('company_id', companyId)
@@ -356,7 +364,7 @@ export async function GET(request: NextRequest) {
     const subcontractIds = allSubcontracts.map(s => s.id)
     let allSubcontractPayments: Array<{ subcontract_id: string; id: string; status: string; amount: number; paid_at: string | null }> = []
     if (subcontractIds.length > 0) {
-      const { data: paymentsData, error: paymentsError } = await supabase
+      const { data: paymentsData, error: paymentsError } = await dataClient
         .from('subcontract_payments')
         .select('id, subcontract_id, status, amount, paid_at')
         .in('subcontract_id', subcontractIds)
@@ -381,7 +389,7 @@ export async function GET(request: NextRequest) {
     // 배치 쿼리: 모든 인건비 정보를 한 번에 조회
     let allPayrolls: Array<{ user_id: string; id: string; status: string; amount: number | null; paid_at: string | null }> = []
     if (regularUserIds.length > 0) {
-      const { data: payrollsData, error: payrollsError } = await supabase
+      const { data: payrollsData, error: payrollsError } = await dataClient
         .from('payrolls')
         .select('id, user_id, status, amount, paid_at')
         .in('user_id', regularUserIds)
@@ -518,7 +526,7 @@ export async function GET(request: NextRequest) {
 
     // 오늘 수금일인 매장 조회 및 결제 상태 확인
     // 모든 매장을 가져온 후 말일 조정하여 필터링
-    const { data: allStores, error: allStoresError } = await supabase
+    const { data: allStores, error: allStoresError } = await dataClient
       .from('stores')
       .select('id, name, payment_day, service_amount, payment_method')
       .eq('company_id', user.company_id)
@@ -542,7 +550,7 @@ export async function GET(request: NextRequest) {
     
     if (todayPaymentStoreIds.length > 0) {
       // 모든 매장의 이번 달 매출을 한 번에 조회
-      const { data: revenuesData, error: revenuesError } = await supabase
+      const { data: revenuesData, error: revenuesError } = await dataClient
         .from('revenues')
         .select('id, amount, store_id')
         .in('store_id', todayPaymentStoreIds)
@@ -558,7 +566,7 @@ export async function GET(request: NextRequest) {
       // 모든 매장의 수금을 한 번에 조회
       const revenueIds = allPaymentStoreRevenues.map(r => r.id)
       if (revenueIds.length > 0) {
-        const { data: receiptsData, error: receiptsError } = await supabase
+        const { data: receiptsData, error: receiptsError } = await dataClient
           .from('receipts')
           .select('revenue_id, amount')
           .in('revenue_id', revenueIds)
@@ -633,7 +641,7 @@ export async function GET(request: NextRequest) {
 
     // 일당 직원 조회 (worker_name이 있는 payrolls)
     // 지급완료된 것도 포함하여 당일 표시 (paid_at이 오늘인 것만)
-    const { data: dailyPayrolls, error: dailyPayrollsError } = await supabase
+    const { data: dailyPayrolls, error: dailyPayrollsError } = await dataClient
       .from('payrolls')
       .select('id, worker_name, pay_period, work_days, daily_wage, amount, paid_at, status')
       .eq('company_id', user.company_id)
@@ -686,7 +694,7 @@ export async function GET(request: NextRequest) {
     const previousMonthEnd = new Date(growthCurrentYear, growthCurrentMonth, 0, 23, 59, 59, 999)
     
     // 이번 달 수금액 계산 (received_at 기준)
-    const { data: currentMonthReceipts, error: currentMonthReceiptsError } = await supabase
+    const { data: currentMonthReceipts, error: currentMonthReceiptsError } = await dataClient
       .from('receipts')
       .select('amount')
       .eq('company_id', user.company_id)
@@ -701,7 +709,7 @@ export async function GET(request: NextRequest) {
     const currentMonthRevenue = currentMonthReceipts?.reduce((sum, r) => sum + (r.amount || 0), 0) || 0
     
     // 전월 수금액 계산 (received_at 기준)
-    const { data: previousMonthReceipts, error: previousMonthReceiptsError } = await supabase
+    const { data: previousMonthReceipts, error: previousMonthReceiptsError } = await dataClient
       .from('receipts')
       .select('amount')
       .eq('company_id', user.company_id)

@@ -1,3 +1,4 @@
+import { createClient } from '@supabase/supabase-js'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { getServerUser } from '@/lib/supabase/server'
 import { Suspense } from 'react'
@@ -14,6 +15,12 @@ export default async function BusinessOwnerDashboardPage() {
   const user = await getServerUser()
   const supabase = await createServerSupabaseClient()
 
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const dataClient = (serviceRoleKey && supabaseUrl)
+    ? createClient(supabaseUrl, serviceRoleKey, { auth: { autoRefreshToken: false, persistSession: false } })
+    : supabase
+
   if (!user || !user.company_id) {
     return (
       <div className="max-w-6xl mx-auto">
@@ -24,19 +31,19 @@ export default async function BusinessOwnerDashboardPage() {
     )
   }
 
-  // 필수 데이터만 먼저 조회 (빠른 초기 렌더링)
+  // 필수 데이터만 먼저 조회 (RLS 우회 - company_id 검증 완료)
   const [companyResult, storesResult, usersResult] = await Promise.all([
-    supabase
+    dataClient
       .from('companies')
       .select('id, name')
       .eq('id', user.company_id)
       .single(),
-    supabase
+    dataClient
       .from('stores')
       .select('id', { count: 'exact', head: true })
       .eq('company_id', user.company_id)
       .is('deleted_at', null),
-    supabase
+    dataClient
       .from('users')
       .select('id, role', { count: 'exact' })
       .eq('company_id', user.company_id),
