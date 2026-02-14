@@ -51,7 +51,7 @@ export async function GET(
     // 분실물 습득 데이터 조회
     const { data: lostItems, error: lostItemsError } = await adminSupabase
       .from('lost_items')
-      .select('id, type, description, photo_url, status, storage_location, created_at, updated_at')
+      .select('id, type, description, photo_url, status, storage_location, created_at, updated_at, business_confirmed_at, business_confirmed_by')
       .eq('store_id', params.id)
       .order('created_at', { ascending: false })
 

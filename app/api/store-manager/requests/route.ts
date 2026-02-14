@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient, getServerUser } from '@/lib/supabase/server'
+import { createClient } from '@supabase/supabase-js'
 import { assertStoreActive } from '@/lib/store-active'
 
-// 점주용 요청 생성 (접수 상태로 생성)
 export async function POST(request: NextRequest) {
   try {
     const user = await getServerUser()
@@ -21,9 +21,13 @@ export async function POST(request: NextRequest) {
     }
 
     const supabase = await createServerSupabaseClient()
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+    const dataClient = serviceRoleKey && supabaseUrl
+      ? createClient(supabaseUrl, serviceRoleKey, { auth: { autoRefreshToken: false, persistSession: false } })
+      : supabase
 
-    // 매장이 사용자의 매장인지 확인
-    const { data: store, error: storeError } = await supabase
+    const { data: store, error: storeError } = await dataClient
       .from('stores')
       .select('id')
       .eq('id', store_id)
@@ -32,9 +36,20 @@ export async function POST(request: NextRequest) {
     if (storeError || !store) {
       return NextResponse.json({ error: 'Store not found' }, { status: 404 })
     }
-    await assertStoreActive(supabase, store_id)
 
-    // 점주가 작성하면 접수 상태로 저장
+    const { data: storeAssign } = await dataClient
+      .from('store_assign')
+      .select('id')
+      .eq('user_id', user.id)
+      .eq('store_id', store_id)
+      .maybeSingle()
+
+    if (!storeAssign) {
+      return NextResponse.json({ error: 'Store not found' }, { status: 404 })
+    }
+
+    await assertStoreActive(dataClient, store_id)
+
     const insertData = {
       store_id,
       title: category, // 카테고리를 title로 저장
@@ -46,7 +61,7 @@ export async function POST(request: NextRequest) {
 
     console.log('Creating request with data:', { ...insertData, description: insertData.description.substring(0, 50) + '...' })
 
-    const { data, error } = await supabase
+    const { data, error } = await dataClient
       .from('requests')
       .insert(insertData)
       .select()

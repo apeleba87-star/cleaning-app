@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient, getServerUser } from '@/lib/supabase/server'
+import { createClient } from '@supabase/supabase-js'
 
 export async function GET(
   request: NextRequest,
@@ -12,9 +13,14 @@ export async function GET(
     }
 
     const supabase = await createServerSupabaseClient()
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+    const dataClient = serviceRoleKey && supabaseUrl
+      ? createClient(supabaseUrl, serviceRoleKey, { auth: { autoRefreshToken: false, persistSession: false } })
+      : supabase
 
     // 매장이 store_manager에게 배정되어 있는지 확인
-    const { data: storeAssign, error: storeAssignError } = await supabase
+    const { data: storeAssign, error: storeAssignError } = await dataClient
       .from('store_assign')
       .select('id')
       .eq('user_id', user.id)
@@ -30,9 +36,8 @@ export async function GET(
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
     thirtyDaysAgo.setHours(0, 0, 0, 0)
 
-    // 모든 요청 조회 (날짜 제한 없음) - status 필터링은 클라이언트에서 처리
-    // completed_by_user, rejected_by_user는 컬럼이 없을 수 있으므로 선택적으로 조회
-    const { data: allRequestsData, error: allRequestsError } = await supabase
+    // 모든 요청 조회 (dataClient로 RLS 우회)
+    const { data: allRequestsData, error: allRequestsError } = await dataClient
       .from('requests')
       .select(`
         id, 

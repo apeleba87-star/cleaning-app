@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient, getServerUser } from '@/lib/supabase/server'
+import { createClient } from '@supabase/supabase-js'
 
-// 요청 생성
 export async function POST(request: NextRequest) {
   try {
     const user = await getServerUser()
@@ -20,9 +20,13 @@ export async function POST(request: NextRequest) {
     }
 
     const supabase = await createServerSupabaseClient()
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+    const dataClient = serviceRoleKey && supabaseUrl
+      ? createClient(supabaseUrl, serviceRoleKey, { auth: { autoRefreshToken: false, persistSession: false } })
+      : supabase
 
-    // franchise_manager의 경우 franchise_id를 별도로 조회
-    const { data: userData, error: userDataError } = await supabase
+    const { data: userData, error: userDataError } = await dataClient
       .from('users')
       .select('franchise_id, company_id')
       .eq('id', user.id)
@@ -32,8 +36,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Franchise information not found' }, { status: 403 })
     }
 
-    // 매장이 사용자의 프렌차이즈에 속하는지 확인
-    const { data: store, error: storeError } = await supabase
+    const { data: store, error: storeError } = await dataClient
       .from('stores')
       .select('id, franchise_id, company_id')
       .eq('id', store_id)
@@ -55,7 +58,7 @@ export async function POST(request: NextRequest) {
 
     console.log('Creating request with data:', { ...insertData, description: insertData.description.substring(0, 50) + '...' })
 
-    const { data, error } = await supabase
+    const { data, error } = await dataClient
       .from('requests')
       .insert(insertData)
       .select()

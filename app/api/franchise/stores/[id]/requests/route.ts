@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient, getServerUser } from '@/lib/supabase/server'
+import { createClient } from '@supabase/supabase-js'
 
 export async function GET(
   request: NextRequest,
@@ -12,9 +13,13 @@ export async function GET(
     }
 
     const supabase = await createServerSupabaseClient()
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+    const dataClient = serviceRoleKey && supabaseUrl
+      ? createClient(supabaseUrl, serviceRoleKey, { auth: { autoRefreshToken: false, persistSession: false } })
+      : supabase
 
-    // franchise_manager의 경우 franchise_id를 별도로 조회
-    const { data: userData, error: userDataError } = await supabase
+    const { data: userData, error: userDataError } = await dataClient
       .from('users')
       .select('franchise_id, company_id')
       .eq('id', user.id)
@@ -24,8 +29,7 @@ export async function GET(
       return NextResponse.json({ error: 'Franchise information not found' }, { status: 403 })
     }
 
-    // 매장이 사용자의 프렌차이즈에 속하는지 확인
-    const { data: store, error: storeError } = await supabase
+    const { data: store, error: storeError } = await dataClient
       .from('stores')
       .select('id, franchise_id, company_id')
       .eq('id', params.id)
@@ -40,8 +44,7 @@ export async function GET(
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
     thirtyDaysAgo.setHours(0, 0, 0, 0)
 
-    // 모든 요청 조회
-    const { data: allRequestsData, error: allRequestsError } = await supabase
+    const { data: allRequestsData, error: allRequestsError } = await dataClient
       .from('requests')
       .select(`
         id, 
@@ -89,7 +92,7 @@ export async function GET(
     let completedRequestsWithDetails = completedRequests
     
     try {
-      const { data: completedDetails, error: detailsError } = await supabase
+      const { data: completedDetails, error: detailsError } = await dataClient
         .from('requests')
         .select(`
           id,
@@ -149,7 +152,7 @@ export async function GET(
     try {
       const rejectedIds = rejectedRequests.map(r => r.id)
       if (rejectedIds.length > 0) {
-        const { data: rejectedDetails, error: rejectedDetailsError } = await supabase
+        const { data: rejectedDetails, error: rejectedDetailsError } = await dataClient
           .from('requests')
           .select(`
             id,

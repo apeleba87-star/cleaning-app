@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient, getServerUser } from '@/lib/supabase/server'
+import { createClient } from '@supabase/supabase-js'
 
 // 요청 확인 (처리완료된 요청 확인 처리)
 export async function PATCH(
@@ -18,9 +19,14 @@ export async function PATCH(
     }
 
     const supabase = await createServerSupabaseClient()
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+    const dataClient = serviceRoleKey && supabaseUrl
+      ? createClient(supabaseUrl, serviceRoleKey, { auth: { autoRefreshToken: false, persistSession: false } })
+      : supabase
 
-    // 요청 조회
-    const { data: requestData, error: requestError } = await supabase
+    // 요청 조회 (dataClient로 RLS 우회)
+    const { data: requestData, error: requestError } = await dataClient
       .from('requests')
       .select(`
         *,
@@ -43,7 +49,7 @@ export async function PATCH(
       }
     } else if (user.role === 'store_manager') {
       // 점주는 자신이 배정된 매장의 요청만 확인 가능
-      const { data: storeAssign, error: storeAssignError } = await supabase
+      const { data: storeAssign, error: storeAssignError } = await dataClient
         .from('store_assign')
         .select('id')
         .eq('user_id', user.id)
@@ -56,7 +62,7 @@ export async function PATCH(
     } else if (user.role === 'franchise_manager') {
       // 프렌차이즈 관리자는 자신의 프렌차이즈 매장 요청만 확인 가능
       // 먼저 사용자의 franchise_id 조회
-      const { data: userData, error: userDataError } = await supabase
+      const { data: userData, error: userDataError } = await dataClient
         .from('users')
         .select('franchise_id, company_id')
         .eq('id', user.id)
@@ -67,7 +73,7 @@ export async function PATCH(
       }
 
       // 매장이 해당 프렌차이즈에 속하는지 확인
-      const { data: storeData, error: storeDataError } = await supabase
+      const { data: storeData, error: storeDataError } = await dataClient
         .from('stores')
         .select('franchise_id, company_id')
         .eq('id', requestData.store_id)
@@ -99,8 +105,8 @@ export async function PATCH(
       })
     }
 
-    // DB에 확인 처리 정보 저장
-    const { data: updatedRequest, error: updateError } = await supabase
+    // DB에 확인 처리 정보 저장 (dataClient로 RLS 우회)
+    const { data: updatedRequest, error: updateError } = await dataClient
       .from('requests')
       .update({
         business_confirmed_at: new Date().toISOString(),

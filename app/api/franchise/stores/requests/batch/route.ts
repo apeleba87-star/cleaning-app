@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient, getServerUser } from '@/lib/supabase/server'
+import { createClient } from '@supabase/supabase-js'
 
 export async function GET(request: NextRequest) {
   try {
@@ -9,9 +10,13 @@ export async function GET(request: NextRequest) {
     }
 
     const supabase = await createServerSupabaseClient()
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+    const dataClient = serviceRoleKey && supabaseUrl
+      ? createClient(supabaseUrl, serviceRoleKey, { auth: { autoRefreshToken: false, persistSession: false } })
+      : supabase
 
-    // franchise_manager의 경우 franchise_id를 별도로 조회
-    const { data: userData, error: userDataError } = await supabase
+    const { data: userData, error: userDataError } = await dataClient
       .from('users')
       .select('franchise_id, company_id')
       .eq('id', user.id)
@@ -21,8 +26,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Franchise information not found' }, { status: 403 })
     }
 
-    // 프렌차이즈에 속한 모든 매장 조회
-    const { data: stores, error: storesError } = await supabase
+    const { data: stores, error: storesError } = await dataClient
       .from('stores')
       .select('id, name')
       .eq('franchise_id', userData.franchise_id)
@@ -49,8 +53,7 @@ export async function GET(request: NextRequest) {
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
     thirtyDaysAgo.setHours(0, 0, 0, 0)
 
-    // 모든 매장의 요청을 한 번에 조회
-    const { data: allRequestsData, error: allRequestsError } = await supabase
+    const { data: allRequestsData, error: allRequestsError } = await dataClient
       .from('requests')
       .select(`
         id, 
@@ -106,7 +109,7 @@ export async function GET(request: NextRequest) {
     let completedDetailsMap = new Map<string, any>()
     if (completedRequestIds.length > 0) {
       try {
-        const { data: completedDetails, error: detailsError } = await supabase
+        const { data: completedDetails, error: detailsError } = await dataClient
           .from('requests')
           .select(`
             id,
@@ -131,7 +134,7 @@ export async function GET(request: NextRequest) {
     let rejectedDetailsMap = new Map<string, any>()
     if (rejectedRequestIds.length > 0) {
       try {
-        const { data: rejectedDetails, error: rejectedDetailsError } = await supabase
+        const { data: rejectedDetails, error: rejectedDetailsError } = await dataClient
           .from('requests')
           .select(`
             id,

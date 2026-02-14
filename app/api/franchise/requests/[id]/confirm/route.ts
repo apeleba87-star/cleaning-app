@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient, getServerUser } from '@/lib/supabase/server'
+import { createClient } from '@supabase/supabase-js'
 
 // 요청 확인 (처리완료된 요청 확인 처리)
 export async function PATCH(
@@ -18,9 +19,14 @@ export async function PATCH(
     }
 
     const supabase = await createServerSupabaseClient()
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+    const dataClient = serviceRoleKey && supabaseUrl
+      ? createClient(supabaseUrl, serviceRoleKey, { auth: { autoRefreshToken: false, persistSession: false } })
+      : supabase
 
     // franchise_manager의 경우 franchise_id를 별도로 조회
-    const { data: userData, error: userDataError } = await supabase
+    const { data: userData, error: userDataError } = await dataClient
       .from('users')
       .select('franchise_id, company_id')
       .eq('id', user.id)
@@ -30,8 +36,8 @@ export async function PATCH(
       return NextResponse.json({ error: 'Franchise information not found' }, { status: 403 })
     }
 
-    // 요청 조회
-    const { data: requestData, error: requestError } = await supabase
+    // 요청 조회 (dataClient로 RLS 우회)
+    const { data: requestData, error: requestError } = await dataClient
       .from('requests')
       .select(`
         *,
@@ -60,13 +66,38 @@ export async function PATCH(
       )
     }
 
-    // confirmed_at 컬럼이 없으므로 성공만 반환 (클라이언트에서 상태 관리)
+    // 이미 확인 처리된 경우
+    if (requestData.business_confirmed_at) {
+      return NextResponse.json({ 
+        success: true, 
+        data: requestData,
+        message: 'Already confirmed'
+      })
+    }
+
+    // DB에 확인 처리 정보 저장 (dataClient로 RLS 우회)
+    const { data: updatedRequest, error: updateError } = await dataClient
+      .from('requests')
+      .update({
+        business_confirmed_at: new Date().toISOString(),
+        business_confirmed_by: user.id,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', params.id)
+      .select()
+      .single()
+
+    if (updateError || !updatedRequest) {
+      console.error('Error updating request confirmation:', updateError)
+      return NextResponse.json(
+        { error: 'Failed to confirm request' },
+        { status: 500 }
+      )
+    }
+
     return NextResponse.json({ 
       success: true, 
-      data: {
-        ...requestData,
-        confirmed_at: new Date().toISOString(), // 클라이언트에서 사용할 수 있도록 반환
-      }
+      data: updatedRequest
     })
   } catch (error: any) {
     console.error('Error in PATCH /api/franchise/requests/[id]/confirm:', error)

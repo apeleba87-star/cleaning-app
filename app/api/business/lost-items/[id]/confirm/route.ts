@@ -13,9 +13,14 @@ export async function PATCH(
     }
 
     const supabase = await createServerSupabaseClient()
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+    const dataClient = serviceRoleKey && supabaseUrl
+      ? createClient(supabaseUrl, serviceRoleKey, { auth: { autoRefreshToken: false, persistSession: false } })
+      : supabase
 
     // 분실물이 존재하고 사용자의 회사 매장에 속하는지 확인
-    const { data: lostItem, error: fetchError } = await supabase
+    const { data: lostItem, error: fetchError } = await dataClient
       .from('lost_items')
       .select('id, store_id, status, updated_at, stores!inner(company_id)')
       .eq('id', params.id)
@@ -37,7 +42,7 @@ export async function PATCH(
     }
 
     // 이미 확인 처리된 경우
-    const { data: currentLostItem, error: fetchCurrentError } = await supabase
+    const { data: currentLostItem, error: fetchCurrentError } = await dataClient
       .from('lost_items')
       .select('business_confirmed_at')
       .eq('id', params.id)
@@ -55,29 +60,7 @@ export async function PATCH(
       })
     }
 
-    // Service Role Key를 사용하여 RLS 우회 (업데이트가 실패할 경우를 대비)
-    let adminSupabase: ReturnType<typeof createClient> | null = null
-    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-    
-    console.log('=== Service Role Key Check ===')
-    console.log('Service Role Key exists:', !!serviceRoleKey)
-    console.log('Supabase URL exists:', !!supabaseUrl)
-    
-    if (serviceRoleKey && supabaseUrl) {
-      adminSupabase = createClient(supabaseUrl, serviceRoleKey, {
-        auth: {
-          autoRefreshToken: false,
-          persistSession: false,
-        },
-      })
-      console.log('Service Role Key client created successfully')
-    } else {
-      console.warn('Service Role Key not available - Service Role Key:', !!serviceRoleKey, 'URL:', !!supabaseUrl)
-      console.warn('Will use regular client only')
-    }
-
-    // status 업데이트 시도
+    // status 업데이트 시도 (dataClient로 RLS 우회)
     // lost_items 테이블의 상태 값을 확인하여 올바른 값 사용
     // 일반적으로 submitted, pending, received, completed, rejected 등이 가능
     const updatedAt = new Date().toISOString()
@@ -93,7 +76,7 @@ export async function PATCH(
     let updateError: any = null
     let updateData: any = null
     
-    const updateResult = await supabase
+    const updateResult = await dataClient
       .from('lost_items')
       .update({ 
         status: 'completed',
@@ -106,52 +89,6 @@ export async function PATCH(
 
     updateError = updateResult.error
     updateData = updateResult.data
-    
-    // 일반 클라이언트로 업데이트 실패 시 Service Role Key 사용
-    if (updateError && adminSupabase) {
-      console.log('=== Regular update failed, trying with Service Role Key ===')
-      console.log('Original error:', {
-        code: updateError.code,
-        message: updateError.message,
-        details: updateError.details,
-        hint: updateError.hint
-      })
-      
-      // adminSupabase가 null이 아님을 확인했으므로 타입 단언 사용
-      const adminClient = adminSupabase as any
-      const adminUpdateResult = await adminClient
-        .from('lost_items')
-        .update({ 
-          status: 'completed',
-          business_confirmed_at: updatedAt,
-          business_confirmed_by: user.id,
-          updated_at: updatedAt,
-        })
-        .eq('id', params.id)
-        .select('id, status, updated_at, store_id, business_confirmed_at, business_confirmed_by')
-      
-      console.log('Service Role Key update result:', {
-        error: adminUpdateResult.error,
-        data: adminUpdateResult.data,
-        dataLength: adminUpdateResult.data?.length || 0
-      })
-      
-      if (!adminUpdateResult.error) {
-        console.log('✅ Update succeeded with Service Role Key')
-        updateError = null
-        updateData = adminUpdateResult.data
-      } else {
-        console.error('❌ Update failed even with Service Role Key:', {
-          code: adminUpdateResult.error.code,
-          message: adminUpdateResult.error.message,
-          details: adminUpdateResult.error.details,
-          hint: adminUpdateResult.error.hint
-        })
-        updateError = adminUpdateResult.error
-      }
-    } else if (updateError && !adminSupabase) {
-      console.error('⚠️ Update failed but Service Role Key not available')
-    }
     
     console.log('Update result:', { 
       error: updateError, 
@@ -179,19 +116,8 @@ export async function PATCH(
       
       if (isConstraintError) {
         // lost_items 테이블은 issue_status enum을 사용하므로 'completed'만 유효
-        // Service Role Key로 'completed' 재시도
-        console.log('Constraint error detected, trying "completed" with Service Role Key...')
-        const updateClient = adminSupabase || supabase
-        
-        if (!updateClient) {
-          console.error('Service Role Key not available for retry')
-          return NextResponse.json(
-            { error: `Failed to update status. Constraint error and Service Role Key not available. Error: ${updateError.message || JSON.stringify(updateError)}` },
-            { status: 500 }
-          )
-        }
-        
-        const { error: retryError, data: retryData } = await updateClient
+        console.log('Constraint error detected, retrying with dataClient...')
+        const { error: retryError, data: retryData } = await dataClient
           .from('lost_items')
           .update({ 
             status: 'completed',
@@ -210,12 +136,11 @@ export async function PATCH(
             )
           }
           
-        console.log('Successfully updated with status "completed" using Service Role Key:', retryData)
+        console.log('Successfully updated with status "completed":', retryData)
         
         // 업데이트 후 최신 데이터 조회
         await new Promise(resolve => setTimeout(resolve, 100))
-        const fetchClient = adminSupabase || supabase
-        const { data: finalItem } = await fetchClient
+        const { data: finalItem } = await dataClient
           .from('lost_items')
           .select('id, status, updated_at, store_id, business_confirmed_at, business_confirmed_by')
           .eq('id', params.id)
@@ -249,8 +174,7 @@ export async function PATCH(
     // 데이터베이스 변경사항이 반영될 시간 확보
     await new Promise(resolve => setTimeout(resolve, 300))
     
-    const fetchClient = adminSupabase || supabase
-    const { data: updatedItem, error: fetchUpdatedError } = await fetchClient
+    const { data: updatedItem, error: fetchUpdatedError } = await dataClient
       .from('lost_items')
       .select('id, status, updated_at, store_id, business_confirmed_at, business_confirmed_by')
       .eq('id', params.id)
@@ -298,14 +222,12 @@ export async function PATCH(
       // 상태 값이 허용되지 않는 경우 다른 값 시도
       if (finalStatus === 'submitted' || finalStatus === lostItem.status) {
         console.log('=== Trying alternative status values ===')
-        const updateClient = adminSupabase || supabase
-        console.log('Using client:', adminSupabase ? 'Service Role Key' : 'Regular')
         
         // lost_items 테이블은 issue_status enum을 사용하므로 'completed'만 허용됨
         // 'completed' 상태로 다시 시도 (Service Role Key 사용)
         console.log('Trying status: "completed" with Service Role Key')
         const completedUpdatedAt = new Date().toISOString()
-        const { error: completedError, data: completedData } = await updateClient
+        const { error: completedError, data: completedData } = await dataClient
           .from('lost_items')
           .update({ 
             status: 'completed',

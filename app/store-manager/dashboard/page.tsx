@@ -1371,6 +1371,7 @@ export default function StoreManagerDashboardPage() {
             </div>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-2 md:gap-4">
               <div className="bg-blue-50 rounded-lg p-3 md:p-4 text-center">
+                <div className="text-xs md:text-sm font-medium text-blue-700 mb-1">접수</div>
                 <div className="text-xl md:text-2xl font-bold text-blue-600 mb-2">
                   {storeStatuses.reduce((sum, s) => sum + s.received_request_count, 0)}건
                 </div>
@@ -1378,10 +1379,11 @@ export default function StoreManagerDashboardPage() {
                   onClick={() => handleRequestStatusClick('received')}
                   className="w-full px-3 md:px-4 py-2 bg-blue-600 text-white rounded-md text-xs md:text-sm font-medium hover:bg-blue-700 transition-colors touch-manipulation"
                 >
-                  접수
+                  상세보기
                 </button>
               </div>
               <div className="bg-yellow-50 rounded-lg p-3 md:p-4 text-center">
+                <div className="text-xs md:text-sm font-medium text-yellow-700 mb-1">처리중</div>
                 <div className="text-xl md:text-2xl font-bold text-yellow-600 mb-2">
                   {storeStatuses.reduce((sum, s) => sum + s.in_progress_request_count, 0)}건
                 </div>
@@ -1389,10 +1391,11 @@ export default function StoreManagerDashboardPage() {
                   onClick={() => handleRequestStatusClick('in_progress')}
                   className="w-full px-3 md:px-4 py-2 bg-yellow-600 text-white rounded-md text-xs md:text-sm font-medium hover:bg-yellow-700 transition-colors touch-manipulation"
                 >
-                  처리중
+                  상세보기
                 </button>
               </div>
               <div className="bg-green-50 rounded-lg p-3 md:p-4 text-center">
+                <div className="text-xs md:text-sm font-medium text-green-700 mb-1">처리완료</div>
                 <div className="text-xl md:text-2xl font-bold text-green-600 mb-2">
                   {unconfirmedCompletedCount}건
                 </div>
@@ -1400,10 +1403,11 @@ export default function StoreManagerDashboardPage() {
                   onClick={() => handleRequestStatusClick('completed')}
                   className="w-full px-3 md:px-4 py-2 bg-green-600 text-white rounded-md text-xs md:text-sm font-medium hover:bg-green-700 transition-colors touch-manipulation"
                 >
-                  처리완료
+                  상세보기
                 </button>
               </div>
               <div className="bg-red-50 rounded-lg p-3 md:p-4 text-center">
+                <div className="text-xs md:text-sm font-medium text-red-700 mb-1">반려처리</div>
                 <div className="text-xl md:text-2xl font-bold text-red-600 mb-2">
                   {unconfirmedRejectedCount}건
                 </div>
@@ -1411,7 +1415,7 @@ export default function StoreManagerDashboardPage() {
                   onClick={() => handleRequestStatusClick('rejected')}
                   className="w-full px-3 md:px-4 py-2 bg-red-600 text-white rounded-md text-xs md:text-sm font-medium hover:bg-red-700 transition-colors touch-manipulation"
                 >
-                  반려처리
+                  상세보기
                 </button>
               </div>
             </div>
@@ -2131,7 +2135,7 @@ export default function StoreManagerDashboardPage() {
 
       {/* 요청란 상황 모달 */}
       {showRequestStatusModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-2 md:p-4" onClick={() => setShowRequestStatusModal(false)}>
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[100] p-2 md:p-4" onClick={() => setShowRequestStatusModal(false)}>
           <div className="bg-white rounded-lg p-4 md:p-6 max-w-4xl w-full max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <div className="flex justify-between items-center mb-4">
               <h2 className="text-lg md:text-xl font-semibold">

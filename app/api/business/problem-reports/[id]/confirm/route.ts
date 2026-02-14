@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient, getServerUser } from '@/lib/supabase/server'
+import { createClient } from '@supabase/supabase-js'
 
 export async function PATCH(
   request: NextRequest,
@@ -12,9 +13,14 @@ export async function PATCH(
     }
 
     const supabase = await createServerSupabaseClient()
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+    const dataClient = serviceRoleKey && supabaseUrl
+      ? createClient(supabaseUrl, serviceRoleKey, { auth: { autoRefreshToken: false, persistSession: false } })
+      : supabase
 
     // 문제 보고가 존재하고 사용자의 회사 매장에 속하는지 확인
-    const { data: problemReport, error: fetchError } = await supabase
+    const { data: problemReport, error: fetchError } = await dataClient
       .from('problem_reports')
       .select('id, store_id, stores!inner(company_id)')
       .eq('id', params.id)
@@ -33,7 +39,7 @@ export async function PATCH(
     }
 
     // 이미 확인 처리된 경우
-    const { data: currentProblem, error: fetchCurrentError } = await supabase
+    const { data: currentProblem, error: fetchCurrentError } = await dataClient
       .from('problem_reports')
       .select('business_confirmed_at')
       .eq('id', params.id)
@@ -54,8 +60,8 @@ export async function PATCH(
       })
     }
 
-    // business_confirmed_at과 business_confirmed_by 업데이트
-    const { data: updatedProblem, error: updateError } = await supabase
+    // business_confirmed_at과 business_confirmed_by 업데이트 (dataClient로 RLS 우회)
+    const { data: updatedProblem, error: updateError } = await dataClient
       .from('problem_reports')
       .update({ 
         business_confirmed_at: new Date().toISOString(),

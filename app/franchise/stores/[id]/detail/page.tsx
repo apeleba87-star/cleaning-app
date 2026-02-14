@@ -94,7 +94,7 @@ export default function StoreDetailPage() {
   const [storeName, setStoreName] = useState('')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [activeTab, setActiveTab] = useState<'7days' | '30days' | 'thisMonth' | 'custom'>('7days')
+  const [activeTab, setActiveTab] = useState<'30days' | 'thisMonth' | 'custom'>('30days')
   const [customStartDate, setCustomStartDate] = useState('')
   const [customEndDate, setCustomEndDate] = useState('')
   const [detailData, setDetailData] = useState<StoreDetailData>({
@@ -165,10 +165,7 @@ export default function StoreDetailPage() {
 
     let startDate: Date
 
-    if (activeTab === '7days') {
-      startDate = new Date(today)
-      startDate.setDate(startDate.getDate() - 7)
-    } else if (activeTab === '30days') {
+    if (activeTab === '30days') {
       startDate = new Date(today)
       startDate.setDate(startDate.getDate() - 30)
     } else if (activeTab === 'thisMonth') {
@@ -177,9 +174,8 @@ export default function StoreDetailPage() {
     } else {
       // 기간 선택
       if (!customStartDate || !customEndDate) {
-        // 기본값: 최근 7일
         startDate = new Date(today)
-        startDate.setDate(startDate.getDate() - 7)
+        startDate.setDate(startDate.getDate() - 30)
       } else {
         startDate = new Date(customStartDate)
         const customEnd = new Date(customEndDate)
@@ -190,9 +186,8 @@ export default function StoreDetailPage() {
         const diffTime = Math.abs(endDate.getTime() - startDate.getTime())
         const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
         if (diffDays > 90) {
-          // 기본값으로 되돌림
           startDate = new Date(today)
-          startDate.setDate(startDate.getDate() - 7)
+          startDate.setDate(startDate.getDate() - 30)
           endDate = new Date(today)
           endDate.setHours(23, 59, 59, 999)
         }
@@ -441,16 +436,6 @@ export default function StoreDetailPage() {
       {!requestStatus && (
         <div className="bg-white rounded-lg shadow-md p-4 mb-6">
           <div className="flex gap-4 border-b">
-            <button
-              onClick={() => setActiveTab('7days')}
-              className={`px-4 py-2 font-medium ${
-                activeTab === '7days'
-                  ? 'text-blue-600 border-b-2 border-blue-600'
-                  : 'text-gray-600 hover:text-gray-900'
-              }`}
-            >
-              최근 7일
-            </button>
             <button
               onClick={() => setActiveTab('30days')}
               className={`px-4 py-2 font-medium ${

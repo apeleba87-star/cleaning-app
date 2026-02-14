@@ -51,7 +51,7 @@ export async function GET(
     // 모든 problem_reports 조회 (category와 title 확인을 위해)
     const { data: allReports, error: reportsError } = await adminSupabase
       .from('problem_reports')
-      .select('id, title, description, photo_url, status, category, vending_machine_number, product_number, created_at, updated_at')
+      .select('id, title, description, photo_url, status, category, vending_machine_number, product_number, created_at, updated_at, business_confirmed_at, business_confirmed_by')
       .eq('store_id', params.id)
       .order('created_at', { ascending: false })
 

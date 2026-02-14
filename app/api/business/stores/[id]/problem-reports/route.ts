@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient, getServerUser } from '@/lib/supabase/server'
+import { createClient } from '@supabase/supabase-js'
 
 export async function GET(
   request: NextRequest,
@@ -12,9 +13,14 @@ export async function GET(
     }
 
     const supabase = await createServerSupabaseClient()
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+    const dataClient = serviceRoleKey && supabaseUrl
+      ? createClient(supabaseUrl, serviceRoleKey, { auth: { autoRefreshToken: false, persistSession: false } })
+      : supabase
 
     // 매장이 사용자의 회사에 속하는지 확인
-    const { data: store, error: storeError } = await supabase
+    const { data: store, error: storeError } = await dataClient
       .from('stores')
       .select('id, company_id')
       .eq('id', params.id)
@@ -24,8 +30,8 @@ export async function GET(
       return NextResponse.json({ error: 'Store not found' }, { status: 404 })
     }
 
-    // 모든 problem_reports 조회 (category와 title 확인을 위해)
-    const { data: allReports, error: reportsError } = await supabase
+    // 모든 problem_reports 조회 (dataClient로 RLS 우회)
+    const { data: allReports, error: reportsError } = await dataClient
       .from('problem_reports')
       .select('id, title, description, photo_url, status, category, vending_machine_number, product_number, created_at, updated_at, business_confirmed_at, business_confirmed_by')
       .eq('store_id', params.id)

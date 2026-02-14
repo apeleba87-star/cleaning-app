@@ -71,6 +71,16 @@ export default function RequestList({ initialRequests, storeMap }: RequestListPr
     }
   }
 
+  const getPhotoUrls = (photoUrl: string | null): string[] => {
+    if (!photoUrl) return []
+    try {
+      const parsed = JSON.parse(photoUrl)
+      return Array.isArray(parsed) ? parsed : [parsed]
+    } catch {
+      return [photoUrl]
+    }
+  }
+
   const getStatusColor = (status: RequestStatus) => {
     switch (status) {
       case 'received':
@@ -408,6 +418,22 @@ export default function RequestList({ initialRequests, storeMap }: RequestListPr
                         {request.description}
                       </div>
                     )}
+                    {(request.status === 'received' || request.status === 'in_progress') && request.photo_url && getPhotoUrls(request.photo_url).length > 0 && (
+                      <div className="mt-2">
+                        <div className="flex flex-wrap gap-2">
+                          {getPhotoUrls(request.photo_url).map((url, idx) => (
+                            <img
+                              key={idx}
+                              src={url}
+                              alt={`요청 사진 ${idx + 1}`}
+                              className="w-20 h-20 object-cover rounded border border-gray-200 cursor-pointer hover:opacity-80"
+                              onClick={() => setViewingImage(url)}
+                            />
+                          ))}
+                        </div>
+                        <p className="text-xs text-gray-500 mt-1">클릭하여 크게 보기</p>
+                      </div>
+                    )}
                   </td>
                   <td className="px-6 py-5 whitespace-nowrap">
                     <div className={`text-sm font-medium ${request.status === 'completed' || request.status === 'rejected' ? 'text-gray-400' : 'text-gray-600'}`}>
@@ -562,6 +588,19 @@ export default function RequestList({ initialRequests, storeMap }: RequestListPr
                   {request.description && (
                     <div className={`text-sm text-gray-600 mt-2 whitespace-normal break-words leading-relaxed ${request.status === 'completed' || request.status === 'rejected' ? 'text-gray-400' : ''}`}>
                       {request.description}
+                    </div>
+                  )}
+                  {(request.status === 'received' || request.status === 'in_progress') && request.photo_url && getPhotoUrls(request.photo_url).length > 0 && (
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {getPhotoUrls(request.photo_url).map((url, idx) => (
+                        <img
+                          key={idx}
+                          src={url}
+                          alt={`요청 사진 ${idx + 1}`}
+                          className="w-16 h-16 object-cover rounded border border-gray-200 cursor-pointer hover:opacity-80"
+                          onClick={() => setViewingImage(url)}
+                        />
+                      ))}
                     </div>
                   )}
                 </div>
@@ -781,6 +820,21 @@ export default function RequestList({ initialRequests, storeMap }: RequestListPr
           </div>
         )
       })()}
+
+      {/* 이미지 확대 보기 모달 */}
+      {viewingImage && (
+        <div
+          className="fixed inset-0 bg-black/80 flex items-center justify-center z-[100] p-4"
+          onClick={() => setViewingImage(null)}
+        >
+          <img
+            src={viewingImage}
+            alt="확대 보기"
+            className="max-w-full max-h-[90vh] object-contain rounded"
+            onClick={(e) => e.stopPropagation()}
+          />
+        </div>
+      )}
     </div>
   )
 }
