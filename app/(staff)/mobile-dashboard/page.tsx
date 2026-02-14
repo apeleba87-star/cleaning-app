@@ -8,7 +8,7 @@ import { calculateChecklistProgress } from '@/lib/utils/checklist'
 import { GeoGuard } from '@/components/GeoGuard'
 import { clockInAction, clockOutAction } from '../attendance/actions'
 import { GPSLocation } from '@/types/db'
-import { getTodayDateKST, getYesterdayDateKST, getCurrentHourKST, isWithinManagementPeriod, calculateWorkDateForNightShift } from '@/lib/utils/date'
+import { getTodayDateKST, getCurrentHourKST, isWithinManagementPeriod, calculateWorkDateForNightShift } from '@/lib/utils/date'
 import QuickStartGuide from '@/components/staff/QuickStartGuide'
 import { useToast } from '@/components/Toast'
 
@@ -365,106 +365,28 @@ export default function MobileDashboardPage() {
 
         setUser(userData)
 
-        const { data: storeAssignments, error: assignError } = await supabase
-          .from('store_assign')
-          .select(`
-            store_id,
-            stores:store_id (
-              id,
-              name,
-              management_days,
-              is_night_shift,
-              work_start_hour,
-              work_end_hour,
-              service_active
-            )
-          `)
-          .eq('user_id', session.user.id)
+        // 배정된 매장 + 출근 상태 조회 (API 사용 - RLS 우회)
+        const assignRes = await fetch('/api/staff/assigned-stores?include_attendance=1')
+        const assignJson = await assignRes.json()
+        const apiStores = assignJson.success && assignJson.data ? assignJson.data : []
 
-        if (assignError) {
-          console.error('Error loading store assignments:', assignError)
-        }
+        const storesData: StoreWithAssignment[] = apiStores
+          .map((store: any) => {
+            const attendanceStatus = store.attendanceStatus || 'not_clocked_in'
+            const attendanceWorkDate = store.attendanceWorkDate || null
+            const attendanceType = store.attendanceType || null
 
-        const today = getTodayDateKST()
-        const yesterday = getYesterdayDateKST()
-
-        // 오늘 날짜의 출근 기록 조회 (attendance_type 포함)
-        const { data: todayAttendance, error: todayAttendanceError } = await supabase
-            .from('attendance')
-            .select('store_id, clock_out_at, work_date, attendance_type')
-            .eq('user_id', session.user.id)
-          .eq('work_date', today)
-
-        // 어제 날짜의 미퇴근 기록만 조회 (날짜 경계를 넘는 야간 근무 고려)
-        const { data: yesterdayAttendance, error: yesterdayAttendanceError } = await supabase
-            .from('attendance')
-            .select('store_id, clock_out_at, work_date, attendance_type')
-            .eq('user_id', session.user.id)
-          .eq('work_date', yesterday)
-          .is('clock_out_at', null) // 미퇴근 기록만
-          .order('clock_in_at', { ascending: false })
-          .limit(10) // 최근 10개만 조회 (성능 최적화)
-
-        if (todayAttendanceError || yesterdayAttendanceError) {
-          console.error('Error loading attendance:', todayAttendanceError || yesterdayAttendanceError)
-        }
-
-        const attendanceMap = new Map<string, { status: 'not_clocked_in' | 'clocked_in' | 'clocked_out', workDate: string | null, attendanceType: string | null }>()
-        
-        // 오늘 날짜의 출근 기록 처리
-        if (todayAttendance) {
-          todayAttendance.forEach((attendance: any) => {
-            if (attendance.work_date === today) {
-              if (attendance.clock_out_at) {
-                attendanceMap.set(attendance.store_id, { status: 'clocked_out', workDate: attendance.work_date, attendanceType: attendance.attendance_type || null })
-              } else {
-                attendanceMap.set(attendance.store_id, { status: 'clocked_in', workDate: attendance.work_date, attendanceType: attendance.attendance_type || null })
-              }
-            }
-          })
-        }
-        
-        // 어제 날짜의 미퇴근 기록 처리 (오늘 출근 기록이 없는 경우에만)
-        // 어제 완료된 기록은 오늘 상태에 표시하지 않음 (이미 미퇴근 기록만 조회하므로 clock_out_at은 항상 NULL)
-        if (yesterdayAttendance) {
-          yesterdayAttendance.forEach((attendance: any) => {
-            // 오늘 날짜로 이미 처리된 매장이 아니면 처리
-            if (!attendanceMap.has(attendance.store_id)) {
-              // 미퇴근 기록만 조회했으므로 항상 "관리중" 상태
-              attendanceMap.set(attendance.store_id, { status: 'clocked_in', workDate: attendance.work_date, attendanceType: attendance.attendance_type || null })
-            }
-          })
-        }
-
-        const storesData: StoreWithAssignment[] = (
-          storeAssignments || []
-        )
-          .map((assignment: any) => {
-            const store = assignment.stores
-            if (!store || store.service_active === false) return null
-            
-            let attendanceStatus: 'not_clocked_in' | 'clocked_in' | 'clocked_out' = 'not_clocked_in'
-            let attendanceWorkDate: string | null = null
-            let attendanceType: string | null = null
-            if (attendanceMap.has(store.id)) {
-              const attendanceData = attendanceMap.get(store.id)
-              attendanceStatus = attendanceData?.status || 'not_clocked_in'
-              attendanceWorkDate = attendanceData?.workDate || null
-              attendanceType = attendanceData?.attendanceType || null
-            }
-            
             // 출근일 변경으로 출근한 경우, isWorkDay가 false여도 출근 상태로 처리
             const isRescheduledAttendance = attendanceType === 'rescheduled' && attendanceStatus === 'clocked_in'
-            
-            // 출근 기록이 있는 경우 work_date 기준으로 체크, 없는 경우 야간 매장 날짜 경계 고려
+
             const calculatedIsWorkDay = isTodayWorkDay(
               store.management_days,
-              attendanceWorkDate, // 출근 기록의 work_date
+              attendanceWorkDate,
               store.is_night_shift,
               store.work_start_hour,
               store.work_end_hour
-            ) || isRescheduledAttendance // 출근일 변경 출근도 근무일로 처리
-            
+            ) || isRescheduledAttendance
+
             return {
               id: store.id,
               name: store.name,
@@ -478,7 +400,6 @@ export default function MobileDashboardPage() {
               work_end_hour: store.work_end_hour,
             }
           })
-          .filter((s: any): s is StoreWithAssignment => s !== null)
           .sort((a, b) => {
             // 정렬 순서: 1. 출근중, 2. 출근전, 3. 퇴근완료, 4. 휴무
             const getSortOrder = (store: StoreWithAssignment) => {

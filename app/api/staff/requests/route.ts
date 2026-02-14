@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server'
 import { createServerSupabaseClient, getServerUser } from '@/lib/supabase/server'
 import { handleApiError, UnauthorizedError, ForbiddenError } from '@/lib/errors'
+import { createClient } from '@supabase/supabase-js'
 import { getTodayDateKST } from '@/lib/utils/date'
 
 // 직원용 요청란 조회 (출근 중인 매장의 처리중인 요청만)
@@ -17,11 +18,21 @@ export async function GET(request: NextRequest) {
 
     const supabase = await createServerSupabaseClient()
 
+    // RLS 우회: store_assign, stores, requests 등 조회 시 서비스 역할 사용
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+    const dataClient =
+      serviceRoleKey && supabaseUrl
+        ? createClient(supabaseUrl, serviceRoleKey, {
+            auth: { autoRefreshToken: false, persistSession: false },
+          })
+        : supabase
+
     // 오늘 날짜
     const today = getTodayDateKST()
 
     // 배정된 매장 ID 목록 조회
-    const { data: storeAssignments, error: assignmentError } = await supabase
+    const { data: storeAssignments, error: assignmentError } = await dataClient
       .from('store_assign')
       .select('store_id')
       .eq('user_id', user.id)
@@ -42,7 +53,7 @@ export async function GET(request: NextRequest) {
     }
 
     // 오늘 출근 상태 조회 (출근 중인 매장과 퇴근한 매장 구분용)
-    const { data: todayAttendances, error: attendanceError } = await supabase
+    const { data: todayAttendances, error: attendanceError } = await dataClient
       .from('attendance')
       .select('store_id, clock_out_at')
       .eq('user_id', user.id)
@@ -64,7 +75,7 @@ export async function GET(request: NextRequest) {
     })
 
     // 배정된 매장의 처리중인 요청란 조회 (출근 여부와 관계없이)
-    const { data: requests, error } = await supabase
+    const { data: requests, error } = await dataClient
       .from('requests')
       .select(`
         *,
@@ -97,7 +108,7 @@ export async function GET(request: NextRequest) {
           console.log(`[API] Fetching user for request ${request.id}, created_by: ${request.created_by}`)
           
           // 먼저 users 테이블에서 조회
-          const { data: userData, error: userError } = await supabase
+          const { data: userData, error: userError } = await dataClient
             .from('users')
             .select('id, name, role')
             .eq('id', request.created_by)
@@ -135,7 +146,7 @@ export async function GET(request: NextRequest) {
             
             // 방법 1: auth_user_id 컬럼이 있는 경우 (컬럼이 없으면 에러 발생하지만 무시)
             try {
-              const { data: userByAuthId, error: authError } = await supabase
+              const { data: userByAuthId, error: authError } = await dataClient
                 .from('users')
                 .select('id, name, role')
                 .eq('auth_user_id', request.created_by)

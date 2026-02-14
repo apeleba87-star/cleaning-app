@@ -72,27 +72,13 @@ export default function ProfilePage() {
           email: authUser.user?.email,
         })
 
-        // 배정된 매장 조회 (비활성 매장 제외)
-        const { data: storeAssignments, error: assignError } = await supabase
-          .from('store_assign')
-          .select(`
-            store_id,
-            stores:store_id (
-              id,
-              name,
-              service_active
-            )
-          `)
-          .eq('user_id', session.user.id)
-
-        if (assignError) {
-          console.error('Error loading store assignments:', assignError)
-        } else {
-          const stores: Store[] = (storeAssignments || [])
-            .map((assignment: any) => assignment.stores)
-            .filter((store: any): store is Store => store != null && store !== undefined && store.service_active !== false)
+        // 배정된 매장 조회 (API 사용 - RLS 우회)
+        const res = await fetch('/api/staff/assigned-stores')
+        const json = await res.json()
+        if (json.success && json.data) {
+          const stores: Store[] = json.data
+            .map((s: { id: string; name: string }) => ({ id: s.id, name: s.name }))
             .sort((a: Store, b: Store) => a.name.localeCompare(b.name))
-          
           setAssignedStores(stores)
         }
 

@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { Store } from '@/types/db'
-import { getCurrentHourKST, isWithinManagementPeriod, calculateWorkDateForNightShift } from '@/lib/utils/date'
+import { getCurrentHourKST } from '@/lib/utils/date'
 
 interface StoreSelectorProps {
   selectedStoreId: string
@@ -19,9 +19,6 @@ type StoreSelectorStore = Pick<Store, 'id' | 'name' | 'company_id' | 'deleted_at
 const isDev = process.env.NODE_ENV !== 'production'
 const devLog = (...args: any[]) => {
   if (isDev) console.log(...args)
-}
-const devWarn = (...args: any[]) => {
-  if (isDev) console.warn(...args)
 }
 
 export default function StoreSelector({ selectedStoreId: propSelectedStoreId, onSelectStore, disabled = false, excludeStoreIds = [], showOnlyTodayManagement = true }: StoreSelectorProps) {
@@ -42,80 +39,24 @@ export default function StoreSelector({ selectedStoreId: propSelectedStoreId, on
 
     if (!session) return
 
-    // 배정된 매장 조회
-    devLog('=== StoreSelector Debug ===')
-    devLog('User ID:', session.user.id)
-    devLog('User Email:', session.user.email)
-    
-    const { data: assignments, error: assignError } = await supabase
-      .from('store_assign')
-      .select('store_id, id, created_at')
-      .eq('user_id', session.user.id)
+    try {
+      const res = await fetch('/api/staff/assigned-stores')
+      const json = await res.json()
 
-    devLog('Store Assign Query Result:')
-    devLog('  - Data:', assignments)
-    devLog('  - Error:', assignError)
-    devLog('  - Error Code:', assignError?.code)
-    devLog('  - Error Message:', assignError?.message)
-    devLog('  - Error Details:', assignError?.details)
-    devLog('  - Error Hint:', assignError?.hint)
+      if (!res.ok) {
+        throw new Error(json.error || '매장 목록을 불러오는데 실패했습니다.')
+      }
 
-    if (assignError) {
-      console.error('Error fetching store assignments:', assignError)
-      setError(`매장 배정 정보를 불러오는 데 실패했습니다: ${assignError.message} (코드: ${assignError.code || 'N/A'})`)
-      setLoading(false)
-      return
-    }
+      if (!json.success || !json.data) {
+        setStores([])
+        setLoading(false)
+        return
+      }
 
-    if (!assignments || assignments.length === 0) {
-      devLog('No store assignments found for user:', session.user.id)
-      setLoading(false)
-      return
-    }
+      const storesData: StoreSelectorStore[] = json.data
+      devLog('Assigned stores from API:', storesData.length, storesData)
 
-    devLog('Found store assignments:', assignments)
-
-    const storeIds = assignments.map((a) => a.store_id)
-    devLog('Store IDs to fetch:', storeIds)
-    devLog('Number of store IDs:', storeIds.length)
-    
-    if (storeIds.length === 0) {
-      devLog('No store IDs to fetch')
-      setLoading(false)
-      return
-    }
-    
-    const { data: storesData, error: storesError } = await supabase
-      .from('stores')
-      .select('id, name, company_id, deleted_at, management_days, is_night_shift, work_start_hour, work_end_hour, service_active')
-      .in('id', storeIds)
-      .is('deleted_at', null)
-
-    devLog('=== Stores Query Result ===')
-    devLog('  - Data:', storesData)
-    devLog('  - Data Length:', storesData?.length || 0)
-    devLog('  - Error:', storesError)
-    devLog('  - Error Code:', storesError?.code)
-    devLog('  - Error Message:', storesError?.message)
-    devLog('  - Error Details:', storesError?.details)
-    devLog('  - Error Hint:', storesError?.hint)
-    
-    if (storesData && storesData.length > 0) {
-      devLog('✅ Successfully fetched stores:', storesData.map(s => ({ id: s.id, name: s.name })))
-    } else if (!storesError) {
-      devWarn('⚠️ No stores returned, but no error. Possible RLS issue.')
-    }
-
-    if (storesError) {
-      console.error('Error fetching store details:', storesError)
-      setError(`매장 정보를 불러오는 데 실패했습니다: ${storesError.message} (코드: ${storesError.code || 'N/A'})`)
-      setLoading(false)
-      return
-    }
-
-    devLog('Final stores:', storesData)
-
-    // 오늘의 요일 확인
+      // 오늘의 요일 확인
     const today = new Date()
     const dayOfWeek = today.getDay() // 0 = 일요일, 1 = 월요일, ..., 6 = 토요일
     const dayNames = ['일', '월', '화', '수', '목', '금', '토']
@@ -135,7 +76,9 @@ export default function StoreSelector({ selectedStoreId: propSelectedStoreId, on
       // 비활성 매장은 직원앱에서 제외
       if (store.service_active === false) return false
       // management_days가 없으면 모든 요일 허용 (기존 매장 호환성)
-      if (!store.management_days || store.management_days.trim() === '') {
+      const mdCheck = store.management_days
+      const mdStr = Array.isArray(mdCheck) ? mdCheck.join(',') : (mdCheck || '')
+      if (!mdStr || mdStr.trim() === '') {
         // management_days가 없으면 showOnlyTodayManagement가 false일 때만 포함
         return showOnlyTodayManagement === false
       }
@@ -171,8 +114,9 @@ export default function StoreSelector({ selectedStoreId: propSelectedStoreId, on
       }
       
       // management_days에서 확인할 요일이 포함되어 있는지 확인
-      // 형식: "월,수,금" 또는 "월수금" 둘 다 처리
-      const managementDays = store.management_days.replace(/\s/g, '') // 공백 제거
+      // 형식: "월,수,금" 또는 "월수금" 또는 배열 ["월","수","금"] 둘 다 처리
+      const mdRaw = store.management_days
+      const managementDays = (Array.isArray(mdRaw) ? mdRaw.join(',') : (mdRaw || '')).replace(/\s/g, '')
       const dayList = managementDays.split(',').map(d => d.trim())
       
       // 쉼표로 구분된 경우와 그렇지 않은 경우 모두 처리
@@ -217,6 +161,11 @@ export default function StoreSelector({ selectedStoreId: propSelectedStoreId, on
       }
     }
     setLoading(false)
+    } catch (err) {
+      console.error('Error fetching assigned stores:', err)
+      setError(err instanceof Error ? err.message : '매장 목록을 불러오는데 실패했습니다.')
+      setLoading(false)
+    }
   }
 
   const handleStoreChange = (storeId: string) => {
