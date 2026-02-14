@@ -21,11 +21,22 @@ export async function GET(request: NextRequest) {
     }
 
     const supabase = await createServerSupabaseClient()
+
+    // RLS 정책 문제로 인해 store_assign, stores 조회 시 서비스 역할 키 사용
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+    let adminSupabase: ReturnType<typeof createClient> | null = null
+    if (serviceRoleKey && supabaseUrl) {
+      adminSupabase = createClient(supabaseUrl, serviceRoleKey, {
+        auth: { autoRefreshToken: false, persistSession: false },
+      })
+    }
+    const dataClient = adminSupabase || supabase
     
-    // 매장관리자가 배정된 매장 조회
+    // 매장관리자가 배정된 매장 조회 (RLS 우회 - API에서 auth.role, user_id 검증 완료)
     console.log(`[Store Manager API] User ID: ${user.id}, Role: ${user.role}, Company ID: ${user.company_id}`)
     
-    const { data: storeAssigns, error: storeAssignError } = await supabase
+    const { data: storeAssigns, error: storeAssignError } = await dataClient
       .from('store_assign')
       .select('store_id')
       .eq('user_id', user.id)
@@ -57,7 +68,7 @@ export async function GET(request: NextRequest) {
     console.log(`[Store Manager API] Store IDs: ${storeIds.join(', ')}`)
 
     // 배정된 매장 정보 조회
-    const { data: stores, error: storesError } = await supabase
+    const { data: stores, error: storesError } = await dataClient
       .from('stores')
       .select('id, name, address, management_days, updated_at')
       .in('id', storeIds)
@@ -80,20 +91,6 @@ export async function GET(request: NextRequest) {
       })
     }
 
-    // RLS 정책 문제로 인해 attendance 조회 시 서비스 역할 키 사용
-    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-    let adminSupabase: ReturnType<typeof createClient> | null = null
-    
-    if (serviceRoleKey && supabaseUrl) {
-      adminSupabase = createClient(supabaseUrl, serviceRoleKey, {
-        auth: {
-          autoRefreshToken: false,
-          persistSession: false,
-        },
-      })
-    }
-    
     const attendanceClient = adminSupabase || supabase
 
     // 오늘 날짜 (한국 시간 기준)
@@ -124,7 +121,7 @@ export async function GET(request: NextRequest) {
             : false
 
           // 매장에 배정된 모든 사용자 조회 (출근 기록 확인용)
-          const { data: assignedStaff } = await supabase
+          const { data: assignedStaff } = await dataClient
             .from('store_assign')
             .select('user_id')
             .eq('store_id', store.id)
@@ -133,7 +130,7 @@ export async function GET(request: NextRequest) {
           
           // 디버깅: 배정된 사용자들의 역할 확인
           if (assignedUserIds.length > 0) {
-            const { data: users } = await supabase
+            const { data: users } = await dataClient
               .from('users')
               .select('id, role')
               .in('id', assignedUserIds)
@@ -249,7 +246,7 @@ export async function GET(request: NextRequest) {
           let staffName: string | null = null
           const latestAttendance = todayAttendances.length > 0 ? todayAttendances[0] : null
           if (latestAttendance?.user_id) {
-            const { data: staff } = await supabase
+            const { data: staff } = await dataClient
               .from('users')
               .select('name')
               .eq('id', latestAttendance.user_id)
@@ -262,13 +259,13 @@ export async function GET(request: NextRequest) {
           thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
           thirtyDaysAgo.setHours(0, 0, 0, 0)
 
-          const { data: problemReports } = await supabase
+          const { data: problemReports } = await dataClient
             .from('problem_reports')
             .select('id, category, status, title, created_at')
             .eq('store_id', store.id)
             .gte('created_at', thirtyDaysAgo.toISOString())
 
-          const { data: lostItems } = await supabase
+          const { data: lostItems } = await dataClient
             .from('lost_items')
             .select('id, status, created_at, updated_at')
             .eq('store_id', store.id)
@@ -307,7 +304,7 @@ export async function GET(request: NextRequest) {
           const unconfirmedLostItems = lostItems?.filter((l: any) => l.status !== 'completed').length || 0
 
           // 최근 30일 요청란
-          const { data: recentRequests } = await supabase
+          const { data: recentRequests } = await dataClient
             .from('requests')
             .select('id, title, status, created_at')
             .eq('store_id', store.id)
@@ -322,7 +319,7 @@ export async function GET(request: NextRequest) {
           // 물품 요청: 점주 처리중 상태만 카운트
           let managerInProgressSupplyRequestCount = 0
           try {
-            const { data: supplyRequests } = await supabase
+            const { data: supplyRequests } = await dataClient
               .from('supply_requests')
               .select('id, status')
               .eq('store_id', store.id)
@@ -334,20 +331,20 @@ export async function GET(request: NextRequest) {
           }
 
           // 오늘 체크리스트 (오늘 날짜로 복사된 체크리스트)
-          const { data: todayChecklistsKST } = await supabase
+          const { data: todayChecklistsKST } = await dataClient
             .from('checklist')
             .select('items, updated_at, work_date')
             .eq('store_id', store.id)
             .eq('work_date', todayDateKST)
 
-          const { data: todayChecklistsUTC } = await supabase
+          const { data: todayChecklistsUTC } = await dataClient
             .from('checklist')
             .select('items, updated_at, work_date')
             .eq('store_id', store.id)
             .eq('work_date', todayDateUTC)
 
           // 템플릿 체크리스트도 조회 (직원이 출근하지 않아서 복사되지 않은 경우)
-          const { data: templateChecklists } = await supabase
+          const { data: templateChecklists } = await dataClient
             .from('checklist')
             .select('items, updated_at, work_date')
             .eq('store_id', store.id)
@@ -363,7 +360,7 @@ export async function GET(request: NextRequest) {
           const checklistsToUse = hasTodayChecklists ? todayChecklists : (templateChecklists || [])
 
           // 오늘 관리전후사진
-          const { data: todayCleaningPhotos } = await supabase
+          const { data: todayCleaningPhotos } = await dataClient
             .from('cleaning_photos')
             .select('id, kind, created_at')
             .eq('store_id', store.id)

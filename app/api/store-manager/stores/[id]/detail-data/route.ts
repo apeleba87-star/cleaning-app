@@ -9,7 +9,7 @@ export async function GET(
   try {
     const user = await getServerUser()
 
-    if (!user || user.role !== 'store_manager') {
+    if (!user || !['store_manager', 'manager'].includes(user.role)) {
       return NextResponse.json({ error: '권한이 없습니다.' }, { status: 403 })
     }
 
@@ -22,7 +22,7 @@ export async function GET(
       return NextResponse.json({ error: '시작일과 종료일이 필요합니다.' }, { status: 400 })
     }
 
-    // 매장이 store_manager에게 배정되어 있는지 확인
+    // 매장이 store_manager/manager(점주)에게 배정되어 있는지 확인
     const { data: storeAssign, error: storeAssignError } = await supabase
       .from('store_assign')
       .select('id')

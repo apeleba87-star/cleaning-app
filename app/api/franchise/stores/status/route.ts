@@ -35,7 +35,7 @@ export async function GET(request: NextRequest) {
 
     const userFranchiseId = userData.franchise_id
     
-    // RLS 정책 문제로 인해 attendance 조회 시 서비스 역할 키 사용
+    // RLS 정책 문제로 인해 stores, store_assign, attendance 조회 시 서비스 역할 키 사용
     const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
     let adminSupabase: ReturnType<typeof createClient> | null = null
@@ -49,10 +49,11 @@ export async function GET(request: NextRequest) {
       })
     }
     
+    const dataClient = adminSupabase || supabase
     const attendanceClient = adminSupabase || supabase
 
-    // 프렌차이즈에 속한 모든 매장 조회
-    const { data: stores, error: storesError } = await supabase
+    // 프렌차이즈에 속한 모든 매장 조회 (RLS 우회 - API에서 auth.role, franchise_id 검증 완료)
+    const { data: stores, error: storesError } = await dataClient
       .from('stores')
       .select('id, name, address, management_days, updated_at, service_active')
       .eq('franchise_id', userFranchiseId)
@@ -99,7 +100,7 @@ export async function GET(request: NextRequest) {
 
           let assignedUserIds: string[] = []
           try {
-            const { data: assignedStaff } = await supabase
+            const { data: assignedStaff } = await dataClient
               .from('store_assign')
               .select('user_id')
               .eq('store_id', store.id)
@@ -170,7 +171,7 @@ export async function GET(request: NextRequest) {
           let staffName: string | null = null
           const latestAttendance = todayAttendances.length > 0 ? todayAttendances[0] : null
           if (latestAttendance?.user_id) {
-            const { data: staff } = await supabase
+            const { data: staff } = await dataClient
               .from('users')
               .select('name')
               .eq('id', latestAttendance.user_id)
@@ -353,7 +354,7 @@ export async function GET(request: NextRequest) {
             // 테이블이 없거나 오류 발생 시 빈 배열 유지
           }
 
-          const { data: recentRequests } = await supabase
+          const { data: recentRequests } = await dataClient
             .from('requests')
             .select('id, title, status, created_at')
             .eq('store_id', store.id)
@@ -474,6 +475,12 @@ export async function GET(request: NextRequest) {
             }
           }
 
+          // 휴무일일 때는 출퇴근 시간을 표시하지 않음 (업체관리자 API와 동일 로직)
+          if (!isWorkDay) {
+            clockInTime = null
+            clockOutTime = null
+            attendanceStatus = 'not_clocked_in'
+          }
 
           return {
             store_id: store.id,
