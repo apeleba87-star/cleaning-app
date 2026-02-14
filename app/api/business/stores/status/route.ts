@@ -29,11 +29,11 @@ async function fetchStoreStatusData(companyId: string, forDashboard = false) {
       })
     }
     
-    // attendance 테이블 조회용 클라이언트 (서비스 역할 키 우선 사용)
+    const dataClient = adminSupabase || supabase
     const attendanceClient = adminSupabase || supabase
 
-    // 회사에 속한 모든 매장 조회
-    const { data: stores, error: storesError } = await supabase
+    // 회사에 속한 모든 매장 조회 (RLS 우회 - API에서 company_id 검증 완료)
+    const { data: stores, error: storesError } = await dataClient
       .from('stores')
       .select('id, name, address, management_days, is_night_shift, work_start_hour, work_end_hour, updated_at, service_active')
       .eq('company_id', companyId)
@@ -99,7 +99,7 @@ async function fetchStoreStatusData(companyId: string, forDashboard = false) {
 
     // 배치 쿼리 최적화: 모든 매장의 store_assign을 한 번에 조회
     const storeIds = stores.map(s => s.id)
-    const { data: allStoreAssigns, error: allStoreAssignsError } = await supabase
+    const { data: allStoreAssigns, error: allStoreAssignsError } = await dataClient
       .from('store_assign')
       .select('store_id, user_id')
       .in('store_id', storeIds)
@@ -134,24 +134,24 @@ async function fetchStoreStatusData(companyId: string, forDashboard = false) {
     // Promise.allSettled 사용: 일부 쿼리 실패해도 나머지 데이터 반환 보장
     // forDashboard면 체크리스트·cleaning_photos 조회 생략 (대시보드용 경량화)
     const basePromises = [
-      supabase
+      dataClient
         .from('problem_reports')
         .select('id, store_id, category, status, title, created_at, business_confirmed_at')
         .in('store_id', storeIds)
         .gte('created_at', thirtyDaysAgo.toISOString())
         .lte('created_at', todayEnd.toISOString()),
-      supabase
+      dataClient
         .from('lost_items')
         .select('id, store_id, status, created_at, updated_at, business_confirmed_at')
         .in('store_id', storeIds)
         .or(`created_at.gte.${thirtyDaysAgo.toISOString()},updated_at.gte.${thirtyDaysAgo.toISOString()}`),
-      supabase
+      dataClient
         .from('requests')
         .select('id, store_id, title, status, created_at, business_confirmed_at')
         .in('store_id', storeIds)
         .gte('created_at', thirtyDaysAgo.toISOString())
         .order('created_at', { ascending: false }),
-      supabase
+      dataClient
         .from('supply_requests')
         .select('id, store_id, status')
         .in('store_id', storeIds)
@@ -160,12 +160,12 @@ async function fetchStoreStatusData(companyId: string, forDashboard = false) {
     const optionalPromises = forDashboard
       ? []
       : [
-          supabase
+          dataClient
             .from('checklist')
             .select('id, store_id, items, updated_at, work_date, assigned_user_id')
             .in('store_id', storeIds)
             .or(`work_date.eq.${todayDateKST},work_date.eq.${todayDateUTC},work_date.eq.2000-01-01`),
-          supabase
+          dataClient
             .from('cleaning_photos')
             .select('id, store_id, kind, created_at, area_category')
             .in('store_id', storeIds)
@@ -185,7 +185,7 @@ async function fetchStoreStatusData(companyId: string, forDashboard = false) {
           const timeoutPromise = new Promise<{ data: any[] | null; error: any }>((resolve) =>
             setTimeout(() => resolve({ data: [], error: { message: 'Product photos query timeout' } }), 3000)
           )
-          const queryPromise = supabase
+          const queryPromise = dataClient
             .from('product_photos')
             .select('id, store_id, type, photo_urls, created_at')
             .in('store_id', storeIds)
@@ -248,7 +248,7 @@ async function fetchStoreStatusData(companyId: string, forDashboard = false) {
     // 모든 직원 정보를 한 번에 조회
     let usersMap = new Map<string, string>()
     if (allUserIds.size > 0) {
-      const { data: allUsers, error: usersError } = await supabase
+      const { data: allUsers, error: usersError } = await dataClient
         .from('users')
         .select('id, name')
         .in('id', Array.from(allUserIds))
