@@ -11,6 +11,7 @@ interface StoreSelectorProps {
   disabled?: boolean // 출근 후 매장 선택 불가
   excludeStoreIds?: string[] // 제외할 매장 ID 목록 (이미 출근한 매장)
   showOnlyTodayManagement?: boolean // true: 오늘 관리 요일인 매장만, false: 오늘 관리 요일이 아닌 매장만, undefined: 모든 매장
+  onSelectableStoresChange?: (stores: { id: string; name: string }[]) => void // 선택 가능한 매장 목록 (버튼 라벨·개수 표시용)
 }
 
 // StoreSelector에서 사용하는 최소 필드 타입
@@ -21,15 +22,17 @@ const devLog = (...args: any[]) => {
   if (isDev) console.log(...args)
 }
 
-export default function StoreSelector({ selectedStoreId: propSelectedStoreId, onSelectStore, disabled = false, excludeStoreIds = [], showOnlyTodayManagement = true }: StoreSelectorProps) {
+export default function StoreSelector({ selectedStoreId: propSelectedStoreId, onSelectStore, disabled = false, excludeStoreIds = [], showOnlyTodayManagement = true, onSelectableStoresChange }: StoreSelectorProps) {
   const [stores, setStores] = useState<StoreSelectorStore[]>([])
   const [selectedStoreId, setSelectedStoreId] = useState<string>(propSelectedStoreId)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
+  // excludeStoreIds는 값 기준 비교(문자열화)로 불필요한 재요청 방지
+  const excludeStoreIdsKey = (excludeStoreIds ?? []).slice().sort().join(',')
   useEffect(() => {
     loadAssignedStores()
-  }, [showOnlyTodayManagement, excludeStoreIds])
+  }, [showOnlyTodayManagement, excludeStoreIdsKey])
 
   const loadAssignedStores = async () => {
     const supabase = createClient()
@@ -149,6 +152,7 @@ export default function StoreSelector({ selectedStoreId: propSelectedStoreId, on
     )
     
     setStores(availableStores)
+    onSelectableStoresChange?.(availableStores.map(s => ({ id: s.id, name: s.name })))
     if (availableStores.length > 0) {
       if (!propSelectedStoreId) {
         setSelectedStoreId(availableStores[0].id)

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import dynamic from 'next/dynamic'
 import { useRouter } from 'next/navigation'
 import { GPSLocation } from '@/types/db'
@@ -16,9 +16,10 @@ import { clockInAction, clockOutAction } from './actions'
 import { createClient } from '@/lib/supabase/client'
 import { Attendance } from '@/types/db'
 import StoreSelector from './StoreSelector'
-import { getTodayDateKST, getYesterdayDateKST } from '@/lib/utils/date'
+import { getTodayDateKST } from '@/lib/utils/date'
 import { useTodayAttendance } from '@/contexts/AttendanceContext'
 import { calculateChecklistProgress } from '@/lib/utils/checklist'
+import { useToast } from '@/components/Toast'
 
 // 네트워크 상태 타입 확장
 interface NavigatorWithConnection extends Navigator {
@@ -71,11 +72,32 @@ export default function AttendancePage() {
   
   // 네트워크 상태
   const [networkStatus, setNetworkStatus] = useState<'online' | 'offline' | 'slow' | 'unknown'>(() => getNetworkStatus())
+  // 선택 가능한 매장 목록 (StoreSelector 콜백, 버튼 라벨·개수 표시용)
+  const [selectableStores, setSelectableStores] = useState<{ id: string; name: string }[]>([])
+  const { showToast, ToastContainer } = useToast()
+  const selectedStoreName = selectableStores.find(s => s.id === selectedStoreId)?.name
+  // 오늘 관리한 매장 카드 접기/펼치기 (id별)
+  const [expandedAttendanceIds, setExpandedAttendanceIds] = useState<Set<string>>(new Set())
+  const completedCount = todayAttendances.filter(a => a.clock_out_at).length
+  const allCompletedToday = todayAttendances.length > 0 && completedCount === todayAttendances.length
+  // 참조 안정화: 매 렌더마다 새 배열이면 StoreSelector useEffect가 무한 호출됨
+  const excludeStoreIds = useMemo(
+    () => todayAttendances.map(a => a.store_id),
+    [todayAttendances]
+  )
 
   // 출근 유형 변경 시 매장 선택 초기화
   useEffect(() => {
     setSelectedStoreId('')
   }, [attendanceType])
+
+  // 오늘 이미 출근한 매장이 선택돼 있으면 선택 해제 (관리완료 후 드롭다운 정리)
+  useEffect(() => {
+    const attendedIds = todayAttendances.map(a => a.store_id)
+    if (selectedStoreId && attendedIds.includes(selectedStoreId)) {
+      setSelectedStoreId('')
+    }
+  }, [todayAttendances, selectedStoreId])
 
   // 네트워크 상태 모니터링
   useEffect(() => {
@@ -103,6 +125,12 @@ export default function AttendancePage() {
 
   // 출근 중인 매장이 있는지 확인 (퇴근하지 않은 매장)
   const hasActiveAttendance = todayAttendances.some(a => !a.clock_out_at)
+  // 선택한 매장이 오늘 이미 관리완료된 매장인지 (관리시작 버튼 비활성화용)
+  const isSelectedStoreCompletedToday = Boolean(
+    selectedStoreId && todayAttendances.some(
+      a => a.store_id === selectedStoreId && a.clock_out_at
+    )
+  )
 
   useEffect(() => {
     loadTodayAttendance()
@@ -196,129 +224,23 @@ export default function AttendancePage() {
   }, [loadChecklistProgress])
 
   const loadTodayAttendance = async () => {
-    const supabase = createClient()
-    const {
-      data: { session },
-    } = await supabase.auth.getSession()
-
-    if (!session) return
-
-    const today = getTodayDateKST()
-    const yesterday = getYesterdayDateKST()
-    
-    // 오늘 날짜의 출근 기록 조회
-    const { data: todayData, error: todayError } = await supabase
-      .from('attendance')
-      .select(`
-        id, 
-        user_id, 
-        store_id, 
-        work_date, 
-        clock_in_at, 
-        clock_in_latitude, 
-        clock_in_longitude, 
-        clock_out_at, 
-        clock_out_latitude, 
-        clock_out_longitude, 
-        selfie_url, 
-        attendance_type,
-        scheduled_date,
-        problem_report_id,
-        change_reason,
-        created_at, 
-        updated_at,
-        stores:store_id (
-          id,
-          name
-        )
-      `)
-      .eq('user_id', session.user.id)
-      .eq('work_date', today)
-      .order('clock_in_at', { ascending: false })
-
-    // 어제 날짜의 출근 기록도 조회 (날짜 경계를 넘는 야간 근무 고려, 퇴근 완료 포함)
-    const { data: yesterdayData, error: yesterdayError } = await supabase
-      .from('attendance')
-      .select(`
-        id, 
-        user_id, 
-        store_id, 
-        work_date, 
-        clock_in_at, 
-        clock_in_latitude, 
-        clock_in_longitude, 
-        clock_out_at, 
-        clock_out_latitude, 
-        clock_out_longitude, 
-        selfie_url, 
-        attendance_type,
-        scheduled_date,
-        problem_report_id,
-        change_reason,
-        created_at, 
-        updated_at,
-        stores:store_id (
-          id,
-          name
-        )
-      `)
-      .eq('user_id', session.user.id)
-      .eq('work_date', yesterday)
-      .order('clock_in_at', { ascending: false })
-      .limit(10) // 최근 10개만 조회 (성능 최적화)
-
-    const queryError = todayError || yesterdayError
-    const allData = [...(todayData || []), ...(yesterdayData || [])]
-
-    if (queryError) {
-      console.error('Error loading attendance:', queryError)
+    try {
+      const res = await fetch('/api/staff/attendance')
+      const json = await res.json()
+      if (!res.ok || !json.success) {
+        console.error('Error loading attendance:', json.error)
+        setTodayAttendances([])
+        setLoading(false)
+        return
+      }
+      const data = json.data || []
+      setTodayAttendances(data as AttendanceWithStore[])
+    } catch (err) {
+      console.error('Error loading attendance:', err)
+      setTodayAttendances([])
+    } finally {
+      setLoading(false)
     }
-
-    // 중복 제거: 같은 id를 가진 기록은 하나만 유지 (최신 데이터 우선)
-    const uniqueDataMap = new Map<string, any>()
-    allData.forEach((item: any) => {
-      if (!uniqueDataMap.has(item.id)) {
-        uniqueDataMap.set(item.id, item)
-      } else {
-        // 이미 있는 경우, updated_at이 더 최신인 것으로 교체
-        const existing = uniqueDataMap.get(item.id)
-        if (item.updated_at > existing.updated_at) {
-          uniqueDataMap.set(item.id, item)
-        }
-      }
-    })
-    const data = Array.from(uniqueDataMap.values())
-
-    // 타입 변환: stores가 배열이면 첫 번째 요소 사용
-    const transformedData: AttendanceWithStore[] = (data || []).map((item: any): AttendanceWithStore => {
-      const storesData = Array.isArray(item.stores) && item.stores.length > 0 
-        ? item.stores[0] 
-        : (item.stores || undefined)
-      
-      return {
-        id: item.id,
-        user_id: item.user_id,
-        store_id: item.store_id,
-        work_date: item.work_date,
-        clock_in_at: item.clock_in_at,
-        clock_in_latitude: item.clock_in_latitude,
-        clock_in_longitude: item.clock_in_longitude,
-        clock_out_at: item.clock_out_at,
-        clock_out_latitude: item.clock_out_latitude,
-        clock_out_longitude: item.clock_out_longitude,
-        selfie_url: item.selfie_url,
-        attendance_type: item.attendance_type,
-        scheduled_date: item.scheduled_date,
-        problem_report_id: item.problem_report_id,
-        change_reason: item.change_reason,
-        created_at: item.created_at,
-        updated_at: item.updated_at,
-        stores: storesData ? { name: storesData.name || '' } : undefined,
-      }
-    })
-
-    setTodayAttendances(transformedData)
-    setLoading(false)
   }
 
 
@@ -456,6 +378,8 @@ export default function AttendancePage() {
       if (result.success && result.data) {
         console.log('Clock-out successful:', result.data)
         setError(null)
+        const storeName = (todayAttendances.find(a => a.store_id === storeId) as AttendanceWithStore)?.stores?.name
+        showToast(`${storeName || '매장'} 관리가 완료되었습니다.`, 'success')
 
         // 서버 응답 데이터로 업데이트
         const serverData = result.data as any
@@ -511,6 +435,8 @@ export default function AttendancePage() {
   }
 
   return (
+    <>
+    <ToastContainer />
     <GeoGuard
       onLocationReady={setLocation}
       className="max-w-2xl mx-auto px-2 md:px-4"
@@ -521,12 +447,6 @@ export default function AttendancePage() {
         {error && (
           <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-md text-red-800 text-sm">
             {error}
-          </div>
-        )}
-
-        {location && (
-          <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-md text-sm">
-            위치: {location.lat.toFixed(6)}, {location.lng.toFixed(6)}
           </div>
         )}
 
@@ -544,25 +464,57 @@ export default function AttendancePage() {
 
         {/* 새 매장 관리 섹션 */}
         <div className="mb-4 md:mb-6 p-3 md:p-4 bg-gray-50 rounded-md border border-gray-200">
+          {/* 스텝 인디케이터 */}
+          <div className="flex items-center gap-2 mb-3 text-sm text-gray-500">
+            <span className="flex items-center justify-center w-6 h-6 rounded-full bg-blue-100 text-blue-700 font-medium">1</span>
+            <span>매장 선택</span>
+            <span className="text-gray-300">→</span>
+            <span className="flex items-center justify-center w-6 h-6 rounded-full bg-blue-100 text-blue-700 font-medium">2</span>
+            <span>관리시작</span>
+          </div>
           <h2 className="text-base md:text-lg font-semibold mb-3">새 매장 관리</h2>
+
+          {/* 위치: 카드 안쪽 상단, 확인 시 체크 표시 */}
+          <div className={`mb-4 p-3 rounded-md border text-sm flex items-center gap-2 ${location ? 'bg-green-50 border-green-200 text-green-800' : 'bg-gray-100 border-gray-200 text-gray-600'}`}>
+            {location ? (
+              <>
+                <span className="flex-shrink-0 w-5 h-5 rounded-full bg-green-500 text-white flex items-center justify-center text-xs font-bold">✓</span>
+                <span>위치 확인됨</span>
+                <span className="text-xs opacity-80 ml-auto">{location.lat.toFixed(4)}, {location.lng.toFixed(4)}</span>
+              </>
+            ) : (
+              <>
+                <div className="animate-spin rounded-full h-4 w-4 border-2 border-gray-400 border-t-transparent flex-shrink-0" />
+                <span>위치 확인 중...</span>
+              </>
+            )}
+          </div>
+
           <div className="space-y-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 매장 선택 <span className="text-red-500">*</span>
+                {selectableStores.length > 0 && (
+                  <span className="text-gray-500 font-normal ml-1">({selectableStores.length}개 매장 중 선택)</span>
+                )}
               </label>
             <StoreSelector 
               key={`store-selector-${attendanceType}`} // 출근 유형 변경 시 재렌더링
               selectedStoreId={selectedStoreId} 
               onSelectStore={setSelectedStoreId} 
               disabled={hasActiveAttendance} // 출근 중인 매장이 있으면 비활성화
-              excludeStoreIds={todayAttendances
-                .filter(a => !a.clock_out_at) // 퇴근하지 않은 매장만 제외
-                .map(a => a.store_id)}
+              excludeStoreIds={excludeStoreIds}
               showOnlyTodayManagement={attendanceType === 'rescheduled' ? false : true} // 출근일 변경이면 오늘 관리 요일이 아닌 매장만
+              onSelectableStoresChange={setSelectableStores}
             />
             {hasActiveAttendance && (
               <p className="mt-2 text-sm text-orange-600">
                 ⚠️ 먼저 관리 중인 매장의 관리완료 처리를 완료해주세요.
+              </p>
+            )}
+            {isSelectedStoreCompletedToday && (
+              <p className="mt-2 text-sm text-gray-600 bg-gray-100 px-3 py-2 rounded-md">
+                ✓ 이 매장은 오늘 이미 관리가 완료되었습니다.
               </p>
             )}
           </div>
@@ -572,26 +524,26 @@ export default function AttendancePage() {
             <label className="block text-sm font-medium text-gray-700 mb-2">
               관리 유형
             </label>
-            <div className="space-y-2">
-              <label className="flex items-center">
+            <div className="space-y-1">
+              <label className="flex items-center py-2 cursor-pointer rounded hover:bg-gray-100 px-1 -mx-1">
                 <input
                   type="radio"
                   name="attendanceType"
                   value="regular"
                   checked={attendanceType === 'regular'}
                   onChange={(e) => setAttendanceType(e.target.value as 'regular')}
-                  className="mr-2"
+                  className="mr-3 w-4 h-4"
                 />
                 <span className="text-sm">정규 관리(오늘)</span>
               </label>
-              <label className="flex items-center">
+              <label className="flex items-center py-2 cursor-pointer rounded hover:bg-gray-100 px-1 -mx-1">
                 <input
                   type="radio"
                   name="attendanceType"
                   value="rescheduled"
                   checked={attendanceType === 'rescheduled'}
                   onChange={(e) => setAttendanceType(e.target.value as 'rescheduled')}
-                  className="mr-2"
+                  className="mr-3 w-4 h-4"
                 />
                 <span className="text-sm">관리일 변경</span>
               </label>
@@ -661,8 +613,8 @@ export default function AttendancePage() {
 
           <button
             onClick={handleClockIn}
-            disabled={!location || !selectedStoreId || submitting || hasActiveAttendance || (attendanceType === 'rescheduled' && !scheduledDate)}
-            className="w-full mt-4 px-4 py-3 md:py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors font-medium flex items-center justify-center gap-2 touch-manipulation text-base md:text-sm"
+            disabled={!location || !selectedStoreId || submitting || hasActiveAttendance || isSelectedStoreCompletedToday || (attendanceType === 'rescheduled' && !scheduledDate)}
+            className="w-full mt-4 px-4 py-3 min-h-[44px] bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors font-medium flex items-center justify-center gap-2 touch-manipulation text-base"
           >
             {submitting ? (
               <>
@@ -670,7 +622,7 @@ export default function AttendancePage() {
                 <span>처리 중...</span>
               </>
             ) : (
-              '관리시작'
+              selectedStoreName ? `${selectedStoreName} 관리시작` : '관리시작'
             )}
           </button>
           </div>
@@ -678,92 +630,137 @@ export default function AttendancePage() {
 
         {/* 오늘 관리한 매장 목록 */}
         <div className="space-y-3 md:space-y-4">
-          <h2 className="text-base md:text-lg font-semibold">오늘 관리한 매장</h2>
-          
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <h2 className="text-base md:text-lg font-semibold">오늘 관리한 매장</h2>
+            {todayAttendances.length > 0 && (
+              <span className="text-sm text-gray-500">
+                오늘 완료: {completedCount}개 매장
+              </span>
+            )}
+          </div>
+
+          {allCompletedToday && todayAttendances.length > 0 && (
+            <div className="p-3 bg-green-50 border border-green-200 rounded-md text-green-800 text-sm font-medium flex items-center gap-2">
+              <span className="text-lg">🎉</span>
+              오늘 할 일을 모두 완료했어요
+            </div>
+          )}
+
           {todayAttendances.length === 0 ? (
             <div className="p-4 bg-gray-50 rounded-md text-center text-gray-500">
               아직 관리한 매장이 없습니다.
             </div>
           ) : (
-            todayAttendances.map((attendance) => (
-              <div key={attendance.id} className="p-3 md:p-4 bg-blue-50 rounded-md border border-blue-200">
-                <div className="flex items-start justify-between mb-2">
-                  <div className="flex-1">
-                    <h3 className="font-semibold text-gray-900">
-                      {(attendance as AttendanceWithStore).stores?.name || attendance.store_id}
-                    </h3>
-                    <p className="text-sm text-gray-600 mt-1">
-                      관리시작 시간: {new Date(attendance.clock_in_at).toLocaleString('ko-KR')}
-                    </p>
-                    {/* 관리 유형 표시 */}
-                    {attendance.attendance_type && attendance.attendance_type !== 'regular' && (
-                      <p className="text-xs text-gray-500 mt-1">
-                        {attendance.attendance_type === 'rescheduled' && '📅 관리일 변경'}
-                        {attendance.attendance_type === 'emergency' && '🚨 긴급 관리'}
-                        {attendance.scheduled_date && attendance.attendance_type === 'rescheduled' && (
-                          <span className="ml-1">(원래 예정일: {new Date(attendance.scheduled_date).toLocaleDateString('ko-KR')})</span>
+            todayAttendances.map((attendance) => {
+              const storeName = (attendance as AttendanceWithStore).stores?.name || attendance.store_id
+              const isExpanded = expandedAttendanceIds.has(attendance.id)
+              const startStr = new Date(attendance.clock_in_at).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })
+              const endStr = attendance.clock_out_at
+                ? new Date(attendance.clock_out_at).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })
+                : null
+              const durationMin = attendance.clock_out_at
+                ? Math.round((new Date(attendance.clock_out_at).getTime() - new Date(attendance.clock_in_at).getTime()) / 60000)
+                : null
+
+              return (
+                <div key={attendance.id} className="p-3 md:p-4 bg-blue-50 rounded-md border border-blue-200">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex-1 min-w-0">
+                      <h3 className="font-semibold text-gray-900">{storeName}</h3>
+                      {/* 요약: 시작·완료 시간 또는 관리중 */}
+                      <div className="mt-1 flex items-center gap-2 flex-wrap">
+                        {attendance.clock_out_at ? (
+                          <span className="text-sm text-gray-600">
+                            {startStr} 시작 · {endStr} 완료
+                            {durationMin != null && durationMin >= 0 && (
+                              <span className="text-gray-500 ml-1">(약 {durationMin}분)</span>
+                            )}
+                          </span>
+                        ) : (
+                          <span className="text-sm text-orange-600 font-medium">⚠️ 관리 중</span>
                         )}
-                      </p>
-                    )}
-                    {attendance.clock_out_at ? (
-                      <>
-                        <p className="text-sm text-gray-600 mt-1">
-                          관리완료 시간: {new Date(attendance.clock_out_at).toLocaleString('ko-KR')}
-                        </p>
-                        <p className="text-sm text-green-600 mt-2 font-medium">
-                          ✓ 관리완료
-                        </p>
-                      </>
-                    ) : (
-                      <>
-                        <p className="text-sm text-orange-600 mt-2 font-medium">
-                          ⚠️ 관리 중
-                        </p>
-                        {checklistProgress[attendance.store_id] && (
-                          <div className="mt-2">
-                            <div className="flex items-center justify-between text-sm mb-1">
-                              <span className="text-gray-600">체크리스트 진행률</span>
-                              <span className="font-semibold text-blue-600">
-                                {checklistProgress[attendance.store_id].percentage}%
-                              </span>
-                            </div>
-                            <div className="w-full bg-gray-200 rounded-full h-2">
-                              <div
-                                className="bg-blue-600 h-2 rounded-full transition-all"
-                                style={{ width: `${checklistProgress[attendance.store_id].percentage}%` }}
-                              ></div>
-                            </div>
-                            <p className="text-xs text-gray-500 mt-1">
-                              {checklistProgress[attendance.store_id].completed} / {checklistProgress[attendance.store_id].total} 완료
+                        <button
+                          type="button"
+                          onClick={() => setExpandedAttendanceIds(prev => {
+                            const next = new Set(prev)
+                            if (next.has(attendance.id)) next.delete(attendance.id)
+                            else next.add(attendance.id)
+                            return next
+                          })}
+                          className="text-xs text-blue-600 hover:underline"
+                        >
+                          {isExpanded ? '상세 접기' : '상세 보기'}
+                        </button>
+                      </div>
+                      {attendance.clock_out_at && (
+                        <p className="text-sm text-green-600 mt-1 font-medium">✓ 관리완료</p>
+                      )}
+
+                      {/* 펼친 상세 */}
+                      {isExpanded && (
+                        <div className="mt-3 pt-3 border-t border-blue-200 space-y-1 text-sm text-gray-600">
+                          <p>관리시작: {new Date(attendance.clock_in_at).toLocaleString('ko-KR')}</p>
+                          {attendance.clock_out_at && (
+                            <p>관리완료: {new Date(attendance.clock_out_at).toLocaleString('ko-KR')}</p>
+                          )}
+                          {attendance.attendance_type && attendance.attendance_type !== 'regular' && (
+                            <p className="text-xs text-gray-500">
+                              {attendance.attendance_type === 'rescheduled' && '📅 관리일 변경'}
+                              {attendance.attendance_type === 'emergency' && '🚨 긴급 관리'}
+                              {attendance.scheduled_date && attendance.attendance_type === 'rescheduled' && (
+                                <span className="ml-1">(원래 예정일: {new Date(attendance.scheduled_date).toLocaleDateString('ko-KR')})</span>
+                              )}
                             </p>
+                          )}
+                        </div>
+                      )}
+
+                      {/* 관리 중일 때 체크리스트 진행률 */}
+                      {!attendance.clock_out_at && checklistProgress[attendance.store_id] && (
+                        <div className="mt-2">
+                          <div className="flex items-center justify-between text-sm mb-1">
+                            <span className="text-gray-600">체크리스트 진행률</span>
+                            <span className="font-semibold text-blue-600">
+                              {checklistProgress[attendance.store_id].percentage}%
+                            </span>
                           </div>
+                          <div className="w-full bg-gray-200 rounded-full h-2">
+                            <div
+                              className="bg-blue-600 h-2 rounded-full transition-all"
+                              style={{ width: `${checklistProgress[attendance.store_id].percentage}%` }}
+                            />
+                          </div>
+                          <p className="text-xs text-gray-500 mt-1">
+                            {checklistProgress[attendance.store_id].completed} / {checklistProgress[attendance.store_id].total} 완료
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                    {!attendance.clock_out_at && (
+                      <button
+                        onClick={() => handleClockOut(attendance.store_id)}
+                        disabled={!location || submitting}
+                        className="flex-shrink-0 ml-2 px-3 md:px-4 py-2 min-h-[44px] bg-red-600 text-white rounded-md hover:bg-red-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors font-medium text-xs md:text-sm whitespace-nowrap flex items-center justify-center gap-2 touch-manipulation"
+                      >
+                        {submitting ? (
+                          <>
+                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" />
+                            <span>처리 중...</span>
+                          </>
+                        ) : (
+                          '관리완료'
                         )}
-                      </>
+                      </button>
                     )}
                   </div>
-                  {!attendance.clock_out_at && (
-                    <button
-                      onClick={() => handleClockOut(attendance.store_id)}
-                      disabled={!location || submitting}
-                      className="ml-2 md:ml-4 px-3 md:px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors font-medium text-xs md:text-sm whitespace-nowrap flex items-center justify-center gap-2 touch-manipulation"
-                    >
-                      {submitting ? (
-                        <>
-                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                          <span>처리 중...</span>
-                        </>
-                      ) : (
-                        '관리완료'
-                      )}
-                    </button>
-                  )}
                 </div>
-              </div>
-            ))
+              )
+            })
           )}
         </div>
       </div>
     </GeoGuard>
+    </>
   )
 }
 

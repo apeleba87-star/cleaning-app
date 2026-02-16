@@ -36,33 +36,74 @@ export async function GET(request: NextRequest) {
     const today = getTodayDateKST()
     const yesterday = getYesterdayDateKST()
 
+    const selectFields = `
+      id, user_id, store_id, work_date, clock_in_at, clock_in_latitude, clock_in_longitude,
+      clock_out_at, clock_out_latitude, clock_out_longitude, selfie_url, attendance_type,
+      scheduled_date, problem_report_id, change_reason, created_at, updated_at,
+      stores:store_id ( id, name )
+    `
+
     const [todayResult, yesterdayResult] = await Promise.all([
       dataClient
         .from('attendance')
-        .select('id, user_id, store_id, work_date, clock_in_at, clock_in_latitude, clock_in_longitude, clock_out_at, clock_out_latitude, clock_out_longitude, selfie_url, attendance_type, scheduled_date, problem_report_id, change_reason, created_at, updated_at')
+        .select(selectFields)
         .eq('user_id', user.id)
-        .eq('work_date', today),
+        .eq('work_date', today)
+        .order('clock_in_at', { ascending: false }),
       dataClient
         .from('attendance')
-        .select('id, user_id, store_id, work_date, clock_in_at, clock_in_latitude, clock_in_longitude, clock_out_at, clock_out_latitude, clock_out_longitude, selfie_url, attendance_type, scheduled_date, problem_report_id, change_reason, created_at, updated_at')
+        .select(selectFields)
         .eq('user_id', user.id)
         .eq('work_date', yesterday)
-        .is('clock_out_at', null)
         .order('clock_in_at', { ascending: false })
-        .limit(20),
+        .limit(10),
     ])
 
     const todayData = todayResult.data || []
     const yesterdayData = yesterdayResult.data || []
-    const allData = [...todayData, ...yesterdayData].sort((a, b) => {
+    const allData = [...todayData, ...yesterdayData]
+
+    // 중복 제거: 같은 id는 하나만 (최신 updated_at 기준)
+    const uniqueMap = new Map<string, any>()
+    allData.forEach((item: any) => {
+      const existing = uniqueMap.get(item.id)
+      if (!existing || (item.updated_at && item.updated_at > existing.updated_at)) {
+        uniqueMap.set(item.id, item)
+      }
+    })
+    const uniqueData = Array.from(uniqueMap.values()).sort((a, b) => {
       const dateA = new Date(a.clock_in_at).getTime()
       const dateB = new Date(b.clock_in_at).getTime()
       return dateB - dateA
     })
 
+    const data = uniqueData.map((item: any) => {
+      const storesData = Array.isArray(item.stores) && item.stores.length > 0 ? item.stores[0] : item.stores
+      return {
+        id: item.id,
+        user_id: item.user_id,
+        store_id: item.store_id,
+        work_date: item.work_date,
+        clock_in_at: item.clock_in_at,
+        clock_in_latitude: item.clock_in_latitude,
+        clock_in_longitude: item.clock_in_longitude,
+        clock_out_at: item.clock_out_at,
+        clock_out_latitude: item.clock_out_latitude,
+        clock_out_longitude: item.clock_out_longitude,
+        selfie_url: item.selfie_url,
+        attendance_type: item.attendance_type,
+        scheduled_date: item.scheduled_date,
+        problem_report_id: item.problem_report_id,
+        change_reason: item.change_reason,
+        created_at: item.created_at,
+        updated_at: item.updated_at,
+        stores: storesData ? { name: storesData.name || '' } : undefined,
+      }
+    })
+
     return Response.json({
       success: true,
-      data: allData,
+      data,
       error: todayResult.error || yesterdayResult.error ? (todayResult.error || yesterdayResult.error)?.message : null,
     })
   } catch (err) {
