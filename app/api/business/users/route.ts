@@ -237,6 +237,14 @@ export async function POST(request: NextRequest) {
           )
         }
       }
+      if (role === 'franchise_manager') {
+        if (premiumUnits < 1) {
+          return NextResponse.json(
+            { error: '프렌차이즈관리자 추가는 프리미엄 결제가 필요합니다. 시스템 관리자에게 문의하세요.' },
+            { status: 403 }
+          )
+        }
+      }
       if (role === 'store_manager') {
         if (premiumUnits < 1) {
           return NextResponse.json(

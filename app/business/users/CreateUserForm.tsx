@@ -71,9 +71,9 @@ export default function CreateUserForm({ stores, franchises, companyId, currentU
     }
   }, [role, selectedFranchiseId, franchises])
 
-  // 프리미엄 미사용 시 매장관리자(점주) 선택 불가 — 다른 역할로 초기화
+  // 프리미엄 미사용 시 매장관리자(점주)·프렌차이즈관리자 선택 불가 — 다른 역할로 초기화
   useEffect(() => {
-    if (!hasPremium && role === 'store_manager') {
+    if (!hasPremium && (role === 'store_manager' || role === 'franchise_manager')) {
       setRole('staff')
     }
   }, [hasPremium, role])
@@ -205,7 +205,7 @@ export default function CreateUserForm({ stores, franchises, companyId, currentU
               { id: 'salary', label: '급여 방식' },
               { id: 'employment', label: '근로 상태' },
             ] : []),
-          ].map((tab) => (
+          ].map((tab, index) => (
             <button
               key={tab.id}
               type="button"
@@ -216,7 +216,7 @@ export default function CreateUserForm({ stores, franchises, companyId, currentU
                   : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
               }`}
             >
-              {tab.label}
+              {index + 1} {tab.label}
             </button>
           ))}
         </nav>
@@ -303,7 +303,7 @@ export default function CreateUserForm({ stores, franchises, companyId, currentU
               value={role}
               onChange={(e) => {
                 const val = e.target.value as UserRole
-                if (!hasPremium && val === 'store_manager') return
+                if (!hasPremium && (val === 'store_manager' || val === 'franchise_manager')) return
                 setRole(val)
                 // 역할 변경 시 프렌차이즈 선택 초기화
                 if (val !== 'franchise_manager') {
@@ -320,8 +320,11 @@ export default function CreateUserForm({ stores, franchises, companyId, currentU
               className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
               <option value="staff">직원</option>
-              <option value="manager">매니저</option>
-              <option value="franchise_manager">프렌차이즈관리자</option>
+              {hasPremium ? (
+                <option value="franchise_manager">프렌차이즈관리자</option>
+              ) : (
+                <option value="franchise_manager" disabled>프렌차이즈관리자 — 프리미엄</option>
+              )}
               {hasPremium ? (
                 <option value="store_manager">매장관리자(점주)</option>
               ) : (
@@ -331,7 +334,7 @@ export default function CreateUserForm({ stores, franchises, companyId, currentU
               <option value="subcontract_company">도급(업체)</option>
             </select>
             {!hasPremium && (
-              <p className="mt-1 text-xs text-gray-500">매장관리자(점주)는 프리미엄 버전에서 사용 가능합니다.</p>
+              <p className="mt-1 text-xs text-gray-500">프렌차이즈관리자·매장관리자(점주)는 프리미엄 버전에서 사용 가능합니다.</p>
             )}
           </div>
 

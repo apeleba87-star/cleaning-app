@@ -11,11 +11,14 @@ interface UserFormProps {
   user: User
   stores: UserFormStore[]
   assignedStoreIds?: string[] // 매장 배정 정보
+  /** 프리미엄 결제 수 (1 이상이면 프렌차이즈관리자 역할 선택 가능) */
+  premiumUnits?: number
   onSuccess: (user: User) => void
   onCancel: () => void
 }
 
-export default function UserForm({ user, stores, assignedStoreIds = [], onSuccess, onCancel }: UserFormProps) {
+export default function UserForm({ user, stores, assignedStoreIds = [], premiumUnits = 0, onSuccess, onCancel }: UserFormProps) {
+  const hasPremium = premiumUnits >= 1
   const [name, setName] = useState(user.name)
   const [phone, setPhone] = useState(user.phone || '')
   const [role, setRole] = useState<UserRole>(user.role)
@@ -332,6 +335,7 @@ export default function UserForm({ user, stores, assignedStoreIds = [], onSucces
               value={role}
               onChange={(e) => {
                 const newRole = e.target.value as UserRole
+                if (!hasPremium && (newRole === 'franchise_manager' || newRole === 'store_manager')) return
                 setRole(newRole)
                 // 역할 변경 시 관련 필드 초기화
                 if (newRole !== 'subcontract_individual' && newRole !== 'subcontract_company') {
@@ -342,8 +346,10 @@ export default function UserForm({ user, stores, assignedStoreIds = [], onSucces
               className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
               <option value="staff">직원</option>
-              <option value="manager">매니저</option>
-              <option value="franchise_manager">프렌차이즈관리자</option>
+              {user.role === 'manager' ? <option value="manager">매니저</option> : null}
+              {(hasPremium || user.role === 'franchise_manager') ? (
+                <option value="franchise_manager" disabled={!hasPremium}>프렌차이즈관리자{!hasPremium ? ' — 프리미엄' : ''}</option>
+              ) : null}
               <option value="store_manager">매장관리자(점주)</option>
               <option value="subcontract_individual">도급(개인)</option>
               <option value="subcontract_company">도급(업체)</option>

@@ -23,6 +23,7 @@ interface UserListProps {
 }
 
 export default function UserList({ initialUsers, stores, franchises, userStoreMap, companyId, currentUserRole, premiumUnits = 0 }: UserListProps) {
+  const hasPremium = premiumUnits >= 1
   const [users, setUsers] = useState<User[]>(initialUsers)
   const [editingUser, setEditingUser] = useState<User | null>(null)
   const [assigningUser, setAssigningUser] = useState<User | null>(null)
@@ -425,6 +426,7 @@ export default function UserList({ initialUsers, stores, franchises, userStoreMa
             user={editingUser}
             stores={stores}
             assignedStoreIds={userStoreMap.get(editingUser.id) || []}
+            premiumUnits={premiumUnits}
             onSuccess={handleFormSuccess}
             onCancel={handleFormCancel}
           />
@@ -549,8 +551,12 @@ export default function UserList({ initialUsers, stores, franchises, userStoreMa
                         className="w-full text-sm border border-gray-300 rounded px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100"
                       >
                         <option value="staff">직원</option>
-                        <option value="manager">매니저</option>
-                        <option value="franchise_manager">프렌차이즈관리자</option>
+                        {user.role === 'manager' ? <option value="manager">매니저</option> : null}
+                        {hasPremium ? (
+                          <option value="franchise_manager">프렌차이즈관리자</option>
+                        ) : (
+                          <option value="franchise_manager" disabled>프렌차이즈관리자 — 프리미엄</option>
+                        )}
                         <option value="store_manager">매장관리자(점주)</option>
                         <option value="subcontract_individual">도급(개인)</option>
                         <option value="subcontract_company">도급(업체)</option>
@@ -711,8 +717,12 @@ export default function UserList({ initialUsers, stores, franchises, userStoreMa
                               className="text-sm border border-gray-300 rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100"
                             >
                               <option value="staff">직원</option>
-                              <option value="manager">매니저</option>
-                              <option value="franchise_manager">프렌차이즈관리자</option>
+                              {user.role === 'manager' ? <option value="manager">매니저</option> : null}
+                              {hasPremium ? (
+                                <option value="franchise_manager">프렌차이즈관리자</option>
+                              ) : (
+                                <option value="franchise_manager" disabled>프렌차이즈관리자 — 프리미엄</option>
+                              )}
                               <option value="store_manager">매장관리자(점주)</option>
                               <option value="subcontract_individual">도급(개인)</option>
                               <option value="subcontract_company">도급(업체)</option>
