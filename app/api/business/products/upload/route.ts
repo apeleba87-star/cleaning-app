@@ -1,6 +1,6 @@
-import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { getServerUser } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
+import { createClient } from '@supabase/supabase-js'
 
 // 위치 좌표를 위치 번호로 변환
 function convertLocationToPosition(coordinate: string): number {
@@ -161,7 +161,17 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const supabase = await createServerSupabaseClient()
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+    if (!serviceRoleKey || !supabaseUrl) {
+      return NextResponse.json(
+        { error: '매장 목록을 불러오는데 실패했습니다.' },
+        { status: 500 }
+      )
+    }
+    const supabase = createClient(supabaseUrl, serviceRoleKey, {
+      auth: { autoRefreshToken: false, persistSession: false },
+    })
 
     // 매장 목록 조회 (업체관리자는 자신의 회사 매장만 조회)
     let storesQuery = supabase

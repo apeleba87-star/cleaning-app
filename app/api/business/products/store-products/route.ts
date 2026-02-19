@@ -1,8 +1,8 @@
-import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { getServerUser } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
+import { createClient } from '@supabase/supabase-js'
 
-// GET: 매장별 제품 목록 조회
+// GET: 매장별 제품 목록 조회 (서비스 역할 사용 — RLS 조인으로 인한 조회 실패 방지)
 export async function GET(request: NextRequest) {
   try {
     const user = await getServerUser()
@@ -17,10 +17,31 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url)
     const storeId = searchParams.get('store_id')
 
-    const supabase = await createServerSupabaseClient()
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+    if (!serviceRoleKey || !supabaseUrl) {
+      return NextResponse.json(
+        { error: '매장별 제품 조회에 실패했습니다.' },
+        { status: 500 }
+      )
+    }
 
-    // 매장별 제품 위치 정보 조회
-    let query = supabase
+    const adminSupabase = createClient(supabaseUrl, serviceRoleKey, {
+      auth: { autoRefreshToken: false, persistSession: false },
+    })
+
+    // 회사 소속 매장 ID만 허용 (business_owner인 경우)
+    let allowedStoreIds: string[] | null = null
+    if (user.role === 'business_owner' && user.company_id) {
+      const { data: companyStores } = await adminSupabase
+        .from('stores')
+        .select('id')
+        .eq('company_id', user.company_id)
+        .is('deleted_at', null)
+      allowedStoreIds = companyStores?.map((s) => s.id) ?? []
+    }
+
+    let query = adminSupabase
       .from('store_product_locations')
       .select(`
         store_id,
@@ -49,6 +70,12 @@ export async function GET(request: NextRequest) {
       )
     }
 
+    // business_owner는 본인 회사 매장 데이터만 노출
+    const filteredLocations =
+      allowedStoreIds !== null && locations?.length
+        ? locations.filter((loc: any) => allowedStoreIds!.includes(loc.store_id))
+        : locations ?? []
+
     // 매장별로 그룹화
     const storeMap = new Map<string, {
       store_id: string
@@ -60,7 +87,7 @@ export async function GET(request: NextRequest) {
       }>
     }>()
 
-    locations?.forEach((loc: any) => {
+    filteredLocations.forEach((loc: any) => {
       const storeId = loc.store_id
       const storeName = loc.stores?.name || '알 수 없음'
       const productId = loc.product_id

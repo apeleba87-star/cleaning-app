@@ -3,6 +3,7 @@ import { getServerUser } from '@/lib/supabase/server'
 import { assertBusinessFeature } from '@/lib/plan-features-server'
 import { PlanUpgradeRequiredView } from '@/components/PlanFeatureGuard'
 import { redirect } from 'next/navigation'
+import { createClient } from '@supabase/supabase-js'
 import ProductUploadClient from './ProductUploadClient'
 import ProductMasterSection from './ProductMasterSection'
 import ProductLocationSection from './ProductLocationSection'
@@ -40,8 +41,18 @@ export default async function ProductsPage() {
     console.error('Error fetching stores:', storesError)
   }
 
+  // 제품·위치 조회는 서비스 역할 사용 (RLS로 인한 빈 결과 방지)
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const dataClient =
+    serviceRoleKey && supabaseUrl
+      ? createClient(supabaseUrl, serviceRoleKey, {
+          auth: { autoRefreshToken: false, persistSession: false },
+        })
+      : supabase
+
   // 제품 목록 조회 (모든 제품, limit 없음 - 중복 제거는 DB UNIQUE 제약으로 처리)
-  const { data: products, error: productsError } = await supabase
+  const { data: products, error: productsError } = await dataClient
     .from('products')
     .select('id, name, barcode, image_url, category_1, category_2, created_at, updated_at')
     .is('deleted_at', null)
@@ -60,7 +71,7 @@ export default async function ProductsPage() {
   let locations: any[] = []
   let locationsError: any = null
   
-  let locationsQuery = supabase
+  let locationsQuery = dataClient
     .from('store_product_locations')
     .select(`
       id,
@@ -87,7 +98,7 @@ export default async function ProductsPage() {
   let companyStoreIds: string[] = []
   if (user.role === 'business_owner' && user.company_id) {
     // 먼저 회사 매장 ID 목록 가져오기
-    const { data: companyStores } = await supabase
+    const { data: companyStores } = await dataClient
       .from('stores')
       .select('id')
       .eq('company_id', user.company_id)
@@ -108,7 +119,7 @@ export default async function ProductsPage() {
         let hasMore = true
         
         while (hasMore) {
-          const { data: batchLocations, error: batchError } = await supabase
+          const { data: batchLocations, error: batchError } = await dataClient
             .from('store_product_locations')
             .select(`
               id,
@@ -166,7 +177,7 @@ export default async function ProductsPage() {
     let hasMore = true
     
     while (hasMore) {
-      const { data: batchLocations, error: batchError } = await supabase
+      const { data: batchLocations, error: batchError } = await dataClient
         .from('store_product_locations')
         .select(`
           id,
@@ -218,7 +229,7 @@ export default async function ProductsPage() {
   
   if (user.role === 'business_owner' && user.company_id && companyStoreIds.length > 0) {
     // 제품 위치 정보 총 개수
-    const { count: locationsCount } = await supabase
+    const { count: locationsCount } = await dataClient
       .from('store_product_locations')
       .select('*', { count: 'exact', head: true })
       .in('store_id', companyStoreIds)
@@ -231,7 +242,7 @@ export default async function ProductsPage() {
     
     for (let i = 0; i < companyStoreIds.length; i += STORE_BATCH_SIZE_FOR_COUNT) {
       const batch = companyStoreIds.slice(i, i + STORE_BATCH_SIZE_FOR_COUNT)
-      const { data: distinctStores } = await supabase
+      const { data: distinctStores } = await dataClient
         .from('store_product_locations')
         .select('store_id')
         .in('store_id', batch)
@@ -244,7 +255,7 @@ export default async function ProductsPage() {
     storesWithProductsCount = allDistinctStoreIds.size
   } else if (user.role !== 'business_owner') {
     // 플랫폼 관리자는 모든 데이터
-    const { count: locationsCount } = await supabase
+    const { count: locationsCount } = await dataClient
       .from('store_product_locations')
       .select('*', { count: 'exact', head: true })
     
@@ -257,7 +268,7 @@ export default async function ProductsPage() {
     let hasMore = true
     
     while (hasMore) {
-      const { data: distinctStores } = await supabase
+      const { data: distinctStores } = await dataClient
         .from('store_product_locations')
         .select('store_id')
         .range(offset, offset + limit - 1)

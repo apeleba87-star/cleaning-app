@@ -1,7 +1,7 @@
-import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { getServerUser } from '@/lib/supabase/server'
 import { assertBusinessFeature } from '@/lib/plan-features-server'
 import { NextRequest, NextResponse } from 'next/server'
+import { createClient } from '@supabase/supabase-js'
 
 // 바코드 정규화 함수 (모든 공백, 특수문자 제거, 숫자만 남기기)
 function normalizeBarcode(barcode: string | null | undefined): string | null {
@@ -30,11 +30,22 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    const supabase = await createServerSupabaseClient()
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+    if (!serviceRoleKey || !supabaseUrl) {
+      return NextResponse.json(
+        { error: '제품 목록 조회에 실패했습니다.' },
+        { status: 500 }
+      )
+    }
+    const adminSupabase = createClient(supabaseUrl, serviceRoleKey, {
+      auth: { autoRefreshToken: false, persistSession: false },
+    })
+
     const { searchParams } = new URL(request.url)
     const search = searchParams.get('search')
 
-    let query = supabase
+    let query = adminSupabase
       .from('products')
       .select('id, name, barcode, image_url, category_1, category_2, created_at, updated_at')
       .is('deleted_at', null)
