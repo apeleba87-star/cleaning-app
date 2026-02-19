@@ -362,13 +362,14 @@ export async function POST(request: NextRequest) {
 
     // 3. 매장 배정 (business_owner는 자신의 회사 매장만 배정 가능)
     if (store_ids && Array.isArray(store_ids) && store_ids.length > 0) {
-      const supabase = await createServerSupabaseClient()
-      const { data: stores } = await supabase
+      // RLS 우회: 서비스 역할로 매장 존재·소속 확인 (세션 클라이언트는 RLS로 인해 조회가 막힐 수 있음)
+      const { data: stores, error: storesError } = await adminSupabase
         .from('stores')
         .select('id, company_id, franchise_id')
         .in('id', store_ids)
+        .is('deleted_at', null)
 
-      if (!stores || stores.length === 0) {
+      if (storesError || !stores || stores.length === 0) {
         await adminSupabase.auth.admin.deleteUser(authData.user.id)
         return NextResponse.json(
           { error: '유효하지 않은 매장입니다.' },
@@ -376,16 +377,14 @@ export async function POST(request: NextRequest) {
         )
       }
 
-      // business_owner와 franchise_manager는 자신의 회사 매장만 배정 가능
-      if (user.role === 'business_owner' || user.role === 'franchise_manager') {
-        const invalidStores = stores.filter(s => s.company_id !== user.company_id)
-        if (invalidStores.length > 0) {
-          await adminSupabase.auth.admin.deleteUser(authData.user.id)
-          return NextResponse.json(
-            { error: '자신의 회사 매장만 배정할 수 있습니다.' },
-            { status: 403 }
-          )
-        }
+      // 배정 대상 회사(targetCompanyId) 소속 매장만 허용
+      const invalidStores = stores.filter(s => s.company_id !== targetCompanyId)
+      if (invalidStores.length > 0) {
+        await adminSupabase.auth.admin.deleteUser(authData.user.id)
+        return NextResponse.json(
+          { error: '유효하지 않은 매장입니다.' },
+          { status: 400 }
+        )
       }
 
       // store_manager 역할이고 franchise_id가 선택된 경우, 배정된 매장이 해당 프렌차이즈에 속하는지 확인
