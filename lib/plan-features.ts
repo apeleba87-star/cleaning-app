@@ -90,7 +90,7 @@ export function isSubscriptionActive(status: SubscriptionStatus): boolean {
 }
 
 /** 프리미엄 전용 기능 키 (premium_units >= 1 이면 오픈) */
-const PREMIUM_ONLY_FEATURES: BusinessFeatureKey[] = ['attendance_report', 'franchises']
+const PREMIUM_ONLY_FEATURES: BusinessFeatureKey[] = ['attendance_report', 'franchises', 'products']
 
 /**
  * 해당 플랜·상태에서 기능 사용 가능 여부
