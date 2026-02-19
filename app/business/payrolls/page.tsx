@@ -26,7 +26,10 @@ export default function PayrollsPage() {
   const [error, setError] = useState<string | null>(null)
   const [showForm, setShowForm] = useState(false)
   const [showBulkForm, setShowBulkForm] = useState(false)
-  const [selectedPeriod, setSelectedPeriod] = useState<string>('')
+  const [selectedPeriod, setSelectedPeriod] = useState<string>(() => {
+    const now = new Date()
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+  })
   const [generatingRegular, setGeneratingRegular] = useState(false)
   const [activeTab, setActiveTab] = useState<TabType>('regular')
   const [pendingCount, setPendingCount] = useState<number | null>(null)
@@ -61,12 +64,8 @@ export default function PayrollsPage() {
   const [accountNumber, setAccountNumber] = useState('') // 계좌번호
 
   useEffect(() => {
-    // 현재 월을 기본값으로 설정 (YYYY-MM)
-    const now = new Date()
-    const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
-    setSelectedPeriod(currentMonth)
     loadData()
-  }, [])
+  }, [selectedPeriod])
 
   // ESC 키로 모달 닫기
   useEscapeKey(() => {
@@ -136,21 +135,18 @@ export default function PayrollsPage() {
   }, [loading, selectedPeriod, payrolls.length, hasCheckedAutoGenerate, generatingRegular])
 
   const loadData = async () => {
+    if (!selectedPeriod) return
     try {
       setLoading(true)
-
-      // 인건비 목록 조회
-      const response = await fetch('/api/business/payrolls')
+      const response = await fetch(`/api/business/payrolls?period=${selectedPeriod}`)
       if (!response.ok) {
         throw new Error('인건비 목록 조회 실패')
       }
-
       const result = await response.json()
       if (result.success) {
         setPayrolls(result.data || [])
       }
-      // 미생성 직원 수 갱신
-      if (selectedPeriod && activeTab === 'regular') {
+      if (activeTab === 'regular') {
         loadPendingCount()
       }
     } catch (err: any) {

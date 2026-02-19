@@ -35,9 +35,14 @@ export async function GET(request: NextRequest) {
 
     const { searchParams } = new URL(request.url)
     const userId = searchParams.get('user_id')
-    const period = searchParams.get('period')
+    let period = searchParams.get('period')
+    // 기간 미지정 시 이번 달로 고정 (전체 스캔 방지, 5년치 데이터 대비)
+    if (!period || !/^\d{4}-(0[1-9]|1[0-2])$/.test(period)) {
+      const now = new Date()
+      period = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+    }
     const page = parseInt(searchParams.get('page') || '1')
-    const limit = parseInt(searchParams.get('limit') || '1000') // 기본값 1000 (페이지네이션 없을 때)
+    const limit = parseInt(searchParams.get('limit') || '500')
     const offset = (page - 1) * limit
 
     let query = dataClient
@@ -50,16 +55,12 @@ export async function GET(request: NextRequest) {
         )
       `, { count: 'exact' })
       .eq('company_id', user.company_id)
+      .eq('pay_period', period)
       .is('deleted_at', null)
-      .order('pay_period', { ascending: false })
       .order('created_at', { ascending: false })
 
     if (userId) {
       query = query.eq('user_id', userId)
-    }
-
-    if (period) {
-      query = query.eq('pay_period', period)
     }
 
     // 페이지네이션 적용
@@ -73,9 +74,9 @@ export async function GET(request: NextRequest) {
       throw new Error(`Failed to fetch payrolls: ${error.message}`)
     }
 
-    // 도급 정산 데이터도 함께 조회 (기간이 지정된 경우)
+    // 도급 정산 데이터도 함께 조회 (period는 위에서 항상 YYYY-MM으로 설정됨)
     let subcontractPayments: any[] = []
-    if (period && /^\d{4}-(0[1-9]|1[0-2])$/.test(period)) {
+    {
       // Service role key를 사용하여 RLS 우회
       const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
       const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
