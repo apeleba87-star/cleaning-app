@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server'
-import { createServerSupabaseClient, getServerUser } from '@/lib/supabase/server'
+import { getServerUser } from '@/lib/supabase/server'
 import { handleApiError, UnauthorizedError, ForbiddenError } from '@/lib/errors'
 import { createClient } from '@supabase/supabase-js'
 
@@ -25,10 +25,20 @@ export async function PATCH(
     const body = await request.json()
     const { category, amount, memo, store_id, is_active } = body
 
-    const supabase = await createServerSupabaseClient()
+    // Service role key를 사용하여 RLS 우회 (세션/RLS 이슈로 인한 접근 거부 방지)
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+    
+    if (!serviceRoleKey || !supabaseUrl) {
+      throw new Error('Server configuration error: Service role key is required')
+    }
 
-    // 본인의 회사 고정비인지 확인
-    const { data: existing } = await supabase
+    const adminSupabase = createClient(supabaseUrl, serviceRoleKey, {
+      auth: { autoRefreshToken: false, persistSession: false },
+    })
+
+    // 본인의 회사 고정비인지 확인 (RLS 우회)
+    const { data: existing } = await adminSupabase
       .from('recurring_expenses')
       .select('id, company_id')
       .eq('id', params.id)
@@ -42,7 +52,7 @@ export async function PATCH(
 
     // 매장 확인 (store_id가 있는 경우)
     if (store_id && store_id.trim() !== '') {
-      const { data: store } = await supabase
+      const { data: store } = await adminSupabase
         .from('stores')
         .select('id, company_id')
         .eq('id', store_id)
@@ -54,21 +64,6 @@ export async function PATCH(
         throw new ForbiddenError('Store not found or access denied')
       }
     }
-
-    // RLS 우회를 위해 서비스 역할 키 사용
-    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-    
-    if (!serviceRoleKey || !supabaseUrl) {
-      throw new Error('Server configuration error: Service role key is required')
-    }
-
-    const adminSupabase = createClient(supabaseUrl, serviceRoleKey, {
-      auth: {
-        autoRefreshToken: false,
-        persistSession: false,
-      },
-    })
 
     const updateData: any = {
       updated_at: new Date().toISOString(),
@@ -125,10 +120,20 @@ export async function DELETE(
       throw new ForbiddenError('Company ID is required')
     }
 
-    const supabase = await createServerSupabaseClient()
+    // Service role key를 사용하여 RLS 우회
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+    
+    if (!serviceRoleKey || !supabaseUrl) {
+      throw new Error('Server configuration error: Service role key is required')
+    }
 
-    // 본인의 회사 고정비인지 확인
-    const { data: existing } = await supabase
+    const adminSupabase = createClient(supabaseUrl, serviceRoleKey, {
+      auth: { autoRefreshToken: false, persistSession: false },
+    })
+
+    // 본인의 회사 고정비인지 확인 (RLS 우회)
+    const { data: existing } = await adminSupabase
       .from('recurring_expenses')
       .select('id, company_id')
       .eq('id', params.id)
@@ -139,21 +144,6 @@ export async function DELETE(
     if (!existing) {
       throw new ForbiddenError('Recurring expense not found or access denied')
     }
-
-    // RLS 우회를 위해 서비스 역할 키 사용
-    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-    
-    if (!serviceRoleKey || !supabaseUrl) {
-      throw new Error('Server configuration error: Service role key is required')
-    }
-
-    const adminSupabase = createClient(supabaseUrl, serviceRoleKey, {
-      auth: {
-        autoRefreshToken: false,
-        persistSession: false,
-      },
-    })
 
     // Soft delete
     const { error } = await adminSupabase

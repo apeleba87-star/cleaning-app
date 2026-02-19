@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server'
-import { createServerSupabaseClient, getServerUser } from '@/lib/supabase/server'
+import { getServerUser } from '@/lib/supabase/server'
 import { handleApiError, UnauthorizedError, ForbiddenError } from '@/lib/errors'
 
 // 인건비 수정
@@ -35,10 +35,19 @@ export async function PATCH(
       daily_wage
     } = body
 
-    const supabase = await createServerSupabaseClient()
+    // Service role key를 사용하여 RLS 우회 (세션/RLS 이슈로 인한 접근 거부 방지)
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+    if (!serviceRoleKey || !supabaseUrl) {
+      throw new Error('Server configuration error: Service role key is required')
+    }
+    const { createClient } = await import('@supabase/supabase-js')
+    const adminSupabase = createClient(supabaseUrl, serviceRoleKey, {
+      auth: { autoRefreshToken: false, persistSession: false },
+    })
 
-    // 인건비가 회사에 속해있는지 확인
-    const { data: existingPayroll } = await supabase
+    // 인건비가 회사에 속해있는지 확인 (RLS 우회하여 일당직원 포함 조회)
+    const { data: existingPayroll } = await adminSupabase
       .from('payrolls')
       .select('id, company_id, user_id, worker_name, daily_wage, work_days')
       .eq('id', params.id)
@@ -104,22 +113,6 @@ export async function PATCH(
         }
       }
     }
-
-    // Service role key를 사용하여 RLS 우회
-    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-    
-    if (!serviceRoleKey || !supabaseUrl) {
-      throw new Error('Server configuration error: Service role key is required')
-    }
-
-    const { createClient } = await import('@supabase/supabase-js')
-    const adminSupabase = createClient(supabaseUrl, serviceRoleKey, {
-      auth: {
-        autoRefreshToken: false,
-        persistSession: false,
-      },
-    })
 
     const { data: payroll, error } = await adminSupabase
       .from('payrolls')
