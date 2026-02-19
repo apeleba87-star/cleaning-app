@@ -3,7 +3,6 @@
 import { useState, useRef, useEffect } from 'react'
 import { ChecklistItem } from '@/types/db'
 import { Capacitor } from '@capacitor/core'
-import { clearAppCache } from '@/lib/clear-app-cache'
 
 interface ChecklistCameraProps {
   items: ChecklistItem[]
@@ -35,6 +34,10 @@ export function ChecklistCamera({ items, mode, storeId, checklistId, onComplete,
   const photoItems = items.filter(item => item.area?.trim())
 
   const [cameraError, setCameraError] = useState<string | null>(null)
+  const [hasCaptureError, setHasCaptureError] = useState(false) // 촬영 실패 시 갤러리 활성화용
+  const galleryInputRef = useRef<HTMLInputElement>(null)
+  const lastCaptureDataURLRef = useRef<string | null>(null) // 같은 화면 반복 감지용
+  const identicalCaptureCountRef = useRef(0)
 
   // iOS 감지 (컴포넌트 마운트 시 한 번만 확인)
   useEffect(() => {
@@ -683,6 +686,17 @@ export function ChecklistCamera({ items, mode, storeId, checklistId, onComplete,
       
       // 임시 저장 (base64로 저장)
       const dataURL = canvas.toDataURL('image/jpeg', 0.8)
+
+      // 같은 화면 반복 감지 (비디오 프리즈 등)
+      if (lastCaptureDataURLRef.current === dataURL) {
+        identicalCaptureCountRef.current++
+        if (identicalCaptureCountRef.current >= 2) {
+          setHasCaptureError(true)
+        }
+      } else {
+        identicalCaptureCountRef.current = 0
+      }
+      lastCaptureDataURLRef.current = dataURL
       
       // 컴포넌트 마운트 재확인
       if (!isMountedRef.current) {
@@ -723,12 +737,10 @@ export function ChecklistCamera({ items, mode, storeId, checklistId, onComplete,
         console.log(`✅ 모든 사진 촬영 완료 (인덱스 ${currentIndex})`)
       }
     } catch (error) {
-      // 에러 처리
+      // 에러 처리 - 갤러리 선택 활성화 (오류 시에만)
       console.error('캡처 중 오류:', error)
       if (isMountedRef.current) {
-        // 사용자에게 에러 표시 (필요시)
-        // alert는 사용자 경험을 해칠 수 있으므로 콘솔 로그만 남김
-        console.error('사진 촬영에 실패했습니다. 다시 시도해주세요.')
+        setHasCaptureError(true)
       }
     } finally {
       // 상태 정리 (컴포넌트가 마운트되어 있을 때만)
@@ -772,6 +784,41 @@ export function ChecklistCamera({ items, mode, storeId, checklistId, onComplete,
     } catch (error) {
       console.error('localStorage 정리 실패:', error)
     }
+  }
+
+  // 갤러리에서 사진 선택 (오류 발생 시에만 활성화)
+  const showGalleryOption = !!(cameraError || hasCaptureError)
+
+  const handleGallerySelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file || !file.type.startsWith('image/')) return
+
+    const reader = new FileReader()
+    reader.onload = () => {
+      const dataURL = reader.result as string
+      if (!dataURL) return
+
+      setTempPhotos(prev => ({ ...prev, [currentIndex]: dataURL }))
+
+      const photoKey = `checklist_photo_${checklistId}_${mode}_${currentIndex}`
+      try {
+        localStorage.setItem(photoKey, dataURL)
+      } catch (err) {
+        console.error('localStorage 저장 실패:', err)
+      }
+
+      setHasCaptureError(false)
+      lastCaptureDataURLRef.current = null
+      identicalCaptureCountRef.current = 0
+
+      const nextIndex = currentIndex + 1
+      if (nextIndex < photoItems.length) {
+        setCurrentIndex(nextIndex)
+      }
+    }
+    reader.readAsDataURL(file)
+
+    e.target.value = ''
   }
 
   const removePhoto = (index: number) => {
@@ -1024,31 +1071,35 @@ export function ChecklistCamera({ items, mode, storeId, checklistId, onComplete,
         </div>
       )}
       
-      {/* 상단: 현재 촬영 중인 항목 표시 + 캐시 삭제 (촬영 반복 시) */}
+      {/* 상단: 현재 촬영 중인 항목 표시 + 갤러리 선택 (오류 시에만) */}
       <div className="absolute top-0 left-0 right-0 bg-black bg-opacity-70 text-white p-4 z-10 flex items-center justify-between gap-2">
         <div className="flex-1 text-center min-w-0">
           <div className="text-xl font-semibold truncate">
             {modeText} ({currentItem?.area || ''})
           </div>
         </div>
-        <button
-          type="button"
-          onClick={async () => {
-            const message = '저장하지 않은 사진은 사라질 수 있습니다.\n캐시를 삭제하고 새로고침할까요?'
-            if (!window.confirm(message)) return
-            try {
-              await clearAppCache()
-              window.location.reload()
-            } catch (e) {
-              console.error('캐시 삭제 실패:', e)
-              window.alert('캐시 삭제에 실패했습니다. 페이지를 새로고침해 보세요.')
-            }
-          }}
-          className="flex-shrink-0 text-xs text-gray-300 hover:text-white underline py-1 px-2 rounded"
-          title="사진이 같은 화면으로 반복될 때 사용"
-        >
-          촬영이 안 될 때
-        </button>
+        {showGalleryOption && (
+          <div className="flex-shrink-0 flex flex-col items-end gap-0.5">
+            <input
+              ref={galleryInputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={handleGallerySelect}
+            />
+            <p className="text-[10px] text-gray-400 leading-tight">
+              사진 저장이 안 된 경우
+            </p>
+            <button
+              type="button"
+              onClick={() => galleryInputRef.current?.click()}
+              className="text-xs text-amber-300 hover:text-amber-200 underline py-0.5 px-0 rounded"
+              title="사진 저장이 안 된 경우 갤러리에서 선택해 주세요."
+            >
+              갤러리에서 선택
+            </button>
+          </div>
+        )}
       </div>
 
       {/* 카메라 에러 표시 */}
