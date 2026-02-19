@@ -2,13 +2,13 @@ import { createClient } from '@supabase/supabase-js'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { getServerUser } from '@/lib/supabase/server'
 import { Suspense } from 'react'
-import InitialSetupGuide from './InitialSetupGuide'
 import QuickActionsSection from './QuickActionsSection'
 import CategoryGroupedSectionsLazy from './CategoryGroupedSectionsLazy'
 import DashboardExpandableSections from './DashboardExpandableSections'
 import StoreStatusSection from './StoreStatusSection'
-import MonthlyGrowthRateCard from './MonthlyGrowthRateCard'
 import { FinancialDataProvider } from './FinancialDataContext'
+import { getCompanyPlan } from '@/lib/plan-features-server'
+import { getPlanLabel } from '@/lib/plan-features'
 import { SessionReplacedToast } from './SessionReplacedToast'
 
 export default async function BusinessOwnerDashboardPage() {
@@ -31,8 +31,8 @@ export default async function BusinessOwnerDashboardPage() {
     )
   }
 
-  // 필수 데이터만 먼저 조회 (RLS 우회 - company_id 검증 완료)
-  const [companyResult, storesResult, usersResult] = await Promise.all([
+  // 필수 데이터 + 요금제 정보 조회
+  const [companyResult, storesResult, usersResult, companyPlan] = await Promise.all([
     dataClient
       .from('companies')
       .select('id, name')
@@ -47,13 +47,12 @@ export default async function BusinessOwnerDashboardPage() {
       .from('users')
       .select('id, role', { count: 'exact' })
       .eq('company_id', user.company_id),
+    getCompanyPlan(user.company_id),
   ])
 
   const company = companyResult.data
   const totalStores = storesResult.count || 0
   const totalUsers = usersResult.count || 0
-  // 초기 설정 가이드용: 업체관리자 본인 제외한 직원 수 (직원 초대 완료는 '초대한 직원이 1명 이상'으로 판단)
-  const employeeCount = (usersResult.data || []).filter((u: { role?: string }) => u.role !== 'business_owner').length
 
   // 역할별 사용자 카운트 계산 (이미 조회한 데이터 사용)
   const usersByRole = (usersResult.data || []).reduce((acc: Record<string, number>, user: any) => {
@@ -115,13 +114,6 @@ export default async function BusinessOwnerDashboardPage() {
         )}
       </div>
 
-      {/* 초기 설정 가이드 - 즉시 표시 */}
-      <InitialSetupGuide
-        hasCompany={!!company}
-        storeCount={totalStores}
-        employeeCount={employeeCount}
-      />
-
       {/* 통계 카드 - 즉시 표시 (필수 데이터만) */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
         <div className="bg-white rounded-lg shadow-md p-6">
@@ -152,16 +144,23 @@ export default async function BusinessOwnerDashboardPage() {
             )}
           </div>
         </div>
-        <Suspense fallback={
-          <div className="bg-white rounded-lg shadow-md p-6">
-            <h3 className="text-sm font-medium text-gray-500 mb-2">월별 성장률</h3>
-            <div className="animate-pulse">
-              <div className="h-8 bg-gray-200 rounded w-24"></div>
-            </div>
+        <div className="bg-white rounded-lg shadow-md p-6">
+          <h3 className="text-sm font-medium text-gray-500 mb-3">요금제 정보</h3>
+          <div className="space-y-2">
+            <p className="text-sm text-gray-600">
+              <span className="text-gray-500">현재 요금제:</span>{' '}
+              <span className="font-semibold text-gray-900">{companyPlan ? getPlanLabel(companyPlan.subscription_plan) : '-'}</span>
+            </p>
+            <p className="text-sm text-gray-600">
+              <span className="text-gray-500">오픈 가능한 베이직 매장수:</span>{' '}
+              <span className="font-semibold text-gray-900">{companyPlan?.basic_units ?? 0}곳</span>
+            </p>
+            <p className="text-sm text-gray-600">
+              <span className="text-gray-500">프리미엄 매장수:</span>{' '}
+              <span className="font-semibold text-gray-900">{companyPlan?.premium_units ?? 0}곳</span>
+            </p>
           </div>
-        }>
-          <MonthlyGrowthRateCard companyId={user.company_id} />
-        </Suspense>
+        </div>
       </div>
 
       {/* 매장 상태 현황 - Suspense로 감싸서 독립적으로 로드 */}

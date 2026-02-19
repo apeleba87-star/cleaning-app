@@ -175,17 +175,18 @@ export function NavRoleSwitch({ userRole, userName, onRefresh, isRefreshing, sub
         // 업체 관리자 메뉴 - 그룹화된 구조 (요금 플랜별 기능 키 매핑)
         const businessOwnerNavRaw: (NavItem | NavGroup)[] = [
           { href: '/business/dashboard', label: '대시보드', feature: 'dashboard' },
-          { href: '/business/attendance-report', label: '미관리 매장 확인', feature: 'attendance_report' },
           {
             label: '매장',
             feature: 'stores',
             items: [
-              { href: '/business/stores', label: '매장 관리', feature: 'stores' },
+              { href: '/business/stores', label: '매장 등록/관리', feature: 'stores' },
               { href: '/business/stores/status', label: '매장 상태', feature: 'stores_status' },
-              { href: '/business/franchises', label: '프렌차이즈 관리', feature: 'franchises' },
+              { href: '/business/attendance-report', label: '미관리 매장 확인', feature: 'attendance_report' },
+              { href: '/business/franchises', label: '프렌차이즈 등록/관리', feature: 'franchises' },
             ],
           },
-          { href: '/business/payrolls', label: '인건비 관리', feature: 'payrolls' },
+          { href: '/business/users', label: '사용자 등록/관리', badge: pendingUserCount, feature: 'users' },
+          { href: '/business/payrolls', label: '인건비 등록/관리', feature: 'payrolls' },
           {
             label: '재무',
             feature: 'receivables',
@@ -194,15 +195,13 @@ export function NavRoleSwitch({ userRole, userName, onRefresh, isRefreshing, sub
               { href: '/business/financial', label: '재무 현황', feature: 'financial' },
             ],
           },
-          { href: '/business/users', label: '사용자 관리', badge: pendingUserCount, feature: 'users' },
           {
             label: '운영',
             feature: 'products',
             items: [
               { href: '/business/products', label: '바코드 제품 등록', feature: 'products' },
-              { href: '/business/checklists', label: '체크리스트', feature: 'checklists' },
-              { href: '/business/announcements', label: '공지사항 관리', feature: 'announcements' },
-              { href: '/business/reports', label: '리포트', feature: 'reports' },
+              { href: '/business/checklists', label: '체크리스트 등록/관리', feature: 'checklists' },
+              { href: '/business/announcements', label: '공지사항 등록/관리', feature: 'announcements' },
               { href: '/business/supply-requests', label: '물품 요청', feature: 'supply_requests' },
             ],
           },
@@ -213,6 +212,7 @@ export function NavRoleSwitch({ userRole, userName, onRefresh, isRefreshing, sub
               { href: '/business/company', label: '회사 관리', feature: 'company' },
             ],
           },
+          { href: '/business/manual', label: '사용 설명서', feature: 'company' },
         ]
 
         // 요금 플랜에 따라 허용된 메뉴만 표시 (premium_units >= 1 이면 프리미엄 기능도 표시)
@@ -431,9 +431,11 @@ export function NavRoleSwitch({ userRole, userName, onRefresh, isRefreshing, sub
           className="border-b border-gray-200/50"
         >
           <button
+            type="button"
             onClick={(e) => {
+              e.preventDefault()
               e.stopPropagation()
-              setOpenDropdown(isOpen ? null : `dropdown-${index}`)
+              setOpenDropdown((prev) => (prev === `dropdown-${index}` ? null : `dropdown-${index}`))
             }}
             className={`w-full px-4 py-3 text-base font-medium transition-all duration-200 flex items-center justify-between ${
               isActiveGroup
@@ -515,7 +517,12 @@ export function NavRoleSwitch({ userRole, userName, onRefresh, isRefreshing, sub
         }}
       >
         <button
-          onClick={() => setOpenDropdown(isOpen ? null : `dropdown-${index}`)}
+          type="button"
+          onClick={(e) => {
+            e.preventDefault()
+            e.stopPropagation()
+            setOpenDropdown((prev) => (prev === `dropdown-${index}` ? null : `dropdown-${index}`))
+          }}
           className={`px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 flex items-center gap-1.5 backdrop-blur-sm ${
             isActiveGroup
               ? 'bg-white/20 text-white shadow-lg border border-white/30'

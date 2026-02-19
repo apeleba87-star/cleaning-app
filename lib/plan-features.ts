@@ -38,9 +38,16 @@ export type BusinessFeatureKey =
 const PLAN_FEATURES: Record<SubscriptionPlan, BusinessFeatureKey[]> = {
   free: [
     'dashboard',
-    'attendance_report',
     'stores',
     'stores_status',
+    'payrolls',
+    'receivables',
+    'financial',
+    'users',
+    'checklists',
+    'announcements',
+    'reports',
+    'supply_requests',
     'company',
   ],
   basic: [
