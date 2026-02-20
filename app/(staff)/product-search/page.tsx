@@ -248,7 +248,7 @@ export default function ProductSearchPage() {
         </div>
       </div>
 
-      <div className="px-3 py-3 space-y-3 max-w-md mx-auto">
+      <div className="px-3 py-3 space-y-3 max-w-md mx-auto min-w-0 w-full">
         {/* 매장 선택 - 모바일 최적화 */}
         {stores.length > 1 && (
           <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-3">
@@ -267,14 +267,14 @@ export default function ProductSearchPage() {
           </div>
         )}
 
-        {/* 통합 검색 영역 - 모바일 최적화 */}
-        <div className="bg-white rounded-xl shadow-md border border-gray-100 p-3 sticky top-[57px] z-10">
-          {/* 검색 입력 영역 */}
-          <div className="flex gap-2 mb-2">
-            {/* 바코드 스캔 버튼 - 더 큰 터치 영역 */}
+        {/* 통합 검색 영역 - 모바일 최적화, 카드 안에만 표시되도록 overflow 처리 */}
+        <div className="bg-white rounded-xl shadow-md border border-gray-100 p-3 sticky top-[57px] z-10 overflow-hidden">
+          {/* 검색 입력 영역: min-w-0으로 flex 영역이 카드 밖으로 나가지 않도록 */}
+          <div className="flex gap-2 mb-2 min-w-0">
+            {/* 바코드 스캔 버튼 - 고정 크기로 S25 등에서 잘리지 않게 */}
             <button
               onClick={scanning ? stopBarcodeScan : startBarcodeScan}
-              className={`px-4 py-3 rounded-xl font-semibold transition-all flex-shrink-0 shadow-sm ${
+              className={`flex-shrink-0 w-12 h-12 flex items-center justify-center rounded-xl font-semibold transition-all shadow-sm ${
                 scanning
                   ? 'bg-red-500 text-white active:bg-red-600'
                   : 'bg-gradient-to-r from-green-500 to-green-600 text-white active:from-green-600 active:to-green-700'
@@ -283,8 +283,8 @@ export default function ProductSearchPage() {
               <span className="text-lg">{scanning ? '⏹' : '📷'}</span>
             </button>
             
-            {/* 통합 검색 입력창 */}
-            <div className="flex-1 flex gap-2">
+            {/* 통합 검색 입력창 - min-w-0 으로 좁은 화면에서도 잘리지 않게 */}
+            <div className="flex-1 flex gap-2 min-w-0">
               <input
                 ref={searchInputRef}
                 type="text"
@@ -296,12 +296,12 @@ export default function ProductSearchPage() {
                   }
                 }}
                 placeholder="바코드 또는 제품명"
-                className="flex-1 px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 text-base bg-gray-50"
+                className="flex-1 min-w-0 px-3 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 text-base bg-gray-50"
               />
               <button
                 onClick={() => handleSearch()}
                 disabled={loading || !selectedStoreId || !searchValue.trim()}
-                className="px-5 py-3 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-xl hover:from-blue-600 hover:to-blue-700 disabled:from-gray-300 disabled:to-gray-400 disabled:cursor-not-allowed transition-all font-semibold shadow-sm active:scale-95"
+                className="flex-shrink-0 px-4 py-3 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-xl hover:from-blue-600 hover:to-blue-700 disabled:from-gray-300 disabled:to-gray-400 disabled:cursor-not-allowed transition-all font-semibold shadow-sm active:scale-95 whitespace-nowrap"
               >
                 {loading ? (
                   <span className="inline-block w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
