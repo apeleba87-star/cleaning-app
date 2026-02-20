@@ -18,6 +18,7 @@ interface StoreStatus {
   clock_in_time: string | null
   clock_out_time: string | null
   staff_name: string | null
+  attendance_id?: string | null // 출근 취소용 (출근중일 때만, 관리완료 시 null)
   has_problem: boolean
   store_problem_count: number
   vending_problem_count: number
@@ -131,6 +132,7 @@ export default function BusinessStoresStatusPage() {
     lost_items: any[]
   }>>(new Map())
   const [loadingAllProblems, setLoadingAllProblems] = useState(false)
+  const [cancellingAttendanceId, setCancellingAttendanceId] = useState<string | null>(null)
   // 전체 알림 모달용 데이터
   const [allNotificationsData, setAllNotificationsData] = useState<Map<string, {
     in_progress_requests: any[]
@@ -326,7 +328,8 @@ export default function BusinessStoresStatusPage() {
     setConfirmedRequestIds(ids)
     setConfirmedRequestDates(dates)
     
-    loadStoreStatuses()
+    // 업체관리자 매장 상태 페이지: attendance_id(출근 취소용) 포함 최신 데이터 로드
+    loadStoreStatuses(true)
 
     // 자동 새로고침 설정 (2시간마다, 8시~23시만)
     const setupAutoRefresh = () => {
@@ -390,12 +393,12 @@ export default function BusinessStoresStatusPage() {
     }
   }, [storeStatuses])
 
-  const loadStoreStatuses = async () => {
+  const loadStoreStatuses = async (forceRefresh = false) => {
     try {
       setLoading(true)
-      // 캐시 무효화를 위해 타임스탬프 쿼리 파라미터 추가
       const timestamp = new Date().getTime()
-      const response = await fetch(`/api/business/stores/status?t=${timestamp}`, {
+      const qs = forceRefresh ? `refresh=true&t=${timestamp}` : `t=${timestamp}`
+      const response = await fetch(`/api/business/stores/status?${qs}`, {
         cache: 'no-store',
         headers: {
           'Cache-Control': 'no-cache',
@@ -452,6 +455,25 @@ export default function BusinessStoresStatusPage() {
       console.error('Error loading store statuses:', error)
     } finally {
       setLoading(false)
+    }
+  }
+
+  const handleCancelAttendance = async (attendanceId: string, storeName: string, e: React.MouseEvent) => {
+    e.stopPropagation()
+    if (!confirm('직원 실수로 출근 처리를 취소할까요?')) return
+    setCancellingAttendanceId(attendanceId)
+    try {
+      const res = await fetch(`/api/business/attendances/${attendanceId}`, { method: 'DELETE' })
+      const data = await res.json()
+      if (res.ok && data.success) {
+        await loadStoreStatuses(true)
+      } else {
+        alert(data.error || '출근 취소에 실패했습니다.')
+      }
+    } catch (err: any) {
+      alert(err?.message || '출근 취소 중 오류가 발생했습니다.')
+    } finally {
+      setCancellingAttendanceId(null)
     }
   }
 
@@ -2531,6 +2553,18 @@ export default function BusinessStoresStatusPage() {
                               <span className="w-1 h-1 bg-gray-400 rounded-full"></span>
                               {formatTimeAgo(status.last_update_time)}
                             </span>
+                            {/* 출근 취소 버튼: 출근중일 때만, 관리완료(퇴근완료) 시 비활성화 */}
+                            {!isInactive && status.attendance_status === 'clocked_in' && status.attendance_id && (
+                              <button
+                                type="button"
+                                onClick={(e) => handleCancelAttendance(status.attendance_id!, status.store_name, e)}
+                                disabled={!!cancellingAttendanceId}
+                                className="ml-1 px-2 py-0.5 text-xs text-red-600 hover:text-red-700 hover:bg-red-50 rounded border border-red-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                                title="직원 실수로 출근한 경우 취소"
+                              >
+                                {cancellingAttendanceId === status.attendance_id ? '취소 중...' : '취소'}
+                              </button>
+                            )}
                           </div>
                         </div>
                       </div>

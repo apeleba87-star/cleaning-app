@@ -176,7 +176,7 @@ async function fetchStoreStatusData(companyId: string, forDashboard = false) {
     const tailPromises = [
       attendanceClient
         .from('attendance')
-        .select('store_id, user_id, work_date, clock_in_at, clock_out_at')
+        .select('id, store_id, user_id, work_date, clock_in_at, clock_out_at')
         .in('store_id', storeIds)
         .or(`work_date.eq.${todayDateKST},work_date.eq.${todayDateUTC},clock_in_at.gte.${todayStart.toISOString()},clock_in_at.lte.${todayEnd.toISOString()}`)
         .order('clock_in_at', { ascending: false }),
@@ -632,6 +632,7 @@ async function fetchStoreStatusData(companyId: string, forDashboard = false) {
         let attendanceStatus: 'not_clocked_in' | 'clocked_in' | 'clocked_out' = 'not_clocked_in'
         let clockInTime: string | null = null
         let clockOutTime: string | null = null
+        let attendanceId: string | null = null // 출근 취소용 (출근중일 때만)
 
         if (todayOnlyAttendances.length > 0) {
           // 출근 중인 직원이 있는지 확인 (출근했지만 퇴근하지 않은 경우)
@@ -641,6 +642,7 @@ async function fetchStoreStatusData(companyId: string, forDashboard = false) {
             // 한 명이라도 출근 중이면 "출근중"
             attendanceStatus = 'clocked_in'
             clockInTime = clockedInStaff.clock_in_at
+            attendanceId = clockedInStaff.id
           } else {
             // 모두 퇴근했으면 "퇴근완료" (가장 최근 퇴근 시간 기준)
             const latestClockOut = todayOnlyAttendances
@@ -718,6 +720,7 @@ async function fetchStoreStatusData(companyId: string, forDashboard = false) {
           clock_in_time: clockInTime,
           clock_out_time: clockOutTime,
           staff_name: staffName,
+          attendance_id: attendanceId, // 출근 취소용 (출근중일 때만, 관리완료 시 null)
           has_problem: hasProblem,
           // 문제 보고 카운트
           store_problem_count: storeProblemCount,
@@ -770,6 +773,7 @@ async function fetchStoreStatusData(companyId: string, forDashboard = false) {
             clock_in_time: null,
             clock_out_time: null,
             staff_name: null,
+            attendance_id: null,
             has_problem: false,
             store_problem_count: 0,
             vending_problem_count: 0,
