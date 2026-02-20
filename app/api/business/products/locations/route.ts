@@ -1,8 +1,8 @@
-import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { getServerUser } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
+import { createClient } from '@supabase/supabase-js'
 
-// GET: 제품 위치 정보 조회
+// GET: 제품 위치 정보 조회 (서비스 역할 사용 — RLS로 인한 빈 결과 방지)
 export async function GET(request: NextRequest) {
   try {
     const user = await getServerUser()
@@ -14,6 +14,18 @@ export async function GET(request: NextRequest) {
       )
     }
 
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+    if (!serviceRoleKey || !supabaseUrl) {
+      return NextResponse.json(
+        { error: '위치 정보 조회에 실패했습니다.' },
+        { status: 500 }
+      )
+    }
+    const supabase = createClient(supabaseUrl, serviceRoleKey, {
+      auth: { autoRefreshToken: false, persistSession: false },
+    })
+
     const { searchParams } = new URL(request.url)
     const storeId = searchParams.get('store_id')
     const page = parseInt(searchParams.get('page') || '1', 10)
@@ -22,8 +34,6 @@ export async function GET(request: NextRequest) {
     // limit 최대값 제한 (500개)
     const safeLimit = Math.min(limit, 500)
     const offset = (page - 1) * safeLimit
-
-    const supabase = await createServerSupabaseClient()
 
     // 업체관리자인 경우 자신의 회사 매장만 조회
     let companyStoreIds: string[] | null = null

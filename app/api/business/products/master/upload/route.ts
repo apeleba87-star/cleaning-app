@@ -1,6 +1,6 @@
-import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { getServerUser } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
+import { createClient } from '@supabase/supabase-js'
 
 // 바코드 정규화 함수 (모든 공백, 특수문자 제거, 숫자만 남기기)
 function normalizeBarcode(barcode: string | null | undefined): string | null {
@@ -116,10 +116,21 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const supabase = await createServerSupabaseClient()
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+    if (!serviceRoleKey || !supabaseUrl) {
+      return NextResponse.json(
+        { error: '제품 일괄 업로드에 실패했습니다.' },
+        { status: 500 }
+      )
+    }
+    const supabase = createClient(supabaseUrl, serviceRoleKey, {
+      auth: { autoRefreshToken: false, persistSession: false },
+    })
 
     let productsCreated = 0
     let productsUpdated = 0
+    let productsSkipped = 0  // 이미 존재하는 제품 (오류 아님)
     const errors: string[] = []
 
     // 제품 조회 캐싱 (제품명 -> 제품 정보)
@@ -283,7 +294,13 @@ export async function POST(request: NextRequest) {
             .single()
 
           if (productCreateError || !newProduct) {
-            errors.push(`제품 "${productName}" 생성 실패: ${productCreateError?.message || '알 수 없는 오류'}`)
+            // 이미 존재하는 제품(중복)은 오류가 아닌 스킵으로 처리
+            const isDuplicate = productCreateError?.message?.includes('idx_products_name_unique') || productCreateError?.message?.includes('duplicate key')
+            if (isDuplicate) {
+              productsSkipped++
+            } else {
+              errors.push(`제품 "${productName}" 생성 실패: ${productCreateError?.message || '알 수 없는 오류'}`)
+            }
             continue
           }
 
@@ -308,10 +325,11 @@ export async function POST(request: NextRequest) {
       summary: {
         productsCreated,
         productsUpdated,
+        productsSkipped,
         totalRows: rows.length,
         errors: errors.length
       },
-      errors: errors.length > 0 ? errors.slice(0, 20) : undefined // 최대 20개만 반환
+      errors: errors.length > 0 ? errors.slice(0, 20) : undefined // 최대 20개만 반환 (실제 오류만)
     })
   } catch (error: any) {
     console.error('Error in POST /api/business/products/master/upload:', error)

@@ -24,8 +24,18 @@ export default async function ProductsPage() {
     }
   }
 
+  // 제품·위치·매장 조회는 서비스 역할 사용 (RLS로 인한 빈 결과 방지)
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const dataClient =
+    serviceRoleKey && supabaseUrl
+      ? createClient(supabaseUrl, serviceRoleKey, {
+          auth: { autoRefreshToken: false, persistSession: false },
+        })
+      : supabase
+
   // 매장 목록 조회 (업체관리자는 자신의 회사 매장만)
-  let storesQuery = supabase
+  let storesQuery = dataClient
     .from('stores')
     .select('id, name')
     .is('deleted_at', null)
@@ -40,16 +50,6 @@ export default async function ProductsPage() {
   if (storesError) {
     console.error('Error fetching stores:', storesError)
   }
-
-  // 제품·위치 조회는 서비스 역할 사용 (RLS로 인한 빈 결과 방지)
-  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const dataClient =
-    serviceRoleKey && supabaseUrl
-      ? createClient(supabaseUrl, serviceRoleKey, {
-          auth: { autoRefreshToken: false, persistSession: false },
-        })
-      : supabase
 
   // 제품 목록 조회 (모든 제품, limit 없음 - 중복 제거는 DB UNIQUE 제약으로 처리)
   const { data: products, error: productsError } = await dataClient

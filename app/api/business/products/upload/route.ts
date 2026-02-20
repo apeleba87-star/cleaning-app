@@ -25,6 +25,16 @@ function normalizeProductName(name: string | null | undefined): string {
   return name.trim()
 }
 
+// 마지막 조회용 이름 변형 (DB에 괄호 앞 공백 유무가 다른 경우 대비)
+function getProductNameLookupVariants(name: string): string[] {
+  const variants = new Set<string>([name])
+  if (name.includes('(')) {
+    variants.add(name.replace(/\s*\(\s*/g, '(').replace(/\s*\)\s*/g, ')'))  // 공백 제거
+    variants.add(name.replace(/\(/g, ' ('))  // 괄호 앞 공백 추가
+  }
+  return [...variants]
+}
+
 // 바코드 정규화 함수 (모든 공백, 특수문자 제거, 숫자만 남기기)
 function normalizeBarcode(barcode: string | null | undefined): string | null {
   if (!barcode) return null
@@ -656,11 +666,10 @@ export async function POST(request: NextRequest) {
               .select('id, name, barcode, category_1, category_2')
             
             if (insertError) {
-              // UNIQUE 제약 위반은 정상적인 경우로 처리 (동시성 문제로 인한 중복)
-              if (insertError.message.includes('unique constraint') || insertError.message.includes('duplicate key')) {
-                console.log(`제품 배치 ${batchNumber}/${insertBatches}: UNIQUE 제약 위반 감지 (동시성 문제), 제품 재조회 중...`)
-                
-                // 실패한 제품명들을 재조회하여 캐시에 추가
+              // 배치 INSERT 실패 시 개별 INSERT로 폴백 (일부 제품 실패가 전체에 영향 주지 않도록)
+              const isUniqueError = insertError.message.includes('unique constraint') || insertError.message.includes('duplicate key')
+              if (isUniqueError) {
+                console.log(`제품 배치 ${batchNumber}/${insertBatches}: UNIQUE 제약 위반, 제품 재조회 중...`)
                 const failedProductNames = batchToInsert.map(p => normalizeProductName(p.name)).filter(name => name)
                 if (failedProductNames.length > 0) {
                   const { data: existingProducts, error: fetchError } = await supabase
@@ -668,7 +677,6 @@ export async function POST(request: NextRequest) {
                     .select('id, name, barcode, category_1, category_2')
                     .in('name', failedProductNames)
                     .is('deleted_at', null)
-                  
                   if (!fetchError && existingProducts) {
                     existingProducts.forEach(product => {
                       const normalizedName = normalizeProductName(product.name)
@@ -681,17 +689,56 @@ export async function POST(request: NextRequest) {
                         })
                       }
                     })
-                    console.log(`제품 배치 ${batchNumber}/${insertBatches}: UNIQUE 제약 위반으로 인해 ${existingProducts.length}개 제품을 캐시에 추가 (정상 처리)`)
                   }
                 }
-                // UNIQUE 제약 위반은 에러로 카운트하지 않음 (정상적인 동시성 처리)
               } else {
-                // 다른 종류의 에러는 기록
-                console.error(`제품 배치 INSERT 오류 (배치 ${batchNumber}/${insertBatches}):`, insertError)
-                errors.push(`제품 배치 INSERT 실패 (배치 ${batchNumber}): ${insertError.message}`)
+                // 배치 실패 시 개별 INSERT로 폴백 (바코드 중복 등 일부 실패 대응)
+                console.log(`제품 배치 INSERT 실패, 개별 INSERT로 폴백: ${insertError.message}`)
+                let fallbackInserted = 0
+                for (const product of batchToInsert) {
+                  const { data: singleResult, error: singleError } = await supabase
+                    .from('products')
+                    .insert(product)
+                    .select('id, name, barcode, category_1, category_2')
+                    .single()
+                  if (!singleError && singleResult) {
+                    const normalizedName = normalizeProductName(singleResult.name)
+                    if (normalizedName) {
+                      productCache.set(normalizedName, {
+                        id: singleResult.id,
+                        barcode: singleResult.barcode,
+                        category_1: singleResult.category_1,
+                        category_2: singleResult.category_2
+                      })
+                      fallbackInserted++
+                    }
+                  } else if (singleError && (singleError.message.includes('unique constraint') || singleError.message.includes('duplicate key'))) {
+                    const { data: existing } = await supabase
+                      .from('products')
+                      .select('id, name, barcode, category_1, category_2')
+                      .eq('name', product.name)
+                      .is('deleted_at', null)
+                      .single()
+                    if (existing) {
+                      const normalizedName = normalizeProductName(existing.name)
+                      if (normalizedName) {
+                        productCache.set(normalizedName, {
+                          id: existing.id,
+                          barcode: existing.barcode,
+                          category_1: existing.category_1,
+                          category_2: existing.category_2
+                        })
+                      }
+                    }
+                  } else {
+                    errors.push(`제품 생성 실패 "${product.name}": ${singleError?.message || '알 수 없는 오류'}`)
+                  }
+                }
+                if (fallbackInserted > 0) {
+                  console.log(`개별 INSERT 폴백 완료: ${fallbackInserted}개 생성`)
+                }
               }
             } else if (insertedProducts) {
-              // INSERT 후 반환된 제품 정보를 캐시에 저장
               insertedProducts.forEach(product => {
                 const normalizedName = normalizeProductName(product.name)
                 if (normalizedName) {
@@ -786,18 +833,26 @@ export async function POST(request: NextRequest) {
           }
 
           // 캐시에서 제품 ID 조회 (배치 UPSERT로 이미 처리됨)
-          const cachedProduct = productCache.get(productName)
+          let cachedProduct = productCache.get(productName)
           if (!cachedProduct) {
-            // 제품을 찾을 수 없는 경우, 마지막으로 한 번 더 조회 시도
-            const { data: lastChanceProduct, error: lastChanceError } = await supabase
-              .from('products')
-              .select('id, name, barcode, category_1, category_2')
-              .eq('name', productName)
-              .is('deleted_at', null)
-              .limit(1)
-              .single()
+            // 제품을 찾을 수 없는 경우, 이름 변형으로 DB 조회 시도 (괄호 앞 공백 유무 차이 대비)
+            const lookupVariants = getProductNameLookupVariants(productName)
+            let lastChanceProduct: { id: string; name: string; barcode: string | null; category_1: string | null; category_2: string | null } | null = null
+            for (const variant of lookupVariants) {
+              const { data, error } = await supabase
+                .from('products')
+                .select('id, name, barcode, category_1, category_2')
+                .eq('name', variant)
+                .is('deleted_at', null)
+                .limit(1)
+                .maybeSingle()
+              if (!error && data) {
+                lastChanceProduct = data
+                break
+              }
+            }
             
-            if (!lastChanceError && lastChanceProduct) {
+            if (lastChanceProduct) {
               // 마지막 시도에서 찾았으면 캐시에 추가
               productCache.set(productName, {
                 id: lastChanceProduct.id,

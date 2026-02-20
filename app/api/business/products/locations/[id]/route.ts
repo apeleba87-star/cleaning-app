@@ -1,8 +1,8 @@
-import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { getServerUser } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
+import { createClient } from '@supabase/supabase-js'
 
-// PATCH: 제품 위치 정보 수정
+// PATCH: 제품 위치 정보 수정 (서비스 역할 사용 - RLS 우회)
 export async function PATCH(
   request: NextRequest,
   { params }: { params: { id: string } }
@@ -20,7 +20,17 @@ export async function PATCH(
     const body = await request.json()
     const { stock_quantity, is_available } = body
 
-    const supabase = await createServerSupabaseClient()
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+    if (!serviceRoleKey || !supabaseUrl) {
+      return NextResponse.json(
+        { error: '위치 정보 수정에 실패했습니다.' },
+        { status: 500 }
+      )
+    }
+    const supabase = createClient(supabaseUrl, serviceRoleKey, {
+      auth: { autoRefreshToken: false, persistSession: false },
+    })
 
     const updateData: {
       stock_quantity?: number
@@ -78,7 +88,17 @@ export async function DELETE(
       )
     }
 
-    const supabase = await createServerSupabaseClient()
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+    if (!serviceRoleKey || !supabaseUrl) {
+      return NextResponse.json(
+        { error: '위치 정보 삭제에 실패했습니다.' },
+        { status: 500 }
+      )
+    }
+    const supabase = createClient(supabaseUrl, serviceRoleKey, {
+      auth: { autoRefreshToken: false, persistSession: false },
+    })
 
     // 위치 정보 삭제
     const { error } = await supabase

@@ -1,8 +1,8 @@
-import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { getServerUser } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
+import { createClient } from '@supabase/supabase-js'
 
-// POST: 대량 삭제
+// POST: 대량 삭제 (서비스 역할 사용 - RLS 우회)
 export async function POST(request: NextRequest) {
   try {
     const user = await getServerUser()
@@ -24,7 +24,17 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const supabase = await createServerSupabaseClient()
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+    if (!serviceRoleKey || !supabaseUrl) {
+      return NextResponse.json(
+        { error: '위치 정보 삭제에 실패했습니다.' },
+        { status: 500 }
+      )
+    }
+    const supabase = createClient(supabaseUrl, serviceRoleKey, {
+      auth: { autoRefreshToken: false, persistSession: false },
+    })
 
     // 업체관리자인 경우 자신의 회사 매장만 삭제 가능하도록 매장 ID 목록 가져오기
     let companyStoreIds: string[] | null = null

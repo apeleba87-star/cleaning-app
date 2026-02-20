@@ -95,7 +95,7 @@ export default function ProductMasterSection({ products }: ProductMasterSectionP
       if (data.success) {
         setUploadResult(data)
         // 에러가 없으면 3초 후 자동 새로고침, 에러가 있으면 수동 새로고침
-        const hasErrors = (data.summary?.errors > 0) || (data.errors && data.errors.length > 0)
+        const hasErrors = (data.summary?.errors > 0) || (data.errors && data.errors.length > 0) // productsSkipped는 오류 아님
         if (!hasErrors) {
           setTimeout(() => {
             window.location.reload()
@@ -224,6 +224,9 @@ export default function ProductMasterSection({ products }: ProductMasterSectionP
                 <div className="text-xs text-green-700 space-y-1">
                   <p>생성: {uploadResult.summary?.productsCreated || 0}개</p>
                   <p>업데이트: {uploadResult.summary?.productsUpdated || 0}개</p>
+                  {uploadResult.summary?.productsSkipped > 0 && (
+                    <p className="text-gray-600">기존 제품(이미 등록됨): {uploadResult.summary.productsSkipped}개</p>
+                  )}
                   {uploadResult.summary?.errors > 0 && (
                     <p className="text-red-600 font-semibold">오류: {uploadResult.summary.errors}개</p>
                   )}

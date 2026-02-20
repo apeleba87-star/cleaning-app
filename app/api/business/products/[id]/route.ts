@@ -1,6 +1,6 @@
-import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { getServerUser } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
+import { createClient } from '@supabase/supabase-js'
 
 // 바코드 정규화 함수 (모든 공백, 특수문자 제거, 숫자만 남기기)
 function normalizeBarcode(barcode: string | null | undefined): string | null {
@@ -10,7 +10,16 @@ function normalizeBarcode(barcode: string | null | undefined): string | null {
   return normalized.length > 0 ? normalized : null
 }
 
-// PATCH: 제품 수정
+function getAdminSupabase() {
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+  if (!serviceRoleKey || !supabaseUrl) return null
+  return createClient(supabaseUrl, serviceRoleKey, {
+    auth: { autoRefreshToken: false, persistSession: false },
+  })
+}
+
+// PATCH: 제품 수정 (바코드 포함)
 export async function PATCH(
   request: NextRequest,
   { params }: { params: { id: string } }
@@ -35,9 +44,15 @@ export async function PATCH(
       )
     }
 
-    const supabase = await createServerSupabaseClient()
+    const supabase = getAdminSupabase()
+    if (!supabase) {
+      return NextResponse.json(
+        { error: '제품 수정에 실패했습니다.' },
+        { status: 500 }
+      )
+    }
 
-    // 제품 존재 확인
+    // 제품 존재 확인 (서비스 역할 사용 - RLS 우회)
     const { data: existingProduct, error: checkError } = await supabase
       .from('products')
       .select('id, name, barcode')
@@ -142,7 +157,13 @@ export async function DELETE(
       )
     }
 
-    const supabase = await createServerSupabaseClient()
+    const supabase = getAdminSupabase()
+    if (!supabase) {
+      return NextResponse.json(
+        { error: '제품 삭제에 실패했습니다.' },
+        { status: 500 }
+      )
+    }
 
     // 소프트 삭제
     const { error } = await supabase
