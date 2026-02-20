@@ -32,7 +32,7 @@ function getProductNameLookupVariants(name: string): string[] {
     variants.add(name.replace(/\s*\(\s*/g, '(').replace(/\s*\)\s*/g, ')'))  // 공백 제거
     variants.add(name.replace(/\(/g, ' ('))  // 괄호 앞 공백 추가
   }
-  return [...variants]
+  return Array.from(variants)
 }
 
 // 바코드 정규화 함수 (모든 공백, 특수문자 제거, 숫자만 남기기)
