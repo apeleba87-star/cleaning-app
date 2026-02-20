@@ -1,6 +1,13 @@
-import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { createClient } from '@supabase/supabase-js'
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerUser } from '@/lib/supabase/server'
+
+function getServiceSupabase() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY
+  if (!url || !key) return null
+  return createClient(url, key, { auth: { autoRefreshToken: false, persistSession: false } })
+}
 
 export async function PATCH(
   request: NextRequest,
@@ -16,7 +23,10 @@ export async function PATCH(
       )
     }
 
-    const supabase = await createServerSupabaseClient()
+    const supabase = getServiceSupabase()
+    if (!supabase) {
+      return NextResponse.json({ error: '서버 설정 오류' }, { status: 500 })
+    }
 
     // business_owner는 자신의 회사 프렌차이즈만 수정 가능
     if (user.role === 'business_owner') {
@@ -113,7 +123,10 @@ export async function DELETE(
       )
     }
 
-    const supabase = await createServerSupabaseClient()
+    const supabase = getServiceSupabase()
+    if (!supabase) {
+      return NextResponse.json({ error: '서버 설정 오류' }, { status: 500 })
+    }
 
     // business_owner는 자신의 회사 프렌차이즈만 삭제 가능
     if (user.role === 'business_owner') {

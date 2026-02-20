@@ -1,4 +1,4 @@
-import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { createClient } from '@supabase/supabase-js'
 import { getServerUser } from '@/lib/supabase/server'
 import { assertBusinessFeature } from '@/lib/plan-features-server'
 import { PlanUpgradeRequiredView } from '@/components/PlanFeatureGuard'
@@ -7,7 +7,6 @@ import FranchiseList from './FranchiseList'
 
 export default async function BusinessFranchisesPage() {
   const user = await getServerUser()
-  const supabase = await createServerSupabaseClient()
 
   if (!user || !user.company_id) {
     redirect('/business/dashboard')
@@ -20,7 +19,25 @@ export default async function BusinessFranchisesPage() {
     }
   }
 
-  const { data: franchises, error } = await supabase
+  // RLS 우회: service role로 본인 회사 프렌차이즈만 조회 (서버에서 company_id로 필터)
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const dataClient =
+    serviceRoleKey && supabaseUrl
+      ? createClient(supabaseUrl, serviceRoleKey, {
+          auth: { autoRefreshToken: false, persistSession: false },
+        })
+      : null
+
+  if (!dataClient) {
+    return (
+      <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+        <p className="text-red-800">서버 설정 오류로 목록을 불러올 수 없습니다.</p>
+      </div>
+    )
+  }
+
+  const { data: franchises, error } = await dataClient
     .from('franchises')
     .select('*')
     .eq('company_id', user.company_id)

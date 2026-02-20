@@ -1637,8 +1637,12 @@ export default function ReceivablesPage() {
         </div>
       )}
 
-      {/* 매장별 수금/미수금 현황 - 모바일 카드, 데스크톱 테이블 */}
+      {/* 매장별 수금·미수금 요약 */}
       <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-lg border border-white/20 overflow-hidden">
+        <div className="px-4 sm:px-6 py-3 border-b border-gray-200 bg-gradient-to-r from-blue-50 to-purple-50">
+          <h2 className="text-lg sm:text-xl font-semibold text-gray-900">매장별 수금·미수금 요약</h2>
+          <p className="text-sm text-gray-600 mt-1">매장별로 청구 건수, 총 청구액, 수금액, 미수금을 요약한 표입니다. 아래에서 건별 매출(청구) 목록을 확인할 수 있습니다.</p>
+        </div>
         {/* 데스크톱 테이블 */}
         <div className="hidden lg:block overflow-x-auto">
           <table className="min-w-full divide-y divide-gray-200">
@@ -2050,11 +2054,12 @@ export default function ReceivablesPage() {
         </div>
       </div>
 
-      {/* 매출 목록 - 모바일 카드, 데스크톱 테이블 */}
+      {/* 건별 매출(청구) 목록 */}
       <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-lg border border-white/20 overflow-hidden mt-6">
-        <h2 className="text-lg sm:text-xl font-semibold p-4 sm:p-6 border-b border-gray-200 bg-gradient-to-r from-blue-50 to-purple-50">
-          매출 목록
-        </h2>
+        <div className="p-4 sm:p-6 border-b border-gray-200 bg-gradient-to-r from-blue-50 to-purple-50">
+          <h2 className="text-lg sm:text-xl font-semibold text-gray-900">건별 매출(청구) 목록</h2>
+          <p className="text-sm text-gray-600 mt-1">위 요약표에서 매장을 펼치면 해당 매장의 청구(매출) 건별 내역이 여기에 표시됩니다. 청구일, 청구금액, 수금·미수금 상태를 건별로 확인할 수 있습니다.</p>
+        </div>
         
         {/* 데스크톱 테이블 */}
         <div className="hidden lg:block overflow-x-auto">

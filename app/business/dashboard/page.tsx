@@ -83,21 +83,27 @@ export default async function BusinessOwnerDashboardPage() {
     }
   }
 
-  // 카테고리별 섹션 정의
+  // 카테고리별 섹션 정의 - 상단 메뉴(NavRoleSwitch)와 동일한 구성·순서·라벨
   const sections = [
-    { title: '매장 관리', href: '/business/stores', description: '매장 등록 및 관리', category: 'store' },
+    // 매장 (메뉴와 동일)
+    { title: '매장 등록/관리', href: '/business/stores', description: '매장 등록 및 관리', category: 'store' },
     { title: '매장 상태', href: '/business/stores/status', description: '전체 매장 상태 확인 및 요청란 보내기', category: 'store' },
-    { title: '프렌차이즈 관리', href: '/business/franchises', description: '프렌차이즈 등록 및 관리', category: 'store' },
-    { title: '사용자 관리', href: '/business/users', description: '사용자 초대 및 권한 설정', category: 'user' },
-    { title: '인건비 관리', href: '/business/payrolls', description: '정규 직원 및 일당 근로자 인건비 관리', category: 'financial' },
+    { title: '미관리 매장 확인', href: '/business/attendance-report', description: '어제 오후 1시 기준 매장 출근 현황 리포트', category: 'store' },
+    { title: '프렌차이즈 등록/관리', href: '/business/franchises', description: '프렌차이즈 등록 및 관리', category: 'store' },
+    // 직원 관리
+    { title: '사용자 등록/관리', href: '/business/users', description: '사용자 초대 및 권한 설정', category: 'user' },
+    // 재무 (인건비 + 재무 그룹)
+    { title: '인건비 등록/관리', href: '/business/payrolls', description: '정규 직원 및 일당 근로자 인건비 관리', category: 'financial' },
     { title: '수금/미수금 관리', href: '/business/receivables', description: '매장별 매출(청구) 및 수금 관리', category: 'financial' },
     { title: '재무 현황', href: '/business/financial', description: '매출, 수금, 미수금, 인건비, 지출 통합 관리', category: 'financial' },
+    // 운영
     { title: '바코드 제품 등록', href: '/business/products', description: '제품 등록 및 CSV 파일 업로드로 위치 정보 업데이트', category: 'operation' },
-    { title: '체크리스트 관리', href: '/business/checklists', description: '매장별 체크리스트 생성 및 관리', category: 'operation' },
-    { title: '공지사항 관리', href: '/business/announcements', description: '점주용/직원용 공지사항 작성 및 확인 현황', category: 'operation' },
-    { title: '리포트', href: '/business/reports', description: '월간/주간 리포트 조회', category: 'operation' },
-    { title: '미관리 매장 확인', href: '/business/attendance-report', description: '어제 오후 1시 기준 매장 출근 현황 리포트', category: 'operation' },
+    { title: '체크리스트 등록/관리', href: '/business/checklists', description: '매장별 체크리스트 생성 및 관리', category: 'operation' },
+    { title: '공지사항 등록/관리', href: '/business/announcements', description: '점주용/직원용 공지사항 작성 및 확인 현황', category: 'operation' },
+    { title: '물품 요청', href: '/business/supply-requests', description: '물품 요청 접수 및 관리', category: 'operation' },
+    // 설정
     { title: '회사 관리', href: '/business/company', description: '회사 정보 및 요금제 관리', category: 'settings' },
+    { title: '사용 설명서', href: '/business/manual', description: '업체 관리자 사용 방법 안내', category: 'settings' },
   ]
 
   return (

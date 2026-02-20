@@ -1,9 +1,16 @@
-import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { createClient } from '@supabase/supabase-js'
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerUser } from '@/lib/supabase/server'
 import { assertBusinessFeature } from '@/lib/plan-features-server'
 
-// 프렌차이즈 목록 조회
+function getServiceSupabase() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY
+  if (!url || !key) return null
+  return createClient(url, key, { auth: { autoRefreshToken: false, persistSession: false } })
+}
+
+// 프렌차이즈 목록 조회 (service role 사용, RLS 우회 후 company_id로 필터)
 export async function GET(request: NextRequest) {
   try {
     const user = await getServerUser()
@@ -29,7 +36,10 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    const supabase = await createServerSupabaseClient()
+    const supabase = getServiceSupabase()
+    if (!supabase) {
+      return NextResponse.json({ error: '서버 설정 오류' }, { status: 500 })
+    }
 
     let query = supabase
       .from('franchises')
@@ -104,8 +114,6 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const supabase = await createServerSupabaseClient()
-
     // business_owner는 자신의 회사에만 프렌차이즈 추가 가능
     const targetCompanyId = user.role === 'business_owner' ? user.company_id : (company_id || null)
 
@@ -114,6 +122,11 @@ export async function POST(request: NextRequest) {
         { error: '회사 ID가 필요합니다.' },
         { status: 400 }
       )
+    }
+
+    const supabase = getServiceSupabase()
+    if (!supabase) {
+      return NextResponse.json({ error: '서버 설정 오류' }, { status: 500 })
     }
 
     const { data: franchise, error } = await supabase
