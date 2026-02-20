@@ -76,6 +76,7 @@ export async function PATCH(
     }
     // 일당 근로자인 경우
     else if (existingPayroll.worker_name) {
+      if (amount !== undefined) updateData.amount = Math.round(parseFloat(amount))
       if (worker_name !== undefined) updateData.worker_name = worker_name.trim()
       if (work_days !== undefined) {
         updateData.work_days = parseInt(work_days)

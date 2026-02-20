@@ -1,6 +1,8 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { CurrencyInput } from '@/components/ui/CurrencyInput'
+import { parseCurrencyNumber } from '@/lib/utils/currency'
 
 interface UnpaidRevenue {
   revenue_id: string
@@ -137,7 +139,7 @@ export default function UnpaidDetailSection({ onRefresh }: UnpaidDetailSectionPr
       return
     }
 
-    const amount = parseFloat(partialAmount)
+    const amount = parseCurrencyNumber(partialAmount)
     if (isNaN(amount) || amount <= 0) {
       alert('올바른 수금액을 입력해주세요.')
       return
@@ -317,15 +319,12 @@ export default function UnpaidDetailSection({ onRefresh }: UnpaidDetailSectionPr
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   수금액 *
                 </label>
-                <input
-                  type="number"
+                <CurrencyInput
                   value={partialAmount}
-                  onChange={(e) => setPartialAmount(e.target.value)}
+                  onChange={setPartialAmount}
                   className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500"
                   placeholder="수금액을 입력하세요"
                   required
-                  min="1"
-                  max={selectedRevenue.unpaid_amount}
                 />
                 <p className="text-xs text-gray-500 mt-1">
                   최대 {formatCurrency(selectedRevenue.unpaid_amount)}까지 입력 가능

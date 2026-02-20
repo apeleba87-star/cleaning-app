@@ -10,7 +10,7 @@ export async function GET(
   try {
     const user = await getServerUser()
 
-    if (!user || user.role !== 'store_manager') {
+    if (!user || !['store_manager', 'manager'].includes(user.role)) {
       return NextResponse.json({ error: '권한이 없습니다.' }, { status: 403 })
     }
 

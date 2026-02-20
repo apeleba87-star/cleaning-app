@@ -2,6 +2,8 @@
 
 import { useState, useEffect } from 'react'
 import { Payroll } from '@/types/db'
+import { CurrencyInput } from '@/components/ui/CurrencyInput'
+import { parseCurrencyNumber } from '@/lib/utils/currency'
 
 interface DailyEmployee {
   id: string
@@ -158,7 +160,7 @@ export default function DailyPayrollSection({
     try {
       setSubmitting(editingPayroll.id)
       await onUpdate(editingPayroll.id, {
-        amount: parseFloat(editAmount),
+        amount: parseCurrencyNumber(editAmount),
         paid_at: editPaidAt || null,
         status: editStatus,
         memo: editMemo || null,
@@ -263,10 +265,9 @@ export default function DailyPayrollSection({
                       <div>
                         <p className="text-xs text-gray-500 mb-1">총액</p>
                         {editingPayroll?.id === payroll.id ? (
-                          <input
-                            type="number"
+                          <CurrencyInput
                             value={editAmount}
-                            onChange={(e) => setEditAmount(e.target.value)}
+                            onChange={setEditAmount}
                             className="w-full px-2 py-1.5 border-2 border-gray-300 rounded-lg text-sm"
                           />
                         ) : (
@@ -387,11 +388,10 @@ export default function DailyPayrollSection({
                       </td>
                       <td className="px-4 py-3 text-sm font-semibold text-gray-900">
                         {editingPayroll?.id === payroll.id ? (
-                          <input
-                            type="number"
+                          <CurrencyInput
                             value={editAmount}
-                            onChange={(e) => setEditAmount(e.target.value)}
-                            className="w-24 px-2 py-1 border border-gray-300 rounded text-sm"
+                            onChange={setEditAmount}
+                            className="w-28 px-2 py-1 border border-gray-300 rounded text-sm"
                           />
                         ) : (
                           formatCurrency(payroll.amount)

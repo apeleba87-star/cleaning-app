@@ -4,6 +4,8 @@ import { useState, useEffect } from 'react'
 import { Payroll } from '@/types/db'
 import DailyPayrollSection from './DailyPayrollSection'
 import SubcontractManagementSection from './SubcontractManagementSection'
+import { CurrencyInput } from '@/components/ui/CurrencyInput'
+import { parseCurrencyNumber } from '@/lib/utils/currency'
 
 // ESC 키로 모달 닫기 훅
 const useEscapeKey = (callback: () => void) => {
@@ -170,7 +172,7 @@ export default function PayrollsPage() {
       }
 
       // 3.3% 공제 적용 여부에 따라 금액 계산
-      const baseAmount = parseFloat(dailyWage) * parseInt(workDays)
+      const baseAmount = parseCurrencyNumber(dailyWage) * parseInt(workDays)
       const finalAmount = applyDeduction 
         ? Math.floor(baseAmount * (1 - 0.033)) // 3.3% 공제 후 금액 (소수점 버림)
         : baseAmount
@@ -182,7 +184,7 @@ export default function PayrollsPage() {
           worker_name: workerName.trim(),
           resident_registration_number: residentRegistrationNumber || null,
           work_days: parseInt(workDays),
-          daily_wage: parseFloat(dailyWage),
+          daily_wage: parseCurrencyNumber(dailyWage),
           amount: finalAmount,
           pay_period: period,
           paid_at: dailyPaidAt || null,
@@ -494,7 +496,7 @@ export default function PayrollsPage() {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          amount: parseFloat(editAmount),
+          amount: parseCurrencyNumber(editAmount),
           paid_at: editPaidAt || null,
           status: editStatus,
           memo: editMemo || null,
@@ -520,9 +522,11 @@ export default function PayrollsPage() {
     ? payrolls.filter(p => p.pay_period === selectedPeriod)
     : payrolls
 
-  // 정규 직원과 일당 근로자 분리
+  // 정규 직원 / 일당 근로자 / 도급 분리 (도급은 type === 'subcontract'로 구분)
   const regularPayrollsBase = filteredPayrolls.filter(p => p.user_id)
-  const dailyPayrollsBase = filteredPayrolls.filter(p => !p.user_id)
+  const dailyPayrollsBase = filteredPayrolls.filter(
+    p => !p.user_id && (p as { type?: string }).type !== 'subcontract'
+  )
   
   // 검색 필터링
   const regularPayrolls = regularSearchTerm
@@ -1081,13 +1085,9 @@ export default function PayrollsPage() {
                           </svg>
                           일당 금액 <span className="text-red-500">*</span>
                         </label>
-                        <input
-                          type="number"
+                        <CurrencyInput
                           value={dailyWage}
-                          onChange={(e) => setDailyWage(e.target.value)}
-                          required
-                          min="0"
-                          step="0.01"
+                          onChange={setDailyWage}
                           className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all bg-white text-lg font-semibold"
                           placeholder="일당 금액"
                         />
@@ -1143,7 +1143,7 @@ export default function PayrollsPage() {
                           </label>
                         </div>
                         {(() => {
-                          const baseAmount = parseFloat(dailyWage) * parseInt(workDays)
+                          const baseAmount = parseCurrencyNumber(dailyWage) * parseInt(workDays)
                           const deductionAmount = baseAmount * 0.033
                           const finalAmount = applyDeduction ? Math.floor(baseAmount * (1 - 0.033)) : baseAmount
                           return (
@@ -1327,10 +1327,9 @@ export default function PayrollsPage() {
                           <div>
                             <p className="text-xs text-gray-500 mb-1">금액</p>
                             {editingPayroll?.id === payroll.id ? (
-                              <input
-                                type="number"
+                              <CurrencyInput
                                 value={editAmount}
-                                onChange={(e) => setEditAmount(e.target.value)}
+                                onChange={setEditAmount}
                                 className="w-full px-2 py-1.5 border-2 border-gray-300 rounded-lg text-sm"
                               />
                             ) : (
@@ -1438,10 +1437,9 @@ export default function PayrollsPage() {
                             <td className="px-4 py-3 text-sm whitespace-nowrap">{payroll.pay_period}</td>
                             <td className="px-4 py-3 text-sm whitespace-nowrap">
                               {editingPayroll?.id === payroll.id ? (
-                                <input
-                                  type="number"
+                                <CurrencyInput
                                   value={editAmount}
-                                  onChange={(e) => setEditAmount(e.target.value)}
+                                  onChange={setEditAmount}
                                   className="w-24 px-2 py-1 border border-gray-300 rounded text-sm"
                                 />
                               ) : (

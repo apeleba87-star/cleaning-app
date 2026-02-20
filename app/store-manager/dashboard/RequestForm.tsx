@@ -27,6 +27,7 @@ const REQUEST_CATEGORIES = [
 
 export default function RequestForm({ storeId, onSuccess, onCancel }: RequestFormProps) {
   const [submitting, setSubmitting] = useState(false)
+  const submitInProgressRef = useRef(false)
   const [formData, setFormData] = useState({
     category: '',
     description: '',
@@ -149,7 +150,14 @@ export default function RequestForm({ storeId, onSuccess, onCancel }: RequestFor
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
+    // 이중 전송 방지: 클릭 직후 동기적으로 차단
+    if (submitInProgressRef.current) return
+    submitInProgressRef.current = true
+    setSubmitting(true)
+
     if (!formData.category || !formData.description.trim()) {
+      submitInProgressRef.current = false
+      setSubmitting(false)
       alert('카테고리와 설명을 입력해주세요.')
       return
     }
@@ -157,11 +165,11 @@ export default function RequestForm({ storeId, onSuccess, onCancel }: RequestFor
     // 업로드 중인 사진이 있으면 대기
     const uploadingPhotos = photos.filter(p => p.isUploading)
     if (uploadingPhotos.length > 0) {
+      submitInProgressRef.current = false
+      setSubmitting(false)
       alert(`사진 업로드가 완료될 때까지 기다려주세요. (${uploadingPhotos.length}장 업로드 중)`)
       return
     }
-
-    setSubmitting(true)
 
     try {
       // blob URL은 업로드 실패한 사진이므로 제외
@@ -188,12 +196,17 @@ export default function RequestForm({ storeId, onSuccess, onCancel }: RequestFor
         throw new Error(data.error || '요청란 접수에 실패했습니다.')
       }
 
-      alert('요청란이 접수되었습니다.')
+      if (data.duplicate) {
+        alert('동일한 요청이 이미 접수되어 있습니다. 목록을 새로고침했습니다.')
+      } else {
+        alert('요청란이 접수되었습니다.')
+      }
       onSuccess()
     } catch (error: any) {
       console.error('Error submitting request:', error)
       alert(error.message || '요청란 접수에 실패했습니다.')
     } finally {
+      submitInProgressRef.current = false
       setSubmitting(false)
     }
   }

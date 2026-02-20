@@ -2,6 +2,8 @@
 
 import { useState, useEffect } from 'react'
 import { useToast } from '@/components/Toast'
+import { CurrencyInput } from '@/components/ui/CurrencyInput'
+import { parseCurrencyNumber } from '@/lib/utils/currency'
 
 interface Expense {
   id: string
@@ -191,7 +193,7 @@ export default function ExpenseDetailSection({ period, onRefresh }: ExpenseDetai
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             category: quickCategory,
-            amount: parseFloat(getNumericValue(quickAmount)),
+            amount: parseCurrencyNumber(quickAmount),
             memo: finalMemo || null,
             store_id: quickStoreId || null,
             create_current_month: true, // 현재 월 지출도 함께 생성
@@ -239,7 +241,7 @@ export default function ExpenseDetailSection({ period, onRefresh }: ExpenseDetai
       id: tempId,
       date: quickDate,
       category: quickCategory,
-      amount: parseFloat(getNumericValue(quickAmount)),
+      amount: parseCurrencyNumber(quickAmount),
       memo: finalMemo || null,
       store_id: (quickStoreId && quickStoreId !== '__custom__' && quickStoreId.trim() !== '') ? quickStoreId : null,
       recurring_expense_id: null,
@@ -308,7 +310,7 @@ export default function ExpenseDetailSection({ period, onRefresh }: ExpenseDetai
     setSelectedExpense(expense)
     setEditDate(expense.date)
     setEditCategory(expense.category)
-    setEditAmount(formatAmountInput(expense.amount.toString()))
+    setEditAmount(expense.amount.toString())
     
     // memo에서 직접 입력 매장명 추출 (형식: [매장명] 메모)
     let memo = expense.memo || ''
@@ -357,7 +359,7 @@ export default function ExpenseDetailSection({ period, onRefresh }: ExpenseDetai
         body: JSON.stringify({
           date: editDate,
           category: editCategory,
-          amount: parseFloat(getNumericValue(editAmount)),
+          amount: parseCurrencyNumber(editAmount),
           memo: finalMemo || null,
           store_id: editStoreId || null, // 직접 입력 시에는 null
         }),
@@ -716,22 +718,15 @@ export default function ExpenseDetailSection({ period, onRefresh }: ExpenseDetai
                 ))}
               </select>
             </div>
-            <div className="md:col-span-2 relative">
-              <input
-                type="text"
+            <div className="md:col-span-2">
+              <CurrencyInput
                 value={quickAmount}
-                onChange={(e) => {
-                  const formatted = formatAmountInput(e.target.value)
-                  setQuickAmount(formatted)
-                }}
+                onChange={setQuickAmount}
                 placeholder="금액"
-                className="w-full px-3 py-2 pr-14 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500 text-sm"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500 text-sm"
                 required
                 disabled={submitting}
               />
-              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-gray-500 pointer-events-none">
-                원
-              </span>
             </div>
             <div className="md:col-span-3">
               <input
@@ -1276,23 +1271,14 @@ export default function ExpenseDetailSection({ period, onRefresh }: ExpenseDetai
                 <label htmlFor="edit-amount" className="block text-sm font-medium text-gray-700 mb-1">
                   금액
                 </label>
-                <div className="relative">
-                  <input
-                    id="edit-amount"
-                    type="text"
-                    value={editAmount}
-                    onChange={(e) => {
-                      const formatted = formatAmountInput(e.target.value)
-                      setEditAmount(formatted)
-                    }}
-                    className="w-full px-3 py-2 pr-14 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    required
-                    disabled={submitting}
-                  />
-                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-gray-500 pointer-events-none">
-                    원
-                  </span>
-                </div>
+                <CurrencyInput
+                  id="edit-amount"
+                  value={editAmount}
+                  onChange={setEditAmount}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  required
+                  disabled={submitting}
+                />
               </div>
               <div>
                 <label htmlFor="edit-store" className="block text-sm font-medium text-gray-700 mb-1">

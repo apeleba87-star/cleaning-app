@@ -4,6 +4,8 @@ import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
 import QuickExpenseForm from './QuickExpenseForm'
 import { useFinancialData } from './FinancialDataContext'
+import { CurrencyInput } from '@/components/ui/CurrencyInput'
+import { parseCurrencyNumber } from '@/lib/utils/currency'
 
 interface FinancialSummary {
   period: string
@@ -303,7 +305,7 @@ export default function FinancialSummarySection({ companyId }: FinancialSummaryS
         body: JSON.stringify({
           revenue_id: selectedRevenue,
           received_at: new Date(partialDate).toISOString(),
-          amount: parseFloat(partialAmount),
+          amount: parseCurrencyNumber(partialAmount),
           memo: partialMemo.trim() || null,
         }),
       })
@@ -645,13 +647,10 @@ export default function FinancialSummarySection({ companyId }: FinancialSummaryS
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   수금액 <span className="text-red-500">*</span>
                 </label>
-                <input
-                  type="number"
+                <CurrencyInput
                   value={partialAmount}
-                  onChange={(e) => setPartialAmount(e.target.value)}
+                  onChange={setPartialAmount}
                   required
-                  min="0"
-                  step="0.01"
                   className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                   placeholder="0"
                 />

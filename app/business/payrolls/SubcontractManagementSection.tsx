@@ -2,6 +2,8 @@
 
 import { useState, useEffect } from 'react'
 import { Subcontract, SubcontractPayment } from '@/types/db'
+import { CurrencyInput } from '@/components/ui/CurrencyInput'
+import { parseCurrencyNumber } from '@/lib/utils/currency'
 
 // ESC 키로 모달 닫기 훅
 const useEscapeKey = (callback: () => void) => {
@@ -36,6 +38,8 @@ export default function SubcontractManagementSection({
   const [showForm, setShowForm] = useState(false)
   const [formType, setFormType] = useState<'company' | 'individual'>('company')
   const [paymentSubmitting, setPaymentSubmitting] = useState<string | null>(null)
+  const [editingPaymentId, setEditingPaymentId] = useState<string | null>(null)
+  const [editPaymentAmount, setEditPaymentAmount] = useState('')
 
   // 폼 상태
   const [subcontractorId, setSubcontractorId] = useState('')
@@ -199,7 +203,7 @@ export default function SubcontractManagementSection({
           account_number: accountNumber || null,
           contract_period_start: contractPeriodStart,
           contract_period_end: contractPeriodEnd || null,
-          monthly_amount: parseFloat(monthlyAmount),
+          monthly_amount: parseCurrencyNumber(monthlyAmount),
           tax_rate: formType === 'individual' ? parseFloat(taxRate) / 100 : 0,
           memo: memo || null,
         }),
@@ -280,6 +284,46 @@ export default function SubcontractManagementSection({
       onRefresh()
     } catch (err: any) {
       setError(err.message || '지급 완료 처리 중 오류가 발생했습니다.')
+    } finally {
+      setPaymentSubmitting(null)
+    }
+  }
+
+  const handleStartEditPaymentAmount = (payment: SubcontractPayment) => {
+    setEditingPaymentId(payment.id)
+    setEditPaymentAmount(String(payment.amount ?? 0))
+  }
+
+  const handleCancelEditPaymentAmount = () => {
+    setEditingPaymentId(null)
+    setEditPaymentAmount('')
+  }
+
+  const handleSavePaymentAmount = async () => {
+    if (!editingPaymentId) return
+    const amount = parseCurrencyNumber(editPaymentAmount)
+    if (amount < 0) {
+      setError('지급 금액은 0 이상이어야 합니다.')
+      return
+    }
+    try {
+      setPaymentSubmitting(editingPaymentId)
+      setError(null)
+      const response = await fetch(`/api/business/subcontracts/payments/${editingPaymentId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ amount }),
+      })
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || '정산금액 수정 실패')
+      }
+      alert('정산금액이 수정되었습니다.')
+      handleCancelEditPaymentAmount()
+      loadData()
+      onRefresh()
+    } catch (err: any) {
+      setError(err.message || '정산금액 수정 중 오류가 발생했습니다.')
     } finally {
       setPaymentSubmitting(null)
     }
@@ -622,13 +666,10 @@ export default function SubcontractManagementSection({
                       </svg>
                       월 도급금액 <span className="text-red-500">*</span>
                     </label>
-                    <input
-                      type="number"
+                    <CurrencyInput
                       value={monthlyAmount}
-                      onChange={(e) => setMonthlyAmount(e.target.value)}
+                      onChange={setMonthlyAmount}
                       required
-                      min="0"
-                      step="0.01"
                       className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all bg-white text-lg font-semibold"
                       placeholder="월 도급금액"
                     />
@@ -661,20 +702,20 @@ export default function SubcontractManagementSection({
                   )}
                 </div>
 
-                {monthlyAmount && formType === 'individual' && (
+                {parseCurrencyNumber(monthlyAmount) > 0 && formType === 'individual' && (
                   <div className="bg-gradient-to-r from-green-50 to-purple-50 p-5 rounded-xl border-2 border-green-200">
                     <div className="space-y-3 bg-white p-4 rounded-xl border border-green-100 shadow-sm">
                       <div className="flex justify-between items-center">
                         <span className="text-sm font-medium text-gray-700">원금액:</span>
-                        <span className="text-sm font-semibold text-gray-900">{parseFloat(monthlyAmount).toLocaleString('ko-KR')}원</span>
+                        <span className="text-sm font-semibold text-gray-900">{parseCurrencyNumber(monthlyAmount).toLocaleString('ko-KR')}원</span>
                       </div>
                       <div className="flex justify-between items-center border-t border-gray-200 pt-3">
                         <span className="text-sm font-medium text-gray-700">공제액 ({taxRate}%):</span>
-                        <span className="text-sm font-semibold text-red-600">-{Math.floor(parseFloat(monthlyAmount) * (parseFloat(taxRate) / 100)).toLocaleString('ko-KR')}원</span>
+                        <span className="text-sm font-semibold text-red-600">-{Math.floor(parseCurrencyNumber(monthlyAmount) * (parseFloat(taxRate) / 100)).toLocaleString('ko-KR')}원</span>
                       </div>
                       <div className="flex justify-between items-center border-t-2 border-green-300 pt-3 mt-2">
                         <span className="text-base font-bold text-green-800">지급 금액:</span>
-                        <span className="text-xl font-bold text-green-800">{Math.floor(parseFloat(monthlyAmount) * (1 - parseFloat(taxRate) / 100)).toLocaleString('ko-KR')}원</span>
+                        <span className="text-xl font-bold text-green-800">{Math.floor(parseCurrencyNumber(monthlyAmount) * (1 - parseFloat(taxRate) / 100)).toLocaleString('ko-KR')}원</span>
                       </div>
                     </div>
                   </div>
@@ -884,18 +925,52 @@ export default function SubcontractManagementSection({
                         </div>
                         <div>
                           <p className="text-xs text-gray-500 mb-1">지급 금액</p>
-                          <p className="text-sm font-bold text-blue-700">{formatCurrency(payment.amount)}</p>
+                          {editingPaymentId === payment.id ? (
+                            <div className="space-y-2">
+                              <CurrencyInput
+                                value={editPaymentAmount}
+                                onChange={setEditPaymentAmount}
+                                className="w-full px-2 py-1.5 border-2 border-gray-300 rounded-lg text-sm"
+                              />
+                              <div className="flex gap-2">
+                                <button
+                                  onClick={handleSavePaymentAmount}
+                                  disabled={paymentSubmitting === payment.id}
+                                  className="flex-1 py-1.5 px-3 bg-blue-500 text-white rounded-lg text-xs font-medium disabled:opacity-50"
+                                >
+                                  저장
+                                </button>
+                                <button
+                                  onClick={handleCancelEditPaymentAmount}
+                                  className="flex-1 py-1.5 px-3 bg-gray-200 text-gray-700 rounded-lg text-xs font-medium"
+                                >
+                                  취소
+                                </button>
+                              </div>
+                            </div>
+                          ) : (
+                            <p className="text-sm font-bold text-blue-700">{formatCurrency(payment.amount)}</p>
+                          )}
                         </div>
                       </div>
-                      {payment.status === 'scheduled' && (
-                        <div className="pt-2 border-t border-gray-200">
+                      {editingPaymentId !== payment.id && (
+                        <div className="pt-2 border-t border-gray-200 flex flex-wrap gap-2">
                           <button
-                            onClick={() => handleMarkPaymentAsPaid(payment.id, payment.subcontract?.subcontractor?.name || payment.subcontract?.worker_name || '')}
-                            disabled={paymentSubmitting === payment.id}
-                            className="w-full py-2 px-4 bg-green-500 text-white rounded-lg hover:bg-green-600 disabled:opacity-50 disabled:cursor-not-allowed font-medium text-sm transition-colors"
+                            type="button"
+                            onClick={() => handleStartEditPaymentAmount(payment)}
+                            className="text-blue-600 hover:text-blue-800 text-xs"
                           >
-                            지급완료 처리
+                            수정
                           </button>
+                          {payment.status === 'scheduled' && (
+                            <button
+                              onClick={() => handleMarkPaymentAsPaid(payment.id, payment.subcontract?.subcontractor?.name || payment.subcontract?.worker_name || '')}
+                              disabled={paymentSubmitting === payment.id}
+                              className="text-green-600 hover:text-green-800 text-xs disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                              지급완료
+                            </button>
+                          )}
                         </div>
                       )}
                     </div>
@@ -926,7 +1001,30 @@ export default function SubcontractManagementSection({
                           {formatCurrency(payment.base_amount)}
                         </td>
                         <td className="px-4 py-2 text-sm font-semibold text-gray-900">
-                          {formatCurrency(payment.amount)}
+                          {editingPaymentId === payment.id ? (
+                            <div className="flex items-center gap-2">
+                              <CurrencyInput
+                                value={editPaymentAmount}
+                                onChange={setEditPaymentAmount}
+                                className="w-28 px-2 py-1 border border-gray-300 rounded text-sm"
+                              />
+                              <button
+                                onClick={handleSavePaymentAmount}
+                                disabled={paymentSubmitting === payment.id}
+                                className="text-xs text-blue-600 hover:underline disabled:opacity-50"
+                              >
+                                저장
+                              </button>
+                              <button
+                                onClick={handleCancelEditPaymentAmount}
+                                className="text-xs text-gray-500 hover:underline"
+                              >
+                                취소
+                              </button>
+                            </div>
+                          ) : (
+                            formatCurrency(payment.amount)
+                          )}
                         </td>
                         <td className="px-4 py-2 text-sm text-gray-500">
                           {payment.paid_at ? payment.paid_at.split('T')[0] : '-'}
@@ -943,15 +1041,28 @@ export default function SubcontractManagementSection({
                           </span>
                         </td>
                         <td className="px-4 py-2 text-sm">
-                          {payment.status === 'scheduled' && (
-                            <button
-                              onClick={() => handleMarkPaymentAsPaid(payment.id, payment.subcontract?.subcontractor?.name || payment.subcontract?.worker_name || '')}
-                              disabled={paymentSubmitting === payment.id}
-                              className="px-3 py-1.5 text-xs bg-green-500 text-white rounded hover:bg-green-600 disabled:opacity-50 disabled:cursor-not-allowed"
-                            >
-                              지급완료
-                            </button>
-                          )}
+                          <div className="flex items-center gap-2">
+                            {editingPaymentId === payment.id ? null : (
+                              <>
+                                <button
+                                  type="button"
+                                  onClick={() => handleStartEditPaymentAmount(payment)}
+                                  className="text-blue-600 hover:text-blue-800 text-xs"
+                                >
+                                  수정
+                                </button>
+                                {payment.status === 'scheduled' && (
+                                  <button
+                                    onClick={() => handleMarkPaymentAsPaid(payment.id, payment.subcontract?.subcontractor?.name || payment.subcontract?.worker_name || '')}
+                                    disabled={paymentSubmitting === payment.id}
+                                    className="text-green-600 hover:text-green-800 text-xs disabled:opacity-50 disabled:cursor-not-allowed"
+                                  >
+                                    지급완료
+                                  </button>
+                                )}
+                              </>
+                            )}
+                          </div>
                         </td>
                       </tr>
                     ))}
@@ -1146,18 +1257,52 @@ export default function SubcontractManagementSection({
                         </div>
                         <div className="flex justify-between items-center pt-2 border-t border-gray-200">
                           <span className="text-sm font-bold text-green-800">지급 금액</span>
-                          <span className="text-base font-bold text-green-700">{formatCurrency(payment.amount)}</span>
+                          {editingPaymentId === payment.id ? (
+                            <div className="flex-1 ml-2 space-y-2">
+                              <CurrencyInput
+                                value={editPaymentAmount}
+                                onChange={setEditPaymentAmount}
+                                className="w-full px-2 py-1.5 border-2 border-gray-300 rounded-lg text-sm"
+                              />
+                              <div className="flex gap-2">
+                                <button
+                                  onClick={handleSavePaymentAmount}
+                                  disabled={paymentSubmitting === payment.id}
+                                  className="flex-1 py-1.5 px-3 bg-blue-500 text-white rounded-lg text-xs font-medium disabled:opacity-50"
+                                >
+                                  저장
+                                </button>
+                                <button
+                                  onClick={handleCancelEditPaymentAmount}
+                                  className="flex-1 py-1.5 px-3 bg-gray-200 text-gray-700 rounded-lg text-xs font-medium"
+                                >
+                                  취소
+                                </button>
+                              </div>
+                            </div>
+                          ) : (
+                            <span className="text-base font-bold text-green-700">{formatCurrency(payment.amount)}</span>
+                          )}
                         </div>
                       </div>
-                      {payment.status === 'scheduled' && (
-                        <div className="pt-2 border-t border-gray-200">
+                      {editingPaymentId !== payment.id && (
+                        <div className="pt-2 border-t border-gray-200 flex flex-wrap gap-2">
                           <button
-                            onClick={() => handleMarkPaymentAsPaid(payment.id, payment.subcontract?.worker?.name || payment.subcontract?.worker_name || '')}
-                            disabled={paymentSubmitting === payment.id}
-                            className="w-full py-2 px-4 bg-green-500 text-white rounded-lg hover:bg-green-600 disabled:opacity-50 disabled:cursor-not-allowed font-medium text-sm transition-colors"
+                            type="button"
+                            onClick={() => handleStartEditPaymentAmount(payment)}
+                            className="text-blue-600 hover:text-blue-800 text-xs"
                           >
-                            지급완료 처리
+                            수정
                           </button>
+                          {payment.status === 'scheduled' && (
+                            <button
+                              onClick={() => handleMarkPaymentAsPaid(payment.id, payment.subcontract?.worker?.name || payment.subcontract?.worker_name || '')}
+                              disabled={paymentSubmitting === payment.id}
+                              className="text-green-600 hover:text-green-800 text-xs disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                              지급완료
+                            </button>
+                          )}
                         </div>
                       )}
                     </div>
@@ -1192,7 +1337,30 @@ export default function SubcontractManagementSection({
                           -{formatCurrency(payment.deduction_amount)}
                         </td>
                         <td className="px-4 py-2 text-sm font-semibold text-green-700">
-                          {formatCurrency(payment.amount)}
+                          {editingPaymentId === payment.id ? (
+                            <div className="flex items-center gap-2">
+                              <CurrencyInput
+                                value={editPaymentAmount}
+                                onChange={setEditPaymentAmount}
+                                className="w-28 px-2 py-1 border border-gray-300 rounded text-sm"
+                              />
+                              <button
+                                onClick={handleSavePaymentAmount}
+                                disabled={paymentSubmitting === payment.id}
+                                className="text-xs text-blue-600 hover:underline disabled:opacity-50"
+                              >
+                                저장
+                              </button>
+                              <button
+                                onClick={handleCancelEditPaymentAmount}
+                                className="text-xs text-gray-500 hover:underline"
+                              >
+                                취소
+                              </button>
+                            </div>
+                          ) : (
+                            formatCurrency(payment.amount)
+                          )}
                         </td>
                         <td className="px-4 py-2 text-sm text-gray-500">
                           {payment.paid_at ? payment.paid_at.split('T')[0] : '-'}
@@ -1209,15 +1377,28 @@ export default function SubcontractManagementSection({
                           </span>
                         </td>
                         <td className="px-4 py-2 text-sm">
-                          {payment.status === 'scheduled' && (
-                            <button
-                              onClick={() => handleMarkPaymentAsPaid(payment.id, payment.subcontract?.worker?.name || payment.subcontract?.worker_name || '')}
-                              disabled={paymentSubmitting === payment.id}
-                              className="px-3 py-1.5 text-xs bg-green-500 text-white rounded hover:bg-green-600 disabled:opacity-50 disabled:cursor-not-allowed"
-                            >
-                              지급완료
-                            </button>
-                          )}
+                          <div className="flex items-center gap-2">
+                            {editingPaymentId === payment.id ? null : (
+                              <>
+                                <button
+                                  type="button"
+                                  onClick={() => handleStartEditPaymentAmount(payment)}
+                                  className="text-blue-600 hover:text-blue-800 text-xs"
+                                >
+                                  수정
+                                </button>
+                                {payment.status === 'scheduled' && (
+                                  <button
+                                    onClick={() => handleMarkPaymentAsPaid(payment.id, payment.subcontract?.worker?.name || payment.subcontract?.worker_name || '')}
+                                    disabled={paymentSubmitting === payment.id}
+                                    className="text-green-600 hover:text-green-800 text-xs disabled:opacity-50 disabled:cursor-not-allowed"
+                                  >
+                                    지급완료
+                                  </button>
+                                )}
+                              </>
+                            )}
+                          </div>
                         </td>
                       </tr>
                     ))}

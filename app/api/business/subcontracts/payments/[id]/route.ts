@@ -24,6 +24,8 @@ export async function PATCH(
     if (body.status) updateData.status = body.status
     if (body.paid_at !== undefined) updateData.paid_at = body.paid_at || null
     if (body.memo !== undefined) updateData.memo = body.memo?.trim() || null
+    // 정산금액 수정 (근무 일수 등으로 금액 변경 시)
+    if (body.amount !== undefined) updateData.amount = Math.round(Number(body.amount))
 
     const supabase = await createServerSupabaseClient()
 

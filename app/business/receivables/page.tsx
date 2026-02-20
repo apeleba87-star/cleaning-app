@@ -3,6 +3,8 @@
 import { useState, useEffect, useCallback } from 'react'
 import { Revenue, Receipt } from '@/types/db'
 import { adjustPaymentDayToLastDay } from '@/lib/utils/date'
+import { CurrencyInput } from '@/components/ui/CurrencyInput'
+import { parseCurrencyNumber } from '@/lib/utils/currency'
 
 // ESC 키로 모달 닫기 훅
 const useEscapeKey = (callback: () => void) => {
@@ -333,7 +335,7 @@ export default function ReceivablesPage() {
         body: JSON.stringify({
           store_id: revenueType === 'existing' ? revenueStoreId : null,
           service_period: finalServicePeriod,
-          amount: parseFloat(revenueAmount),
+          amount: parseCurrencyNumber(revenueAmount),
           due_date: finalDueDate,
           billing_memo: revenueType === 'existing' ? (revenueBillingMemo.trim() || null) : null,
           revenue_name: revenueType === 'new' ? revenueName.trim() : null,
@@ -383,7 +385,7 @@ export default function ReceivablesPage() {
         body: JSON.stringify({
           revenue_id: receiptRevenueId,
           received_at: receiptReceivedAt || new Date().toISOString(),
-          amount: parseFloat(receiptAmount),
+          amount: parseCurrencyNumber(receiptAmount),
           memo: receiptMemo.trim() || null,
         }),
       })
@@ -488,7 +490,7 @@ export default function ReceivablesPage() {
           body: JSON.stringify({
             store_id: store.storeId,
             service_period: revenueServicePeriod || selectedPeriod,
-            amount: parseFloat(store.amount) || 0,
+            amount: parseCurrencyNumber(store.amount) || 0,
             due_date: store.dueDate || calculateDueDate(revenueServicePeriod || selectedPeriod, stores.find(s => s.id === store.storeId)?.payment_day || null),
             billing_memo: revenueBillingMemo.trim() || null,
           }),
@@ -582,7 +584,7 @@ export default function ReceivablesPage() {
             const now = new Date()
             return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
           })(),
-          amount: parseFloat(revenueAmount),
+          amount: parseCurrencyNumber(revenueAmount),
           due_date: revenueDueDate || new Date().toISOString().split('T')[0],
           billing_memo: revenueType === 'existing' ? (revenueBillingMemo.trim() || null) : null,
           revenue_name: revenueType === 'new' ? revenueName.trim() : null,
@@ -678,7 +680,7 @@ export default function ReceivablesPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           received_at: receiptReceivedAt || new Date().toISOString(),
-          amount: parseFloat(receiptAmount),
+          amount: parseCurrencyNumber(receiptAmount),
           memo: receiptMemo.trim() || null,
         }),
       })
@@ -1127,17 +1129,14 @@ export default function ReceivablesPage() {
                             <label className="block text-xs font-medium text-gray-700 mb-1">
                               청구 금액 <span className="text-red-500">*</span>
                             </label>
-                            <input
-                              type="number"
+                            <CurrencyInput
                               value={store.amount}
-                              onChange={(e) => {
+                              onChange={(raw) => {
                                 setBatchStores(prev => prev.map((s, i) => 
-                                  i === index ? { ...s, amount: e.target.value } : s
+                                  i === index ? { ...s, amount: raw } : s
                                 ))
                               }}
                               required
-                              min="0"
-                              step="0.01"
                               className="w-full px-2 py-1 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                             />
                           </div>
@@ -1349,13 +1348,10 @@ export default function ReceivablesPage() {
                           </svg>
                           청구 금액 <span className="text-red-500">*</span>
                         </label>
-                        <input
-                          type="number"
+                        <CurrencyInput
                           value={revenueAmount}
-                          onChange={(e) => setRevenueAmount(e.target.value)}
+                          onChange={setRevenueAmount}
                           required
-                          min="0"
-                          step="0.01"
                           className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white text-lg font-semibold"
                           placeholder="0"
                         />
@@ -1404,13 +1400,10 @@ export default function ReceivablesPage() {
                           </svg>
                           금액 <span className="text-red-500">*</span>
                         </label>
-                        <input
-                          type="number"
+                        <CurrencyInput
                           value={revenueAmount}
-                          onChange={(e) => setRevenueAmount(e.target.value)}
+                          onChange={setRevenueAmount}
                           required={revenueType === 'new'}
-                          min="0"
-                          step="0.01"
                           className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white text-lg font-semibold"
                           placeholder="0"
                         />
@@ -1585,13 +1578,10 @@ export default function ReceivablesPage() {
                     </svg>
                     입금액 <span className="text-red-500">*</span>
                   </label>
-                  <input
-                    type="number"
+                  <CurrencyInput
                     value={receiptAmount}
-                    onChange={(e) => setReceiptAmount(e.target.value)}
+                    onChange={setReceiptAmount}
                     required
-                    min="0"
-                    step="0.01"
                     className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all bg-white text-lg font-semibold"
                     placeholder="0"
                   />

@@ -4,6 +4,8 @@ import { useState, FormEvent, useEffect, useRef } from 'react'
 import { Store, Franchise, CategoryTemplate, StoreContact, StoreFile } from '@/types/db'
 import { DocumentUploader } from '@/components/DocumentUploader'
 import MonthlyScheduleModal from '@/components/MonthlyScheduleModal'
+import { CurrencyInput } from '@/components/ui/CurrencyInput'
+import { parseCurrencyNumber } from '@/lib/utils/currency'
 
 // StoreForm에서 사용하는 최소 필드 타입
 type StoreFormFranchise = Pick<Franchise, 'id' | 'name'>
@@ -242,7 +244,7 @@ export default function StoreForm({ store, franchises, categoryTemplates, compan
             }
             return null
           })(),
-          service_amount: serviceAmount ? parseFloat(serviceAmount) : null,
+          service_amount: serviceAmount ? parseCurrencyNumber(serviceAmount) : null,
           category: category.trim() || null,
           contract_start_date: contractStartDate || null,
           contract_end_date: contractEndDate || null,
@@ -1013,23 +1015,13 @@ export default function StoreForm({ store, franchises, categoryTemplates, compan
               <label htmlFor="service_amount" className="block text-sm font-medium text-gray-700 mb-1">
                 서비스 금액 (VAT포함)
               </label>
-              <div className="relative">
-                <input
-                  id="service_amount"
-                  type="text"
-                  value={serviceAmount ? Number(serviceAmount).toLocaleString('ko-KR') : ''}
-                  onChange={(e) => {
-                    // 숫자만 추출 (쉼표 제거)
-                    const numericValue = e.target.value.replace(/[^0-9]/g, '')
-                    setServiceAmount(numericValue)
-                  }}
-                  className="w-full px-4 py-2 pr-12 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder="서비스 금액을 입력하세요"
-                />
-                <div className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-500 text-sm pointer-events-none">
-                  원
-                </div>
-              </div>
+              <CurrencyInput
+                id="service_amount"
+                value={serviceAmount}
+                onChange={setServiceAmount}
+                className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                placeholder="서비스 금액을 입력하세요"
+              />
             </div>
 
             <div>

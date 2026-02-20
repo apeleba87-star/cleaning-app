@@ -2,6 +2,8 @@
 
 import { useState, useEffect } from 'react'
 import { useToast } from '@/components/Toast'
+import { CurrencyInput } from '@/components/ui/CurrencyInput'
+import { parseCurrencyNumber } from '@/lib/utils/currency'
 
 // 기본 카테고리 목록
 const DEFAULT_CATEGORIES = [
@@ -68,7 +70,7 @@ export default function QuickExpenseForm({ onSuccess }: QuickExpenseFormProps) {
     const formData = {
       date: quickDate,
       category: quickCategory,
-      amount: parseFloat(quickAmount),
+      amount: parseCurrencyNumber(quickAmount),
       memo: quickMemo.trim(),
       storeId: (quickStoreId && quickStoreId !== '__custom__' && quickStoreId.trim() !== '') ? quickStoreId : null,
       storeCustom: quickStoreCustom.trim(),
@@ -171,16 +173,13 @@ export default function QuickExpenseForm({ onSuccess }: QuickExpenseFormProps) {
                 </option>
               ))}
             </select>
-            <input
-              type="number"
+            <CurrencyInput
               value={quickAmount}
-              onChange={(e) => setQuickAmount(e.target.value)}
+              onChange={setQuickAmount}
               placeholder="금액"
               className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500 text-sm"
               required
               disabled={submitting}
-              min="0"
-              step="1"
             />
             <input
               type="text"

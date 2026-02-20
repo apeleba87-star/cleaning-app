@@ -50,10 +50,36 @@ export async function POST(request: NextRequest) {
 
     await assertStoreActive(dataClient, store_id)
 
+    const trimmedDescription = description.trim()
+
+    // 짧은 시간(5분) 내 동일 접수 유사 중복 방지: 같은 매장·카테고리·작성자·내용이면 1건만 허용
+    const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString()
+    const { data: existing } = await dataClient
+      .from('requests')
+      .select('id, store_id, title, description, status, created_at, created_by')
+      .eq('store_id', store_id)
+      .eq('title', category)
+      .eq('created_by', user.id)
+      .eq('description', trimmedDescription)
+      .gte('created_at', fiveMinutesAgo)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+
+    if (existing) {
+      console.log('Duplicate request prevented, returning existing:', existing.id)
+      return NextResponse.json({
+        success: true,
+        data: existing,
+        duplicate: true,
+        message: '이미 동일한 요청이 접수되었습니다.',
+      })
+    }
+
     const insertData = {
       store_id,
       title: category, // 카테고리를 title로 저장
-      description: description.trim(),
+      description: trimmedDescription,
       photo_url: photo_urls && photo_urls.length > 0 ? JSON.stringify(photo_urls) : null,
       status: 'received' as const, // 접수 상태로 저장
       created_by: user.id, // 작성자 ID

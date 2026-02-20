@@ -3,6 +3,8 @@
 import { useState, FormEvent, useEffect } from 'react'
 import { User, Store, UserFile, UserRole } from '@/types/db'
 import { DocumentUploader } from '@/components/DocumentUploader'
+import { CurrencyInput } from '@/components/ui/CurrencyInput'
+import { parseCurrencyNumber } from '@/lib/utils/currency'
 
 // UserForm에서 사용하는 최소 필드 타입
 type UserFormStore = Pick<Store, 'id' | 'name'>
@@ -175,7 +177,7 @@ export default function UserForm({ user, stores, assignedStoreIds = [], premiumU
           store_ids: selectedStoreIds,
           // 재무 관리 필드
           pay_type: payType || null,
-          pay_amount: payAmount ? parseFloat(payAmount) : null,
+          pay_amount: payAmount ? parseCurrencyNumber(payAmount) : null,
           salary_payment_method: salaryPaymentMethod || null,
           bank_name: bankName.trim() || null,
           account_number: accountNumber.trim() || null,
@@ -505,12 +507,10 @@ export default function UserForm({ user, stores, assignedStoreIds = [], premiumU
                   <label htmlFor="pay_amount" className="block text-sm font-medium text-gray-700 mb-1">
                     월급 금액
                   </label>
-                  <input
+                  <CurrencyInput
                     id="pay_amount"
-                    type="number"
-                    step="0.01"
                     value={payAmount}
-                    onChange={(e) => setPayAmount(e.target.value)}
+                    onChange={setPayAmount}
                     className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                     placeholder="월급 금액을 입력하세요"
                   />
@@ -552,12 +552,10 @@ export default function UserForm({ user, stores, assignedStoreIds = [], premiumU
                   <label htmlFor="pay_amount" className="block text-sm font-medium text-gray-700 mb-1">
                     도급 금액
                   </label>
-                  <input
+                  <CurrencyInput
                     id="pay_amount"
-                    type="number"
-                    step="0.01"
                     value={payAmount}
-                    onChange={(e) => setPayAmount(e.target.value)}
+                    onChange={setPayAmount}
                     className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                     placeholder="도급 금액을 입력하세요"
                   />
