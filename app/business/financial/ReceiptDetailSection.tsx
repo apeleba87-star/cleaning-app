@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 
 interface Receipt {
   id: string
@@ -29,6 +29,8 @@ export default function ReceiptDetailSection({ period, onRefresh }: ReceiptDetai
   const [receipts, setReceipts] = useState<Receipt[]>([])
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
+  const [sortColumn, setSortColumn] = useState<string | null>(null)
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc')
   const [currentPage, setCurrentPage] = useState(1)
   const [totalPages, setTotalPages] = useState(1)
   const itemsPerPage = 50
@@ -81,13 +83,44 @@ export default function ReceiptDetailSection({ period, onRefresh }: ReceiptDetai
   }
 
   const filteredReceipts = receipts.filter((receipt) => {
-    return receipt.revenues?.stores?.name.toLowerCase().includes(searchTerm.toLowerCase()) || false
+    return !searchTerm || receipt.revenues?.stores?.name.toLowerCase().includes(searchTerm.toLowerCase()) || false
   })
+
+  const handleSort = (column: string) => {
+    if (sortColumn === column) {
+      setSortDirection((d) => (d === 'asc' ? 'desc' : 'asc'))
+    } else {
+      setSortColumn(column)
+      setSortDirection('asc')
+    }
+    setCurrentPage(1)
+  }
+
+  const getSortIcon = (column: string) => {
+    if (sortColumn !== column) return <span className="ml-1 text-gray-400">↕</span>
+    return <span className="ml-1">{sortDirection === 'asc' ? '↑' : '↓'}</span>
+  }
+
+  const sortedReceipts = useMemo(() => {
+    if (!sortColumn) return filteredReceipts
+    return [...filteredReceipts].sort((a, b) => {
+      let cmp = 0
+      if (sortColumn === 'store_name') {
+        cmp = (a.revenues?.stores?.name ?? '').localeCompare(b.revenues?.stores?.name ?? '')
+      } else if (sortColumn === 'received_at') {
+        cmp = new Date(a.received_at).getTime() - new Date(b.received_at).getTime()
+      } else if (sortColumn === 'amount') {
+        cmp = (a.amount || 0) - (b.amount || 0)
+      } else if (sortColumn === 'memo') {
+        cmp = (a.memo ?? '').localeCompare(b.memo ?? '')
+      }
+      return sortDirection === 'asc' ? cmp : -cmp
+    })
+  }, [filteredReceipts, sortColumn, sortDirection])
 
   const totalAmount = filteredReceipts.reduce((sum, r) => sum + (r.amount || 0), 0)
 
-  // 페이지네이션 계산 (검색어가 없을 때만)
-  const displayReceipts = searchTerm ? filteredReceipts : filteredReceipts
+  const displayReceipts = sortedReceipts
   const displayTotalPages = searchTerm ? 1 : totalPages
 
   if (loading) {
@@ -132,17 +165,29 @@ export default function ReceiptDetailSection({ period, onRefresh }: ReceiptDetai
         <table className="min-w-full divide-y divide-gray-200">
           <thead className="bg-gray-50">
             <tr>
-              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                매장명
+              <th
+                className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                onClick={() => handleSort('store_name')}
+              >
+                매장명{getSortIcon('store_name')}
               </th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                수금일
+              <th
+                className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                onClick={() => handleSort('received_at')}
+              >
+                수금일{getSortIcon('received_at')}
               </th>
-              <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                금액
+              <th
+                className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                onClick={() => handleSort('amount')}
+              >
+                금액{getSortIcon('amount')}
               </th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                메모
+              <th
+                className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                onClick={() => handleSort('memo')}
+              >
+                메모{getSortIcon('memo')}
               </th>
             </tr>
           </thead>

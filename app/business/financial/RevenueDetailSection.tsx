@@ -127,8 +127,8 @@ export default function RevenueDetailSection({ period, onRefresh }: RevenueDetai
 
     switch (sortColumn) {
       case 'store_name':
-        aValue = a.stores?.name || ''
-        bValue = b.stores?.name || ''
+        aValue = a.stores?.name || a.revenue_name || ''
+        bValue = b.stores?.name || b.revenue_name || ''
         break
       case 'due_date':
         aValue = new Date(a.due_date).getTime()
@@ -146,6 +146,10 @@ export default function RevenueDetailSection({ period, onRefresh }: RevenueDetai
         }
         aValue = statusOrder[a.status] || 4
         bValue = statusOrder[b.status] || 4
+        break
+      case 'billing_memo':
+        aValue = a.billing_memo || ''
+        bValue = b.billing_memo || ''
         break
       default:
         return 0
@@ -251,8 +255,14 @@ export default function RevenueDetailSection({ period, onRefresh }: RevenueDetai
                   {getSortIcon('status')}
                 </div>
               </th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                메모
+              <th
+                className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                onClick={() => handleSort('billing_memo')}
+              >
+                <div className="flex items-center space-x-1">
+                  <span>메모</span>
+                  {getSortIcon('billing_memo')}
+                </div>
               </th>
             </tr>
           </thead>

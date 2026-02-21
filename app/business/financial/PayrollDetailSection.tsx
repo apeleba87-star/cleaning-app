@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 
 interface Payroll {
   id: string
@@ -38,6 +38,8 @@ export default function PayrollDetailSection({ period, onRefresh }: PayrollDetai
   const [editMemo, setEditMemo] = useState('')
   const [submitting, setSubmitting] = useState(false)
 
+  const [sortColumn, setSortColumn] = useState<string | null>(null)
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc')
   const [currentPage, setCurrentPage] = useState(1)
   const [totalPages, setTotalPages] = useState(1)
   const itemsPerPage = 50
@@ -115,10 +117,45 @@ export default function PayrollDetailSection({ period, onRefresh }: PayrollDetai
   }
 
   const filteredPayrolls = payrolls.filter((payroll) => {
-    const matchesSearch = getWorkerName(payroll).toLowerCase().includes(searchTerm.toLowerCase())
+    const matchesSearch = !searchTerm || getWorkerName(payroll).toLowerCase().includes(searchTerm.toLowerCase())
     const matchesStatus = statusFilter === 'all' || payroll.status === statusFilter
     return matchesSearch && matchesStatus
   })
+
+  const handleSort = (column: string) => {
+    if (sortColumn === column) {
+      setSortDirection((d) => (d === 'asc' ? 'desc' : 'asc'))
+    } else {
+      setSortColumn(column)
+      setSortDirection('asc')
+    }
+  }
+
+  const getSortIcon = (column: string) => {
+    if (sortColumn !== column) return <span className="ml-1 text-gray-400">↕</span>
+    return <span className="ml-1">{sortDirection === 'asc' ? '↑' : '↓'}</span>
+  }
+
+  const sortedPayrolls = useMemo(() => {
+    if (!sortColumn) return filteredPayrolls
+    return [...filteredPayrolls].sort((a, b) => {
+      let cmp = 0
+      if (sortColumn === 'worker_name') {
+        cmp = getWorkerName(a).localeCompare(getWorkerName(b))
+      } else if (sortColumn === 'amount') {
+        cmp = (a.amount || 0) - (b.amount || 0)
+      } else if (sortColumn === 'status') {
+        cmp = (a.status === 'paid' ? 1 : 0) - (b.status === 'paid' ? 1 : 0)
+      } else if (sortColumn === 'paid_at') {
+        const ta = a.paid_at ? new Date(a.paid_at).getTime() : 0
+        const tb = b.paid_at ? new Date(b.paid_at).getTime() : 0
+        cmp = ta - tb
+      } else if (sortColumn === 'memo') {
+        cmp = (a.memo ?? '').localeCompare(b.memo ?? '')
+      }
+      return sortDirection === 'asc' ? cmp : -cmp
+    })
+  }, [filteredPayrolls, sortColumn, sortDirection])
 
   const totalAmount = filteredPayrolls.reduce((sum, p) => sum + (p.amount || 0), 0)
   const paidCount = filteredPayrolls.filter(p => p.status === 'paid').length
@@ -322,20 +359,35 @@ export default function PayrollDetailSection({ period, onRefresh }: PayrollDetai
         <table className="min-w-full divide-y divide-gray-200">
           <thead className="bg-gray-50">
             <tr>
-              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                직원명
+              <th
+                className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                onClick={() => handleSort('worker_name')}
+              >
+                직원명{getSortIcon('worker_name')}
               </th>
-              <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                금액
+              <th
+                className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                onClick={() => handleSort('amount')}
+              >
+                금액{getSortIcon('amount')}
               </th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                상태
+              <th
+                className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                onClick={() => handleSort('status')}
+              >
+                상태{getSortIcon('status')}
               </th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                지급일
+              <th
+                className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                onClick={() => handleSort('paid_at')}
+              >
+                지급일{getSortIcon('paid_at')}
               </th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                메모
+              <th
+                className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                onClick={() => handleSort('memo')}
+              >
+                메모{getSortIcon('memo')}
               </th>
               <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
                 작업
@@ -343,14 +395,14 @@ export default function PayrollDetailSection({ period, onRefresh }: PayrollDetai
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
-            {filteredPayrolls.length === 0 ? (
+            {sortedPayrolls.length === 0 ? (
               <tr>
                 <td colSpan={6} className="px-4 py-8 text-center text-gray-500">
                   인건비 데이터가 없습니다.
                 </td>
               </tr>
             ) : (
-              filteredPayrolls.map((payroll) => {
+              sortedPayrolls.map((payroll) => {
                 const roleLabel = getRoleLabel(payroll)
                 return (
                 <tr 

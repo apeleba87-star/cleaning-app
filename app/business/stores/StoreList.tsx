@@ -1,7 +1,10 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { Store, Franchise, CategoryTemplate } from '@/types/db'
+
+const PAGE_SIZE = 30
+type SortKey = 'franchise' | 'parent_store' | 'name' | 'category' | 'service_active'
 import StoreForm from './StoreForm'
 
 // StoreList에서 사용하는 최소 필드 타입
@@ -25,6 +28,26 @@ export default function StoreList({ initialStores, franchises, categoryTemplates
   const [deletingStoreId, setDeletingStoreId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [searchTerm, setSearchTerm] = useState('')
+  const [sortBy, setSortBy] = useState<SortKey | null>(null)
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc')
+  const [currentPage, setCurrentPage] = useState(1)
+
+  const handleSort = (key: SortKey) => {
+    if (sortBy === key) {
+      setSortOrder((prev) => (prev === 'asc' ? 'desc' : 'asc'))
+    } else {
+      setSortBy(key)
+      setSortOrder('asc')
+    }
+    setCurrentPage(1)
+  }
+
+  const SortIcon = ({ column }: { column: SortKey }) => {
+    if (sortBy !== column) {
+      return <span className="ml-1 text-gray-400">↕</span>
+    }
+    return <span className="ml-1">{sortOrder === 'asc' ? '↑' : '↓'}</span>
+  }
 
   const handleCreate = () => {
     setEditingStore(null)
@@ -119,16 +142,54 @@ export default function StoreList({ initialStores, franchises, categoryTemplates
     setError(null)
   }
 
+  // 검색 시 첫 페이지로
+  const handleSearchChange = (value: string) => {
+    setSearchTerm(value)
+    setCurrentPage(1)
+  }
+
   // 검색 필터링
-  const filteredStores = stores.filter(store => {
-    if (!searchTerm) return true
-    const searchLower = searchTerm.toLowerCase()
-    return (
-      store.name.toLowerCase().includes(searchLower) ||
-      store.address?.toLowerCase().includes(searchLower) ||
-      store.category?.toLowerCase().includes(searchLower)
-    )
-  })
+  const filteredStores = useMemo(() => {
+    return stores.filter(store => {
+      if (!searchTerm) return true
+      const searchLower = searchTerm.toLowerCase()
+      return (
+        store.name.toLowerCase().includes(searchLower) ||
+        store.address?.toLowerCase().includes(searchLower) ||
+        store.category?.toLowerCase().includes(searchLower)
+      )
+    })
+  }, [stores, searchTerm])
+
+  // 정렬
+  const sortedStores = useMemo(() => {
+    if (!sortBy) return filteredStores
+    const sorted = [...filteredStores].sort((a, b) => {
+      const franchiseA = (a as any).franchises ? (a as any).franchises?.name : (franchises.find(f => f.id === a.franchise_id)?.name ?? '')
+      const franchiseB = (b as any).franchises ? (b as any).franchises?.name : (franchises.find(f => f.id === b.franchise_id)?.name ?? '')
+      let cmp = 0
+      if (sortBy === 'franchise') {
+        cmp = String(franchiseA).localeCompare(String(franchiseB))
+      } else if (sortBy === 'parent_store') {
+        cmp = (a.parent_store_name ?? '').localeCompare(b.parent_store_name ?? '')
+      } else if (sortBy === 'name') {
+        cmp = (a.name ?? '').localeCompare(b.name ?? '')
+      } else if (sortBy === 'category') {
+        cmp = (a.category ?? '').localeCompare(b.category ?? '')
+      } else if (sortBy === 'service_active') {
+        cmp = (a.service_active === b.service_active) ? 0 : (a.service_active ? -1 : 1)
+      }
+      return sortOrder === 'asc' ? cmp : -cmp
+    })
+    return sorted
+  }, [filteredStores, sortBy, sortOrder, franchises])
+
+  // 페이지네이션 (30개씩)
+  const totalPages = Math.max(1, Math.ceil(sortedStores.length / PAGE_SIZE))
+  const paginatedStores = useMemo(() => {
+    const start = (currentPage - 1) * PAGE_SIZE
+    return sortedStores.slice(start, start + PAGE_SIZE)
+  }, [sortedStores, currentPage])
 
   return (
     <div>
@@ -143,7 +204,7 @@ export default function StoreList({ initialStores, franchises, categoryTemplates
           <input
             type="text"
             value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
+            onChange={(e) => handleSearchChange(e.target.value)}
             placeholder="매장명, 주소, 카테고리로 검색..."
             className="w-full px-3 sm:px-4 py-2 text-sm sm:text-base border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
@@ -184,20 +245,40 @@ export default function StoreList({ initialStores, franchises, categoryTemplates
           <table className="w-full">
             <thead className="bg-gray-50">
               <tr>
-                <th className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th
+                  className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 select-none"
+                  onClick={() => handleSort('franchise')}
+                >
                   프렌차이즈
+                  <SortIcon column="franchise" />
                 </th>
-                <th className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th
+                  className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 select-none"
+                  onClick={() => handleSort('parent_store')}
+                >
                   상위매장
+                  <SortIcon column="parent_store" />
                 </th>
-                <th className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th
+                  className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 select-none"
+                  onClick={() => handleSort('name')}
+                >
                   매장명
+                  <SortIcon column="name" />
                 </th>
-                <th className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th
+                  className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 select-none"
+                  onClick={() => handleSort('category')}
+                >
                   카테고리
+                  <SortIcon column="category" />
                 </th>
-                <th className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th
+                  className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 select-none"
+                  onClick={() => handleSort('service_active')}
+                >
                   서비스진행
+                  <SortIcon column="service_active" />
                 </th>
                 <th className="px-4 lg:px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
                   작업
@@ -205,14 +286,14 @@ export default function StoreList({ initialStores, franchises, categoryTemplates
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {filteredStores.length === 0 ? (
+              {paginatedStores.length === 0 ? (
                 <tr>
                   <td colSpan={6} className="px-4 lg:px-6 py-4 text-center text-gray-500">
                     {searchTerm ? '검색 결과가 없습니다.' : '등록된 매장이 없습니다.'}
                   </td>
                 </tr>
               ) : (
-                filteredStores.map((store) => {
+                paginatedStores.map((store) => {
                   // 프렌차이즈 정보 찾기 (join된 데이터 또는 prop에서)
                   const franchise = (store as any).franchises 
                     ? (store as any).franchises 
@@ -304,16 +385,71 @@ export default function StoreList({ initialStores, franchises, categoryTemplates
             </tbody>
           </table>
         </div>
+        {/* 페이지네이션 (30개씩) */}
+        {sortedStores.length > PAGE_SIZE && (
+          <div className="px-4 py-3 border-t border-gray-200 flex flex-col sm:flex-row items-center justify-between gap-2">
+            <p className="text-sm text-gray-600">
+              총 {sortedStores.length}개 중 {(currentPage - 1) * PAGE_SIZE + 1}–{Math.min(currentPage * PAGE_SIZE, sortedStores.length)}개 표시
+            </p>
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                disabled={currentPage <= 1}
+                className="px-3 py-1 text-sm border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                이전
+              </button>
+              <span className="px-3 py-1 text-sm text-gray-600">
+                {currentPage} / {totalPages}
+              </span>
+              <button
+                onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                disabled={currentPage >= totalPages}
+                className="px-3 py-1 text-sm border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                다음
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
-      {/* 모바일: 카드 뷰 */}
+      {/* 모바일: 정렬 선택 + 카드 뷰 */}
       <div className="sm:hidden space-y-4">
-        {filteredStores.length === 0 ? (
+        <div className="flex items-center gap-2">
+          <label className="text-sm text-gray-600">정렬:</label>
+          <select
+            value={sortBy ?? ''}
+            onChange={(e) => {
+              const v = e.target.value as SortKey | ''
+              setSortBy(v || null)
+              setCurrentPage(1)
+            }}
+            className="px-3 py-2 text-sm border border-gray-300 rounded-md"
+          >
+            <option value="">기본</option>
+            <option value="franchise">프렌차이즈</option>
+            <option value="parent_store">상위매장</option>
+            <option value="name">매장명</option>
+            <option value="category">카테고리</option>
+            <option value="service_active">서비스진행</option>
+          </select>
+          {sortBy && (
+            <button
+              type="button"
+              onClick={() => setSortOrder((o) => (o === 'asc' ? 'desc' : 'asc'))}
+              className="text-sm text-blue-600"
+            >
+              {sortOrder === 'asc' ? '↑' : '↓'}
+            </button>
+          )}
+        </div>
+        {paginatedStores.length === 0 ? (
           <div className="bg-white rounded-lg shadow-md p-6 text-center text-gray-500">
             {searchTerm ? '검색 결과가 없습니다.' : '등록된 매장이 없습니다.'}
           </div>
         ) : (
-          filteredStores.map((store) => {
+          paginatedStores.map((store) => {
             const franchise = (store as any).franchises 
               ? (store as any).franchises 
               : (store.franchise_id ? franchises.find(f => f.id === store.franchise_id) : null)
@@ -409,6 +545,28 @@ export default function StoreList({ initialStores, franchises, categoryTemplates
               </div>
             )
           })
+        )}
+        {/* 모바일 페이지네이션 */}
+        {sortedStores.length > PAGE_SIZE && (
+          <div className="flex items-center justify-between px-2 py-3">
+            <button
+              onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+              disabled={currentPage <= 1}
+              className="px-3 py-2 text-sm border border-gray-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              이전
+            </button>
+            <span className="text-sm text-gray-600">
+              {currentPage} / {totalPages}
+            </span>
+            <button
+              onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+              disabled={currentPage >= totalPages}
+              className="px-3 py-2 text-sm border border-gray-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              다음
+            </button>
+          </div>
         )}
       </div>
     </div>

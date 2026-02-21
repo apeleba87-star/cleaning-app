@@ -1,7 +1,9 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { User, UserRole, Franchise, Store } from '@/types/db'
+
+type SortKey = 'name' | 'email' | 'role' | 'phone' | 'assigned_stores' | 'employment_active'
 import UserForm from './UserForm'
 import UserStoreAssign from './UserStoreAssign'
 import CreateUserForm from './CreateUserForm'
@@ -33,10 +35,30 @@ export default function UserList({ initialUsers, stores, franchises, userStoreMa
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [searchTerm, setSearchTerm] = useState('')
+  const [sortBy, setSortBy] = useState<SortKey | null>(null)
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc')
   const [mobilePage, setMobilePage] = useState(1)
   const [desktopPage, setDesktopPage] = useState(1)
   const MOBILE_ITEMS_PER_PAGE = 20
   const DESKTOP_ITEMS_PER_PAGE = 30
+
+  const handleSort = (key: SortKey) => {
+    if (sortBy === key) {
+      setSortOrder((prev) => (prev === 'asc' ? 'desc' : 'asc'))
+    } else {
+      setSortBy(key)
+      setSortOrder('asc')
+    }
+    setMobilePage(1)
+    setDesktopPage(1)
+  }
+
+  const SortIcon = ({ column }: { column: SortKey }) => {
+    if (sortBy !== column) {
+      return <span className="ml-1 text-gray-400">↕</span>
+    }
+    return <span className="ml-1">{sortOrder === 'asc' ? '↑' : '↓'}</span>
+  }
 
   const handleCreate = () => {
     // 사용자 수정 폼이 열려있으면 경고 메시지 표시
@@ -293,39 +315,68 @@ export default function UserList({ initialUsers, stores, franchises, userStoreMa
   }
 
   // 승인된 사용자만 필터링 (승인 대기 제외)
-  const approvedUsersBase = users.filter((u) => u.approval_status !== 'pending')
+  const approvedUsersBase = useMemo(
+    () => users.filter((u) => u.approval_status !== 'pending'),
+    [users]
+  )
   
   // 검색 필터링
-  const approvedUsers = searchTerm
-    ? approvedUsersBase.filter((user) => {
-        const searchLower = searchTerm.toLowerCase()
-        const userName = user.name?.toLowerCase() || ''
-        const userEmail = ((user as any).email || '').toLowerCase()
-        const userPhone = (user.phone || '').toLowerCase()
-        const userRole = getRoleLabel(user.role).toLowerCase()
-        const assignedStores = getUserStores(user.id).map(s => s.name.toLowerCase()).join(' ')
-        
-        return (
-          userName.includes(searchLower) ||
-          userEmail.includes(searchLower) ||
-          userPhone.includes(searchLower) ||
-          userRole.includes(searchLower) ||
-          assignedStores.includes(searchLower)
-        )
-      })
-    : approvedUsersBase
+  const approvedUsers = useMemo(() => {
+    return searchTerm
+      ? approvedUsersBase.filter((user) => {
+          const searchLower = searchTerm.toLowerCase()
+          const userName = user.name?.toLowerCase() || ''
+          const userEmail = ((user as any).email || '').toLowerCase()
+          const userPhone = (user.phone || '').toLowerCase()
+          const userRole = getRoleLabel(user.role).toLowerCase()
+          const assignedStores = getUserStores(user.id).map(s => s.name.toLowerCase()).join(' ')
+          return (
+            userName.includes(searchLower) ||
+            userEmail.includes(searchLower) ||
+            userPhone.includes(searchLower) ||
+            userRole.includes(searchLower) ||
+            assignedStores.includes(searchLower)
+          )
+        })
+      : approvedUsersBase
+  }, [approvedUsersBase, searchTerm])
+
+  // 정렬
+  const sortedUsers = useMemo(() => {
+    if (!sortBy) return approvedUsers
+    const sorted = [...approvedUsers].sort((a, b) => {
+      let cmp = 0
+      if (sortBy === 'name') {
+        cmp = (a.name ?? '').localeCompare(b.name ?? '')
+      } else if (sortBy === 'email') {
+        cmp = ((a as any).email ?? '').localeCompare((b as any).email ?? '')
+      } else if (sortBy === 'role') {
+        cmp = getRoleLabel(a.role).localeCompare(getRoleLabel(b.role))
+      } else if (sortBy === 'phone') {
+        cmp = (a.phone ?? '').localeCompare(b.phone ?? '')
+      } else if (sortBy === 'assigned_stores') {
+        const storesA = getUserStores(a.id).map(s => s.name).join(' ')
+        const storesB = getUserStores(b.id).map(s => s.name).join(' ')
+        cmp = storesA.localeCompare(storesB)
+      } else if (sortBy === 'employment_active') {
+        cmp = (a.employment_active === b.employment_active) ? 0 : (a.employment_active ? -1 : 1)
+      }
+      return sortOrder === 'asc' ? cmp : -cmp
+    })
+    return sorted
+  }, [approvedUsers, sortBy, sortOrder])
 
   // 모바일 페이지네이션 계산
-  const mobileTotalPages = Math.ceil(approvedUsers.length / MOBILE_ITEMS_PER_PAGE)
+  const mobileTotalPages = Math.ceil(sortedUsers.length / MOBILE_ITEMS_PER_PAGE)
   const mobileStartIndex = (mobilePage - 1) * MOBILE_ITEMS_PER_PAGE
   const mobileEndIndex = mobileStartIndex + MOBILE_ITEMS_PER_PAGE
-  const mobileUsers = approvedUsers.slice(mobileStartIndex, mobileEndIndex)
+  const mobileUsers = sortedUsers.slice(mobileStartIndex, mobileEndIndex)
 
   // 데스크톱 페이지네이션 계산
-  const desktopTotalPages = Math.ceil(approvedUsers.length / DESKTOP_ITEMS_PER_PAGE)
+  const desktopTotalPages = Math.ceil(sortedUsers.length / DESKTOP_ITEMS_PER_PAGE)
   const desktopStartIndex = (desktopPage - 1) * DESKTOP_ITEMS_PER_PAGE
   const desktopEndIndex = desktopStartIndex + DESKTOP_ITEMS_PER_PAGE
-  const desktopUsers = approvedUsers.slice(desktopStartIndex, desktopEndIndex)
+  const desktopUsers = sortedUsers.slice(desktopStartIndex, desktopEndIndex)
 
   // 검색어 변경 시 페이지 리셋
   useEffect(() => {
@@ -512,8 +563,38 @@ export default function UserList({ initialUsers, stores, franchises, userStoreMa
       )}
 
       <div className="bg-white rounded-lg shadow-md overflow-hidden">
-        {/* 모바일: 카드 형태 */}
+        {/* 모바일: 정렬 선택 + 카드 형태 */}
         <div className="block sm:hidden">
+          <div className="p-4 pb-0 flex items-center gap-2">
+            <label className="text-sm text-gray-600">정렬:</label>
+            <select
+              value={sortBy ?? ''}
+              onChange={(e) => {
+                const v = e.target.value as SortKey | ''
+                setSortBy(v || null)
+                setMobilePage(1)
+                setDesktopPage(1)
+              }}
+              className="px-3 py-2 text-sm border border-gray-300 rounded-md"
+            >
+              <option value="">기본</option>
+              <option value="name">이름</option>
+              <option value="email">이메일</option>
+              <option value="role">역할</option>
+              <option value="phone">전화번호</option>
+              <option value="assigned_stores">배정 매장</option>
+              <option value="employment_active">근무여부</option>
+            </select>
+            {sortBy && (
+              <button
+                type="button"
+                onClick={() => setSortOrder((o) => (o === 'asc' ? 'desc' : 'asc'))}
+                className="text-sm text-blue-600"
+              >
+                {sortOrder === 'asc' ? '↑' : '↓'}
+              </button>
+            )}
+          </div>
           <div className="space-y-4 p-4">
             {mobileUsers.length === 0 ? (
               <div className="text-center text-gray-500 text-sm py-8">
@@ -616,7 +697,7 @@ export default function UserList({ initialUsers, stores, franchises, userStoreMa
           </div>
           
           {/* 모바일 페이지네이션 */}
-          {approvedUsers.length > MOBILE_ITEMS_PER_PAGE && (
+          {sortedUsers.length > MOBILE_ITEMS_PER_PAGE && (
             <div className="border-t border-gray-200 px-4 py-3 flex items-center justify-between">
               <div className="flex-1 flex justify-between sm:hidden">
                 <button
@@ -635,7 +716,7 @@ export default function UserList({ initialUsers, stores, franchises, userStoreMa
                     {mobilePage} / {mobileTotalPages}
                   </span>
                   <span className="text-xs text-gray-500">
-                    (총 {approvedUsers.length}명)
+                    (총 {sortedUsers.length}명)
                   </span>
                 </div>
                 <button
@@ -659,23 +740,47 @@ export default function UserList({ initialUsers, stores, franchises, userStoreMa
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
               <tr>
-                <th className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th
+                  className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 select-none"
+                  onClick={() => handleSort('name')}
+                >
                   이름
+                  <SortIcon column="name" />
                 </th>
-                <th className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th
+                  className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 select-none"
+                  onClick={() => handleSort('email')}
+                >
                   이메일
+                  <SortIcon column="email" />
                 </th>
-                <th className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th
+                  className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 select-none"
+                  onClick={() => handleSort('role')}
+                >
                   역할
+                  <SortIcon column="role" />
                 </th>
-                <th className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider hidden md:table-cell">
+                <th
+                  className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider hidden md:table-cell cursor-pointer hover:bg-gray-100 select-none"
+                  onClick={() => handleSort('phone')}
+                >
                   전화번호
+                  <SortIcon column="phone" />
                 </th>
-                <th className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th
+                  className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 select-none"
+                  onClick={() => handleSort('assigned_stores')}
+                >
                   배정 매장
+                  <SortIcon column="assigned_stores" />
                 </th>
-                <th className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider hidden lg:table-cell">
+                <th
+                  className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider hidden lg:table-cell cursor-pointer hover:bg-gray-100 select-none"
+                  onClick={() => handleSort('employment_active')}
+                >
                   근무여부
+                  <SortIcon column="employment_active" />
                 </th>
                 <th className="px-4 lg:px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
                   작업
@@ -822,7 +927,7 @@ export default function UserList({ initialUsers, stores, franchises, userStoreMa
         </div>
         
         {/* 데스크톱 페이지네이션 */}
-        {approvedUsers.length > DESKTOP_ITEMS_PER_PAGE && (
+        {sortedUsers.length > DESKTOP_ITEMS_PER_PAGE && (
           <div className="hidden sm:flex items-center justify-between border-t border-gray-200 bg-white px-4 py-3">
             <div className="flex flex-1 justify-between sm:hidden">
               <button
@@ -857,9 +962,9 @@ export default function UserList({ initialUsers, stores, franchises, userStoreMa
                 <p className="text-sm text-gray-700">
                   <span className="font-medium">{(desktopStartIndex + 1)}</span>
                   {' - '}
-                  <span className="font-medium">{Math.min(desktopEndIndex, approvedUsers.length)}</span>
+                  <span className="font-medium">{Math.min(desktopEndIndex, sortedUsers.length)}</span>
                   {' / '}
-                  <span className="font-medium">{approvedUsers.length}</span>
+                  <span className="font-medium">{sortedUsers.length}</span>
                   {' 명'}
                 </p>
               </div>

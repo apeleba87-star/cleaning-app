@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { CurrencyInput } from '@/components/ui/CurrencyInput'
 import { parseCurrencyNumber } from '@/lib/utils/currency'
 
@@ -24,6 +24,8 @@ export default function UnpaidDetailSection({ onRefresh }: UnpaidDetailSectionPr
   const [unpaidRevenues, setUnpaidRevenues] = useState<UnpaidRevenue[]>([])
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
+  const [sortColumn, setSortColumn] = useState<string | null>(null)
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc')
   const [showPartialPaymentModal, setShowPartialPaymentModal] = useState(false)
   const [selectedRevenue, setSelectedRevenue] = useState<UnpaidRevenue | null>(null)
   const [partialAmount, setPartialAmount] = useState('')
@@ -73,8 +75,36 @@ export default function UnpaidDetailSection({ onRefresh }: UnpaidDetailSectionPr
   }
 
   const filteredUnpaid = unpaidRevenues.filter((item) => {
-    return item.store_name.toLowerCase().includes(searchTerm.toLowerCase())
+    return !searchTerm || item.store_name.toLowerCase().includes(searchTerm.toLowerCase())
   })
+
+  const handleSort = (column: string) => {
+    if (sortColumn === column) {
+      setSortDirection((d) => (d === 'asc' ? 'desc' : 'asc'))
+    } else {
+      setSortColumn(column)
+      setSortDirection('asc')
+    }
+  }
+
+  const getSortIcon = (column: string) => {
+    if (sortColumn !== column) return <span className="ml-1 text-gray-400">↕</span>
+    return <span className="ml-1">{sortDirection === 'asc' ? '↑' : '↓'}</span>
+  }
+
+  const sortedUnpaid = useMemo(() => {
+    if (!sortColumn) return filteredUnpaid
+    return [...filteredUnpaid].sort((a, b) => {
+      let cmp = 0
+      if (sortColumn === 'store_name') cmp = a.store_name.localeCompare(b.store_name)
+      else if (sortColumn === 'due_date') cmp = new Date(a.due_date).getTime() - new Date(b.due_date).getTime()
+      else if (sortColumn === 'amount') cmp = a.amount - b.amount
+      else if (sortColumn === 'received_amount') cmp = a.received_amount - b.received_amount
+      else if (sortColumn === 'unpaid_amount') cmp = a.unpaid_amount - b.unpaid_amount
+      else if (sortColumn === 'days_overdue') cmp = a.days_overdue - b.days_overdue
+      return sortDirection === 'asc' ? cmp : -cmp
+    })
+  }, [filteredUnpaid, sortColumn, sortDirection])
 
   const totalUnpaid = filteredUnpaid.reduce((sum, item) => sum + item.unpaid_amount, 0)
 
@@ -222,23 +252,41 @@ export default function UnpaidDetailSection({ onRefresh }: UnpaidDetailSectionPr
         <table className="min-w-full divide-y divide-gray-200">
           <thead className="bg-gray-50">
             <tr>
-              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                매장명
+              <th
+                className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                onClick={() => handleSort('store_name')}
+              >
+                매장명{getSortIcon('store_name')}
               </th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                청구일
+              <th
+                className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                onClick={() => handleSort('due_date')}
+              >
+                청구일{getSortIcon('due_date')}
               </th>
-              <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                청구금액
+              <th
+                className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                onClick={() => handleSort('amount')}
+              >
+                청구금액{getSortIcon('amount')}
               </th>
-              <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                수금액
+              <th
+                className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                onClick={() => handleSort('received_amount')}
+              >
+                수금액{getSortIcon('received_amount')}
               </th>
-              <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                미수금액
+              <th
+                className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                onClick={() => handleSort('unpaid_amount')}
+              >
+                미수금액{getSortIcon('unpaid_amount')}
               </th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                연체일수
+              <th
+                className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                onClick={() => handleSort('days_overdue')}
+              >
+                연체일수{getSortIcon('days_overdue')}
               </th>
               <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
                 작업
@@ -246,14 +294,14 @@ export default function UnpaidDetailSection({ onRefresh }: UnpaidDetailSectionPr
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
-            {filteredUnpaid.length === 0 ? (
+            {sortedUnpaid.length === 0 ? (
               <tr>
                 <td colSpan={7} className="px-4 py-8 text-center text-gray-500">
                   미수금 데이터가 없습니다.
                 </td>
               </tr>
             ) : (
-              filteredUnpaid.map((item) => (
+              sortedUnpaid.map((item) => (
                 <tr key={item.revenue_id} className="hover:bg-gray-50">
                   <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
                     {item.store_name}
