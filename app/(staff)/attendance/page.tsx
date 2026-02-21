@@ -16,6 +16,7 @@ import { clockInAction, clockOutAction } from './actions'
 import { createClient } from '@/lib/supabase/client'
 import { Attendance } from '@/types/db'
 import StoreSelector from './StoreSelector'
+import OperationMemoSection from '@/components/staff/OperationMemoSection'
 import { getTodayDateKST } from '@/lib/utils/date'
 import { useTodayAttendance } from '@/contexts/AttendanceContext'
 import { calculateChecklistProgress } from '@/lib/utils/checklist'
@@ -507,6 +508,14 @@ export default function AttendancePage() {
               showOnlyTodayManagement={attendanceType === 'rescheduled' ? false : true} // 출근일 변경이면 오늘 관리 요일이 아닌 매장만
               onSelectableStoresChange={setSelectableStores}
             />
+            {/* 매장 선택 시 운영 메모 (관리시작 전 출입정보 확인용) */}
+            {selectedStoreId && !hasActiveAttendance && (
+              <OperationMemoSection
+                storeId={selectedStoreId}
+                storeName={selectedStoreName || ''}
+                className="mt-3"
+              />
+            )}
             {hasActiveAttendance && (
               <p className="mt-2 text-sm text-orange-600">
                 ⚠️ 먼저 관리 중인 매장의 관리완료 처리를 완료해주세요.

@@ -10,6 +10,7 @@ import { clockInAction, clockOutAction } from '../attendance/actions'
 import { GPSLocation } from '@/types/db'
 import { getTodayDateKST, getCurrentHourKST, isWithinManagementPeriod, calculateWorkDateForNightShift } from '@/lib/utils/date'
 import QuickStartGuide from '@/components/staff/QuickStartGuide'
+import OperationMemoSection from '@/components/staff/OperationMemoSection'
 import { useToast } from '@/components/Toast'
 
 interface StoreWithAssignment {
@@ -966,6 +967,10 @@ export default function MobileDashboardPage() {
                           )}
                       </div>
                       </div>
+                      {/* 운영 메모 (관리중일 때만, 매장명 바로 아래 접이식) */}
+                      {store.attendanceStatus === 'clocked_in' && (
+                        <OperationMemoSection storeId={store.id} storeName={store.name} />
+                      )}
                       {/* 경고 메시지 */}
                       {warningMessage && warningMessage.storeId === store.id && (
                         <div className="mt-2 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
