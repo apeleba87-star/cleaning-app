@@ -85,9 +85,9 @@ export function AttendanceProvider({ children }: { children: ReactNode }) {
     }
   }, [loadAttendance])
 
-  const refresh = () => {
+  const refresh = useCallback(() => {
     loadAttendance()
-  }
+  }, [loadAttendance])
 
   // 퇴근하지 않은 출근 기록들
   const activeAttendances = attendances.filter(a => !a.clock_out_at)
