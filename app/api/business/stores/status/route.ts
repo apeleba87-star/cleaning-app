@@ -78,22 +78,14 @@ async function fetchStoreStatusData(companyId: string, forDashboard = false) {
     const now = new Date()
     const todayDateUTC = now.toISOString().split('T')[0]
     
-    // 한국 시간대 객체 생성 (요일 확인용) - UTC offset 계산 방식 (서버리스 환경 안정성)
-    const kstOffset = 9 * 60 // 분 단위
-    const utc = now.getTime() + (now.getTimezoneOffset() * 60 * 1000)
-    const koreaTime = new Date(utc + (kstOffset * 60 * 1000))
-    
-    // 한국 시간 기준으로 오늘 00:00:00 ~ 23:59:59 (UTC로 변환)
-    const todayStartKST = new Date(koreaTime)
-    todayStartKST.setHours(0, 0, 0, 0)
-    const todayEndKST = new Date(koreaTime)
-    todayEndKST.setHours(23, 59, 59, 999)
-
-    // UTC로 변환 (Supabase는 UTC로 저장)
-    const todayStart = new Date(todayStartKST.toISOString())
-    const todayEnd = new Date(todayEndKST.toISOString())
+    // 한국 시간 기준 오늘 00:00:00 ~ 23:59:59.999 (서버 타임존 무관하게 KST로 고정)
+    const todayStart = new Date(`${todayDateKST}T00:00:00+09:00`)
+    const todayEnd = new Date(`${todayDateKST}T23:59:59.999+09:00`)
 
     // 오늘 요일 확인 (한국 시간 기준)
+    const kstOffset = 9 * 60
+    const utc = now.getTime() + (now.getTimezoneOffset() * 60 * 1000)
+    const koreaTime = new Date(utc + (kstOffset * 60 * 1000))
     const dayNames = ['일', '월', '화', '수', '목', '금', '토']
     const todayDayName = dayNames[koreaTime.getDay()]
 
@@ -123,10 +115,8 @@ async function fetchStoreStatusData(companyId: string, forDashboard = false) {
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
     thirtyDaysAgo.setHours(0, 0, 0, 0)
 
-    // product_photos 쿼리 최적화: 3일 범위로 제한 (타임아웃 방지)
-    const threeDaysAgo = new Date()
-    threeDaysAgo.setDate(threeDaysAgo.getDate() - 3)
-    threeDaysAgo.setHours(0, 0, 0, 0)
+    // product_photos 쿼리: 오늘 00:00 KST 기준 3일 전 (모달·카드와 동일한 날짜 기준)
+    const threeDaysAgo = new Date(todayStart.getTime() - 3 * 24 * 60 * 60 * 1000)
 
     // 모든 배정된 직원 ID 수집
     const allAssignedUserIds = Array.from(new Set(Array.from(assignsByStore.values()).flat()))
@@ -182,10 +172,12 @@ async function fetchStoreStatusData(companyId: string, forDashboard = false) {
         .order('clock_in_at', { ascending: false }),
       (async (): Promise<{ data: any[] | null; error: any }> => {
         try {
+          // RLS 우회: 제품 입고/보관 사진은 서비스 역할로 조회 (업체 관리자 화면에서 확실히 표시)
+          const productPhotosClient = adminSupabase ?? dataClient
           const timeoutPromise = new Promise<{ data: any[] | null; error: any }>((resolve) =>
-            setTimeout(() => resolve({ data: [], error: { message: 'Product photos query timeout' } }), 3000)
+            setTimeout(() => resolve({ data: [], error: { message: 'Product photos query timeout' } }), 10000)
           )
-          const queryPromise = dataClient
+          const queryPromise = productPhotosClient
             .from('product_photos')
             .select('id, store_id, type, photo_urls, created_at')
             .in('store_id', storeIds)
@@ -477,16 +469,16 @@ async function fetchStoreStatusData(companyId: string, forDashboard = false) {
         // 배치 쿼리에서 가져온 제품 사진 데이터 사용
         const storeProductPhotos = productPhotosByStore.get(store.id) || []
         
-        // 오늘 제품 입고 사진 (type = 'receipt')
-        const todayProductInflow = storeProductPhotos.filter((p: any) => 
+        // 당일 제품 입고 사진만 (type = 'receipt', 한국 시간 오늘 구간)
+        const todayProductInflow = storeProductPhotos.filter((p: any) =>
           p.type === 'receipt' &&
           new Date(p.created_at) >= todayStart &&
           new Date(p.created_at) <= todayEnd
         )
 
-        // 최근 보관 사진 (type = 'storage') - 최신 사진만 (최대 2개)
+        // 당일 보관 사진만 (type = 'storage') - 최신 1건에서 썸네일 최대 2개
         const storagePhotos = storeProductPhotos
-          .filter((p: any) => p.type === 'storage')
+          .filter((p: any) => p.type === 'storage' && new Date(p.created_at) >= todayStart && new Date(p.created_at) <= todayEnd)
           .sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
           .slice(0, 1)
         
@@ -733,7 +725,7 @@ async function fetchStoreStatusData(companyId: string, forDashboard = false) {
           confirmed_vending_problems: confirmedVendingProblems,
           unconfirmed_lost_items: unconfirmedLostItems,
           confirmed_lost_items: confirmedLostItems,
-          // 제품 입고 및 보관 사진
+          // 제품 입고 및 보관 사진 (당일만)
           has_product_inflow_today: todayProductInflow.length > 0,
           has_storage_photos: recentStoragePhotos.length > 0,
           storage_photos: recentStoragePhotos,
@@ -873,11 +865,13 @@ export async function GET(request: NextRequest) {
 
     // 캐시 키 생성 (company_id + 대시보드 여부별 분리)
     const cacheKey = `store-status-${user.company_id}-${forDashboard ? 'dashboard' : 'full'}`
+    const isDev = process.env.NODE_ENV === 'development'
+    const cacheTtl = isDev ? 0 : CACHE_TTL // 개발 중에는 캐시 미사용(수정 반영 바로 확인)
 
     // 캐시 확인 (forceRefresh가 false이고 캐시가 유효한 경우)
-    if (!forceRefresh) {
+    if (!forceRefresh && cacheTtl > 0) {
       const cached = cache.get(cacheKey)
-      if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
+      if (cached && Date.now() - cached.timestamp < cacheTtl) {
         // 캐시 히트
         return Response.json(cached.data)
       }

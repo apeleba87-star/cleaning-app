@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server'
 import { createServerSupabaseClient, getServerUser } from '@/lib/supabase/server'
 import { handleApiError, UnauthorizedError, ForbiddenError } from '@/lib/errors'
+import { getTodayDateKST } from '@/lib/utils/date'
 
 // 특정 매장의 상태만 조회
 export async function GET(
@@ -44,17 +45,18 @@ export async function GET(
       throw new ForbiddenError('Store not found or access denied')
     }
 
-    // 오늘 날짜
-    const todayDate = new Date().toISOString().split('T')[0]
-    const todayStart = new Date()
-    todayStart.setHours(0, 0, 0, 0)
-    const todayEnd = new Date()
-    todayEnd.setHours(23, 59, 59, 999)
+    // 오늘 날짜 (한국 시간 기준)
+    const todayDate = getTodayDateKST()
+    const todayStart = new Date(`${todayDate}T00:00:00+09:00`)
+    const todayEnd = new Date(`${todayDate}T23:59:59.999+09:00`)
 
-    // 오늘 요일 확인
-    const today = new Date()
+    // 오늘 요일 확인 (한국 시간 기준)
+    const now = new Date()
+    const kstOffset = 9 * 60
+    const utc = now.getTime() + (now.getTimezoneOffset() * 60 * 1000)
+    const koreaTime = new Date(utc + (kstOffset * 60 * 1000))
     const dayNames = ['일', '월', '화', '수', '목', '금', '토']
-    const todayDayName = dayNames[today.getDay()]
+    const todayDayName = dayNames[koreaTime.getDay()]
 
     // 오늘이 출근일인지 확인
     const isWorkDay = store.management_days

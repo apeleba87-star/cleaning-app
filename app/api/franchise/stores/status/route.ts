@@ -76,17 +76,14 @@ export async function GET(request: NextRequest) {
     const now = new Date()
     const todayDateUTC = now.toISOString().split('T')[0]
     
-    // 한국 시간대 계산 (안전한 방식 - toLocaleString 사용 안 함)
-    const kstOffset = 9 * 60 // 분 단위
+    // 한국 시간 기준 오늘 00:00:00 ~ 23:59:59.999 (서버 타임존 무관하게 KST로 고정)
+    const todayStart = new Date(`${todayDateKST}T00:00:00+09:00`)
+    const todayEnd = new Date(`${todayDateKST}T23:59:59.999+09:00`)
+    
+    // 오늘 요일 확인 (한국 시간 기준)
+    const kstOffset = 9 * 60
     const utc = now.getTime() + (now.getTimezoneOffset() * 60 * 1000)
     const koreaTime = new Date(utc + (kstOffset * 60 * 1000))
-    
-    const todayStartKST = new Date(koreaTime)
-    todayStartKST.setHours(0, 0, 0, 0)
-    const todayEndKST = new Date(koreaTime)
-    todayEndKST.setHours(23, 59, 59, 999)
-    const todayStart = new Date(todayStartKST.toISOString())
-    const todayEnd = new Date(todayEndKST.toISOString())
     const dayNames = ['일', '월', '화', '수', '목', '금', '토']
     const todayDayName = dayNames[koreaTime.getDay()]
 
@@ -326,12 +323,14 @@ export async function GET(request: NextRequest) {
             .lte('created_at', todayEnd.toISOString())
           let storagePhotosArray: any[] = []
           try {
-            // 먼저 product_photos 테이블이 존재하는지 확인
+            // 당일 보관 사진만 (카드 썸네일)
             const { data: recentStoragePhotosData, error: storageError } = await productPhotosClient
               .from('product_photos')
               .select('id, photo_urls, created_at')
               .eq('store_id', store.id)
               .eq('type', 'storage')
+              .gte('created_at', todayStart.toISOString())
+              .lte('created_at', todayEnd.toISOString())
               .order('created_at', { ascending: false })
               .limit(1)
 

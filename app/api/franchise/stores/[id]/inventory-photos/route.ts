@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient, getServerUser } from '@/lib/supabase/server'
 import { createClient } from '@supabase/supabase-js'
+import { getTodayDateKST } from '@/lib/utils/date'
 
 export async function GET(
   request: NextRequest,
@@ -25,8 +26,19 @@ export async function GET(
       return NextResponse.json({ error: 'Franchise information not found' }, { status: 403 })
     }
 
-    // 매장이 사용자의 프렌차이즈에 속하는지 확인
-    const { data: store, error: storeError } = await supabase
+    // 서비스 역할 클라이언트 (있으면 매장 조회·제품사진 RLS 우회)
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+    const adminSupabase =
+      serviceRoleKey && supabaseUrl
+        ? createClient(supabaseUrl, serviceRoleKey, {
+            auth: { autoRefreshToken: false, persistSession: false },
+          })
+        : null
+
+    // 매장 존재·소속 확인 (RLS 우회: 서비스 역할로 조회 후 franchise_id 검증)
+    const storeClient = adminSupabase || supabase
+    const { data: store, error: storeError } = await storeClient
       .from('stores')
       .select('id, franchise_id, company_id')
       .eq('id', params.id)
@@ -36,31 +48,20 @@ export async function GET(
       return NextResponse.json({ error: 'Store not found' }, { status: 404 })
     }
 
-    // RLS 정책 문제로 인해 서비스 역할 키 사용
-    const adminSupabase = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!,
-      {
-        auth: {
-          autoRefreshToken: false,
-          persistSession: false
-        }
-      }
-    )
+    const productPhotosClient = adminSupabase || supabase
 
-    // 오늘 날짜 범위
-    const today = new Date()
-    today.setHours(0, 0, 0, 0)
-    const todayEnd = new Date()
-    todayEnd.setHours(23, 59, 59, 999)
+    // 오늘 날짜 범위 (한국 시간 기준)
+    const todayDateKST = getTodayDateKST()
+    const todayStart = new Date(`${todayDateKST}T00:00:00+09:00`)
+    const todayEnd = new Date(`${todayDateKST}T23:59:59.999+09:00`)
 
     // 당일 제품 입고 사진 (type = 'receipt')
-    const { data: todayReceiptPhotos, error: receiptError } = await adminSupabase
+    const { data: todayReceiptPhotos, error: receiptError } = await productPhotosClient
       .from('product_photos')
       .select('id, photo_urls, description, created_at')
       .eq('store_id', params.id)
       .eq('type', 'receipt')
-      .gte('created_at', today.toISOString())
+      .gte('created_at', todayStart.toISOString())
       .lte('created_at', todayEnd.toISOString())
       .order('created_at', { ascending: false })
 
@@ -68,12 +69,14 @@ export async function GET(
       console.error('Error fetching receipt photos:', receiptError)
     }
 
-    // 최근 보관 사진 (type = 'storage')
-    const { data: storagePhotos, error: storageError } = await adminSupabase
+    // 당일 보관 사진만 (type = 'storage')
+    const { data: storagePhotos, error: storageError } = await productPhotosClient
       .from('product_photos')
       .select('id, photo_urls, description, created_at')
       .eq('store_id', params.id)
       .eq('type', 'storage')
+      .gte('created_at', todayStart.toISOString())
+      .lte('created_at', todayEnd.toISOString())
       .order('created_at', { ascending: false })
       .limit(10)
 

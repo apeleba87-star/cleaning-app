@@ -138,6 +138,7 @@ export default function FranchiseStoresStatusPage() {
   }>>(new Map())
   const [loadingAllNotifications, setLoadingAllNotifications] = useState(false)
   const [inventoryPhotos, setInventoryPhotos] = useState<{ product_inflow: InventoryPhoto[]; storage: InventoryPhoto[] }>({ product_inflow: [], storage: [] })
+  const [loadingInventoryPhotos, setLoadingInventoryPhotos] = useState(false)
   const [problemReports, setProblemReports] = useState<{ store_problems: ProblemReport[]; vending_problems: ProblemReport[] }>({ store_problems: [], vending_problems: [] })
   const [lostItems, setLostItems] = useState<LostItem[]>([])
   const [requests, setRequests] = useState<{ received: Request[]; in_progress: Request[]; completed: Request[]; rejected: Request[] }>({ received: [], in_progress: [], completed: [], rejected: [] })
@@ -541,16 +542,26 @@ export default function FranchiseStoresStatusPage() {
 
   const handleOpenInventoryModal = async (store: StoreStatus) => {
     setSelectedStore(store)
+    setInventoryPhotos({ product_inflow: [], storage: [] })
+    setLoadingInventoryPhotos(true)
     setShowInventoryModal(true)
 
     try {
-      const response = await fetch(`/api/franchise/stores/${store.store_id}/inventory-photos`)
+      const response = await fetch(`/api/franchise/stores/${store.store_id}/inventory-photos?t=${Date.now()}`, {
+        cache: 'no-store',
+        headers: { 'Cache-Control': 'no-cache' },
+      })
       const data = await response.json()
-      if (response.ok) {
-        setInventoryPhotos(data.data || { product_inflow: [], storage: [] })
+      if (response.ok && data.data) {
+        setInventoryPhotos(data.data)
+      } else {
+        setInventoryPhotos({ product_inflow: [], storage: [] })
       }
     } catch (error) {
       console.error('Error loading inventory photos:', error)
+      setInventoryPhotos({ product_inflow: [], storage: [] })
+    } finally {
+      setLoadingInventoryPhotos(false)
     }
   }
 
@@ -2766,53 +2777,62 @@ export default function FranchiseStoresStatusPage() {
             </div>
 
             <div className="space-y-6">
-              {/* 오늘 제품 입고 */}
-              <div>
-                <h3 className="text-lg font-medium mb-3">오늘 제품 입고</h3>
-                {inventoryPhotos.product_inflow.length === 0 ? (
-                  <p className="text-gray-500">제품 입고 사진이 없습니다.</p>
-                ) : (
-                  <div className="grid grid-cols-2 gap-4">
-                    {inventoryPhotos.product_inflow.map((photo) => (
-                      <div key={photo.id} className="border rounded-lg overflow-hidden">
-                        <img
-                          src={photo.photo_url}
-                          alt={photo.photo_type}
-                          className="w-full h-48 object-cover cursor-pointer"
-                          onClick={() => setSelectedImage(photo.photo_url)}
-                        />
-                        <div className="p-2 text-sm text-gray-600">
-                          제품 입고
-                        </div>
+              {loadingInventoryPhotos ? (
+                <div className="py-8 flex flex-col items-center justify-center gap-3 text-gray-500">
+                  <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+                  <p>제품 입고 및 보관 사진을 불러오는 중입니다.</p>
+                </div>
+              ) : (
+                <>
+                  {/* 오늘 제품 입고 */}
+                  <div>
+                    <h3 className="text-lg font-medium mb-3">오늘 제품 입고</h3>
+                    {inventoryPhotos.product_inflow.length === 0 ? (
+                      <p className="text-gray-500">제품 입고 사진이 없습니다.</p>
+                    ) : (
+                      <div className="grid grid-cols-2 gap-4">
+                        {inventoryPhotos.product_inflow.map((photo) => (
+                          <div key={photo.id} className="border rounded-lg overflow-hidden">
+                            <img
+                              src={photo.photo_url}
+                              alt={photo.photo_type}
+                              className="w-full h-48 object-cover cursor-pointer"
+                              onClick={() => setSelectedImage(photo.photo_url)}
+                            />
+                            <div className="p-2 text-sm text-gray-600">
+                              제품 입고
+                            </div>
+                          </div>
+                        ))}
                       </div>
-                    ))}
+                    )}
                   </div>
-                )}
-              </div>
 
-              {/* 보관 사진 */}
-              <div>
-                <h3 className="text-lg font-medium mb-3">보관 사진</h3>
-                {inventoryPhotos.storage.length === 0 ? (
-                  <p className="text-gray-500">보관 사진이 없습니다.</p>
-                ) : (
-                  <div className="grid grid-cols-2 gap-4">
-                    {inventoryPhotos.storage.map((photo) => (
-                      <div key={photo.id} className="border rounded-lg overflow-hidden">
-                        <img
-                          src={photo.photo_url}
-                          alt={photo.photo_type}
-                          className="w-full h-48 object-cover cursor-pointer"
-                          onClick={() => setSelectedImage(photo.photo_url)}
-                        />
-                        <div className="p-2 text-sm text-gray-600">
-                          보관 사진
-                        </div>
+                  {/* 보관 사진 */}
+                  <div>
+                    <h3 className="text-lg font-medium mb-3">보관 사진</h3>
+                    {inventoryPhotos.storage.length === 0 ? (
+                      <p className="text-gray-500">보관 사진이 없습니다.</p>
+                    ) : (
+                      <div className="grid grid-cols-2 gap-4">
+                        {inventoryPhotos.storage.map((photo) => (
+                          <div key={photo.id} className="border rounded-lg overflow-hidden">
+                            <img
+                              src={photo.photo_url}
+                              alt={photo.photo_type}
+                              className="w-full h-48 object-cover cursor-pointer"
+                              onClick={() => setSelectedImage(photo.photo_url)}
+                            />
+                            <div className="p-2 text-sm text-gray-600">
+                              보관 사진
+                            </div>
+                          </div>
+                        ))}
                       </div>
-                    ))}
+                    )}
                   </div>
-                )}
-              </div>
+                </>
+              )}
             </div>
           </div>
         </div>
