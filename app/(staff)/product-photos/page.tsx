@@ -42,13 +42,21 @@ export default function ProductPhotosPage() {
   const [cameraError, setCameraError] = useState<string | null>(null)
   const [isCapturing, setIsCapturing] = useState(false)
 
-  const { storeId: attendanceStoreId, isClockedIn, loading: attendanceLoading } = useTodayAttendance()
+  const { storeId: attendanceStoreId, activeStoreIds, isClockedIn, loading: attendanceLoading, refresh: refreshAttendance } = useTodayAttendance()
 
+  // 페이지 마운트 시 출근 정보 새로고침 (다른 화면에서 출근 후 왔을 때 반영)
   useEffect(() => {
-    if (!attendanceLoading && attendanceStoreId && isClockedIn) {
-      setStoreId(attendanceStoreId)
+    refreshAttendance()
+  }, [refreshAttendance])
+
+  // 출근한 매장 ID: 단일 storeId 우선, 없으면 활성 출근 매장 목록의 첫 번째
+  const effectiveStoreId = attendanceStoreId || (activeStoreIds && activeStoreIds[0]) || storeId
+  useEffect(() => {
+    if (!attendanceLoading && isClockedIn) {
+      const id = attendanceStoreId || (activeStoreIds && activeStoreIds[0])
+      if (id) setStoreId(id)
     }
-  }, [attendanceLoading, attendanceStoreId, isClockedIn])
+  }, [attendanceLoading, attendanceStoreId, activeStoreIds, isClockedIn])
 
   // 카메라 모달이 닫힐 때 스트림 정리
   useEffect(() => {
@@ -64,8 +72,8 @@ export default function ProductPhotosPage() {
   }, [showCamera, cameraStream])
 
   const handleCameraClick = (photoType: PhotoSubType) => {
-    if (!isClockedIn) {
-      alert('출근한 매장의 제품 입고 및 보관 사진만 등록할 수 있습니다.')
+    if (!isClockedIn || !effectiveStoreId) {
+      alert('출근한 매장의 제품 입고 및 보관 사진만 등록할 수 있습니다. 관리시작 후 출근 정보를 불러오는 중이라면 잠시 후 다시 시도해주세요.')
       return
     }
     setCameraPhotoType(photoType)
@@ -75,8 +83,8 @@ export default function ProductPhotosPage() {
   }
 
   const handleGalleryClick = (photoType: PhotoSubType) => {
-    if (!isClockedIn) {
-      alert('출근한 매장의 제품 입고 및 보관 사진만 등록할 수 있습니다.')
+    if (!isClockedIn || !effectiveStoreId) {
+      alert('출근한 매장의 제품 입고 및 보관 사진만 등록할 수 있습니다. 관리시작 후 출근 정보를 불러오는 중이라면 잠시 후 다시 시도해주세요.')
       return
     }
     setActivePhotoType(photoType)
@@ -319,16 +327,16 @@ export default function ProductPhotosPage() {
   }
 
   const handleSubmit = async () => {
-    // 출근 중이면 출근한 매장 ID를 강제로 사용
-    const finalStoreId = (isClockedIn && attendanceStoreId) ? attendanceStoreId : storeId
+    // 출근 중이면 출근한 매장 ID 사용 (단일 또는 activeStoreIds[0])
+    const finalStoreId = isClockedIn ? effectiveStoreId : storeId
 
     if (!finalStoreId) {
-      alert('매장을 선택해주세요.')
+      alert('매장을 선택해주세요. 출근한 매장이 없으면 관리시작 후 다시 시도해주세요.')
       return
     }
 
     if (!isClockedIn) {
-      alert('출근한 매장이 없습니다.')
+      alert('출근한 매장이 없습니다. 관리시작/종료에서 관리시작을 먼저 진행해주세요.')
       return
     }
 
@@ -592,14 +600,14 @@ export default function ProductPhotosPage() {
                   <div className="flex gap-2 mb-3">
                     <button
                       onClick={() => handleCameraClick('product')}
-                      disabled={!isClockedIn || uploading || receiptProductPhotos.length >= 10}
+                      disabled={!isClockedIn || !effectiveStoreId || uploading || receiptProductPhotos.length >= 10}
                       className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
                     >
                       📷 제품 즉시 촬영
                     </button>
                     <button
                       onClick={() => handleGalleryClick('product')}
-                      disabled={!isClockedIn || uploading || receiptProductPhotos.length >= 10}
+                      disabled={!isClockedIn || !effectiveStoreId || uploading || receiptProductPhotos.length >= 10}
                       className="flex-1 px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
                     >
                       🖼️ 제품 갤러리
@@ -645,14 +653,14 @@ export default function ProductPhotosPage() {
                   <div className="flex gap-2 mb-3">
                     <button
                       onClick={() => handleCameraClick('order_sheet')}
-                      disabled={!isClockedIn || uploading || receiptOrderSheetPhotos.length >= 10}
+                      disabled={!isClockedIn || !effectiveStoreId || uploading || receiptOrderSheetPhotos.length >= 10}
                       className="flex-1 px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
                     >
                       📷 발주서 즉시 촬영
                     </button>
                     <button
                       onClick={() => handleGalleryClick('order_sheet')}
-                      disabled={!isClockedIn || uploading || receiptOrderSheetPhotos.length >= 10}
+                      disabled={!isClockedIn || !effectiveStoreId || uploading || receiptOrderSheetPhotos.length >= 10}
                       className="flex-1 px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
                     >
                       🖼️ 발주서 갤러리
@@ -719,14 +727,14 @@ export default function ProductPhotosPage() {
                   <div className="flex gap-2 mb-3">
                     <button
                       onClick={() => handleCameraClick('product')}
-                      disabled={uploading || currentPhotos.length >= 10}
+                      disabled={!isClockedIn || !effectiveStoreId || uploading || currentPhotos.length >= 10}
                       className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
                     >
                       📷 즉시 촬영
                     </button>
                     <button
                       onClick={() => handleGalleryClick('product')}
-                      disabled={uploading || currentPhotos.length >= 10}
+                      disabled={!isClockedIn || !effectiveStoreId || uploading || currentPhotos.length >= 10}
                       className="flex-1 px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
                     >
                       🖼️ 갤러리
@@ -805,7 +813,7 @@ export default function ProductPhotosPage() {
             )}
             <button
               onClick={handleSubmit}
-              disabled={!isClockedIn || submitting || (activeTab === 'receipt' ? !hasReceiptPhotos : currentPhotos.length === 0)}
+              disabled={!isClockedIn || !effectiveStoreId || submitting || (activeTab === 'receipt' ? !hasReceiptPhotos : currentPhotos.length === 0)}
               className="w-full px-4 py-3 bg-blue-600 text-white rounded-md font-medium hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
             >
               {submitting ? '등록 중...' : '등록하기'}
