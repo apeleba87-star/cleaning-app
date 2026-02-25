@@ -109,6 +109,17 @@ export default function TodayTasksWrapperClient({ companyId }: { companyId: stri
       return
     }
 
+    // 낙관적 업데이트: 즉시 해당 매장을 결제완료로 표시
+    if (financialData?.today_payment_stores) {
+      const updatedStores = financialData.today_payment_stores.map((store) =>
+        store.id === storeId ? { ...store, is_paid: true, is_auto_payment: false } : store
+      )
+      setFinancialData({
+        ...financialData,
+        today_payment_stores: updatedStores,
+      })
+    }
+
     try {
       // 해당 매장의 미수금 매출 조회
       const response = await fetch(`/api/business/revenues?store_id=${storeId}`)
@@ -117,58 +128,70 @@ export default function TodayTasksWrapperClient({ companyId }: { companyId: stri
       }
 
       const result = await response.json()
-      if (result.success) {
-        // 미수금이 있는 매출만 필터링
-        const unpaidRevenues = (result.data || []).filter(
-          (r: any) => r.status === 'unpaid' || r.status === 'partial'
-        )
+      if (!result.success) {
+        throw new Error('매출 정보를 불러올 수 없습니다.')
+      }
 
-        if (unpaidRevenues.length === 0) {
-          alert('완납할 미수금이 없습니다.')
-          return
-        }
+      // 미수금이 있는 매출만 필터링
+      const unpaidRevenues = (result.data || []).filter(
+        (r: any) => r.status === 'unpaid' || r.status === 'partial'
+      )
 
-        // 각 매출에 대해 수금 등록
-        for (const revenue of unpaidRevenues) {
-          const remainingAmount = revenue.amount - (revenue.received_amount || 0)
-          if (remainingAmount > 0) {
-            const receiptResponse = await fetch('/api/business/receipts', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                revenue_id: revenue.id,
-                received_at: new Date().toISOString(),
-                amount: remainingAmount,
-                memo: '전체 완납',
-              }),
+      if (unpaidRevenues.length === 0) {
+        throw new Error('완납할 미수금이 없습니다.')
+      }
+
+      // 각 매출에 대해 수금 등록
+      for (const revenue of unpaidRevenues) {
+        const remainingAmount = revenue.amount - (revenue.received_amount || 0)
+        if (remainingAmount > 0) {
+          const receiptResponse = await fetch('/api/business/receipts', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              revenue_id: revenue.id,
+              received_at: new Date().toISOString(),
+              amount: remainingAmount,
+              memo: '전체 완납',
+            }),
+          })
+
+          if (!receiptResponse.ok) {
+            const errorData = await receiptResponse.json().catch(() => ({}))
+            console.error('[TodayTasksWrapperClient] Receipt creation failed:', {
+              revenue_id: revenue.id,
+              status: receiptResponse.status,
+              error: errorData,
             })
+            throw new Error(errorData.error || `수금 등록 중 오류가 발생했습니다. (${receiptResponse.status})`)
+          }
 
-            if (!receiptResponse.ok) {
-              const errorData = await receiptResponse.json().catch(() => ({}))
-              console.error('[TodayTasksWrapperClient] Receipt creation failed:', {
-                revenue_id: revenue.id,
-                status: receiptResponse.status,
-                error: errorData,
-              })
-              throw new Error(errorData.error || `수금 등록 중 오류가 발생했습니다. (${receiptResponse.status})`)
-            }
-
-            const receiptResult = await receiptResponse.json()
-            if (!receiptResult.success) {
-              console.error('[TodayTasksWrapperClient] Receipt creation failed:', {
-                revenue_id: revenue.id,
-                error: receiptResult.error,
-              })
-              throw new Error(receiptResult.error || '수금 등록 실패')
-            }
+          const receiptResult = await receiptResponse.json()
+          if (!receiptResult.success) {
+            console.error('[TodayTasksWrapperClient] Receipt creation failed:', {
+              revenue_id: revenue.id,
+              error: receiptResult.error,
+            })
+            throw new Error(receiptResult.error || '수금 등록 실패')
           }
         }
-
-        alert('전체 완납이 등록되었습니다.')
-        loadFinancialData()
       }
+
+      showToast('전체 완납이 등록되었습니다.', 'success')
+      loadFinancialData().catch((err) => console.error('Failed to sync financial data:', err))
     } catch (err: any) {
-      alert(err.message || '전체 완납 처리 중 오류가 발생했습니다.')
+      // 실패 시 롤백
+      if (financialData?.today_payment_stores) {
+        const rolledBackStores = financialData.today_payment_stores.map((store) =>
+          store.id === storeId ? { ...store, is_paid: false } : store
+        )
+        setFinancialData({
+          ...financialData,
+          today_payment_stores: rolledBackStores,
+        })
+      }
+      const message = err.message || '전체 완납 처리 중 오류가 발생했습니다.'
+      showToast(message, 'error')
     }
   }
 
