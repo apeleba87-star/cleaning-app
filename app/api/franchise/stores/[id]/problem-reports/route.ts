@@ -63,26 +63,23 @@ export async function GET(
       )
     }
 
-    // category를 우선적으로 확인하고, 없으면 title을 확인
+    // status 목록 API와 동일한 분류 규칙 적용 (카드 건수와 모달 목록 일치)
     const storeProblems: any[] = []
     const vendingProblems: any[] = []
 
     allReports?.forEach((report) => {
-      const category = report.category?.toLowerCase() || ''
-      const title = (report.title || '').toLowerCase()
+      const category = (report.category || '').toString().toLowerCase().trim()
+      const title = (report.title || '').toString().toLowerCase()
 
-      // category를 먼저 확인 (가장 정확함)
       const isStoreProblemByCategory =
         category === 'store_problem' ||
         category === 'store-problem' ||
         category === 'storeproblem'
-
       const isVendingProblemByCategory =
         category === 'vending_machine' ||
         category === 'vending-machine' ||
         category === 'vendingmachine'
 
-      // category가 명확하면 category 기준으로 분류
       if (isStoreProblemByCategory) {
         storeProblems.push(report)
         return
@@ -92,16 +89,26 @@ export async function GET(
         return
       }
 
-      // category가 'other'이거나 없을 때만 title로 판단
-      if (title.includes('제품 걸림') || title.includes('수량 오류') || 
-          (title.includes('자판기') && (title.includes('제품') || title.includes('수량')))) {
+      // category가 없거나 'other' 등일 때: status API와 동일하게 title 기준
+      // "매장 문제" 등 매장 문제 제목을 먼저 확인 (목록 카드와 동일)
+      const storeTitleMatch =
+        title.includes('매장 문제') ||
+        title.includes('제품 관련') ||
+        title.includes('무인택배함') ||
+        title.includes('매장 시설') ||
+        title.includes('자판기 고장') ||
+        title.includes('자판기 오류')
+      const vendingTitleMatch =
+        title.includes('제품 걸림') ||
+        title.includes('수량 오류') ||
+        (title.includes('자판기') && (title.includes('제품') || title.includes('수량')))
+
+      if (vendingTitleMatch && !title.includes('자판기 고장') && !title.includes('자판기 오류')) {
         vendingProblems.push(report)
-      } else if (title.includes('자판기 고장') || title.includes('자판기 오류')) {
+      } else if (storeTitleMatch || !title.includes('자판기')) {
         storeProblems.push(report)
-      } else if (title.includes('자판기') || title.includes('vending')) {
-        vendingProblems.push(report)
       } else {
-        storeProblems.push(report)
+        vendingProblems.push(report)
       }
     })
 
