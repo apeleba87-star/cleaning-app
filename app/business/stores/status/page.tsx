@@ -1920,7 +1920,7 @@ export default function BusinessStoresStatusPage() {
         setCompletionDescription('')
         setCompletionPhotos([])
         
-        // 카운트만 부분 업데이트 (전체 새로고침 없음, 프랜차이즈와 동일)
+        // 카운트만 부분 업데이트 (전체 새로고침 없음)
         if (selectedStore) {
           setStoreStatuses((prev) => {
             return prev.map((s) => {
@@ -1938,10 +1938,24 @@ export default function BusinessStoresStatusPage() {
               return s
             })
           })
-          // 모달 데이터만 새로고침 (약간의 지연을 두어 DB 반영 시간 확보)
-          setTimeout(async () => {
-            await handleOpenProblemModal(selectedStore)
-          }, 300)
+          // 모달은 다시 불러오지 않고, 해당 항목만 낙관적 업데이트 (로딩 스피너 없음)
+          const completedAt = new Date().toISOString()
+          setProblemReports((prev) => ({
+            ...prev,
+            store_problems: (prev.store_problems || []).map((p) => {
+              if (p.id !== problemId) return p
+              const existingDesc = p.description || ''
+              const newDesc = existingDesc
+                ? `${existingDesc}\n\n[처리 완료] ${finalDescription}`
+                : `[처리 완료] ${finalDescription}`
+              return {
+                ...p,
+                status: 'completed' as const,
+                updated_at: completedAt,
+                description: newDesc,
+              }
+            }),
+          }))
         }
         
         showToast('처리 완료되었습니다.', 'success')
