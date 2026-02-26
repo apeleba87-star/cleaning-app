@@ -32,7 +32,8 @@ export async function GET(
       .eq('id', params.id)
       .single()
 
-    if (storeError || !store || store.franchise_id !== userData.franchise_id || store.company_id !== userData.company_id) {
+    // 목록 API와 동일하게 franchise_id만 검증 (같은 프랜차이즈 매장이면 조회 허용)
+    if (storeError || !store || store.franchise_id !== userData.franchise_id) {
       return NextResponse.json({ error: 'Store not found' }, { status: 404 })
     }
 
