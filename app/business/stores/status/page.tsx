@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import Link from 'next/link'
 import { uploadPhoto } from '@/lib/supabase/upload'
 import { getTodayDateKST } from '@/lib/utils/date'
+import { useToast } from '@/components/Toast'
 
 interface StoreStatus {
   store_id: string
@@ -315,6 +316,7 @@ export default function BusinessStoresStatusPage() {
     new Date().toLocaleString('ko-KR', { dateStyle: 'long', timeStyle: 'medium' })
   )
   const intervalRef = useRef<NodeJS.Timeout | null>(null)
+  const { showToast, ToastContainer } = useToast()
 
   // 시간 체크 함수 (8시 ~ 23시)
   const isWithinRefreshHours = () => {
@@ -1918,24 +1920,38 @@ export default function BusinessStoresStatusPage() {
         setCompletionDescription('')
         setCompletionPhotos([])
         
-        // 전체 상태 갱신 먼저 (매장 상태 카드 업데이트)
-        await loadStoreStatuses()
-        
-        // 모달 데이터 새로고침 (약간의 지연을 두어 DB 반영 시간 확보)
+        // 카운트만 부분 업데이트 (전체 새로고침 없음, 프랜차이즈와 동일)
         if (selectedStore) {
+          setStoreStatuses((prev) => {
+            return prev.map((s) => {
+              if (s.store_id === selectedStore.store_id) {
+                return {
+                  ...s,
+                  unprocessed_store_problems: Math.max(0, (s.unprocessed_store_problems || 0) - 1),
+                  completed_store_problems: (s.completed_store_problems || 0) + 1,
+                  store_problem_count: Math.max(0, (s.store_problem_count || 0) - 1),
+                  has_problem: (s.unprocessed_store_problems || 0) - 1 > 0 ||
+                             (s.unconfirmed_vending_problems || 0) > 0 ||
+                             (s.unconfirmed_lost_items || 0) > 0
+                }
+              }
+              return s
+            })
+          })
+          // 모달 데이터만 새로고침 (약간의 지연을 두어 DB 반영 시간 확보)
           setTimeout(async () => {
             await handleOpenProblemModal(selectedStore)
-          }, 500)
+          }, 300)
         }
         
-        alert('처리 완료되었습니다.')
+        showToast('처리 완료되었습니다.', 'success')
       } else {
         console.error('Failed to complete problem report:', data)
-        alert(data.error || '처리 완료 중 오류가 발생했습니다.')
+        showToast(data.error || '처리 완료 중 오류가 발생했습니다.', 'error')
       }
     } catch (error) {
       console.error('Error completing problem:', error)
-      alert('처리 완료 중 오류가 발생했습니다.')
+      showToast('처리 완료 중 오류가 발생했습니다.', 'error')
     }
   }
 
@@ -2286,6 +2302,8 @@ export default function BusinessStoresStatusPage() {
   }
 
   return (
+    <>
+      <ToastContainer />
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6 bg-gray-50 min-h-screen">
       {/* 헤더 */}
       <div className="mb-6">
@@ -5804,5 +5822,6 @@ export default function BusinessStoresStatusPage() {
         </div>
       )}
     </div>
+    </>
   )
 }
