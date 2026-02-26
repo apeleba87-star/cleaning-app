@@ -283,6 +283,7 @@ export default function FranchiseStoresStatusPage() {
   })
   const [viewingCompletedRequestId, setViewingCompletedRequestId] = useState<string | null>(null)
   const [showCompletionForm, setShowCompletionForm] = useState<string | null>(null)
+  const [confirmingLostItemId, setConfirmingLostItemId] = useState<string | null>(null)
   const [completionDescription, setCompletionDescription] = useState('')
   const [completionPhotos, setCompletionPhotos] = useState<string[]>([])
   // 전체 문제발생 모달용 처리 완료 폼 상태 (각 문제 ID별로 관리)
@@ -1433,6 +1434,8 @@ export default function FranchiseStoresStatusPage() {
   }
 
   const handleConfirmLostItem = async (lostItemId: string) => {
+    setConfirmingLostItemId(lostItemId)
+    await new Promise<void>((r) => setTimeout(r, 0))
     console.log('=== handleConfirmLostItem called ===', lostItemId)
     try {
       console.log('Confirming lost item:', lostItemId)
@@ -1548,6 +1551,8 @@ export default function FranchiseStoresStatusPage() {
     } catch (error) {
       console.error('Error confirming lost item:', error)
       alert('확인 처리 중 오류가 발생했습니다.')
+    } finally {
+      setConfirmingLostItemId(null)
     }
   }
 
@@ -3405,9 +3410,17 @@ export default function FranchiseStoresStatusPage() {
                                 console.log('Confirm button clicked for item:', item.id)
                                 handleConfirmLostItem(item.id)
                               }}
-                              className="ml-4 px-4 py-2 bg-green-600 text-white text-sm font-semibold rounded-md hover:bg-green-700 transition-colors shadow-sm"
+                              disabled={confirmingLostItemId === item.id}
+                              className="ml-4 px-4 py-2 bg-green-600 text-white text-sm font-semibold rounded-md hover:bg-green-700 transition-colors shadow-sm disabled:opacity-70 disabled:cursor-not-allowed flex items-center gap-2 min-w-[80px] justify-center"
                             >
-                              확인
+                              {confirmingLostItemId === item.id ? (
+                                <>
+                                  <span className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent" />
+                                  처리 중...
+                                </>
+                              ) : (
+                                '확인'
+                              )}
                             </button>
                           </div>
                         </div>
@@ -4920,26 +4933,19 @@ export default function FranchiseStoresStatusPage() {
                                         </div>
                                         <button
                                           onClick={async () => {
-                                            // 원본 상태 스냅샷 저장 (롤백용)
+                                            setConfirmingLostItemId(item.id)
+                                            await new Promise<void>((r) => setTimeout(r, 0))
                                             const originalConfirmedIds = new Set(confirmedLostItemIds)
                                             const wasConfirmed = confirmedLostItemIds.has(item.id)
-                                            
-                                            // 낙관적 업데이트: 즉시 UI에서 제거
                                             if (!wasConfirmed) {
                                               setConfirmedLostItemIds(prev => new Set(prev).add(item.id))
                                             }
-                                            
-                                            // 백그라운드에서 API 호출
                                             try {
                                               const response = await fetch(`/api/franchise/lost-items/${item.id}/confirm`, {
                                                 method: 'PATCH',
                                               })
-                                              
                                               const data = await response.json()
-                                              
                                               if (response.ok && data.success) {
-                                                // 성공: 상태 유지 (이미 낙관적 업데이트됨)
-                                                // 카운트만 부분 업데이트 (전체 새로고침 없음)
                                                 setStoreStatuses((prev) => {
                                                   return prev.map((s) => {
                                                     if (s.store_id === store.store_id) {
@@ -4947,36 +4953,38 @@ export default function FranchiseStoresStatusPage() {
                                                         ...s,
                                                         unconfirmed_lost_items: Math.max(0, (s.unconfirmed_lost_items || 0) - 1),
                                                         lost_item_count: Math.max(0, (s.lost_item_count || 0) - 1),
-                                                        has_problem: (s.unprocessed_store_problems || 0) > 0 || 
-                                                                   (s.unconfirmed_vending_problems || 0) > 0 || 
+                                                        has_problem: (s.unprocessed_store_problems || 0) > 0 ||
+                                                                   (s.unconfirmed_vending_problems || 0) > 0 ||
                                                                    (s.unconfirmed_lost_items || 0) - 1 > 0
                                                       }
                                                     }
                                                     return s
                                                   })
                                                 })
-                                                
-                                                // 토스트 메시지 (alert 대신)
                                                 showToast('확인 처리되었습니다.', 'success')
                                               } else {
-                                                // 실패: 롤백
-                                                if (!wasConfirmed) {
-                                                  setConfirmedLostItemIds(originalConfirmedIds)
-                                                }
+                                                if (!wasConfirmed) setConfirmedLostItemIds(originalConfirmedIds)
                                                 showToast(data.error || '확인 처리 중 오류가 발생했습니다.', 'error')
                                               }
                                             } catch (error) {
-                                              // 에러 발생: 롤백
-                                              if (!wasConfirmed) {
-                                                setConfirmedLostItemIds(originalConfirmedIds)
-                                              }
+                                              if (!wasConfirmed) setConfirmedLostItemIds(originalConfirmedIds)
                                               console.error('Error confirming lost item:', error)
                                               showToast('확인 처리 중 오류가 발생했습니다.', 'error')
+                                            } finally {
+                                              setConfirmingLostItemId(null)
                                             }
                                           }}
-                                          className="ml-4 px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-md hover:bg-blue-700"
+                                          disabled={confirmingLostItemId === item.id}
+                                          className="ml-4 px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-md hover:bg-blue-700 disabled:opacity-70 disabled:cursor-not-allowed flex items-center gap-2 min-w-[80px] justify-center"
                                         >
-                                          확인
+                                          {confirmingLostItemId === item.id ? (
+                                            <>
+                                              <span className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent" />
+                                              처리 중...
+                                            </>
+                                          ) : (
+                                            '확인'
+                                          )}
                                         </button>
                                       </div>
                                     </div>
@@ -5440,12 +5448,13 @@ export default function FranchiseStoresStatusPage() {
                                         </div>
                                         <button
                                           onClick={async () => {
+                                            setConfirmingLostItemId(item.id)
+                                            await new Promise<void>((r) => setTimeout(r, 0))
                                             try {
                                               const response = await fetch(`/api/franchise/lost-items/${item.id}/confirm`, {
                                                 method: 'PATCH',
                                               })
                                               if (response.ok) {
-                                                // 데이터 다시 로드
                                                 const timestamp = new Date().getTime()
                                                 const [requestResponse, problemResponse, lostResponse] = await Promise.all([
                                                   fetch(`/api/franchise/stores/${store.store_id}/requests?t=${timestamp}`, {
@@ -5477,11 +5486,21 @@ export default function FranchiseStoresStatusPage() {
                                               }
                                             } catch (error) {
                                               console.error('Error confirming lost item:', error)
+                                            } finally {
+                                              setConfirmingLostItemId(null)
                                             }
                                           }}
-                                          className="ml-4 px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-md hover:bg-blue-700"
+                                          disabled={confirmingLostItemId === item.id}
+                                          className="ml-4 px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-md hover:bg-blue-700 disabled:opacity-70 disabled:cursor-not-allowed flex items-center gap-2 min-w-[80px] justify-center"
                                         >
-                                          확인
+                                          {confirmingLostItemId === item.id ? (
+                                            <>
+                                              <span className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent" />
+                                              처리 중...
+                                            </>
+                                          ) : (
+                                            '확인'
+                                          )}
                                         </button>
                                       </div>
                                     </div>

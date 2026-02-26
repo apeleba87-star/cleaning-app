@@ -292,6 +292,7 @@ export default function BusinessStoresStatusPage() {
   const [completionDescription, setCompletionDescription] = useState('')
   const [completionPhotos, setCompletionPhotos] = useState<string[]>([])
   const [completingProblemId, setCompletingProblemId] = useState<string | null>(null)
+  const [confirmingLostItemId, setConfirmingLostItemId] = useState<string | null>(null)
   const [showRequestCreateModal, setShowRequestCreateModal] = useState(false)
   const [broadcastMode, setBroadcastMode] = useState(false)
   const [editingRequestId, setEditingRequestId] = useState<string | null>(null)
@@ -1650,6 +1651,8 @@ export default function BusinessStoresStatusPage() {
   }
 
   const handleConfirmLostItem = async (lostItemId: string, storeId?: string) => {
+    setConfirmingLostItemId(lostItemId)
+    await new Promise<void>((r) => setTimeout(r, 0))
     // Optimistic Update: 즉시 로컬 상태 업데이트
     // allNotificationsData에서 찾기 (알림 모달용)
     const lostItemToConfirmNotification = storeId
@@ -1872,6 +1875,8 @@ export default function BusinessStoresStatusPage() {
       }
       console.error('Error confirming lost item:', error)
       alert('확인 처리 중 오류가 발생했습니다.')
+    } finally {
+      setConfirmingLostItemId(null)
     }
   }
 
@@ -3808,12 +3813,19 @@ export default function BusinessStoresStatusPage() {
                               onClick={(e) => {
                                 e.preventDefault()
                                 e.stopPropagation()
-                                console.log('Confirm button clicked for item:', item.id)
                                 handleConfirmLostItem(item.id, selectedStore?.store_id)
                               }}
-                              className="ml-4 px-4 py-2 bg-green-600 text-white text-sm font-semibold rounded-md hover:bg-green-700 transition-colors shadow-sm"
+                              disabled={confirmingLostItemId === item.id}
+                              className="ml-4 px-4 py-2 bg-green-600 text-white text-sm font-semibold rounded-md hover:bg-green-700 transition-colors shadow-sm disabled:opacity-70 disabled:cursor-not-allowed flex items-center gap-2 min-w-[80px] justify-center"
                             >
-                              확인
+                              {confirmingLostItemId === item.id ? (
+                                <>
+                                  <span className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent" />
+                                  처리 중...
+                                </>
+                              ) : (
+                                '확인'
+                              )}
                             </button>
                           </div>
                         </div>
@@ -5049,9 +5061,17 @@ export default function BusinessStoresStatusPage() {
                                         </div>
                                         <button
                                           onClick={() => handleConfirmLostItem(item.id, store.store_id)}
-                                          className="ml-4 px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-md hover:bg-blue-700"
+                                          disabled={confirmingLostItemId === item.id}
+                                          className="ml-4 px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-md hover:bg-blue-700 disabled:opacity-70 disabled:cursor-not-allowed flex items-center gap-2 min-w-[80px] justify-center"
                                         >
-                                          확인
+                                          {confirmingLostItemId === item.id ? (
+                                            <>
+                                              <span className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent" />
+                                              처리 중...
+                                            </>
+                                          ) : (
+                                            '확인'
+                                          )}
                                         </button>
                                       </div>
                                     </div>
@@ -5420,9 +5440,17 @@ export default function BusinessStoresStatusPage() {
                                         </div>
                                         <button
                                           onClick={() => handleConfirmLostItem(item.id, store.store_id)}
-                                          className="ml-4 px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-md hover:bg-blue-700"
+                                          disabled={confirmingLostItemId === item.id}
+                                          className="ml-4 px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-md hover:bg-blue-700 disabled:opacity-70 disabled:cursor-not-allowed flex items-center gap-2 min-w-[80px] justify-center"
                                         >
-                                          확인
+                                          {confirmingLostItemId === item.id ? (
+                                            <>
+                                              <span className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent" />
+                                              처리 중...
+                                            </>
+                                          ) : (
+                                            '확인'
+                                          )}
                                         </button>
                                       </div>
                                     </div>
