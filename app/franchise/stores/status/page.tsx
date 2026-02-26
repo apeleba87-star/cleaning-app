@@ -1435,7 +1435,9 @@ export default function FranchiseStoresStatusPage() {
 
   const handleConfirmLostItem = async (lostItemId: string) => {
     setConfirmingLostItemId(lostItemId)
-    await new Promise<void>((r) => setTimeout(r, 0))
+    await new Promise<void>((resolve) => {
+      requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
+    })
     console.log('=== handleConfirmLostItem called ===', lostItemId)
     try {
       console.log('Confirming lost item:', lostItemId)
@@ -4934,7 +4936,9 @@ export default function FranchiseStoresStatusPage() {
                                         <button
                                           onClick={async () => {
                                             setConfirmingLostItemId(item.id)
-                                            await new Promise<void>((r) => setTimeout(r, 0))
+                                            await new Promise<void>((resolve) => {
+                                              requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
+                                            })
                                             const originalConfirmedIds = new Set(confirmedLostItemIds)
                                             const wasConfirmed = confirmedLostItemIds.has(item.id)
                                             if (!wasConfirmed) {
@@ -5449,7 +5453,9 @@ export default function FranchiseStoresStatusPage() {
                                         <button
                                           onClick={async () => {
                                             setConfirmingLostItemId(item.id)
-                                            await new Promise<void>((r) => setTimeout(r, 0))
+                                            await new Promise<void>((resolve) => {
+                                              requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
+                                            })
                                             try {
                                               const response = await fetch(`/api/franchise/lost-items/${item.id}/confirm`, {
                                                 method: 'PATCH',

@@ -1652,7 +1652,9 @@ export default function BusinessStoresStatusPage() {
 
   const handleConfirmLostItem = async (lostItemId: string, storeId?: string) => {
     setConfirmingLostItemId(lostItemId)
-    await new Promise<void>((r) => setTimeout(r, 0))
+    await new Promise<void>((resolve) => {
+      requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
+    })
     // Optimistic Update: 즉시 로컬 상태 업데이트
     // allNotificationsData에서 찾기 (알림 모달용)
     const lostItemToConfirmNotification = storeId
