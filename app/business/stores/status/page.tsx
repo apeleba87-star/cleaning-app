@@ -291,6 +291,7 @@ export default function BusinessStoresStatusPage() {
   const [showCompletionForm, setShowCompletionForm] = useState<string | null>(null)
   const [completionDescription, setCompletionDescription] = useState('')
   const [completionPhotos, setCompletionPhotos] = useState<string[]>([])
+  const [completingProblemId, setCompletingProblemId] = useState<string | null>(null)
   const [showRequestCreateModal, setShowRequestCreateModal] = useState(false)
   const [broadcastMode, setBroadcastMode] = useState(false)
   const [editingRequestId, setEditingRequestId] = useState<string | null>(null)
@@ -1875,6 +1876,9 @@ export default function BusinessStoresStatusPage() {
   }
 
   const handleCompleteStoreProblem = async (problemId: string) => {
+    setCompletingProblemId(problemId)
+    // 한 틱 양보해 '처리 중' UI가 먼저 그려지도록 함
+    await new Promise<void>((r) => setTimeout(r, 0))
     try {
       // 사진 파일을 업로드하고 URL 받기
       const photoUrls: string[] = []
@@ -1893,6 +1897,7 @@ export default function BusinessStoresStatusPage() {
             photoUrls.push(url)
           } catch (uploadError) {
             console.error('Photo upload error:', uploadError)
+            setCompletingProblemId(null)
             alert('사진 업로드 중 오류가 발생했습니다.')
             return
           }
@@ -1966,6 +1971,8 @@ export default function BusinessStoresStatusPage() {
     } catch (error) {
       console.error('Error completing problem:', error)
       showToast('처리 완료 중 오류가 발생했습니다.', 'error')
+    } finally {
+      setCompletingProblemId(null)
     }
   }
 
@@ -3413,9 +3420,17 @@ export default function BusinessStoresStatusPage() {
                                 <div className="flex gap-2">
                                   <button
                                     onClick={() => handleCompleteStoreProblem(problem.id)}
-                                    className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+                                    disabled={completingProblemId === problem.id}
+                                    className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-70 disabled:cursor-not-allowed flex items-center gap-2 min-w-[80px] justify-center"
                                   >
-                                    완료
+                                    {completingProblemId === problem.id ? (
+                                      <>
+                                        <span className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent" />
+                                        처리 중...
+                                      </>
+                                    ) : (
+                                      '완료'
+                                    )}
                                   </button>
                                   <button
                                     onClick={() => {
@@ -3423,7 +3438,8 @@ export default function BusinessStoresStatusPage() {
                                       setCompletionDescription('')
                                       setCompletionPhotos([])
                                     }}
-                                    className="px-4 py-2 bg-gray-300 text-gray-700 rounded hover:bg-gray-400"
+                                    disabled={completingProblemId === problem.id}
+                                    className="px-4 py-2 bg-gray-300 text-gray-700 rounded hover:bg-gray-400 disabled:opacity-50 disabled:cursor-not-allowed"
                                   >
                                     취소
                                   </button>
