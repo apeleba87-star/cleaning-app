@@ -235,7 +235,9 @@ export default function AttendancePage() {
         return
       }
       const data = json.data || []
-      setTodayAttendances(data as AttendanceWithStore[])
+      const todayKST = getTodayDateKST()
+      const todayOnly = data.filter((a: AttendanceWithStore) => a.work_date === todayKST)
+      setTodayAttendances(todayOnly as AttendanceWithStore[])
     } catch (err) {
       console.error('Error loading attendance:', err)
       setTodayAttendances([])
