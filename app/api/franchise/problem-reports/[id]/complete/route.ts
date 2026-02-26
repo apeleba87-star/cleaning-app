@@ -16,11 +16,15 @@ export async function PATCH(
     const { description, photo_urls } = body
 
     const supabase = await createServerSupabaseClient()
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+    const dataClient = serviceRoleKey && supabaseUrl
+      ? createClient(supabaseUrl, serviceRoleKey, { auth: { autoRefreshToken: false, persistSession: false } })
+      : supabase
 
-    // franchise_manager의 경우 franchise_id를 별도로 조회
     const { data: userData, error: userDataError } = await supabase
       .from('users')
-      .select('franchise_id, company_id')
+      .select('franchise_id')
       .eq('id', user.id)
       .single()
 
@@ -28,20 +32,8 @@ export async function PATCH(
       return NextResponse.json({ error: 'Franchise information not found' }, { status: 403 })
     }
 
-    // RLS 정책 문제로 인해 서비스 역할 키 사용
-    const adminSupabase = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!,
-      {
-        auth: {
-          autoRefreshToken: false,
-          persistSession: false
-        }
-      }
-    )
-
-    // 문제 보고 조회 (서비스 역할 키 사용)
-    const { data: problemReport, error: fetchError } = await adminSupabase
+    // 문제 보고 조회 (서비스 역할로 RLS 우회)
+    const { data: problemReport, error: fetchError } = await dataClient
       .from('problem_reports')
       .select('id, store_id, description, photo_url, status')
       .eq('id', params.id)
@@ -54,14 +46,14 @@ export async function PATCH(
       )
     }
 
-    // 매장이 사용자의 프렌차이즈에 속하는지 확인
-    const { data: store, error: storeError } = await supabase
+    // 매장이 사용자의 프렌차이즈에 속하는지 확인 (업체 API와 동일하게 dataClient 사용, franchise_id만 검증)
+    const { data: store, error: storeError } = await dataClient
       .from('stores')
-      .select('id, franchise_id, company_id')
+      .select('id, franchise_id')
       .eq('id', problemReport.store_id)
       .single()
 
-    if (storeError || !store || store.franchise_id !== userData.franchise_id || store.company_id !== userData.company_id) {
+    if (storeError || !store || store.franchise_id !== userData.franchise_id) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
@@ -94,8 +86,7 @@ export async function PATCH(
       ...(photo_urls || [])
     ]
 
-    // status를 먼저 업데이트 (서비스 역할 키 사용)
-    const { error: statusError } = await adminSupabase
+    const { error: statusError } = await dataClient
       .from('problem_reports')
       .update({ status: 'completed' })
       .eq('id', params.id)
@@ -108,8 +99,7 @@ export async function PATCH(
       )
     }
 
-    // description과 photo_url 업데이트 (서비스 역할 키 사용)
-    const { error: updateError } = await adminSupabase
+    const { error: updateError } = await dataClient
       .from('problem_reports')
       .update({
         description: newDescription,

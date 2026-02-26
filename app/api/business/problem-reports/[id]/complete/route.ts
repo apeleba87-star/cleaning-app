@@ -22,10 +22,10 @@ export async function PATCH(
       ? createClient(supabaseUrl, serviceRoleKey, { auth: { autoRefreshToken: false, persistSession: false } })
       : supabase
 
-    // 문제 보고가 존재하고 사용자의 회사 매장에 속하는지 확인
+    // 문제 보고 조회 (프랜차이즈 API와 동일하게 단건 조회 후 매장 검증)
     const { data: problemReport, error: fetchError } = await dataClient
       .from('problem_reports')
-      .select('id, store_id, description, photo_url, status, stores!inner(company_id)')
+      .select('id, store_id, description, photo_url, status')
       .eq('id', params.id)
       .single()
 
@@ -36,8 +36,14 @@ export async function PATCH(
       )
     }
 
-    // 권한 확인
-    if ((problemReport.stores as any).company_id !== user.company_id) {
+    // 매장이 사용자의 회사에 속하는지 확인 (dataClient로 조회 후 company_id 검증)
+    const { data: store, error: storeError } = await dataClient
+      .from('stores')
+      .select('id, company_id')
+      .eq('id', problemReport.store_id)
+      .single()
+
+    if (storeError || !store || store.company_id !== user.company_id) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 

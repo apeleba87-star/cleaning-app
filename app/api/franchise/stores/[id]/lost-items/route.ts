@@ -13,11 +13,15 @@ export async function GET(
     }
 
     const supabase = await createServerSupabaseClient()
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+    const dataClient = serviceRoleKey && supabaseUrl
+      ? createClient(supabaseUrl, serviceRoleKey, { auth: { autoRefreshToken: false, persistSession: false } })
+      : supabase
 
-    // franchise_manager의 경우 franchise_id를 별도로 조회
     const { data: userData, error: userDataError } = await supabase
       .from('users')
-      .select('franchise_id, company_id')
+      .select('franchise_id')
       .eq('id', user.id)
       .single()
 
@@ -25,32 +29,19 @@ export async function GET(
       return NextResponse.json({ error: 'Franchise information not found' }, { status: 403 })
     }
 
-    // 매장이 사용자의 프렌차이즈에 속하는지 확인
-    const { data: store, error: storeError } = await supabase
+    // 매장 조회·검증은 업체 API와 동일하게 dataClient(서비스 역할) 사용 (RLS 우회)
+    const { data: store, error: storeError } = await dataClient
       .from('stores')
-      .select('id, franchise_id, company_id')
+      .select('id, franchise_id')
       .eq('id', params.id)
       .single()
 
-    // 목록 API와 동일하게 franchise_id만 검증 (같은 프랜차이즈 매장이면 조회 허용)
     if (storeError || !store || store.franchise_id !== userData.franchise_id) {
       return NextResponse.json({ error: 'Store not found' }, { status: 404 })
     }
 
-    // RLS 정책 문제로 인해 서비스 역할 키 사용
-    const adminSupabase = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!,
-      {
-        auth: {
-          autoRefreshToken: false,
-          persistSession: false
-        }
-      }
-    )
-
-    // 분실물 습득 데이터 조회
-    const { data: lostItems, error: lostItemsError } = await adminSupabase
+    // 분실물 습득 데이터 조회 (업체 API와 동일하게 dataClient 사용)
+    const { data: lostItems, error: lostItemsError } = await dataClient
       .from('lost_items')
       .select('id, type, description, photo_url, status, storage_location, created_at, updated_at, business_confirmed_at, business_confirmed_by')
       .eq('store_id', params.id)

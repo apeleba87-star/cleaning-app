@@ -13,11 +13,15 @@ export async function PATCH(
     }
 
     const supabase = await createServerSupabaseClient()
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+    const dataClient = serviceRoleKey && supabaseUrl
+      ? createClient(supabaseUrl, serviceRoleKey, { auth: { autoRefreshToken: false, persistSession: false } })
+      : supabase
 
-    // franchise_manager의 경우 franchise_id를 별도로 조회
     const { data: userData, error: userDataError } = await supabase
       .from('users')
-      .select('franchise_id, company_id')
+      .select('franchise_id')
       .eq('id', user.id)
       .single()
 
@@ -25,20 +29,7 @@ export async function PATCH(
       return NextResponse.json({ error: 'Franchise information not found' }, { status: 403 })
     }
 
-    // RLS 정책 문제로 인해 서비스 역할 키 사용
-    const adminSupabase = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!,
-      {
-        auth: {
-          autoRefreshToken: false,
-          persistSession: false
-        }
-      }
-    )
-
-    // 문제 보고 조회 (서비스 역할 키 사용)
-    const { data: problemReport, error: fetchError } = await adminSupabase
+    const { data: problemReport, error: fetchError } = await dataClient
       .from('problem_reports')
       .select('id, store_id')
       .eq('id', params.id)
@@ -51,22 +42,17 @@ export async function PATCH(
       )
     }
 
-    // 매장이 사용자의 프렌차이즈에 속하는지 확인
-    const { data: store, error: storeError } = await supabase
+    const { data: store, error: storeError } = await dataClient
       .from('stores')
-      .select('id, franchise_id, company_id')
+      .select('id, franchise_id')
       .eq('id', problemReport.store_id)
       .single()
 
-    if (storeError || !store || store.franchise_id !== userData.franchise_id || store.company_id !== userData.company_id) {
+    if (storeError || !store || store.franchise_id !== userData.franchise_id) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
-    // franchise_confirmed_at 컬럼이 없으므로, description에 확인 정보를 추가하는 방식 사용
-    // 또는 business_confirmed_at을 사용할 수도 있지만, 일단 description에 추가
-    
-    // 현재 문제 보고 확인
-    const { data: currentProblem } = await adminSupabase
+    const { data: currentProblem } = await dataClient
       .from('problem_reports')
       .select('description, updated_at')
       .eq('id', params.id)
@@ -94,7 +80,7 @@ export async function PATCH(
       ? `${currentProblem.description}${confirmationText}`
       : confirmationText
 
-    const { data: updatedProblem, error: updateError } = await adminSupabase
+    const { data: updatedProblem, error: updateError } = await dataClient
       .from('problem_reports')
       .update({ 
         description: newDescription,
