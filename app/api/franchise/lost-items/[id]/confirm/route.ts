@@ -13,11 +13,15 @@ export async function PATCH(
     }
 
     const supabase = await createServerSupabaseClient()
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+    const dataClient = serviceRoleKey && supabaseUrl
+      ? createClient(supabaseUrl, serviceRoleKey, { auth: { autoRefreshToken: false, persistSession: false } })
+      : supabase
 
-    // franchise_manager의 경우 franchise_id를 별도로 조회
     const { data: userData, error: userDataError } = await supabase
       .from('users')
-      .select('franchise_id, company_id')
+      .select('franchise_id')
       .eq('id', user.id)
       .single()
 
@@ -25,20 +29,7 @@ export async function PATCH(
       return NextResponse.json({ error: 'Franchise information not found' }, { status: 403 })
     }
 
-    // RLS 정책 문제로 인해 서비스 역할 키 사용
-    const adminSupabase = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!,
-      {
-        auth: {
-          autoRefreshToken: false,
-          persistSession: false
-        }
-      }
-    )
-
-    // 분실물 조회 (서비스 역할 키 사용)
-    const { data: lostItem, error: fetchError } = await adminSupabase
+    const { data: lostItem, error: fetchError } = await dataClient
       .from('lost_items')
       .select('id, store_id, status, updated_at')
       .eq('id', params.id)
@@ -52,14 +43,14 @@ export async function PATCH(
       )
     }
 
-    // 매장이 사용자의 프렌차이즈에 속하는지 확인
-    const { data: store, error: storeError } = await supabase
+    // 매장 조회·검증은 dataClient 사용, franchise_id만 검증 (problem-reports와 동일)
+    const { data: store, error: storeError } = await dataClient
       .from('stores')
-      .select('id, franchise_id, company_id')
+      .select('id, franchise_id')
       .eq('id', lostItem.store_id)
       .single()
 
-    if (storeError || !store || store.franchise_id !== userData.franchise_id || store.company_id !== userData.company_id) {
+    if (storeError || !store || store.franchise_id !== userData.franchise_id) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
@@ -76,7 +67,7 @@ export async function PATCH(
     const updatedAt = new Date().toISOString()
     
     // 'completed' 상태로 업데이트 (franchise_confirmed_at 컬럼이 없으므로 status만 사용)
-    const { data: updatedItem, error: updateError } = await adminSupabase
+    const { data: updatedItem, error: updateError } = await dataClient
       .from('lost_items')
       .update({ 
         status: 'completed',
