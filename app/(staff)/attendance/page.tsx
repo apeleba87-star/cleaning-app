@@ -126,6 +126,9 @@ export default function AttendancePage() {
 
   // 출근 중인 매장이 있는지 확인 (퇴근하지 않은 매장)
   const hasActiveAttendance = todayAttendances.some(a => !a.clock_out_at)
+  // 관리종료 버튼용: 현재 관리 중인 매장 1개 (퇴근 전)
+  const activeAttendance = todayAttendances.find(a => !a.clock_out_at)
+  const activeStoreName = activeAttendance ? (activeAttendance as AttendanceWithStore).stores?.name : null
   // 선택한 매장이 오늘 이미 관리완료된 매장인지 (관리시작 버튼 비활성화용)
   const isSelectedStoreCompletedToday = Boolean(
     selectedStoreId && todayAttendances.some(
@@ -523,6 +526,22 @@ export default function AttendancePage() {
                 ⚠️ 먼저 관리 중인 매장의 관리완료 처리를 완료해주세요.
               </p>
             )}
+            {hasActiveAttendance && activeAttendance && (
+              <button
+                onClick={() => handleClockOut(activeAttendance.store_id)}
+                disabled={!location || submitting}
+                className="w-full mt-4 px-4 py-3 min-h-[44px] bg-red-600 text-white rounded-md hover:bg-red-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors font-medium flex items-center justify-center gap-2 touch-manipulation text-base"
+              >
+                {submitting ? (
+                  <>
+                    <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white" />
+                    <span>처리 중...</span>
+                  </>
+                ) : (
+                  activeStoreName ? `${activeStoreName} 관리종료` : '관리종료'
+                )}
+              </button>
+            )}
             {isSelectedStoreCompletedToday && (
               <p className="mt-2 text-sm text-gray-600 bg-gray-100 px-3 py-2 rounded-md">
                 ✓ 이 매장은 오늘 이미 관리가 완료되었습니다.
@@ -622,9 +641,10 @@ export default function AttendancePage() {
             </div>
           )} */}
 
+          {!hasActiveAttendance && (
           <button
             onClick={handleClockIn}
-            disabled={!location || !selectedStoreId || submitting || hasActiveAttendance || isSelectedStoreCompletedToday || (attendanceType === 'rescheduled' && !scheduledDate)}
+            disabled={!location || !selectedStoreId || submitting || isSelectedStoreCompletedToday || (attendanceType === 'rescheduled' && !scheduledDate)}
             className="w-full mt-4 px-4 py-3 min-h-[44px] bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors font-medium flex items-center justify-center gap-2 touch-manipulation text-base"
           >
             {submitting ? (
@@ -636,6 +656,7 @@ export default function AttendancePage() {
               selectedStoreName ? `${selectedStoreName} 관리시작` : '관리시작'
             )}
           </button>
+          )}
           </div>
         </div>
 
