@@ -306,6 +306,10 @@ export default function ChecklistClient() {
             before_photo_url: item.before_photo_url || null,
             after_photo_url: item.after_photo_url || null,
             comment: item.comment?.trim() || undefined,
+            before_photo_from_gallery: item.before_photo_from_gallery ?? undefined,
+            after_photo_from_gallery: item.after_photo_from_gallery ?? undefined,
+            before_photo_reviewed_at: item.before_photo_reviewed_at ?? undefined,
+            after_photo_reviewed_at: item.after_photo_reviewed_at ?? undefined,
           }
           
           // 디버깅: 관리후 사진이 있는 항목 로깅
@@ -841,11 +845,11 @@ export default function ChecklistClient() {
   if (selectedChecklist) {
     return (
       <div className="max-w-6xl mx-auto px-4 py-6 space-y-6 mb-16 md:mb-0">
-        <div className="flex items-center justify-between">
-          <h1 className="text-xl md:text-2xl font-bold">체크리스트 수행</h1>
-          <div className="flex items-center gap-3">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+          <h1 className="text-xl md:text-2xl font-bold truncate min-w-0">체크리스트 수행</h1>
+          <div className="flex items-center justify-end gap-2 flex-shrink-0 min-w-0">
             {hasGalleryPhotosNeedingReview && (
-              <span className="text-sm font-semibold text-red-600 whitespace-nowrap">
+              <span className="text-xs sm:text-sm font-semibold text-red-600 whitespace-nowrap">
                 검수 대상 사진
               </span>
             )}
@@ -854,7 +858,7 @@ export default function ChecklistClient() {
                 setSelectedChecklist(null)
                 setCameraMode(null)
               }}
-              className="px-4 py-2 text-gray-600 hover:text-gray-800"
+              className="text-sm font-medium text-gray-600 hover:text-gray-800 whitespace-nowrap py-1 px-2 sm:px-3"
             >
               ← 목록으로
             </button>
@@ -1257,6 +1261,11 @@ export default function ChecklistClient() {
                                                         sizes="(max-width: 768px) 50vw, 33vw"
                                                         loading="lazy"
                                                       />
+                                                      {item.before_photo_from_gallery && (
+                                                        <span className="absolute top-1 right-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-red-600 text-white shadow">
+                                                          검수대상
+                                                        </span>
+                                                      )}
                                                     </div>
                                                   </button>
                                                 </div>
@@ -1316,6 +1325,11 @@ export default function ChecklistClient() {
                                                           sizes="(max-width: 768px) 50vw, 33vw"
                                                           loading="lazy"
                                                         />
+                                                        {item.before_photo_from_gallery && (
+                                                          <span className="absolute top-1 right-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-red-600 text-white shadow">
+                                                            검수대상
+                                                          </span>
+                                                        )}
                                                       </div>
                                                     </button>
                                                   </div>
@@ -1340,6 +1354,11 @@ export default function ChecklistClient() {
                                                           sizes="(max-width: 768px) 50vw, 33vw"
                                                           loading="lazy"
                                                         />
+                                                        {item.after_photo_from_gallery && (
+                                                          <span className="absolute top-1 right-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-red-600 text-white shadow">
+                                                            검수대상
+                                                          </span>
+                                                        )}
                                                       </div>
                                                     </button>
                                                   </div>
@@ -1400,6 +1419,11 @@ export default function ChecklistClient() {
                                                         sizes="(max-width: 768px) 50vw, 33vw"
                                                         loading="lazy"
                                                       />
+                                                      {item.after_photo_from_gallery && (
+                                                        <span className="absolute top-1 right-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-red-600 text-white shadow">
+                                                          검수대상
+                                                        </span>
+                                                      )}
                                                     </div>
                                                   </button>
                                                 </div>
