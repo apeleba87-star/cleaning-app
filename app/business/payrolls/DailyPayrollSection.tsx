@@ -524,6 +524,7 @@ export default function DailyPayrollSection({
               </div>
             )}
           </div>
+        </div>
         )
       })()}
     </div>

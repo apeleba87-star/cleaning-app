@@ -1540,7 +1540,6 @@ export default function PayrollsPage() {
                       </tbody>
                     </table>
                   </div>
-                </div>
                 {regularPayrolls.length > PAYROLL_PAGE_SIZE && (
                   <div className="px-4 py-3 border-t border-gray-200 flex flex-wrap items-center justify-between gap-2 mt-2">
                     <p className="text-sm text-gray-600">
