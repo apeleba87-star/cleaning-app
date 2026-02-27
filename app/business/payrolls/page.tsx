@@ -561,9 +561,10 @@ export default function PayrollsPage() {
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
       </div>
     )
-  } else {
-    return (
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6">
+  }
+
+  return (
+    <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6">
       <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 mb-6">
         <h1 className="text-xl sm:text-2xl font-bold">인건비 관리</h1>
         <a
@@ -1578,6 +1579,5 @@ export default function PayrollsPage() {
 
     </div>
   )
-  }
 }
 
