@@ -1,6 +1,8 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
+const BARCODE_PRODUCTS_ALLOWED_EMAILS = new Set(['apeleba2@naver.com'])
+
 export async function middleware(request: NextRequest) {
   let supabaseResponse = NextResponse.next({
     request: {
@@ -48,6 +50,24 @@ export async function middleware(request: NextRequest) {
   // 사용자가 있고, 동시 접속 제한이 필요한 역할인 경우 세션 갱신
   if (user) {
     try {
+      // 바코드 제품 등록 기능 이메일 화이트리스트
+      const pathname = request.nextUrl.pathname
+      const isBarcodeProductsPage = pathname.startsWith('/business/products')
+      const isBarcodeProductsApi = pathname.startsWith('/api/business/products')
+      if (isBarcodeProductsPage || isBarcodeProductsApi) {
+        const userEmail = user.email?.toLowerCase() || ''
+        const isAllowedUser = BARCODE_PRODUCTS_ALLOWED_EMAILS.has(userEmail)
+        if (!isAllowedUser) {
+          if (isBarcodeProductsApi) {
+            return NextResponse.json(
+              { error: '바코드 제품 등록 기능은 지정된 계정만 사용할 수 있습니다.' },
+              { status: 403 }
+            )
+          }
+          return NextResponse.redirect(new URL('/business/dashboard', request.url))
+        }
+      }
+
       // 사용자 정보 조회
       const { data: userData } = await supabase
         .from('users')

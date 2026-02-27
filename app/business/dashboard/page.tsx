@@ -53,6 +53,7 @@ export default async function BusinessOwnerDashboardPage() {
   const company = companyResult.data
   const totalStores = storesResult.count || 0
   const totalUsers = usersResult.count || 0
+  const barcodeProductsEnabled = user.email?.toLowerCase() === 'apeleba2@naver.com'
   const freeTrialInfo = (() => {
     if (!companyPlan || companyPlan.subscription_plan !== 'free') return null
     if (!companyPlan.trial_ends_at || Number.isNaN(Date.parse(companyPlan.trial_ends_at))) {
@@ -64,7 +65,7 @@ export default async function BusinessOwnerDashboardPage() {
     const nowDay = new Date(now.getFullYear(), now.getMonth(), now.getDate())
     const diffDays = Math.ceil((endDay.getTime() - nowDay.getTime()) / (1000 * 60 * 60 * 24))
     if (diffDays < 0) {
-      return { label: `무료체험 만료 (+${Math.abs(diffDays)}일)`, className: 'text-red-700 font-semibold' }
+      return { label: '무료체험 만료', className: 'text-red-700 font-semibold' }
     }
     if (diffDays === 0) {
       return { label: '무료체험 오늘 만료', className: 'text-orange-700 font-semibold' }
@@ -121,7 +122,9 @@ export default async function BusinessOwnerDashboardPage() {
     { title: '수금/미수금 관리', href: '/business/receivables', description: '매장별 매출(청구) 및 수금 관리', category: 'financial' },
     { title: '재무 현황', href: '/business/financial', description: '매출, 수금, 미수금, 인건비, 지출 통합 관리', category: 'financial' },
     // 운영
-    { title: '바코드 제품 등록', href: '/business/products', description: '제품 등록 및 CSV 파일 업로드로 위치 정보 업데이트', category: 'operation' },
+    ...(barcodeProductsEnabled
+      ? [{ title: '바코드 제품 등록', href: '/business/products', description: '제품 등록 및 CSV 파일 업로드로 위치 정보 업데이트', category: 'operation' }]
+      : []),
     { title: '체크리스트 등록/관리', href: '/business/checklists', description: '매장별 체크리스트 생성 및 관리', category: 'operation' },
     { title: '공지사항 등록/관리', href: '/business/announcements', description: '점주용/직원용 공지사항 작성 및 확인 현황', category: 'operation' },
     { title: '물품 요청', href: '/business/supply-requests', description: '물품 요청 접수 및 관리', category: 'operation' },

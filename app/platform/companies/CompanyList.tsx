@@ -133,7 +133,7 @@ export default function CompanyList({ initialCompanies }: CompanyListProps) {
     const diffDays = Math.ceil((endDay.getTime() - nowDay.getTime()) / (1000 * 60 * 60 * 24))
 
     if (diffDays < 0) {
-      return { label: `만료 (+${Math.abs(diffDays)}일)`, className: 'text-red-700 font-semibold' }
+      return { label: '만료', className: 'text-red-700 font-semibold' }
     }
     if (diffDays === 0) {
       return { label: '오늘 만료', className: 'text-orange-700 font-semibold' }

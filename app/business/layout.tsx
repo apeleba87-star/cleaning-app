@@ -22,6 +22,7 @@ export default async function BusinessLayout({
     ? await getCompanyPlan(user.company_id)
     : null
   const isTrialExpired = !!companyPlan?.is_trial_expired
+  const barcodeProductsEnabled = user.email?.toLowerCase() === 'apeleba2@naver.com'
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -31,6 +32,7 @@ export default async function BusinessLayout({
         subscriptionPlan={companyPlan?.subscription_plan ?? 'free'}
         subscriptionStatus={companyPlan?.subscription_status ?? 'active'}
         subscriptionPremiumUnits={companyPlan?.premium_units ?? 0}
+        barcodeProductsEnabled={barcodeProductsEnabled}
       />
       {isTrialExpired && (
         <div className="bg-red-50 border-b border-red-200">

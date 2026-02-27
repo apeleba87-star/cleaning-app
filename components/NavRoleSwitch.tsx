@@ -18,6 +18,8 @@ interface NavRoleSwitchProps {
   subscriptionStatus?: 'active' | 'suspended' | 'cancelled'
   /** 프리미엄 결제 수 (1 이상이면 프리미엄 기능 오픈) */
   subscriptionPremiumUnits?: number
+  /** 바코드 제품 등록 기능 표시 여부 */
+  barcodeProductsEnabled?: boolean
 }
 
 interface NavItem {
@@ -38,7 +40,16 @@ interface NavGroup {
   feature?: BusinessFeatureKey
 }
 
-export function NavRoleSwitch({ userRole, userName, onRefresh, isRefreshing, subscriptionPlan = 'free', subscriptionStatus = 'active', subscriptionPremiumUnits = 0 }: NavRoleSwitchProps) {
+export function NavRoleSwitch({
+  userRole,
+  userName,
+  onRefresh,
+  isRefreshing,
+  subscriptionPlan = 'free',
+  subscriptionStatus = 'active',
+  subscriptionPremiumUnits = 0,
+  barcodeProductsEnabled = true,
+}: NavRoleSwitchProps) {
   const pathname = usePathname()
   const router = useRouter()
   const [isClient, setIsClient] = useState(false)
@@ -225,7 +236,14 @@ export function NavRoleSwitch({ userRole, userName, onRefresh, isRefreshing, sub
           .map((entry) => {
             if ('items' in entry && entry.items) {
               const group = entry as NavGroup
-              const allowedItems = group.items!.filter((item) => hasFeature((item as NavItem).feature))
+              const allowedItems = group.items!
+                .filter((item) => hasFeature((item as NavItem).feature))
+                .filter((item) => {
+                  if ((item as NavItem).href === '/business/products') {
+                    return barcodeProductsEnabled
+                  }
+                  return true
+                })
               if (allowedItems.length === 0) return null
               return { ...group, items: allowedItems }
             }
