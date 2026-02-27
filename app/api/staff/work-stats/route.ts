@@ -14,9 +14,9 @@ export async function GET(request: NextRequest) {
     const user = await getServerUser()
     if (!user) throw new UnauthorizedError('Authentication required')
 
-    const allowedRoles = ['staff', 'subcontract_individual', 'subcontract_company']
+    const allowedRoles = ['staff', 'subcontract_individual', 'subcontract_company', 'business_owner']
     if (!allowedRoles.includes(user.role)) {
-      throw new ForbiddenError('Only staff can view work stats')
+      throw new ForbiddenError('Only staff or business owner (staff mode) can view work stats')
     }
 
     const supabase = await createServerSupabaseClient()

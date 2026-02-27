@@ -16,8 +16,9 @@ export async function GET(request: NextRequest) {
       throw new UnauthorizedError('Authentication required')
     }
 
-    if (user.role !== 'staff' && user.role !== 'subcontract_individual' && user.role !== 'subcontract_company') {
-      throw new ForbiddenError('Only staff can view their checklists')
+    const allowedRoles = ['staff', 'subcontract_individual', 'subcontract_company', 'business_owner']
+    if (!allowedRoles.includes(user.role)) {
+      throw new ForbiddenError('Only staff or business owner (staff mode) can view their checklists')
     }
 
     const supabase = await createServerSupabaseClient()

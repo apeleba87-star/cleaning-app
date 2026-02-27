@@ -16,9 +16,9 @@ export async function GET(request: NextRequest) {
       throw new UnauthorizedError('Authentication required')
     }
 
-    const allowedRoles = ['staff', 'subcontract_individual', 'subcontract_company']
+    const allowedRoles = ['staff', 'subcontract_individual', 'subcontract_company', 'business_owner']
     if (!allowedRoles.includes(user.role)) {
-      throw new ForbiddenError('Only staff can view their attendance')
+      throw new ForbiddenError('Only staff or business owner (staff mode) can view their attendance')
     }
 
     const supabase = await createServerSupabaseClient()

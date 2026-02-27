@@ -84,9 +84,9 @@ export default function ChecklistForm({
 
   const selectedStore = stores.find((s) => s.id === storeId)
 
-  // 드래그 앤 드롭 센서 설정
+  // 드래그 앤 드롭 센서 설정 (모바일: 스크롤과 구분 위해 거리 8px 이상일 때만 드래그)
   const sensors = useSensors(
-    useSensor(PointerSensor),
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
     useSensor(KeyboardSensor, {
       coordinateGetter: sortableKeyboardCoordinates,
     })
@@ -226,9 +226,12 @@ export default function ChecklistForm({
   }
 
   return (
-    <div className="bg-white rounded-lg shadow-md p-6">
-      <h2 className="text-xl font-semibold mb-4">
-        {isEditMode ? '체크리스트 수정' : '새 체크리스트 생성'} - {selectedStore?.name}
+    <div className="bg-white rounded-lg shadow-md p-4 sm:p-6 max-w-full">
+      <h2 className="text-lg sm:text-xl font-semibold mb-4 break-words">
+        {isEditMode ? '체크리스트 수정' : '새 체크리스트 생성'}
+        <span className="block text-base font-normal text-gray-600 mt-1 sm:inline sm:ml-2 sm:mt-0">
+          {selectedStore?.name}
+        </span>
       </h2>
 
       {error && (
@@ -262,7 +265,7 @@ export default function ChecklistForm({
           <button
             type="button"
             onClick={handleAddItem}
-            className="mt-2 px-4 py-2 text-sm text-blue-600 hover:text-blue-800 border border-blue-300 rounded-md"
+            className="mt-2 w-full sm:w-auto px-4 py-2.5 text-sm text-blue-600 hover:text-blue-800 border border-blue-300 rounded-md touch-manipulation"
           >
             + 항목 추가
           </button>
@@ -277,23 +280,23 @@ export default function ChecklistForm({
             value={note}
             onChange={(e) => setNote(e.target.value)}
             rows={3}
-            className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full px-3 sm:px-4 py-2.5 text-base border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 min-h-[80px]"
             placeholder="특이사항이나 참고사항을 입력하세요"
           />
         </div>
 
-        <div className="flex justify-end space-x-3 pt-4">
+        <div className="flex flex-col-reverse sm:flex-row gap-2 sm:justify-end sm:space-x-3 pt-4">
           <button
             type="button"
             onClick={onCancel}
-            className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50"
+            className="w-full sm:w-auto px-4 py-2.5 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50 touch-manipulation"
           >
             취소
           </button>
           <button
             type="submit"
             disabled={loading}
-            className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
+            className="w-full sm:w-auto px-4 py-2.5 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed touch-manipulation"
           >
             {loading ? (isEditMode ? '수정 중...' : '생성 중...') : (isEditMode ? '수정' : '생성')}
           </button>
@@ -340,16 +343,17 @@ function SortableItem({
     <div
       ref={setNodeRef}
       style={style}
-      className={`flex items-start space-x-2 p-3 border border-gray-200 rounded-md ${
+      className={`flex flex-col sm:flex-row sm:items-start gap-3 sm:gap-2 p-3 border border-gray-200 rounded-md min-w-0 ${
         isDragging ? 'bg-blue-50' : 'bg-white'
       }`}
     >
-      {/* 드래그 핸들 */}
+      {/* 드래그 핸들: 모바일 터치 영역 44px 이상 */}
       <div
         {...attributes}
         {...listeners}
-        className="flex items-center justify-center w-8 h-8 mt-1 cursor-grab active:cursor-grabbing text-gray-400 hover:text-gray-600"
+        className="flex-shrink-0 flex items-center justify-center w-11 h-11 sm:w-8 sm:h-8 sm:mt-1 rounded-md cursor-grab active:cursor-grabbing text-gray-400 hover:text-gray-600 hover:bg-gray-100 touch-manipulation self-start"
         title="드래그하여 순서 변경"
+        aria-label="순서 변경"
       >
         <svg
           xmlns="http://www.w3.org/2000/svg"
@@ -367,75 +371,76 @@ function SortableItem({
         </svg>
       </div>
 
-      <div className="flex-1 space-y-2">
+      {/* 항목명 + 타입/상태/코멘트: 모바일 세로 배치, 데스크톱 기존처럼 */}
+      <div className="flex-1 min-w-0 space-y-2">
         <input
           type="text"
           placeholder="항목명 (예: 홀 바닥, 주방 싱크)"
           value={item.area}
           onChange={(e) => onItemChange(index, 'area', e.target.value)}
-          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+          className="w-full px-3 py-2.5 sm:py-2 text-base sm:text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
         />
-        <div className="flex items-center space-x-2">
-          <select
-            value={item.type}
-            onChange={(e) =>
-              onItemTypeChange(index, e.target.value as 'check' | 'before_photo' | 'after_photo' | 'before_after_photo')
-            }
-            className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-          >
-            <option value="check">일반 체크</option>
-            <option value="before_photo">관리 전 사진</option>
-            <option value="after_photo">관리 후 사진</option>
-            <option value="before_after_photo">관리 전/후 사진</option>
-          </select>
-          {item.type === 'check' && (
-            <>
-              <select
-                value={item.status || 'good'}
-                onChange={(e) => onItemChange(index, 'status', e.target.value as 'good' | 'bad')}
-                className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="good">양호</option>
-                <option value="bad">불량</option>
-              </select>
-              <input
-                type="text"
-                placeholder={item.status === 'bad' ? '코멘트 (필수)' : '코멘트 (선택)'}
-                value={item.comment || ''}
-                onChange={(e) => onItemChange(index, 'comment', e.target.value)}
-                className={`flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                  item.status === 'bad' && !item.comment?.trim() ? 'border-red-300' : ''
-                }`}
-              />
-            </>
-          )}
-          {(item.type === 'before_photo' ||
-            item.type === 'after_photo' ||
-            item.type === 'before_after_photo') && (
-            <div className="flex-1">
-              <div className="text-sm text-gray-600 mb-2">
-                {item.type === 'before_photo' && '관리 전 사진만 촬영합니다.'}
-                {item.type === 'after_photo' && '관리 후 사진만 촬영합니다.'}
-                {item.type === 'before_after_photo' && '관리 전/후 사진을 모두 촬영해야 합니다.'}
-              </div>
-              <input
-                type="text"
-                placeholder="코멘트 입력 (선택)"
-                value={item.comment || ''}
-                onChange={(e) => onItemChange(index, 'comment', e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
-              />
-            </div>
-          )}
-          {itemsLength > 1 && (
-            <button
-              type="button"
-              onClick={() => onRemoveItem(index)}
-              className="px-3 py-2 text-red-600 hover:text-red-800"
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:flex-wrap sm:gap-2">
+        <select
+          value={item.type}
+          onChange={(e) =>
+            onItemTypeChange(index, e.target.value as 'check' | 'before_photo' | 'after_photo' | 'before_after_photo')
+          }
+          className="w-full sm:w-auto min-w-0 px-3 py-2.5 sm:py-2 text-base sm:text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+        >
+          <option value="check">일반 체크</option>
+          <option value="before_photo">관리 전 사진</option>
+          <option value="after_photo">관리 후 사진</option>
+          <option value="before_after_photo">관리 전/후 사진</option>
+        </select>
+        {item.type === 'check' && (
+          <>
+            <select
+              value={item.status || 'good'}
+              onChange={(e) => onItemChange(index, 'status', e.target.value as 'good' | 'bad')}
+              className="w-full sm:w-auto min-w-0 px-3 py-2.5 sm:py-2 text-base sm:text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
-              삭제
-            </button>
-          )}
+              <option value="good">양호</option>
+              <option value="bad">불량</option>
+            </select>
+            <input
+              type="text"
+              placeholder={item.status === 'bad' ? '코멘트 (필수)' : '코멘트 (선택)'}
+              value={item.comment || ''}
+              onChange={(e) => onItemChange(index, 'comment', e.target.value)}
+              className={`w-full sm:flex-1 min-w-0 px-3 py-2.5 sm:py-2 text-base sm:text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                item.status === 'bad' && !item.comment?.trim() ? 'border-red-300' : ''
+              }`}
+            />
+          </>
+        )}
+        {(item.type === 'before_photo' ||
+          item.type === 'after_photo' ||
+          item.type === 'before_after_photo') && (
+          <div className="w-full sm:flex-1 min-w-0 space-y-1">
+            <div className="text-sm text-gray-600">
+              {item.type === 'before_photo' && '관리 전 사진만 촬영합니다.'}
+              {item.type === 'after_photo' && '관리 후 사진만 촬영합니다.'}
+              {item.type === 'before_after_photo' && '관리 전/후 사진을 모두 촬영해야 합니다.'}
+            </div>
+            <input
+              type="text"
+              placeholder="코멘트 입력 (선택)"
+              value={item.comment || ''}
+              onChange={(e) => onItemChange(index, 'comment', e.target.value)}
+              className="w-full px-3 py-2.5 sm:py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-base sm:text-sm"
+            />
+          </div>
+        )}
+        {itemsLength > 1 && (
+          <button
+            type="button"
+            onClick={() => onRemoveItem(index)}
+            className="w-full sm:w-auto px-3 py-2.5 sm:py-2 text-red-600 hover:text-red-800 hover:bg-red-50 rounded-md touch-manipulation text-left sm:text-center"
+          >
+            삭제
+          </button>
+        )}
         </div>
       </div>
     </div>

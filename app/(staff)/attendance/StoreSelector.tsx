@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import { Store } from '@/types/db'
 import { getCurrentHourKST } from '@/lib/utils/date'
@@ -27,6 +28,7 @@ export default function StoreSelector({ selectedStoreId: propSelectedStoreId, on
   const [selectedStoreId, setSelectedStoreId] = useState<string>(propSelectedStoreId)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [currentUserRole, setCurrentUserRole] = useState<string | null>(null)
 
   // excludeStoreIds는 값 기준 비교(문자열화)로 불필요한 재요청 방지
   const excludeStoreIdsKey = (excludeStoreIds ?? []).slice().sort().join(',')
@@ -52,10 +54,12 @@ export default function StoreSelector({ selectedStoreId: propSelectedStoreId, on
 
       if (!json.success || !json.data) {
         setStores([])
+        setCurrentUserRole(json.role ?? null)
         setLoading(false)
         return
       }
 
+      setCurrentUserRole(json.role ?? null)
       const storesData: StoreSelectorStore[] = json.data
       devLog('Assigned stores from API:', storesData.length, storesData)
 
@@ -228,9 +232,19 @@ export default function StoreSelector({ selectedStoreId: propSelectedStoreId, on
             ? `오늘(${todayDayName}요일) 관리 요일인 배정 매장이 없습니다.`
             : '배정된 매장이 없습니다.'}
         </p>
-        <p className="text-xs text-yellow-700 mt-1">
-          관리자에게 문의하거나 매장의 관리 요일을 확인하세요.
-        </p>
+        {currentUserRole === 'business_owner' && showOnlyTodayManagement !== false ? (
+          <p className="text-xs text-yellow-700 mt-1">
+            직원모드로 사용하려면{' '}
+            <Link href="/business/users" className="underline font-medium text-blue-700 hover:text-blue-800">
+              사용자 등록/관리
+            </Link>
+            에서 본인에게 매장을 배정해 주세요.
+          </p>
+        ) : (
+          <p className="text-xs text-yellow-700 mt-1">
+            관리자에게 문의하거나 매장의 관리 요일을 확인하세요.
+          </p>
+        )}
       </div>
     )
   }

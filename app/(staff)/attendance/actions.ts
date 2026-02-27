@@ -35,7 +35,8 @@ export async function clockInAction(
     }
     
     const user = await getServerUser()
-    if (!user || (user.role !== 'staff' && user.role !== 'subcontract_individual' && user.role !== 'subcontract_company')) {
+    const clockInRoles = ['staff', 'subcontract_individual', 'subcontract_company', 'business_owner']
+    if (!user || !clockInRoles.includes(user.role)) {
       return { success: false, error: 'Unauthorized' }
     }
 
@@ -291,7 +292,8 @@ export async function clockOutAction(
 ): Promise<ServerActionResponse> {
   try {
     const user = await getServerUser()
-    if (!user || (user.role !== 'staff' && user.role !== 'subcontract_individual' && user.role !== 'subcontract_company')) {
+    const clockOutRoles = ['staff', 'subcontract_individual', 'subcontract_company', 'business_owner']
+    if (!user || !clockOutRoles.includes(user.role)) {
       return { success: false, error: 'Unauthorized' }
     }
 

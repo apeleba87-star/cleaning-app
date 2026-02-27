@@ -17,9 +17,9 @@ export async function GET(
       throw new UnauthorizedError('Authentication required')
     }
 
-    const allowedRoles = ['staff', 'subcontract_individual', 'subcontract_company']
+    const allowedRoles = ['staff', 'subcontract_individual', 'subcontract_company', 'business_owner']
     if (!allowedRoles.includes(user.role)) {
-      throw new ForbiddenError('Only staff can view operation memo')
+      throw new ForbiddenError('Only staff or business owner (staff mode) can view operation memo')
     }
 
     const storeId = params.storeId

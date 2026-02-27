@@ -12,8 +12,9 @@ export async function POST(request: NextRequest) {
       throw new UnauthorizedError('Authentication required')
     }
 
-    if (user.role !== 'staff' && user.role !== 'subcontract_individual' && user.role !== 'subcontract_company') {
-      throw new ForbiddenError('Only staff or subcontract users can clock out')
+    const clockOutRoles = ['staff', 'subcontract_individual', 'subcontract_company', 'business_owner']
+    if (!clockOutRoles.includes(user.role)) {
+      throw new ForbiddenError('Only staff, subcontract, or business owner (staff mode) can clock out')
     }
 
     const body = await request.json()

@@ -6,7 +6,8 @@ export async function GET(request: NextRequest) {
   try {
     const user = await getServerUser()
 
-    if (!user || user.role !== 'staff') {
+    const allowedRoles = ['staff', 'subcontract_individual', 'subcontract_company', 'business_owner']
+    if (!user || !allowedRoles.includes(user.role)) {
       return NextResponse.json({ error: '권한이 없습니다.' }, { status: 403 })
     }
 
@@ -62,7 +63,8 @@ export async function POST(request: NextRequest) {
   try {
     const user = await getServerUser()
 
-    if (!user || user.role !== 'staff') {
+    const allowedRoles = ['staff', 'subcontract_individual', 'subcontract_company', 'business_owner']
+    if (!user || !allowedRoles.includes(user.role)) {
       return NextResponse.json({ error: '권한이 없습니다.' }, { status: 403 })
     }
 

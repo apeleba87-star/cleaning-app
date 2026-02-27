@@ -18,9 +18,9 @@ export async function GET(request: NextRequest) {
       throw new UnauthorizedError('Authentication required')
     }
 
-    const allowedRoles = ['staff', 'subcontract_individual', 'subcontract_company']
+    const allowedRoles = ['staff', 'subcontract_individual', 'subcontract_company', 'business_owner']
     if (!allowedRoles.includes(user.role)) {
-      throw new ForbiddenError('Only staff can view assigned stores')
+      throw new ForbiddenError('Only staff or business owner (staff mode) can view assigned stores')
     }
 
     const searchParams = request.nextUrl.searchParams
@@ -50,7 +50,7 @@ export async function GET(request: NextRequest) {
 
     const storeIds = storeAssignments?.map((a) => a.store_id) || []
     if (storeIds.length === 0) {
-      return Response.json({ success: true, data: [] })
+      return Response.json({ success: true, data: [], role: user.role })
     }
 
     const { data: stores, error: storesError } = await dataClient
@@ -64,7 +64,7 @@ export async function GET(request: NextRequest) {
     }
 
     if (!stores || stores.length === 0) {
-      return Response.json({ success: true, data: [] })
+      return Response.json({ success: true, data: [], role: user.role })
     }
 
     // service_active가 false인 매장 제외
@@ -74,6 +74,7 @@ export async function GET(request: NextRequest) {
       return Response.json({
         success: true,
         data: activeStores,
+        role: user.role,
       })
     }
 
@@ -124,6 +125,7 @@ export async function GET(request: NextRequest) {
     return Response.json({
       success: true,
       data: dataWithAttendance,
+      role: user.role,
     })
   } catch (err) {
     return handleApiError(err)

@@ -18,9 +18,13 @@ interface StoreListProps {
   companyId: string
   premiumUnits?: number
   basePath?: string // 기본 경로 (예: '/business' 또는 '/franchise')
+  /** 매장별 배정된 인원 이름 목록 (store_id -> names) */
+  storeAssignees?: Record<string, string[]>
+  /** 매장별 체크리스트 템플릿 존재 여부 (store_id -> boolean) */
+  storeHasChecklist?: Record<string, boolean>
 }
 
-export default function StoreList({ initialStores, franchises, categoryTemplates, companyId, premiumUnits = 0, basePath = '/business' }: StoreListProps) {
+export default function StoreList({ initialStores, franchises, categoryTemplates, companyId, premiumUnits = 0, basePath = '/business', storeAssignees = {}, storeHasChecklist = {} }: StoreListProps) {
   const [stores, setStores] = useState<Store[]>(initialStores)
   const [editingStore, setEditingStore] = useState<Store | null>(null)
   const [showForm, setShowForm] = useState(false)
@@ -280,6 +284,16 @@ export default function StoreList({ initialStores, franchises, categoryTemplates
                   서비스진행
                   <SortIcon column="service_active" />
                 </th>
+                {basePath === '/business' && (
+                  <>
+                    <th className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      인원 배정
+                    </th>
+                    <th className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      체크리스트
+                    </th>
+                  </>
+                )}
                 <th className="px-4 lg:px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
                   작업
                 </th>
@@ -288,7 +302,7 @@ export default function StoreList({ initialStores, franchises, categoryTemplates
             <tbody className="bg-white divide-y divide-gray-200">
               {paginatedStores.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-4 lg:px-6 py-4 text-center text-gray-500">
+                  <td colSpan={basePath === '/business' ? 8 : 6} className="px-4 lg:px-6 py-4 text-center text-gray-500">
                     {searchTerm ? '검색 결과가 없습니다.' : '등록된 매장이 없습니다.'}
                   </td>
                 </tr>
@@ -348,6 +362,26 @@ export default function StoreList({ initialStores, franchises, categoryTemplates
                         {store.service_active ? '진행중' : '중지'}
                       </span>
                     </td>
+                    {basePath === '/business' && (
+                      <>
+                        <td className="px-4 lg:px-6 py-4 text-sm text-gray-700">
+                          {(storeAssignees[store.id]?.length ?? 0) > 0
+                            ? storeAssignees[store.id].join(', ')
+                            : '없음'}
+                        </td>
+                        <td className="px-4 lg:px-6 py-4 whitespace-nowrap">
+                          <span
+                            className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                              storeHasChecklist[store.id]
+                                ? 'bg-green-100 text-green-800'
+                                : 'bg-gray-100 text-gray-600'
+                            }`}
+                          >
+                            {storeHasChecklist[store.id] ? '있음' : '없음'}
+                          </span>
+                        </td>
+                      </>
+                    )}
                     <td className="px-4 lg:px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                       {basePath === '/business' && (
                         <a
@@ -507,6 +541,24 @@ export default function StoreList({ initialStores, franchises, categoryTemplates
                       <span className="text-gray-500 w-20 flex-shrink-0">카테고리:</span>
                       <span className="text-gray-900">{store.category}</span>
                     </div>
+                  )}
+                  {basePath === '/business' && (
+                    <>
+                      <div className="flex items-center">
+                        <span className="text-gray-500 w-20 flex-shrink-0">인원 배정:</span>
+                        <span className="text-gray-900">
+                          {(storeAssignees[store.id]?.length ?? 0) > 0
+                            ? storeAssignees[store.id].join(', ')
+                            : '없음'}
+                        </span>
+                      </div>
+                      <div className="flex items-center">
+                        <span className="text-gray-500 w-20 flex-shrink-0">체크리스트:</span>
+                        <span className={storeHasChecklist[store.id] ? 'text-green-700 font-medium' : 'text-gray-600'}>
+                          {storeHasChecklist[store.id] ? '있음' : '없음'}
+                        </span>
+                      </div>
+                    </>
                   )}
                 </div>
                 

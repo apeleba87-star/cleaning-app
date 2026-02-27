@@ -340,8 +340,9 @@ export function NavRoleSwitch({ userRole, userName, onRefresh, isRefreshing, sub
   // 뒤로가기 가능 여부 확인 (루트 페이지가 아니고 히스토리가 있는 경우)
   const showBackButton = isIOS && canGoBack && pathname !== '/mobile-dashboard' && pathname !== '/'
 
-  // 모바일에서는 간단한 헤더만 표시
-  if (userRole === 'staff') {
+  // 직원 앱: staff 또는 업체관리자(직원모드)일 때 간단한 헤더 표시
+  const isStaffApp = userRole === 'staff' || (userRole === 'business_owner' && !pathname.startsWith('/business'))
+  if (isStaffApp) {
     return (
       <nav className="bg-blue-600 text-white shadow-lg">
         <div className="container mx-auto px-4">
@@ -366,6 +367,14 @@ export function NavRoleSwitch({ userRole, userName, onRefresh, isRefreshing, sub
               </Link>
             </div>
             <div className="flex items-center space-x-2 md:space-x-4 flex-shrink-0">
+              {userRole === 'business_owner' && (
+                <Link
+                  href="/business/dashboard"
+                  className="px-2 md:px-3 py-1 md:py-2 bg-white/20 hover:bg-white/30 rounded-md text-xs md:text-sm font-medium transition-colors"
+                >
+                  관리자모드
+                </Link>
+              )}
               {userName && (
                 <span className="text-xs md:text-sm hidden md:inline">
                   {userName}
@@ -658,6 +667,14 @@ export function NavRoleSwitch({ userRole, userName, onRefresh, isRefreshing, sub
                 })</span>
               </span>
             )}
+            {userRole === 'business_owner' && pathname.startsWith('/business') && (
+              <Link
+                href="/mobile-dashboard"
+                className="px-3 sm:px-4 py-2 bg-white/20 hover:bg-white/30 backdrop-blur-sm rounded-lg text-xs sm:text-sm font-medium transition-all duration-200 border border-white/30"
+              >
+                직원모드
+              </Link>
+            )}
             <button
               onClick={handleLogout}
               className="px-3 sm:px-4 py-2 bg-red-500/90 hover:bg-red-600 backdrop-blur-sm rounded-lg text-xs sm:text-sm font-medium transition-all duration-200 shadow-lg hover:shadow-xl active:scale-95 border border-red-400/30"
@@ -734,7 +751,16 @@ export function NavRoleSwitch({ userRole, userName, onRefresh, isRefreshing, sub
           </div>
 
           {/* 모바일 메뉴 푸터 */}
-          <div className="border-t border-gray-200/50 p-4 bg-gradient-to-t from-gray-50 to-white">
+          <div className="border-t border-gray-200/50 p-4 bg-gradient-to-t from-gray-50 to-white space-y-2">
+            {userRole === 'business_owner' && pathname.startsWith('/business') && (
+              <Link
+                href="/mobile-dashboard"
+                onClick={() => setIsMobileMenuOpen(false)}
+                className="block w-full px-4 py-3 bg-gradient-to-r from-blue-500 to-indigo-500 hover:from-blue-600 hover:to-indigo-600 text-white rounded-xl text-sm font-semibold transition-all duration-200 shadow-lg text-center"
+              >
+                직원모드로 이동
+              </Link>
+            )}
             <button
               onClick={handleLogout}
               className="w-full px-4 py-3 bg-gradient-to-r from-red-500 to-pink-500 hover:from-red-600 hover:to-pink-600 text-white rounded-xl text-sm font-semibold transition-all duration-200 shadow-lg hover:shadow-xl active:scale-95"

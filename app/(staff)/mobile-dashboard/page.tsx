@@ -679,8 +679,17 @@ export default function MobileDashboardPage() {
             </div>
             <div className="space-y-2">
               {stores.length === 0 ? (
-                <div className="text-xs sm:text-sm text-gray-500 text-center py-4">
-                  배정된 매장이 없습니다.
+                <div className="text-xs sm:text-sm text-gray-500 text-center py-4 space-y-1">
+                  <p>배정된 매장이 없습니다.</p>
+                  {user?.role === 'business_owner' && (
+                    <p>
+                      직원모드로 사용하려면{' '}
+                      <Link href="/business/users" className="underline font-medium text-blue-600 hover:text-blue-700">
+                        사용자 등록/관리
+                      </Link>
+                      에서 본인에게 매장을 배정해 주세요.
+                    </p>
+                  )}
                 </div>
               ) : (
                 stores.map((store) => {

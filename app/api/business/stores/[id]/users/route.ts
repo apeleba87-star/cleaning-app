@@ -82,13 +82,14 @@ export async function GET(
       )
     }
 
-    // 역할별로 분류
+    // 역할별로 분류 (업체관리자 = 직원모드용 배정 포함)
     const franchiseManagers: any[] = []
     const staff: any[] = []
     const storeManagers: any[] = []
     const managers: any[] = []
     const subcontractIndividuals: any[] = []
     const subcontractCompanies: any[] = []
+    const businessOwners: any[] = []
 
     assignments?.forEach((assign: any) => {
       const user = assign.users
@@ -106,6 +107,8 @@ export async function GET(
         subcontractIndividuals.push(user)
       } else if (user.role === 'subcontract_company') {
         subcontractCompanies.push(user)
+      } else if (user.role === 'business_owner') {
+        businessOwners.push(user)
       }
     })
 
@@ -116,6 +119,7 @@ export async function GET(
       managers: managers,
       subcontract_individuals: subcontractIndividuals,
       subcontract_companies: subcontractCompanies,
+      business_owners: businessOwners,
     })
   } catch (error: any) {
     console.error('Error in GET /api/business/stores/[id]/users:', error)

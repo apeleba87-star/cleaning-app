@@ -37,6 +37,37 @@ export default async function BusinessStoresPage() {
   ])
 
   const premiumUnits = Number(companyPlan?.premium_units ?? 0)
+  const storeIds = (stores || []).map((s) => s.id)
+
+  // 매장별 인원 배정(store_assign) 및 체크리스트 템플릿 존재 여부 조회
+  let storeAssignees: Record<string, string[]> = {}
+  let storeHasChecklist: Record<string, boolean> = {}
+  if (storeIds.length > 0) {
+    const [assignRes, checklistRes] = await Promise.all([
+      dataClient
+        .from('store_assign')
+        .select('store_id, users:user_id(name)')
+        .in('store_id', storeIds),
+      dataClient
+        .from('checklist')
+        .select('store_id')
+        .in('store_id', storeIds)
+        .eq('work_date', '2000-01-01')
+        .is('assigned_user_id', null),
+    ])
+    const assignList = assignRes.data || []
+    assignList.forEach((row: any) => {
+      const sid = row.store_id
+      const name = row.users?.name
+      if (!sid) return
+      if (!storeAssignees[sid]) storeAssignees[sid] = []
+      if (name) storeAssignees[sid].push(name)
+    })
+    const checklistStoreIds = new Set((checklistRes.data || []).map((r: any) => r.store_id))
+    storeIds.forEach((id) => {
+      storeHasChecklist[id] = checklistStoreIds.has(id)
+    })
+  }
 
   const { data: franchises, error: franchisesError } = await dataClient
     .from('franchises')
@@ -80,6 +111,8 @@ export default async function BusinessStoresPage() {
         categoryTemplates={categoryTemplates || []}
         companyId={user.company_id}
         premiumUnits={premiumUnits}
+        storeAssignees={storeAssignees}
+        storeHasChecklist={storeHasChecklist}
       />
     </div>
   )

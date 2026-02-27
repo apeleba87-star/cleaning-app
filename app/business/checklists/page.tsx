@@ -40,6 +40,21 @@ export default async function BusinessChecklistsPage() {
     )
   }
 
+  const storeIds = (stores || []).map((s) => s.id)
+  let storeHasChecklist: Record<string, boolean> = {}
+  if (storeIds.length > 0) {
+    const { data: checklistStores } = await dataClient
+      .from('checklist')
+      .select('store_id')
+      .in('store_id', storeIds)
+      .eq('work_date', '2000-01-01')
+      .is('assigned_user_id', null)
+    const hasSet = new Set((checklistStores || []).map((r: { store_id: string }) => r.store_id))
+    storeIds.forEach((id) => {
+      storeHasChecklist[id] = hasSet.has(id)
+    })
+  }
+
   // 회사 직원 목록 조회 (staff 역할만)
   const { data: staffUsers, error: usersError } = await dataClient
     .from('users')
@@ -54,7 +69,7 @@ export default async function BusinessChecklistsPage() {
   return (
     <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6">
       <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 mb-6">
-        <h1 className="text-xl sm:text-2xl font-bold">체크리스트 관리</h1>
+        <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold">체크리스트 관리</h1>
         <a
           href="/business/dashboard"
           className="text-blue-600 hover:text-blue-800 text-sm"
@@ -67,6 +82,7 @@ export default async function BusinessChecklistsPage() {
         stores={stores || []} 
         staffUsers={staffUsers || []}
         companyId={user.company_id}
+        storeHasChecklist={storeHasChecklist}
       />
     </div>
   )

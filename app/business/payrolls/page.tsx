@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { Payroll } from '@/types/db'
 import DailyPayrollSection from './DailyPayrollSection'
 import SubcontractManagementSection from './SubcontractManagementSection'
@@ -38,6 +38,7 @@ export default function PayrollsPage() {
   const [regularSearchTerm, setRegularSearchTerm] = useState('')
   const [dailySearchTerm, setDailySearchTerm] = useState('')
   const [subcontractSearchTerm, setSubcontractSearchTerm] = useState('')
+  const [regularPage, setRegularPage] = useState(1)
   
   // 대량 등록용 상태
   const [bulkEntries, setBulkEntries] = useState<Array<{
@@ -99,6 +100,10 @@ export default function PayrollsPage() {
       loadPendingCount()
     }
   }, [selectedPeriod, activeTab])
+
+  useEffect(() => {
+    setRegularPage(1)
+  }, [regularSearchTerm])
 
   const loadPendingCount = async () => {
     try {
@@ -535,6 +540,13 @@ export default function PayrollsPage() {
         p.pay_period?.toLowerCase().includes(regularSearchTerm.toLowerCase())
       )
     : regularPayrollsBase
+
+  const PAYROLL_PAGE_SIZE = 30
+  const regularTotalPages = Math.max(1, Math.ceil(regularPayrolls.length / PAYROLL_PAGE_SIZE))
+  const paginatedRegularPayrolls = useMemo(() => {
+    const start = (regularPage - 1) * PAYROLL_PAGE_SIZE
+    return regularPayrolls.slice(start, start + PAYROLL_PAGE_SIZE)
+  }, [regularPayrolls, regularPage])
   
   const dailyPayrolls = dailySearchTerm
     ? dailyPayrollsBase.filter(p => 
@@ -549,10 +561,9 @@ export default function PayrollsPage() {
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
       </div>
     )
-  }
-
-  return (
-    <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6">
+  } else {
+    return (
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6">
       <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 mb-6">
         <h1 className="text-xl sm:text-2xl font-bold">인건비 관리</h1>
         <a
@@ -1281,29 +1292,30 @@ export default function PayrollsPage() {
             </div>
           </div>
 
-          {/* 정규 직원 인건비 목록 */}
-          <div className="bg-white rounded-lg shadow-md p-4 sm:p-6">
-            <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 sm:gap-4 mb-4">
+          {/* 정규 직원 인건비 목록 (사용자 등록 관리와 동일 스타일) */}
+          <div className="bg-white rounded-lg shadow-md overflow-hidden">
+            <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 sm:gap-4 p-4 sm:p-6 pb-0">
               <h2 className="text-base sm:text-lg font-semibold">정규 직원 인건비</h2>
-              <div className="flex-1 sm:max-w-xs sm:ml-4">
+              <div className="flex-1 sm:max-w-md w-full">
                 <input
                   type="text"
                   value={regularSearchTerm}
                   onChange={(e) => setRegularSearchTerm(e.target.value)}
                   placeholder="이름, 기간으로 검색..."
-                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-1.5 sm:px-4 sm:py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
             </div>
-            {regularPayrolls.length === 0 ? (
-              <p className="text-gray-500 text-sm">
-                {regularSearchTerm ? '검색 결과가 없습니다.' : '등록된 인건비가 없습니다.'}
-              </p>
-            ) : (
-              <>
+            <div className="p-4 sm:p-6 pt-2">
+              {regularPayrolls.length === 0 ? (
+                <p className="text-gray-500 text-sm py-4">
+                  {regularSearchTerm ? '검색 결과가 없습니다.' : '등록된 인건비가 없습니다.'}
+                </p>
+              ) : (
+                <>
                 {/* 모바일: 카드 형태 */}
                 <div className="block sm:hidden space-y-4">
-                  {regularPayrolls.map((payroll) => (
+                  {paginatedRegularPayrolls.map((payroll) => (
                     <div key={payroll.id} className="bg-gradient-to-br from-white to-blue-50/30 border-2 border-blue-100 rounded-xl p-4 shadow-sm">
                       <div className="space-y-3">
                         <div className="flex justify-between items-start">
@@ -1417,21 +1429,20 @@ export default function PayrollsPage() {
                 </div>
 
                 {/* 데스크톱: 테이블 형태 */}
-                <div className="hidden sm:block overflow-x-auto -mx-4 sm:mx-0">
-                  <div className="inline-block min-w-full align-middle">
-                    <table className="min-w-full divide-y divide-gray-200">
-                      <thead className="bg-gray-50">
-                        <tr>
-                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">이름</th>
-                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">기간</th>
-                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">금액</th>
-                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">지급일</th>
-                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">상태</th>
-                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">작업</th>
-                        </tr>
-                      </thead>
-                      <tbody className="bg-white divide-y divide-gray-200">
-                        {regularPayrolls.map((payroll) => (
+                <div className="hidden sm:block overflow-x-auto">
+                  <table className="w-full">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">이름</th>
+                        <th className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">기간</th>
+                        <th className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">금액</th>
+                        <th className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">지급일</th>
+                        <th className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">상태</th>
+                        <th className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">작업</th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-200">
+                      {paginatedRegularPayrolls.map((payroll) => (
                           <tr key={payroll.id}>
                             <td className="px-4 py-3 text-sm whitespace-nowrap">{payroll.users?.name || '-'}</td>
                             <td className="px-4 py-3 text-sm whitespace-nowrap">{payroll.pay_period}</td>
@@ -1529,8 +1540,37 @@ export default function PayrollsPage() {
                     </table>
                   </div>
                 </div>
-              </>
-            )}
+                {regularPayrolls.length > PAYROLL_PAGE_SIZE && (
+                  <div className="px-4 py-3 border-t border-gray-200 flex flex-wrap items-center justify-between gap-2 mt-2">
+                    <p className="text-sm text-gray-600">
+                      총 {regularPayrolls.length}개 중 {(regularPage - 1) * PAYROLL_PAGE_SIZE + 1}–{Math.min(regularPage * PAYROLL_PAGE_SIZE, regularPayrolls.length)}개 표시
+                    </p>
+                    <div className="flex items-center gap-1">
+                      <button
+                        type="button"
+                        onClick={() => setRegularPage((p) => Math.max(1, p - 1))}
+                        disabled={regularPage <= 1}
+                        className="px-3 py-1 text-sm border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        이전
+                      </button>
+                      <span className="px-3 py-1 text-sm text-gray-600">
+                        {regularPage} / {regularTotalPages}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setRegularPage((p) => Math.min(regularTotalPages, p + 1))}
+                        disabled={regularPage >= regularTotalPages}
+                        className="px-3 py-1 text-sm border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        다음
+                      </button>
+                    </div>
+                  </div>
+                )}
+                </>
+              )}
+            </div>
           </div>
 
         </>
@@ -1538,5 +1578,6 @@ export default function PayrollsPage() {
 
     </div>
   )
+  }
 }
 

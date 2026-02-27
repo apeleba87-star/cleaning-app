@@ -53,12 +53,18 @@ export default function DailyPayrollSection({
   const [editPaidAt, setEditPaidAt] = useState('')
   const [editStatus, setEditStatus] = useState<'scheduled' | 'paid'>('scheduled')
   const [editMemo, setEditMemo] = useState('')
+  const [currentPage, setCurrentPage] = useState(1)
+  const PAGE_SIZE = 30
 
   useEffect(() => {
     if (selectedPeriod) {
       loadDailySummary()
     }
   }, [selectedPeriod])
+
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [searchTerm])
 
   const loadDailySummary = async () => {
     try {
@@ -205,7 +211,7 @@ export default function DailyPayrollSection({
         </p>
       </div>
 
-      {/* 등록된 일당 인건비 목록 */}
+      {/* 등록된 일당 인건비 목록 (사용자 등록 관리와 동일 스타일, 30개 페이지네이션) */}
       {(() => {
         const filteredPayrolls = searchTerm
           ? existingDailyPayrolls.filter(p => 
@@ -214,6 +220,10 @@ export default function DailyPayrollSection({
             )
           : existingDailyPayrolls
 
+        const totalPages = Math.max(1, Math.ceil(filteredPayrolls.length / PAGE_SIZE))
+        const start = (currentPage - 1) * PAGE_SIZE
+        const paginatedPayrolls = filteredPayrolls.slice(start, start + PAGE_SIZE)
+
         if (filteredPayrolls.length === 0) {
           return null
         }
@@ -221,13 +231,11 @@ export default function DailyPayrollSection({
         return (
           <div className="mt-6">
             <h3 className="text-base sm:text-lg font-semibold mb-4">등록된 일당 인건비</h3>
-            {searchTerm && filteredPayrolls.length === 0 && (
-              <p className="text-gray-500 text-sm mb-4">검색 결과가 없습니다.</p>
-            )}
             
+            <div className="bg-white rounded-lg shadow-md overflow-hidden">
             {/* 모바일: 카드 형태 */}
-            <div className="block sm:hidden space-y-4">
-              {filteredPayrolls.map((payroll) => (
+            <div className="block sm:hidden space-y-4 p-4">
+              {paginatedPayrolls.map((payroll) => (
                 <div key={payroll.id} className="bg-gradient-to-br from-white to-green-50/30 border-2 border-green-100 rounded-xl p-4 shadow-sm">
                   <div className="space-y-3">
                     <div className="flex justify-between items-start">
@@ -360,21 +368,21 @@ export default function DailyPayrollSection({
 
             {/* 데스크톱: 테이블 형태 */}
             <div className="hidden sm:block overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200">
+              <table className="w-full">
                 <thead className="bg-gray-50">
                   <tr>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">이름</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">기간</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">일당</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">일수</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">총액</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">지급일</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">상태</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">작업</th>
+                    <th className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">이름</th>
+                    <th className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">기간</th>
+                    <th className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">일당</th>
+                    <th className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">일수</th>
+                    <th className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">총액</th>
+                    <th className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">지급일</th>
+                    <th className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">상태</th>
+                    <th className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">작업</th>
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
-                  {filteredPayrolls.map((payroll) => (
+                  {paginatedPayrolls.map((payroll) => (
                     <tr key={payroll.id} className="hover:bg-gray-50">
                       <td className="px-4 py-3 text-sm font-medium text-gray-900">
                         {payroll.worker_name || '-'}
@@ -487,6 +495,34 @@ export default function DailyPayrollSection({
                 </tbody>
               </table>
             </div>
+            {filteredPayrolls.length > PAGE_SIZE && (
+              <div className="px-4 py-3 border-t border-gray-200 flex flex-wrap items-center justify-between gap-2">
+                <p className="text-sm text-gray-600">
+                  총 {filteredPayrolls.length}개 중 {start + 1}–{Math.min(start + PAGE_SIZE, filteredPayrolls.length)}개 표시
+                </p>
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                    disabled={currentPage <= 1}
+                    className="px-3 py-1 text-sm border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    이전
+                  </button>
+                  <span className="px-3 py-1 text-sm text-gray-600">
+                    {currentPage} / {totalPages}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                    disabled={currentPage >= totalPages}
+                    className="px-3 py-1 text-sm border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    다음
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         )
       })()}

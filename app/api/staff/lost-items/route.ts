@@ -5,7 +5,7 @@ import { createClient } from '@supabase/supabase-js'
 export async function POST(request: NextRequest) {
   try {
     const user = await getServerUser()
-    const allowedRoles = ['staff', 'subcontract_individual', 'subcontract_company']
+    const allowedRoles = ['staff', 'subcontract_individual', 'subcontract_company', 'business_owner']
     if (!user || !allowedRoles.includes(user.role)) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }

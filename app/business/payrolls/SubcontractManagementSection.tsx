@@ -57,12 +57,20 @@ export default function SubcontractManagementSection({
   // 도급업체 목록 (프렌차이즈)
   const [franchises, setFranchises] = useState<Array<{ id: string; name: string }>>([])
   const [users, setUsers] = useState<Array<{ id: string; name: string }>>([])
+  const [companyPage, setCompanyPage] = useState(1)
+  const [individualPage, setIndividualPage] = useState(1)
+  const PAGE_SIZE = 30
 
   useEffect(() => {
     loadData()
     loadFranchises()
     loadUsers()
   }, [selectedPeriod])
+
+  useEffect(() => {
+    setCompanyPage(1)
+    setIndividualPage(1)
+  }, [searchTerm])
 
   // ESC 키로 모달 닫기
   useEscapeKey(() => {
@@ -369,6 +377,17 @@ export default function SubcontractManagementSection({
   
   const companyPayments = payments.filter((p) => p.subcontract?.subcontract_type === 'company')
   const individualPayments = payments.filter((p) => p.subcontract?.subcontract_type === 'individual')
+
+  const companyTotalPages = Math.max(1, Math.ceil(companySubcontracts.length / PAGE_SIZE))
+  const paginatedCompanySubcontracts = companySubcontracts.slice(
+    (companyPage - 1) * PAGE_SIZE,
+    (companyPage - 1) * PAGE_SIZE + PAGE_SIZE
+  )
+  const individualTotalPages = Math.max(1, Math.ceil(individualSubcontracts.length / PAGE_SIZE))
+  const paginatedIndividualSubcontracts = individualSubcontracts.slice(
+    (individualPage - 1) * PAGE_SIZE,
+    (individualPage - 1) * PAGE_SIZE + PAGE_SIZE
+  )
 
   return (
     <div className="space-y-6">
@@ -770,9 +789,10 @@ export default function SubcontractManagementSection({
         </div>
       )}
 
-      {/* 업체 간 도급 섹션 */}
+      {/* 업체 간 도급 섹션 (사용자 등록 관리와 동일 스타일, 30개 페이지네이션) */}
       {activeSection === 'company' && (
-        <div className="bg-white rounded-lg shadow-md p-4 sm:p-6">
+        <div className="bg-white rounded-lg shadow-md overflow-hidden">
+          <div className="p-4 sm:p-6">
           <h3 className="text-base sm:text-lg font-semibold mb-4">업체 간 도급</h3>
           {companySubcontracts.length === 0 ? (
             <p className="text-gray-500 text-sm text-center py-8">등록된 업체 간 도급이 없습니다.</p>
@@ -780,7 +800,7 @@ export default function SubcontractManagementSection({
             <>
               {/* 모바일: 카드 형태 */}
               <div className="block sm:hidden space-y-4">
-                {companySubcontracts.map((sub) => (
+                {paginatedCompanySubcontracts.map((sub) => (
                   <div key={sub.id} className="bg-gradient-to-br from-white to-blue-50/30 border-2 border-blue-100 rounded-xl p-4 shadow-sm">
                     <div className="space-y-3">
                       <div className="flex justify-between items-start">
@@ -833,20 +853,20 @@ export default function SubcontractManagementSection({
 
               {/* 데스크톱: 테이블 형태 */}
               <div className="hidden sm:block overflow-x-auto">
-                <table className="min-w-full divide-y divide-gray-200">
+                <table className="w-full">
                   <thead className="bg-gray-50">
                     <tr>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">도급업체</th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">계약 기간</th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">월 도급금액</th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">은행명</th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">계좌번호</th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">상태</th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">작업</th>
+                      <th className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">도급업체</th>
+                      <th className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">계약 기간</th>
+                      <th className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">월 도급금액</th>
+                      <th className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">은행명</th>
+                      <th className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">계좌번호</th>
+                      <th className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">상태</th>
+                      <th className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">작업</th>
                     </tr>
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
-                    {companySubcontracts.map((sub) => (
+                    {paginatedCompanySubcontracts.map((sub) => (
                       <tr key={sub.id} className="hover:bg-gray-50">
                         <td className="px-4 py-3 text-sm font-medium text-gray-900">
                           {sub.subcontractor?.name || sub.worker_name || sub.worker?.name || '-'}
@@ -886,8 +906,35 @@ export default function SubcontractManagementSection({
                   </tbody>
                 </table>
               </div>
+              {companySubcontracts.length > PAGE_SIZE && (
+                <div className="px-4 py-3 border-t border-gray-200 flex flex-wrap items-center justify-between gap-2 mt-2">
+                  <p className="text-sm text-gray-600">
+                    총 {companySubcontracts.length}개 중 {(companyPage - 1) * PAGE_SIZE + 1}–{Math.min(companyPage * PAGE_SIZE, companySubcontracts.length)}개 표시
+                  </p>
+                  <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() => setCompanyPage((p) => Math.max(1, p - 1))}
+                      disabled={companyPage <= 1}
+                      className="px-3 py-1 text-sm border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      이전
+                    </button>
+                    <span className="px-3 py-1 text-sm text-gray-600">{companyPage} / {companyTotalPages}</span>
+                    <button
+                      type="button"
+                      onClick={() => setCompanyPage((p) => Math.min(companyTotalPages, p + 1))}
+                      disabled={companyPage >= companyTotalPages}
+                      className="px-3 py-1 text-sm border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      다음
+                    </button>
+                  </div>
+                </div>
+              )}
             </>
           )}
+          </div>
 
           {/* 업체 간 도급 정산 내역 */}
           {companyPayments.length > 0 && (
@@ -1074,9 +1121,10 @@ export default function SubcontractManagementSection({
         </div>
       )}
 
-      {/* 개인 도급 섹션 */}
+      {/* 개인 도급 섹션 (사용자 등록 관리와 동일 스타일, 30개 페이지네이션) */}
       {activeSection === 'individual' && (
-        <div className="bg-white rounded-lg shadow-md p-4 sm:p-6">
+        <div className="bg-white rounded-lg shadow-md overflow-hidden">
+          <div className="p-4 sm:p-6">
           <h3 className="text-base sm:text-lg font-semibold mb-4">개인 도급</h3>
           {individualSubcontracts.length === 0 ? (
             <p className="text-gray-500 text-sm text-center py-8">등록된 개인 도급이 없습니다.</p>
@@ -1084,7 +1132,7 @@ export default function SubcontractManagementSection({
             <>
               {/* 모바일: 카드 형태 */}
               <div className="block sm:hidden space-y-4">
-                {individualSubcontracts.map((sub) => {
+                {paginatedIndividualSubcontracts.map((sub) => {
                   const finalAmount = Math.floor(sub.monthly_amount * (1 - sub.tax_rate))
                   return (
                     <div key={sub.id} className="bg-gradient-to-br from-white to-green-50/30 border-2 border-green-100 rounded-xl p-4 shadow-sm">
@@ -1150,22 +1198,22 @@ export default function SubcontractManagementSection({
 
               {/* 데스크톱: 테이블 형태 */}
               <div className="hidden sm:block overflow-x-auto">
-                <table className="min-w-full divide-y divide-gray-200">
+                <table className="w-full">
                   <thead className="bg-gray-50">
                     <tr>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">이름</th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">계약 기간</th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">월 도급금액</th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">세율</th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">지급 금액</th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">은행명</th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">계좌번호</th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">상태</th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">작업</th>
+                      <th className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">이름</th>
+                      <th className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">계약 기간</th>
+                      <th className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">월 도급금액</th>
+                      <th className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">세율</th>
+                      <th className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">지급 금액</th>
+                      <th className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">은행명</th>
+                      <th className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">계좌번호</th>
+                      <th className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">상태</th>
+                      <th className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">작업</th>
                     </tr>
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
-                    {individualSubcontracts.map((sub) => {
+                    {paginatedIndividualSubcontracts.map((sub) => {
                       const finalAmount = Math.floor(sub.monthly_amount * (1 - sub.tax_rate))
                       return (
                         <tr key={sub.id} className="hover:bg-gray-50">
@@ -1214,8 +1262,35 @@ export default function SubcontractManagementSection({
                   </tbody>
                 </table>
               </div>
+              {individualSubcontracts.length > PAGE_SIZE && (
+                <div className="px-4 py-3 border-t border-gray-200 flex flex-wrap items-center justify-between gap-2 mt-2">
+                  <p className="text-sm text-gray-600">
+                    총 {individualSubcontracts.length}개 중 {(individualPage - 1) * PAGE_SIZE + 1}–{Math.min(individualPage * PAGE_SIZE, individualSubcontracts.length)}개 표시
+                  </p>
+                  <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() => setIndividualPage((p) => Math.max(1, p - 1))}
+                      disabled={individualPage <= 1}
+                      className="px-3 py-1 text-sm border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      이전
+                    </button>
+                    <span className="px-3 py-1 text-sm text-gray-600">{individualPage} / {individualTotalPages}</span>
+                    <button
+                      type="button"
+                      onClick={() => setIndividualPage((p) => Math.min(individualTotalPages, p + 1))}
+                      disabled={individualPage >= individualTotalPages}
+                      className="px-3 py-1 text-sm border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      다음
+                    </button>
+                  </div>
+                </div>
+              )}
             </>
           )}
+          </div>
 
           {/* 개인 도급 정산 내역 */}
           {individualPayments.length > 0 && (
