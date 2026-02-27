@@ -842,6 +842,30 @@ export function ChecklistCamera({ items, mode, storeId, checklistId, onComplete,
     console.log(`📍 재촬영을 위해 인덱스로 이동: ${index}`)
   }
 
+  // 1~N번 슬롯이 모두 채워졌는지 검사 (tempPhotos + localStorage)
+  const validateAllSlots = (): { allFilled: boolean; firstEmptyIndex: number | null } => {
+    for (let i = 0; i < photoItems.length; i++) {
+      const fromState = tempPhotos[i]
+      const photoKey = `checklist_photo_${checklistId}_${mode}_${i}`
+      const fromStorage = typeof localStorage !== 'undefined' ? localStorage.getItem(photoKey) : null
+      if (!fromState && !fromStorage) {
+        return { allFilled: false, firstEmptyIndex: i }
+      }
+    }
+    return { allFilled: true, firstEmptyIndex: null }
+  }
+
+  // 저장 클릭 시: 검사 후 하나라도 비어 있으면 갤러리 활성화 + 해당 인덱스로 이동, 전부 차 있으면 저장 진행
+  const handleSaveOrValidate = () => {
+    const { allFilled, firstEmptyIndex } = validateAllSlots()
+    if (!allFilled && firstEmptyIndex !== null) {
+      setHasCaptureError(true)
+      setCurrentIndex(firstEmptyIndex)
+      return
+    }
+    handleSave()
+  }
+
   const handleSave = async () => {
     // 관리전/관리후 사진 모두 확인 필요
     if (!confirm('저장할까요?')) {
@@ -1246,9 +1270,9 @@ export function ChecklistCamera({ items, mode, storeId, checklistId, onComplete,
               )}
             </button>
           )}
-          {allCaptured && (
+          {photoItems.length > 0 && (
             <button
-              onClick={handleSave}
+              onClick={handleSaveOrValidate}
               disabled={saving}
               className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium shadow-lg disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center justify-center gap-2"
             >
