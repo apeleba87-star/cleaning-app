@@ -1,63 +1,66 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 
 export default function SignupPage() {
+  const [companyName, setCompanyName] = useState('')
+  const [businessRegistrationNumber, setBusinessRegistrationNumber] = useState('')
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [passwordConfirm, setPasswordConfirm] = useState('')
   const [phone, setPhone] = useState('')
-  const [signupCode, setSignupCode] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [codeValidation, setCodeValidation] = useState<{
+  const [emailValidation, setEmailValidation] = useState<{
     status: 'idle' | 'validating' | 'valid' | 'invalid'
     message: string
-    companyName?: string
   }>({ status: 'idle', message: '' })
   const router = useRouter()
 
-  // 코드 검증 (실시간)
-  const validateCode = async (code: string) => {
-    if (!code || code.trim().length === 0) {
-      setCodeValidation({ status: 'idle', message: '' })
+  // 이메일 중복 확인 (디바운스)
+  useEffect(() => {
+    if (!email || email.trim().length === 0) {
+      setEmailValidation({ status: 'idle', message: '' })
       return
     }
 
-    setCodeValidation({ status: 'validating', message: '코드를 확인 중...' })
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+    if (!emailRegex.test(email.trim())) {
+      setEmailValidation({ status: 'invalid', message: '올바른 이메일 형식이 아닙니다.' })
+      return
+    }
 
-    try {
-      const response = await fetch(`/api/auth/validate-code?code=${encodeURIComponent(code.trim())}`)
-      const data = await response.json()
+    const timer = setTimeout(async () => {
+      setEmailValidation({ status: 'validating', message: '이메일을 확인 중...' })
 
-      if (response.ok && data.valid) {
-        setCodeValidation({
-          status: 'valid',
-          message: `✓ 올바른 코드입니다`,
-          companyName: data.companyName,
-        })
-      } else {
-        setCodeValidation({
+      try {
+        const response = await fetch(`/api/auth/check-email?email=${encodeURIComponent(email.trim())}`)
+        const data = await response.json()
+
+        if (response.ok && data.available) {
+          setEmailValidation({
+            status: 'valid',
+            message: '사용 가능한 이메일입니다.',
+          })
+        } else {
+          setEmailValidation({
+            status: 'invalid',
+            message: data.error || data.message || '이미 가입된 이메일입니다.',
+          })
+        }
+      } catch {
+        setEmailValidation({
           status: 'invalid',
-          message: data.error || '올바른 코드를 입력해주세요',
+          message: '이메일 확인 중 오류가 발생했습니다.',
         })
       }
-    } catch (err) {
-      setCodeValidation({
-        status: 'invalid',
-        message: '코드 확인 중 오류가 발생했습니다',
-      })
-    }
-  }
+    }, 400)
 
-  const handleCodeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value
-    setSignupCode(value)
-    validateCode(value)
-  }
+    return () => clearTimeout(timer)
+  }, [email])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -71,9 +74,9 @@ export default function SignupPage() {
       return
     }
 
-    // 코드 검증 상태 확인
-    if (codeValidation.status !== 'valid') {
-      setError('올바른 업체 코드를 입력해주세요.')
+    // 이메일 중복 확인 상태
+    if (emailValidation.status !== 'valid') {
+      setError('사용 가능한 이메일을 입력해주세요.')
       setLoading(false)
       return
     }
@@ -85,11 +88,12 @@ export default function SignupPage() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
+          company_name: companyName.trim(),
+          business_registration_number: businessRegistrationNumber.trim() || null,
           name: name.trim(),
           email: email.trim(),
           password: password,
           phone: phone.trim() || null,
-          signup_code: signupCode.trim(),
         }),
       })
 
@@ -99,12 +103,8 @@ export default function SignupPage() {
         throw new Error(data.error || '회원가입에 실패했습니다.')
       }
 
-      // 성공 시 안내 페이지로 이동
-      if (data.requires_approval) {
-        router.push('/signup/pending')
-      } else {
-        router.push('/signup/success')
-      }
+      // 업체관리자 가입은 승인 대기 페이지로 이동
+      router.push('/signup/pending')
     } catch (err: any) {
       console.error('Signup error:', err)
       setError(err.message || '회원가입 중 오류가 발생했습니다.')
@@ -115,7 +115,10 @@ export default function SignupPage() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-100 p-4">
       <div className="bg-white p-8 rounded-lg shadow-md w-full max-w-md">
-        <h1 className="text-2xl font-bold mb-6 text-center">회원가입</h1>
+        <h1 className="text-2xl font-bold mb-2 text-center">업체관리자 회원가입</h1>
+        <p className="text-sm text-center text-gray-600 mb-6">
+          직원/프렌차이즈/점주 계정은 가입 후 관리자 화면에서 직접 등록합니다.
+        </p>
         {error && (
           <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-md text-red-800 text-sm">
             {error}
@@ -123,8 +126,38 @@ export default function SignupPage() {
         )}
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
+            <label htmlFor="companyName" className="block text-sm font-medium text-gray-700">
+              회사명 <span className="text-red-500">*</span>
+            </label>
+            <input
+              id="companyName"
+              type="text"
+              value={companyName}
+              onChange={(e) => setCompanyName(e.target.value)}
+              required
+              placeholder="회사명을 입력하세요"
+              className="w-full px-4 py-3 border-2 border-gray-300 rounded-md focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
+              autoComplete="organization"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <label htmlFor="businessRegistrationNumber" className="block text-sm font-medium text-gray-700">
+              사업자등록번호
+            </label>
+            <input
+              id="businessRegistrationNumber"
+              type="text"
+              value={businessRegistrationNumber}
+              onChange={(e) => setBusinessRegistrationNumber(e.target.value)}
+              placeholder="예: 123-45-67890"
+              className="w-full px-4 py-3 border-2 border-gray-300 rounded-md focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
+            />
+          </div>
+
+          <div className="space-y-2">
             <label htmlFor="name" className="block text-sm font-medium text-gray-700">
-              이름 <span className="text-red-500">*</span>
+              담당자 이름 <span className="text-red-500">*</span>
             </label>
             <input
               id="name"
@@ -132,7 +165,7 @@ export default function SignupPage() {
               value={name}
               onChange={(e) => setName(e.target.value)}
               required
-              placeholder="이름을 입력하세요"
+              placeholder="담당자 이름을 입력하세요"
               className="w-full px-4 py-3 border-2 border-gray-300 rounded-md focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
               autoComplete="name"
             />
@@ -149,9 +182,28 @@ export default function SignupPage() {
               onChange={(e) => setEmail(e.target.value)}
               required
               placeholder="이메일을 입력하세요"
-              className="w-full px-4 py-3 border-2 border-gray-300 rounded-md focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
+              className={`w-full px-4 py-3 border-2 rounded-md focus:outline-none focus:ring-2 ${
+                emailValidation.status === 'valid'
+                  ? 'border-green-500 focus:border-green-500 focus:ring-green-200'
+                  : emailValidation.status === 'invalid'
+                  ? 'border-red-500 focus:border-red-500 focus:ring-red-200'
+                  : 'border-gray-300 focus:border-blue-500 focus:ring-blue-200'
+              }`}
               autoComplete="email"
             />
+            {emailValidation.message && (
+              <p
+                className={`text-sm ${
+                  emailValidation.status === 'valid'
+                    ? 'text-green-600'
+                    : emailValidation.status === 'invalid'
+                    ? 'text-red-600'
+                    : 'text-gray-600'
+                }`}
+              >
+                {emailValidation.message}
+              </p>
+            )}
           </div>
 
           <div className="space-y-2">
@@ -203,50 +255,10 @@ export default function SignupPage() {
             />
           </div>
 
-          <div className="space-y-2">
-            <label htmlFor="signupCode" className="block text-sm font-medium text-gray-700">
-              업체 코드 <span className="text-red-500">*</span>
-            </label>
-            <input
-              id="signupCode"
-              type="text"
-              value={signupCode}
-              onChange={handleCodeChange}
-              required
-              placeholder="소속 업체에서 받은 코드를 입력하세요"
-              className={`w-full px-4 py-3 border-2 rounded-md focus:outline-none focus:ring-2 ${
-                codeValidation.status === 'valid'
-                  ? 'border-green-500 focus:border-green-500 focus:ring-green-200'
-                  : codeValidation.status === 'invalid'
-                  ? 'border-red-500 focus:border-red-500 focus:ring-red-200'
-                  : 'border-gray-300 focus:border-blue-500 focus:ring-blue-200'
-              }`}
-            />
-            {codeValidation.message && (
-              <p
-                className={`text-sm ${
-                  codeValidation.status === 'valid'
-                    ? 'text-green-600'
-                    : codeValidation.status === 'invalid'
-                    ? 'text-red-600'
-                    : 'text-gray-600'
-                }`}
-              >
-                {codeValidation.message}
-                {codeValidation.companyName && (
-                  <span className="block mt-1">→ {codeValidation.companyName}</span>
-                )}
-              </p>
-            )}
-            <p className="text-xs text-gray-500 mt-1">
-              ℹ️ 소속 업체에서 받은 코드를 입력하세요
-            </p>
-          </div>
-
           <div className="pt-2">
             <button
               type="submit"
-              disabled={loading || codeValidation.status !== 'valid'}
+              disabled={loading || emailValidation.status !== 'valid'}
               className="w-full px-4 py-3 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors font-medium text-base"
             >
               {loading ? '가입 중...' : '가입하기'}
@@ -255,7 +267,7 @@ export default function SignupPage() {
 
           <div className="text-center text-sm text-gray-600 pt-2">
             <p className="mb-2">
-              ℹ️ 가입 신청 후 관리자 승인이 필요할 수 있습니다.
+              ℹ️ 가입 신청 후 시스템 관리자 승인이 필요합니다.
             </p>
             <Link href="/login" className="text-blue-600 hover:text-blue-800">
               이미 계정이 있으신가요? 로그인

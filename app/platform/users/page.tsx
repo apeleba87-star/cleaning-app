@@ -3,6 +3,7 @@ import { getServerUser } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import { createClient } from '@supabase/supabase-js'
 import UserList from './UserList'
+import PendingOwnerSignupsSection from './PendingOwnerSignupsSection'
 
 export default async function PlatformUsersPage() {
   const user = await getServerUser()
@@ -115,6 +116,8 @@ export default async function PlatformUsersPage() {
           ← 대시보드로
         </a>
       </div>
+
+      <PendingOwnerSignupsSection />
       
       <UserList 
         initialUsers={usersWithEmail} 

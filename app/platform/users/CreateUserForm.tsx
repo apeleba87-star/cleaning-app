@@ -157,7 +157,6 @@ export default function CreateUserForm({ stores, companies, onSuccess, onCancel 
             >
               <option value="staff">직원</option>
               <option value="manager">매니저</option>
-              <option value="business_owner">업체관리자</option>
               <option value="platform_admin">시스템관리자</option>
               <option value="admin">관리자</option>
             </select>

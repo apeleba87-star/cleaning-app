@@ -33,6 +33,14 @@ export async function PATCH(
       )
     }
 
+    // 업체관리자 셀프가입 계정은 시스템관리자만 승인 가능
+    if (targetUser.signup_type === 'owner_self_signup' && user.role !== 'platform_admin') {
+      return NextResponse.json(
+        { error: '업체관리자 가입 승인은 시스템 관리자만 처리할 수 있습니다.' },
+        { status: 403 }
+      )
+    }
+
     // 승인 상태 확인
     if (targetUser.approval_status !== 'pending') {
       return NextResponse.json(

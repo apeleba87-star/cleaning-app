@@ -43,17 +43,28 @@ export async function middleware(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser()
 
+  const pathname = request.nextUrl.pathname
+
   // 사용자가 있고, 동시 접속 제한이 필요한 역할인 경우 세션 갱신
   if (user) {
     try {
       // 사용자 정보 조회
       const { data: userData } = await supabase
         .from('users')
-        .select('role')
+        .select('role, approval_status')
         .eq('id', user.id)
         .single()
 
       if (userData) {
+        // 승인 대기 계정은 로그인 이후 서비스 화면 접근 차단
+        const pendingAllowedPaths = ['/signup/pending', '/login', '/signup']
+        const isApiRoute = pathname.startsWith('/api')
+        const isPendingAllowedPath = pendingAllowedPaths.some((path) => pathname.startsWith(path))
+        if (userData.approval_status === 'pending' && !isApiRoute && !isPendingAllowedPath) {
+          const redirectUrl = new URL('/signup/pending', request.url)
+          return NextResponse.redirect(redirectUrl)
+        }
+
         const restrictedRoles = ['franchise_manager', 'business_owner', 'store_manager']
         if (restrictedRoles.includes(userData.role)) {
           // 세션 활동 시간 갱신 (비동기, 에러 무시)

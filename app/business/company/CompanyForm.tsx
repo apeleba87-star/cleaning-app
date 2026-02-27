@@ -8,6 +8,12 @@ interface CompanyFormProps {
 }
 
 export default function CompanyForm({ company }: CompanyFormProps) {
+  const isTrialExpired =
+    company.subscription_plan === 'free' &&
+    !!company.trial_ends_at &&
+    !Number.isNaN(Date.parse(company.trial_ends_at)) &&
+    Date.parse(company.trial_ends_at) < Date.now()
+
   const [name, setName] = useState(company.name)
   const [address, setAddress] = useState(company.address || '')
   const [businessRegistrationNumber, setBusinessRegistrationNumber] = useState(
@@ -205,7 +211,14 @@ export default function CompanyForm({ company }: CompanyFormProps) {
 
   return (
     <div className="bg-white rounded-lg shadow-md p-6">
-      <h2 className="text-xl font-semibold mb-4">회사 정보 설정</h2>
+      <div className="flex flex-wrap items-center gap-2 mb-4">
+        <h2 className="text-xl font-semibold">회사 정보 설정</h2>
+        {isTrialExpired && (
+          <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-red-100 text-red-700 border border-red-200">
+            무료체험 만료
+          </span>
+        )}
+      </div>
 
       {error && (
         <div className="mb-4 bg-red-50 border border-red-200 rounded-lg p-3">
@@ -390,11 +403,13 @@ export default function CompanyForm({ company }: CompanyFormProps) {
             <div className="rounded-lg bg-white border border-slate-100 p-4 shadow-sm">
               <p className="text-xs font-medium text-slate-500 uppercase tracking-wide mb-1">상태</p>
               <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-sm font-semibold ${
-                company.subscription_status === 'active'
+                isTrialExpired
+                  ? 'bg-red-100 text-red-700'
+                  : company.subscription_status === 'active'
                   ? 'bg-emerald-100 text-emerald-700'
                   : 'bg-slate-100 text-slate-600'
               }`}>
-                {company.subscription_status === 'active' ? '활성' : '비활성'}
+                {isTrialExpired ? '무료체험 만료' : company.subscription_status === 'active' ? '활성' : '비활성'}
               </span>
             </div>
             <div className="rounded-lg bg-blue-50/80 border border-blue-100 p-4">
@@ -407,11 +422,22 @@ export default function CompanyForm({ company }: CompanyFormProps) {
             </div>
           </div>
           {company.trial_ends_at && (
-            <div className="mt-4 rounded-lg bg-amber-50 border border-amber-100 px-4 py-3">
-              <p className="text-xs font-medium text-amber-700 uppercase tracking-wide mb-0.5">무료체험 종료일</p>
-              <p className="text-sm font-semibold text-amber-800">
+            <div className={`mt-4 rounded-lg px-4 py-3 border ${
+              isTrialExpired ? 'bg-red-50 border-red-200' : 'bg-amber-50 border-amber-100'
+            }`}>
+              <p className={`text-xs font-medium uppercase tracking-wide mb-0.5 ${
+                isTrialExpired ? 'text-red-700' : 'text-amber-700'
+              }`}>
+                무료체험 종료일
+              </p>
+              <p className={`text-sm font-semibold ${isTrialExpired ? 'text-red-800' : 'text-amber-800'}`}>
                 {new Date(company.trial_ends_at).toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric' })}
               </p>
+              {isTrialExpired && (
+                <p className="text-xs text-red-700 mt-1">
+                  무료체험 기간이 종료되었습니다. 플랜 변경은 시스템 관리자에게 문의하세요.
+                </p>
+              )}
             </div>
           )}
           <p className="mt-4 text-xs text-slate-500 flex items-center gap-1.5">

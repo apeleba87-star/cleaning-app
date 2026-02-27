@@ -53,6 +53,30 @@ export default async function BusinessOwnerDashboardPage() {
   const company = companyResult.data
   const totalStores = storesResult.count || 0
   const totalUsers = usersResult.count || 0
+  const freeTrialInfo = (() => {
+    if (!companyPlan || companyPlan.subscription_plan !== 'free') return null
+    if (!companyPlan.trial_ends_at || Number.isNaN(Date.parse(companyPlan.trial_ends_at))) {
+      return { label: '무료체험 종료일 미설정', className: 'text-red-700' }
+    }
+    const endDate = new Date(companyPlan.trial_ends_at)
+    const now = new Date()
+    const endDay = new Date(endDate.getFullYear(), endDate.getMonth(), endDate.getDate())
+    const nowDay = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+    const diffDays = Math.ceil((endDay.getTime() - nowDay.getTime()) / (1000 * 60 * 60 * 24))
+    if (diffDays < 0) {
+      return { label: `무료체험 만료 (+${Math.abs(diffDays)}일)`, className: 'text-red-700 font-semibold' }
+    }
+    if (diffDays === 0) {
+      return { label: '무료체험 오늘 만료', className: 'text-orange-700 font-semibold' }
+    }
+    if (diffDays <= 3) {
+      return { label: `무료체험 D-${diffDays}`, className: 'text-orange-600 font-semibold' }
+    }
+    if (diffDays <= 7) {
+      return { label: `무료체험 D-${diffDays}`, className: 'text-amber-600 font-medium' }
+    }
+    return { label: `무료체험 D-${diffDays}`, className: 'text-slate-600' }
+  })()
 
   // 역할별 사용자 카운트 계산 (이미 조회한 데이터 사용)
   const usersByRole = (usersResult.data || []).reduce((acc: Record<string, number>, user: any) => {
@@ -150,21 +174,42 @@ export default async function BusinessOwnerDashboardPage() {
             )}
           </div>
         </div>
-        <div className="bg-white rounded-lg shadow-md p-6">
-          <h3 className="text-sm font-medium text-gray-500 mb-3">요금제 정보</h3>
-          <div className="space-y-2">
-            <p className="text-sm text-gray-600">
-              <span className="text-gray-500">현재 요금제:</span>{' '}
-              <span className="font-semibold text-gray-900">{companyPlan ? getPlanLabel(companyPlan.subscription_plan) : '-'}</span>
-            </p>
-            <p className="text-sm text-gray-600">
-              <span className="text-gray-500">오픈 가능한 베이직 매장수:</span>{' '}
-              <span className="font-semibold text-gray-900">{companyPlan?.basic_units ?? 0}곳</span>
-            </p>
-            <p className="text-sm text-gray-600">
-              <span className="text-gray-500">프리미엄 매장수:</span>{' '}
-              <span className="font-semibold text-gray-900">{companyPlan?.premium_units ?? 0}곳</span>
-            </p>
+        <div className="rounded-xl border border-slate-200 bg-gradient-to-br from-slate-50 to-white p-5 shadow-sm">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-sm font-semibold text-slate-700">요금제 정보</h3>
+            <span className="rounded-full bg-slate-200/80 px-2 py-0.5 text-xs font-medium text-slate-600">2026</span>
+          </div>
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-slate-500">현재 요금제</span>
+              <span className={`inline-flex px-2.5 py-1 text-xs font-semibold rounded-full ${
+                companyPlan?.subscription_plan === 'free'
+                  ? 'bg-slate-100 text-slate-700'
+                  : companyPlan?.subscription_plan === 'basic'
+                  ? 'bg-blue-100 text-blue-700'
+                  : 'bg-violet-100 text-violet-700'
+              }`}>
+                {companyPlan ? getPlanLabel(companyPlan.subscription_plan) : '-'}
+              </span>
+            </div>
+            {freeTrialInfo && (
+              <div className="rounded-lg border border-amber-100 bg-amber-50/70 px-3 py-2">
+                <p className={`text-xs ${freeTrialInfo.className}`}>{freeTrialInfo.label}</p>
+              </div>
+            )}
+            <div className="rounded-lg border border-slate-200 bg-white px-3 py-2">
+              <p className="text-xs font-medium text-slate-500 mb-2">오픈 가능</p>
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-slate-600">베이직</span>
+                  <span className="font-semibold text-slate-900">{companyPlan?.basic_units ?? 0}곳</span>
+                </div>
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-slate-600">프리미엄</span>
+                  <span className="font-semibold text-slate-900">{companyPlan?.premium_units ?? 0}곳</span>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </div>

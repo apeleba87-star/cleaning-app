@@ -320,6 +320,7 @@ export async function POST(request: NextRequest) {
     }
 
     // 2. public.users에 사용자 정보 추가 (UPSERT)
+    const now = new Date().toISOString()
     const { data: newUser, error: userError } = await adminSupabase
       .from('users')
       .upsert({
@@ -344,7 +345,11 @@ export async function POST(request: NextRequest) {
         resignation_date: resignation_date || null,
         employment_type: employment_type || null,
         business_registration_number: business_registration_number?.trim() || null,
-        updated_at: new Date().toISOString(),
+        approval_status: 'approved',
+        approved_at: now,
+        approved_by: user.id,
+        signup_type: 'admin_created',
+        updated_at: now,
       }, {
         onConflict: 'id',
       })

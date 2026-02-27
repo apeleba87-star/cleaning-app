@@ -123,9 +123,16 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    if (!role || !['staff', 'manager', 'business_owner', 'platform_admin', 'admin', 'franchise_manager', 'store_manager'].includes(role)) {
+    if (!role || !['staff', 'manager', 'platform_admin', 'admin', 'franchise_manager', 'store_manager', 'subcontract_individual', 'subcontract_company'].includes(role)) {
       return NextResponse.json(
         { error: '유효하지 않은 역할입니다.' },
+        { status: 400 }
+      )
+    }
+
+    if (role === 'business_owner') {
+      return NextResponse.json(
+        { error: '업체관리자 계정은 공개 회원가입으로만 생성할 수 있습니다.' },
         { status: 400 }
       )
     }
@@ -206,6 +213,7 @@ export async function POST(request: NextRequest) {
     }
 
     // 2. public.users에 사용자 정보 추가 (UPSERT)
+    const now = new Date().toISOString()
     const { data: newUser, error: userError } = await adminSupabase
       .from('users')
       .upsert({
@@ -218,7 +226,11 @@ export async function POST(request: NextRequest) {
         salary_date: salary_date ? parseInt(salary_date) : null,
         salary_amount: salary_amount ? parseFloat(salary_amount) : null,
         employment_active: employment_active !== undefined ? employment_active : true,
-        updated_at: new Date().toISOString(),
+        approval_status: 'approved',
+        approved_at: now,
+        approved_by: user.id,
+        signup_type: 'admin_created',
+        updated_at: now,
       }, {
         onConflict: 'id',
       })

@@ -1,7 +1,5 @@
-import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
-import { UserRole } from '@/types/db'
 
 export async function POST(request: NextRequest) {
   try {
@@ -11,13 +9,14 @@ export async function POST(request: NextRequest) {
       password,
       name,
       phone,
-      signup_code,
+      company_name,
+      business_registration_number,
     } = body
 
     // 필수 필드 검증
-    if (!email || !password || !name || !signup_code) {
+    if (!email || !password || !name || !company_name) {
       return NextResponse.json(
-        { error: '이메일, 비밀번호, 이름, 업체 코드는 필수입니다.' },
+        { error: '이메일, 비밀번호, 이름, 회사명은 필수입니다.' },
         { status: 400 }
       )
     }
@@ -35,6 +34,13 @@ export async function POST(request: NextRequest) {
     if (password.length < 6) {
       return NextResponse.json(
         { error: '비밀번호는 최소 6자 이상이어야 합니다.' },
+        { status: 400 }
+      )
+    }
+
+    if (typeof company_name !== 'string' || company_name.trim().length === 0) {
+      return NextResponse.json(
+        { error: '회사명을 입력해주세요.' },
         { status: 400 }
       )
     }
@@ -63,57 +69,29 @@ export async function POST(request: NextRequest) {
       },
     })
 
-    // 회사 코드 검증 (대소문자 구분 없이) - RLS 우회
-    const trimmedCode = signup_code.trim().toUpperCase()
-    console.log('Signup - Validating code:', trimmedCode)
-    
-    const { data: companies, error: fetchError } = await adminSupabase
-      .from('companies')
-      .select('id, name, signup_code, signup_code_active, requires_approval, default_role')
-      .eq('signup_code_active', true)
-      .is('deleted_at', null)
-
-    if (fetchError) {
-      console.error('Error fetching companies:', fetchError)
+    // 이메일 중복 사전 체크 (최종 중복 판정은 createUser에서도 수행됨)
+    const { data: existingUsers, error: listError } = await adminSupabase.auth.admin.listUsers()
+    if (listError) {
+      console.error('Error checking duplicate email:', listError)
       return NextResponse.json(
-        { error: '올바른 업체 코드를 입력해주세요.' },
-        { status: 400 }
+        { error: '이메일 확인 중 오류가 발생했습니다.' },
+        { status: 500 }
       )
     }
-
-    console.log('Signup - Found companies:', companies?.length || 0)
-    console.log('Signup - Companies with codes:', companies?.map(c => ({ id: c.id, code: c.signup_code })))
-
-    if (!companies || companies.length === 0) {
-      return NextResponse.json(
-        { error: '올바른 업체 코드를 입력해주세요.' },
-        { status: 400 }
-      )
-    }
-
-    // signup_code가 null이 아니고, 대소문자 구분 없이 코드 찾기
-    const company = companies.find(
-      c => {
-        if (!c.signup_code) return false
-        const dbCode = c.signup_code.trim().toUpperCase()
-        const match = dbCode === trimmedCode
-        if (match) {
-          console.log('Signup - Code matched!', { dbCode, trimmedCode, companyName: c.name })
-        }
-        return match
-      }
+    const normalizedEmail = email.trim().toLowerCase()
+    const hasDuplicateEmail = (existingUsers?.users || []).some(
+      (user) => user.email?.toLowerCase() === normalizedEmail
     )
-
-    if (!company) {
+    if (hasDuplicateEmail) {
       return NextResponse.json(
-        { error: '올바른 업체 코드를 입력해주세요.' },
+        { error: '이미 가입된 이메일입니다.' },
         { status: 400 }
       )
     }
 
-    // Supabase Auth에 계정 생성 (이메일 중복 체크는 여기서 처리됨)
+    // Supabase Auth에 업체관리자 계정 생성
     const { data: authData, error: authError } = await adminSupabase.auth.admin.createUser({
-      email: email.trim(),
+      email: normalizedEmail,
       password: password.trim(),
       email_confirm: true,
     })
@@ -140,9 +118,36 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // users 테이블에 사용자 정보 저장 (email은 auth.users에만 저장됨)
-    // 이미 존재할 수 있으므로 upsert 사용
-    const approvalStatus = company.requires_approval ? 'pending' : 'approved'
+    // 업체(회사) 생성: 무료 7일 체험 + 매장 3개 한도
+    const trialEndsAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString()
+    const { data: company, error: companyError } = await adminSupabase
+      .from('companies')
+      .insert({
+        name: company_name.trim(),
+        business_registration_number: business_registration_number?.trim() || null,
+        subscription_plan: 'free',
+        subscription_status: 'active',
+        trial_ends_at: trialEndsAt,
+        basic_units: 3,
+        premium_units: 0,
+        signup_code_active: false,
+        requires_approval: true,
+        default_role: 'staff',
+      })
+      .select('id, name')
+      .single()
+
+    if (companyError || !company) {
+      console.error('Error creating company during signup:', companyError)
+      await adminSupabase.auth.admin.deleteUser(authData.user.id)
+      return NextResponse.json(
+        { error: '회사 생성에 실패했습니다.' },
+        { status: 500 }
+      )
+    }
+
+    // users 테이블에 업체관리자 정보 저장
+    const approvalStatus = 'pending'
     const now = new Date().toISOString()
 
     const { data: newUser, error: userError } = await adminSupabase
@@ -152,10 +157,12 @@ export async function POST(request: NextRequest) {
         name: name.trim(),
         phone: phone?.trim() || null,
         company_id: company.id,
-        role: company.default_role || 'staff',
+        role: 'business_owner',
         approval_status: approvalStatus,
-        employment_active: approvalStatus === 'approved',
-        approved_at: approvalStatus === 'approved' ? now : null,
+        employment_active: false,
+        approved_at: null,
+        approved_by: null,
+        signup_type: 'owner_self_signup',
         updated_at: now,
       }, {
         onConflict: 'id',
@@ -165,7 +172,11 @@ export async function POST(request: NextRequest) {
 
     if (userError) {
       console.error('Error creating user in users table:', userError)
-      // 롤백: Auth 계정 삭제
+      // 롤백: users 저장 실패 시 auth/company 모두 정리
+      await adminSupabase
+        .from('companies')
+        .delete()
+        .eq('id', company.id)
       await adminSupabase.auth.admin.deleteUser(authData.user.id)
       return NextResponse.json(
         { error: `사용자 정보 저장에 실패했습니다: ${userError.message || '알 수 없는 오류'}` },
@@ -175,10 +186,12 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       user: newUser,
-      requires_approval: company.requires_approval,
-      message: company.requires_approval
-        ? '가입 신청이 완료되었습니다. 관리자 승인 후 로그인하실 수 있습니다.'
-        : '가입이 완료되었습니다. 지금 로그인하실 수 있습니다.',
+      company: {
+        id: company.id,
+        name: company.name,
+      },
+      requires_approval: true,
+      message: '가입 신청이 완료되었습니다. 시스템 관리자 승인 후 로그인하실 수 있습니다.',
     })
   } catch (error: any) {
     console.error('Error in POST /api/auth/signup:', error)

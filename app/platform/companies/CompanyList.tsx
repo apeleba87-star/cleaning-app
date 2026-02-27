@@ -78,6 +78,19 @@ export default function CompanyList({ initialCompanies }: CompanyListProps) {
     }
   }
 
+  const getPlanBadgeClass = (plan: string) => {
+    switch (plan) {
+      case 'free':
+        return 'bg-slate-100 text-slate-700'
+      case 'basic':
+        return 'bg-blue-100 text-blue-700'
+      case 'premium':
+        return 'bg-violet-100 text-violet-700'
+      default:
+        return 'bg-gray-100 text-gray-700'
+    }
+  }
+
   const getStatusLabel = (status: string) => {
     switch (status) {
       case 'active':
@@ -89,6 +102,49 @@ export default function CompanyList({ initialCompanies }: CompanyListProps) {
       default:
         return status
     }
+  }
+
+  const getStatusBadgeClass = (status: string) => {
+    switch (status) {
+      case 'active':
+        return 'bg-green-100 text-green-800'
+      case 'suspended':
+        return 'bg-yellow-100 text-yellow-800'
+      case 'cancelled':
+        return 'bg-red-100 text-red-800'
+      default:
+        return 'bg-gray-100 text-gray-700'
+    }
+  }
+
+  const getTrialInfo = (company: CompanyWithStats) => {
+    if (company.subscription_plan !== 'free') {
+      return { label: '-', className: 'text-gray-400' }
+    }
+
+    if (!company.trial_ends_at || Number.isNaN(Date.parse(company.trial_ends_at))) {
+      return { label: '종료일 없음', className: 'text-red-600 font-medium' }
+    }
+
+    const endDate = new Date(company.trial_ends_at)
+    const now = new Date()
+    const endDay = new Date(endDate.getFullYear(), endDate.getMonth(), endDate.getDate())
+    const nowDay = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+    const diffDays = Math.ceil((endDay.getTime() - nowDay.getTime()) / (1000 * 60 * 60 * 24))
+
+    if (diffDays < 0) {
+      return { label: `만료 (+${Math.abs(diffDays)}일)`, className: 'text-red-700 font-semibold' }
+    }
+    if (diffDays === 0) {
+      return { label: '오늘 만료', className: 'text-orange-700 font-semibold' }
+    }
+    if (diffDays <= 3) {
+      return { label: `D-${diffDays}`, className: 'text-orange-600 font-semibold' }
+    }
+    if (diffDays <= 7) {
+      return { label: `D-${diffDays}`, className: 'text-amber-600 font-medium' }
+    }
+    return { label: `D-${diffDays}`, className: 'text-slate-600' }
   }
 
   return (
@@ -137,6 +193,9 @@ export default function CompanyList({ initialCompanies }: CompanyListProps) {
                 요금제
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                무료체험
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 베이직 결제 수
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -162,12 +221,14 @@ export default function CompanyList({ initialCompanies }: CompanyListProps) {
           <tbody className="bg-white divide-y divide-gray-200">
             {companies.length === 0 ? (
               <tr>
-                <td colSpan={9} className="px-6 py-4 text-center text-gray-500">
+                <td colSpan={10} className="px-6 py-4 text-center text-gray-500">
                   등록된 회사가 없습니다.
                 </td>
               </tr>
             ) : (
-              companies.map((company) => (
+              companies.map((company) => {
+                const trialInfo = getTrialInfo(company)
+                return (
                 <tr key={company.id} className="hover:bg-gray-50">
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="text-sm font-medium text-gray-900">
@@ -180,8 +241,13 @@ export default function CompanyList({ initialCompanies }: CompanyListProps) {
                     )}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-800">
+                    <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getPlanBadgeClass(company.subscription_plan)}`}>
                       {getPlanLabel(company.subscription_plan)}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <span className={`text-sm ${trialInfo.className}`}>
+                      {trialInfo.label}
                     </span>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
@@ -196,13 +262,7 @@ export default function CompanyList({ initialCompanies }: CompanyListProps) {
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <span
-                      className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                        company.subscription_status === 'active'
-                          ? 'bg-green-100 text-green-800'
-                          : company.subscription_status === 'suspended'
-                          ? 'bg-yellow-100 text-yellow-800'
-                          : 'bg-red-100 text-red-800'
-                      }`}
+                      className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getStatusBadgeClass(company.subscription_status)}`}
                     >
                       {getStatusLabel(company.subscription_status)}
                     </span>
@@ -239,7 +299,7 @@ export default function CompanyList({ initialCompanies }: CompanyListProps) {
                     </div>
                   </td>
                 </tr>
-              ))
+              )})
             )}
           </tbody>
         </table>

@@ -45,6 +45,7 @@ export async function GET(request: NextRequest) {
       .from('users')
       .select('*')
       .eq('approval_status', 'pending')
+      .neq('signup_type', 'owner_self_signup')
       .order('created_at', { ascending: false })
 
     if (user.role === 'business_owner' && user.company_id) {

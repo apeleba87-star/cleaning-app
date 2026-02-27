@@ -19,6 +19,8 @@ export interface CompanyPlanInfo {
   company_id: string
   subscription_plan: SubscriptionPlan
   subscription_status: SubscriptionStatus
+  trial_ends_at: string | null
+  is_trial_expired: boolean
   basic_units: number
   premium_units: number
 }
@@ -43,14 +45,30 @@ export async function getCompanyPlan(companyId: string | null): Promise<CompanyP
   const supabase = await getDataClient()
   const { data, error } = await supabase
     .from('companies')
-    .select('id, subscription_plan, subscription_status, basic_units, premium_units')
+    .select('id, subscription_plan, subscription_status, trial_ends_at, basic_units, premium_units')
     .eq('id', companyId)
     .single()
   if (error || !data) return null
+
+  const subscriptionPlan = (data.subscription_plan as SubscriptionPlan) ?? 'free'
+  const rawSubscriptionStatus = (data.subscription_status as SubscriptionStatus) ?? 'active'
+  const trialEndsAt = data.trial_ends_at ?? null
+  const isTrialExpired =
+    subscriptionPlan === 'free' &&
+    !!trialEndsAt &&
+    !Number.isNaN(Date.parse(trialEndsAt)) &&
+    Date.parse(trialEndsAt) < Date.now()
+
+  // 크론 없이도 요청 시점에 만료를 계산해 접근을 제한한다.
+  const effectiveSubscriptionStatus: SubscriptionStatus =
+    rawSubscriptionStatus === 'active' && isTrialExpired ? 'suspended' : rawSubscriptionStatus
+
   return {
     company_id: data.id,
-    subscription_plan: (data.subscription_plan as SubscriptionPlan) ?? 'free',
-    subscription_status: (data.subscription_status as SubscriptionStatus) ?? 'active',
+    subscription_plan: subscriptionPlan,
+    subscription_status: effectiveSubscriptionStatus,
+    trial_ends_at: trialEndsAt,
+    is_trial_expired: isTrialExpired,
     basic_units: Number(data.basic_units ?? 0),
     premium_units: Number(data.premium_units ?? 0),
   }
@@ -69,6 +87,12 @@ export async function assertBusinessFeature(
     return { allowed: false, message: '업체 정보를 찾을 수 없습니다.' }
   }
   if (!isFeatureAllowed(plan.subscription_plan, plan.subscription_status, feature, plan.premium_units)) {
+    if (plan.is_trial_expired) {
+      return {
+        allowed: false,
+        message: '무료체험 기간이 종료되었습니다. 플랜 변경은 시스템 관리자에게 문의하세요.',
+      }
+    }
     return {
       allowed: false,
       message: '버전 업그레이드가 필요합니다. 플랜 변경은 시스템 관리자에게 문의하세요.',

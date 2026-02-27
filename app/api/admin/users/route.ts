@@ -127,6 +127,7 @@ export async function POST(request: NextRequest) {
 
     // 2. public.users에 사용자 정보 추가 (Service role key 사용하여 RLS 우회)
     // 트리거가 이미 생성했을 수 있으므로 UPSERT 사용
+    const now = new Date().toISOString()
     const { data: newUser, error: userError } = await adminSupabase
       .from('users')
       .upsert({
@@ -138,7 +139,11 @@ export async function POST(request: NextRequest) {
         salary_date: salary_date ? parseInt(salary_date) : null,
         salary_amount: salary_amount ? parseFloat(salary_amount) : null,
         employment_active: employment_active !== undefined ? employment_active : true,
-        updated_at: new Date().toISOString(),
+        approval_status: 'approved',
+        approved_at: now,
+        approved_by: user.id,
+        signup_type: 'admin_created',
+        updated_at: now,
       }, {
         onConflict: 'id',
       })

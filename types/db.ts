@@ -8,6 +8,7 @@ export type SupplyRequestCategory = '걸레' | '쓰레기봉투' | '약품' | '�
 export type RequestCategoryType = 'issue' | 'supply'
 
 export type ApprovalStatus = 'pending' | 'approved' | 'rejected'
+export type SignupType = 'owner_self_signup' | 'admin_created'
 export type AttendanceType = 'regular' | 'rescheduled' | 'emergency'
 
 export interface User {
@@ -39,6 +40,7 @@ export interface User {
   approved_at: string | null
   approved_by: string | null
   rejection_reason: string | null
+  signup_type?: SignupType | null
   created_at: string
   updated_at: string
 }
