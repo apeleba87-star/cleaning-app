@@ -866,7 +866,8 @@ export async function GET(request: NextRequest) {
     // 캐시 키 생성 (company_id + 대시보드 여부별 분리)
     const cacheKey = `store-status-${user.company_id}-${forDashboard ? 'dashboard' : 'full'}`
     const isDev = process.env.NODE_ENV === 'development'
-    const cacheTtl = isDev ? 0 : CACHE_TTL // 개발 중에는 캐시 미사용(수정 반영 바로 확인)
+    // 대시보드 요청은 캐시 미사용(요청 접수/처리중 건수 등이 즉시 반영되도록)
+    const cacheTtl = isDev || forDashboard ? 0 : CACHE_TTL
 
     // 캐시 확인 (forceRefresh가 false이고 캐시가 유효한 경우)
     if (!forceRefresh && cacheTtl > 0) {
