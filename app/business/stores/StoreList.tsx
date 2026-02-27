@@ -197,20 +197,20 @@ export default function StoreList({ initialStores, franchises, categoryTemplates
 
   return (
     <div>
-      <div className="flex flex-col sm:flex-row justify-between items-stretch sm:items-center mb-4 gap-4">
+      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center mb-4 gap-3 sm:gap-4">
         <button
           onClick={handleCreate}
-          className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors text-sm sm:text-base whitespace-nowrap order-2 sm:order-1"
+          className="px-3 py-1.5 sm:px-4 sm:py-2 text-sm sm:text-base rounded-md transition-colors bg-blue-600 text-white hover:bg-blue-700"
         >
           + 새 매장 추가
         </button>
-        <div className="flex-1 max-w-full sm:max-w-md order-1 sm:order-2">
+        <div className="flex-1 sm:max-w-md">
           <input
             type="text"
             value={searchTerm}
             onChange={(e) => handleSearchChange(e.target.value)}
             placeholder="매장명, 주소, 카테고리로 검색..."
-            className="w-full px-3 sm:px-4 py-2 text-sm sm:text-base border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full px-3 py-1.5 sm:px-4 sm:py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
         </div>
       </div>
@@ -449,8 +449,8 @@ export default function StoreList({ initialStores, franchises, categoryTemplates
       </div>
 
       {/* 모바일: 정렬 선택 + 카드 뷰 */}
-      <div className="sm:hidden space-y-4">
-        <div className="flex items-center gap-2">
+      <div className="sm:hidden bg-white rounded-lg shadow-md overflow-hidden">
+        <div className="p-4 pb-0 flex items-center gap-2">
           <label className="text-sm text-gray-600">정렬:</label>
           <select
             value={sortBy ?? ''}
@@ -478,8 +478,9 @@ export default function StoreList({ initialStores, franchises, categoryTemplates
             </button>
           )}
         </div>
+        <div className="space-y-4 p-4">
         {paginatedStores.length === 0 ? (
-          <div className="bg-white rounded-lg shadow-md p-6 text-center text-gray-500">
+          <div className="text-center text-gray-500 text-sm py-8">
             {searchTerm ? '검색 결과가 없습니다.' : '등록된 매장이 없습니다.'}
           </div>
         ) : (
@@ -489,7 +490,7 @@ export default function StoreList({ initialStores, franchises, categoryTemplates
               : (store.franchise_id ? franchises.find(f => f.id === store.franchise_id) : null)
             
             return (
-              <div key={store.id} className="bg-white rounded-lg shadow-md p-4 border border-gray-200">
+              <div key={store.id} className="border border-gray-200 rounded-lg p-4 space-y-3">
                 <div className="flex items-start justify-between mb-3">
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-1">
@@ -562,11 +563,11 @@ export default function StoreList({ initialStores, franchises, categoryTemplates
                   )}
                 </div>
                 
-                <div className="flex flex-col gap-2 pt-3 border-t border-gray-200">
+                <div className="flex flex-col gap-2 pt-2 border-t border-gray-200">
                   {basePath === '/business' && (
                     <a
                       href={`${basePath}/stores/${store.id}/personnel`}
-                      className="w-full text-center px-4 py-2 bg-blue-50 text-blue-600 rounded-md hover:bg-blue-100 transition-colors text-sm font-medium"
+                      className="w-full text-center px-3 py-2 text-sm rounded-md transition-colors bg-green-50 text-green-600 hover:bg-green-100"
                     >
                       인원배정
                     </a>
@@ -574,18 +575,18 @@ export default function StoreList({ initialStores, franchises, categoryTemplates
                   <div className="flex gap-2">
                     <button
                       onClick={() => handleEdit(store)}
-                      className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors text-sm font-medium"
+                      className="flex-1 px-3 py-2 text-sm rounded-md transition-colors bg-blue-50 text-blue-600 hover:bg-blue-100"
                     >
                       수정
                     </button>
                     <button
                       onClick={() => handleDelete(store.id)}
                       disabled={loading}
-                      className="flex-1 px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors text-sm font-medium inline-flex items-center justify-center gap-2"
+                      className="flex-1 px-3 py-2 text-sm rounded-md transition-colors bg-red-50 text-red-600 hover:bg-red-100 disabled:bg-gray-100 disabled:text-gray-400 disabled:cursor-not-allowed inline-flex items-center justify-center gap-2"
                     >
                       {loading && deletingStoreId === store.id ? (
                         <>
-                          <span className="inline-block animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent" />
+                          <span className="inline-block animate-spin rounded-full h-4 w-4 border-2 border-red-500 border-t-transparent" />
                           삭제 중...
                         </>
                       ) : (
@@ -598,23 +599,37 @@ export default function StoreList({ initialStores, franchises, categoryTemplates
             )
           })
         )}
+        </div>
         {/* 모바일 페이지네이션 */}
         {sortedStores.length > PAGE_SIZE && (
-          <div className="flex items-center justify-between px-2 py-3">
+          <div className="border-t border-gray-200 px-4 py-3 flex items-center justify-between">
             <button
               onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
               disabled={currentPage <= 1}
-              className="px-3 py-2 text-sm border border-gray-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
+              className={`px-3 py-2 text-sm font-medium rounded-md ${
+                currentPage <= 1
+                  ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                  : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
+              }`}
             >
               이전
             </button>
-            <span className="text-sm text-gray-600">
-              {currentPage} / {totalPages}
-            </span>
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-gray-700">
+                {currentPage} / {totalPages}
+              </span>
+              <span className="text-xs text-gray-500">
+                (총 {sortedStores.length}개)
+              </span>
+            </div>
             <button
               onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
               disabled={currentPage >= totalPages}
-              className="px-3 py-2 text-sm border border-gray-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
+              className={`px-3 py-2 text-sm font-medium rounded-md ${
+                currentPage >= totalPages
+                  ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                  : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
+              }`}
             >
               다음
             </button>
