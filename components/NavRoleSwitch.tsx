@@ -201,6 +201,7 @@ export function NavRoleSwitch({ userRole, userName, onRefresh, isRefreshing, sub
             items: [
               { href: '/business/products', label: '바코드 제품 등록', feature: 'products' },
               { href: '/business/checklists', label: '체크리스트 등록/관리', feature: 'checklists' },
+              { href: '/business/photo-reviews', label: '사진 검수', feature: 'checklists' },
               { href: '/business/announcements', label: '공지사항 등록/관리', feature: 'announcements' },
               { href: '/business/supply-requests', label: '물품 요청', feature: 'supply_requests' },
             ],

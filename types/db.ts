@@ -170,6 +170,14 @@ export interface ChecklistItem {
   comment?: string
   before_photo_url?: string | null // 관리 전 사진 항목 - 관리 전 사진
   after_photo_url?: string | null // 관리 후 사진 항목 - 관리 후 사진
+  /** 갤러리에서 선택한 관리전 사진 여부 (검수 대상) */
+  before_photo_from_gallery?: boolean
+  /** 갤러리에서 선택한 관리후 사진 여부 (검수 대상) */
+  after_photo_from_gallery?: boolean
+  /** 관리전 사진 검수 완료 시각 (관리자 확인 후 설정, 1일 후 목록에서 숨김) */
+  before_photo_reviewed_at?: string | null
+  /** 관리후 사진 검수 완료 시각 */
+  after_photo_reviewed_at?: string | null
 }
 
 export interface Checklist {

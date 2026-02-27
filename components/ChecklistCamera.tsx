@@ -35,6 +35,9 @@ export function ChecklistCamera({ items, mode, storeId, checklistId, onComplete,
 
   const [cameraError, setCameraError] = useState<string | null>(null)
   const [hasCaptureError, setHasCaptureError] = useState(false) // 촬영 실패 시 갤러리 활성화용
+  /** 갤러리에서 선택한 인덱스 (모드별, 검수 대상 표시용) */
+  const [gallerySelectedBefore, setGallerySelectedBefore] = useState<Set<number>>(() => new Set())
+  const [gallerySelectedAfter, setGallerySelectedAfter] = useState<Set<number>>(() => new Set())
   const galleryInputRef = useRef<HTMLInputElement>(null)
   const lastCaptureDataURLRef = useRef<string | null>(null) // 같은 화면 반복 감지용
   const identicalCaptureCountRef = useRef(0)
@@ -811,6 +814,12 @@ export function ChecklistCamera({ items, mode, storeId, checklistId, onComplete,
       lastCaptureDataURLRef.current = null
       identicalCaptureCountRef.current = 0
 
+      if (mode === 'before') {
+        setGallerySelectedBefore(prev => new Set(prev).add(currentIndex))
+      } else {
+        setGallerySelectedAfter(prev => new Set(prev).add(currentIndex))
+      }
+
       const nextIndex = currentIndex + 1
       if (nextIndex < photoItems.length) {
         setCurrentIndex(nextIndex)
@@ -966,18 +975,23 @@ export function ChecklistCamera({ items, mode, storeId, checklistId, onComplete,
             
             if (itemToUpdate) {
               const itemIndex = updatedItems.indexOf(itemToUpdate)
+              const fromGallery = mode === 'before' ? gallerySelectedBefore.has(i) : gallerySelectedAfter.has(i)
               if (mode === 'before') {
                 updatedItems[itemIndex] = {
                   ...updatedItems[itemIndex],
-                  before_photo_url: url
+                  before_photo_url: url,
+                  before_photo_from_gallery: fromGallery,
+                  before_photo_reviewed_at: updatedItems[itemIndex].before_photo_reviewed_at ?? null
                 }
-                console.log(`✅ 관리전 사진 업로드 완료: ${currentPhotoItem.area}`, url)
+                console.log(`✅ 관리전 사진 업로드 완료: ${currentPhotoItem.area}`, url, fromGallery ? '(갤러리 선택)' : '')
               } else {
                 updatedItems[itemIndex] = {
                   ...updatedItems[itemIndex],
-                  after_photo_url: url
+                  after_photo_url: url,
+                  after_photo_from_gallery: fromGallery,
+                  after_photo_reviewed_at: updatedItems[itemIndex].after_photo_reviewed_at ?? null
                 }
-                console.log(`✅ 관리후 사진 업로드 완료: ${currentPhotoItem.area}`, url)
+                console.log(`✅ 관리후 사진 업로드 완료: ${currentPhotoItem.area}`, url, fromGallery ? '(갤러리 선택)' : '')
               }
               
               // 업로드 성공 시 localStorage에서 삭제
@@ -1111,6 +1125,9 @@ export function ChecklistCamera({ items, mode, storeId, checklistId, onComplete,
               className="hidden"
               onChange={handleGallerySelect}
             />
+            <p className="text-[10px] text-amber-200 leading-tight text-right max-w-[120px]">
+              갤러리에 선택된 사진은 검수 대상입니다. 오류일 때만 사용해 주세요.
+            </p>
             <p className="text-[10px] text-gray-400 leading-tight">
               사진 저장이 안 된 경우
             </p>

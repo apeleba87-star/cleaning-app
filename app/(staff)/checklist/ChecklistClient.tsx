@@ -708,26 +708,26 @@ export default function ChecklistClient() {
               
               if (updated) {
                 if (cameraMode === 'before') {
-                  // 관리전 사진이 촬영되면 자동으로 체크 (checked 상태 추가)
-                  const merged = { 
-                    ...item, 
+                  const merged = {
+                    ...item,
                     before_photo_url: updated.before_photo_url || item.before_photo_url,
-                    checked: true 
+                    before_photo_from_gallery: updated.before_photo_from_gallery ?? item.before_photo_from_gallery,
+                    before_photo_reviewed_at: updated.before_photo_reviewed_at ?? item.before_photo_reviewed_at,
+                    checked: true,
                   }
                   console.log(`✅ 관리전 사진 반영: ${item.area}`, merged.before_photo_url ? '있음' : '없음')
                   return merged
                 } else {
-                  // 관리후 사진: 기존 데이터 유지하면서 after_photo_url만 업데이트
-                  const merged = { 
+                  const merged = {
                     ...item,
-                    // 기존 before_photo_url은 유지
                     before_photo_url: item.before_photo_url || null,
-                    // 관리후 사진 URL 업데이트
-                    after_photo_url: updated.after_photo_url || item.after_photo_url || null
+                    after_photo_url: updated.after_photo_url || item.after_photo_url || null,
+                    after_photo_from_gallery: updated.after_photo_from_gallery ?? item.after_photo_from_gallery,
+                    after_photo_reviewed_at: updated.after_photo_reviewed_at ?? item.after_photo_reviewed_at,
                   }
                   console.log(`✅ 관리후 사진 반영: ${item.area}`, {
                     before: merged.before_photo_url ? '있음' : '없음',
-                    after: merged.after_photo_url ? '있음' : '없음'
+                    after: merged.after_photo_url ? '있음' : '없음',
                   })
                   return merged
                 }
@@ -832,20 +832,33 @@ export default function ChecklistClient() {
     )
   }
 
+  const hasGalleryPhotosNeedingReview = items.some(
+    (item: any) =>
+      (item.before_photo_from_gallery && !item.before_photo_reviewed_at) ||
+      (item.after_photo_from_gallery && !item.after_photo_reviewed_at)
+  )
+
   if (selectedChecklist) {
     return (
       <div className="max-w-6xl mx-auto px-4 py-6 space-y-6 mb-16 md:mb-0">
         <div className="flex items-center justify-between">
           <h1 className="text-xl md:text-2xl font-bold">체크리스트 수행</h1>
-          <button
-            onClick={() => {
-              setSelectedChecklist(null)
-              setCameraMode(null)
-            }}
-            className="px-4 py-2 text-gray-600 hover:text-gray-800"
-          >
-            ← 목록으로
-          </button>
+          <div className="flex items-center gap-3">
+            {hasGalleryPhotosNeedingReview && (
+              <span className="text-sm font-semibold text-red-600 whitespace-nowrap">
+                검수 대상 사진
+              </span>
+            )}
+            <button
+              onClick={() => {
+                setSelectedChecklist(null)
+                setCameraMode(null)
+              }}
+              className="px-4 py-2 text-gray-600 hover:text-gray-800"
+            >
+              ← 목록으로
+            </button>
+          </div>
         </div>
 
         <div className="bg-white rounded-lg shadow-md p-6 space-y-6">
