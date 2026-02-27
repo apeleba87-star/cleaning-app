@@ -51,7 +51,7 @@ export async function middleware(request: NextRequest) {
       // 사용자 정보 조회
       const { data: userData } = await supabase
         .from('users')
-        .select('role, approval_status')
+        .select('role, approval_status, company_id')
         .eq('id', user.id)
         .single()
 
@@ -63,6 +63,42 @@ export async function middleware(request: NextRequest) {
         if (userData.approval_status === 'pending' && !isApiRoute && !isPendingAllowedPath) {
           const redirectUrl = new URL('/signup/pending', request.url)
           return NextResponse.redirect(redirectUrl)
+        }
+
+        // 업체관리자 무료체험 만료 시 전체 기능 비활성화
+        if (userData.role === 'business_owner' && userData.company_id) {
+          const { data: companyData } = await supabase
+            .from('companies')
+            .select('subscription_plan, subscription_status, trial_ends_at')
+            .eq('id', userData.company_id)
+            .single()
+
+          if (companyData) {
+            const isFreeTrialExpired =
+              companyData.subscription_plan === 'free' &&
+              companyData.subscription_status === 'active' &&
+              !!companyData.trial_ends_at &&
+              !Number.isNaN(Date.parse(companyData.trial_ends_at)) &&
+              Date.parse(companyData.trial_ends_at) < Date.now()
+
+            if (isFreeTrialExpired) {
+              const allowedPagePaths = ['/trial-expired', '/login']
+              const isAllowedPagePath = allowedPagePaths.some((path) => pathname.startsWith(path))
+              if (!isApiRoute && !isAllowedPagePath) {
+                const redirectUrl = new URL('/trial-expired', request.url)
+                return NextResponse.redirect(redirectUrl)
+              }
+
+              // business API는 만료 시 전체 차단
+              const isBusinessApi = pathname.startsWith('/api/business')
+              if (isBusinessApi) {
+                return NextResponse.json(
+                  { error: '무료체험 기간이 종료되었습니다. 플랜 변경은 시스템 관리자에게 문의하세요.' },
+                  { status: 403 }
+                )
+              }
+            }
+          }
         }
 
         const restrictedRoles = ['franchise_manager', 'business_owner', 'store_manager']

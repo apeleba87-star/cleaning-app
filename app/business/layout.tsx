@@ -21,6 +21,7 @@ export default async function BusinessLayout({
   const companyPlan = user.company_id
     ? await getCompanyPlan(user.company_id)
     : null
+  const isTrialExpired = !!companyPlan?.is_trial_expired
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -31,6 +32,16 @@ export default async function BusinessLayout({
         subscriptionStatus={companyPlan?.subscription_status ?? 'active'}
         subscriptionPremiumUnits={companyPlan?.premium_units ?? 0}
       />
+      {isTrialExpired && (
+        <div className="bg-red-50 border-b border-red-200">
+          <div className="container mx-auto px-4 py-3">
+            <p className="text-sm text-red-700">
+              무료체험 기간이 종료되었습니다. 현재는 <span className="font-semibold">회사 관리</span> 화면만 이용할 수 있습니다.
+              플랜 변경은 시스템 관리자에게 문의하세요.
+            </p>
+          </div>
+        </div>
+      )}
       <main className="container mx-auto px-4 py-8">{children}</main>
     </div>
   )
