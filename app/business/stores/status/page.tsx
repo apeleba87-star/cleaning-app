@@ -10,6 +10,7 @@ interface StoreStatus {
   store_id: string
   store_name: string
   store_address: string | null
+  franchise_id?: string | null
   work_day: string | null
   is_work_day: boolean
   service_active?: boolean // false면 비활성 매장
@@ -295,6 +296,9 @@ export default function BusinessStoresStatusPage() {
   const [confirmingLostItemId, setConfirmingLostItemId] = useState<string | null>(null)
   const [showRequestCreateModal, setShowRequestCreateModal] = useState(false)
   const [broadcastMode, setBroadcastMode] = useState(false)
+  /** 전체 요청접수 시 대상: null = 전체 매장, string = 해당 프렌차이즈 id */
+  const [broadcastFranchiseId, setBroadcastFranchiseId] = useState<string | null>(null)
+  const [franchises, setFranchises] = useState<Array<{ id: string; name: string }>>([])
   const [editingRequestId, setEditingRequestId] = useState<string | null>(null)
   const [requestFormData, setRequestFormData] = useState({
     category: '',
@@ -314,6 +318,8 @@ export default function BusinessStoresStatusPage() {
   })
   const [selectedRequestIds, setSelectedRequestIds] = useState<Set<string>>(new Set())
   const [isBulkConfirming, setIsBulkConfirming] = useState(false)
+  /** 전체/프렌차이즈 요청 접수 등록 중 (스피너·처리중 표시용) */
+  const [isRequestCreateSubmitting, setIsRequestCreateSubmitting] = useState(false)
   const [now, setNow] = useState<string>(() =>
     new Date().toLocaleString('ko-KR', { dateStyle: 'long', timeStyle: 'medium' })
   )
@@ -453,6 +459,7 @@ export default function BusinessStoresStatusPage() {
         
         setStoreStatuses(storesWithConfirmed)
         setPremiumUnits(Number(data.premium_units ?? 0))
+        setFranchises(Array.isArray(data.franchises) ? data.franchises : [])
       } else {
         console.error('API Error:', data)
       }
@@ -1186,13 +1193,20 @@ export default function BusinessStoresStatusPage() {
       return
     }
 
-    // 대상 매장 목록 결정
-    const targets = broadcastMode ? sortedStores : selectedStore ? [selectedStore] : []
+    // 대상 매장 목록 결정 (전체 요청접수 시: 전체 또는 선택한 프렌차이즈만)
+    const targets = broadcastMode
+      ? (broadcastFranchiseId
+          ? sortedStores.filter((s) => s.franchise_id === broadcastFranchiseId)
+          : sortedStores)
+      : selectedStore
+        ? [selectedStore]
+        : []
     if (targets.length === 0) {
       alert('요청을 보낼 매장이 없습니다.')
       return
     }
 
+    setIsRequestCreateSubmitting(true)
     try {
       // 각 매장별로 사진을 업로드하여 요청에 정확히 매핑
       let successCount = 0
@@ -1240,6 +1254,7 @@ export default function BusinessStoresStatusPage() {
 
       setShowRequestCreateModal(false)
       setBroadcastMode(false)
+      setBroadcastFranchiseId(null)
       setRequestFormData({ category: '', description: '', photos: [] })
       setRequestPhotos([])
       loadStoreStatuses()
@@ -1251,6 +1266,8 @@ export default function BusinessStoresStatusPage() {
     } catch (error) {
       console.error('Error creating request:', error)
       alert('요청 등록 중 오류가 발생했습니다.')
+    } finally {
+      setIsRequestCreateSubmitting(false)
     }
   }
 
@@ -2497,6 +2514,7 @@ export default function BusinessStoresStatusPage() {
               onClick={() => {
                 if (premiumUnits < 1) return
                 setBroadcastMode(true)
+                setBroadcastFranchiseId(null)
                 setSelectedStore(null)
                 setShowRequestCreateModal(true)
               }}
@@ -4577,27 +4595,62 @@ export default function BusinessStoresStatusPage() {
         <div
           className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
           onClick={() => {
+            if (isRequestCreateSubmitting) return
             setShowRequestCreateModal(false)
             setBroadcastMode(false)
+            setBroadcastFranchiseId(null)
           }}
         >
-          <div className="bg-white rounded-lg p-6 max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+          <div className="bg-white rounded-lg p-6 max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto relative" onClick={(e) => e.stopPropagation()}>
+            {/* 전체 요청 접수 처리중 오버레이 */}
+            {isRequestCreateSubmitting && (
+              <div className="absolute inset-0 bg-white/80 rounded-lg flex flex-col items-center justify-center z-10">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mb-3" />
+                <p className="text-gray-700 font-medium">처리중...</p>
+                <p className="text-sm text-gray-500 mt-1">매장별 요청 등록 중입니다</p>
+              </div>
+            )}
             <div className="flex justify-between items-center mb-4">
               <h2 className="text-xl font-semibold">요청 작성</h2>
               <button
                 onClick={() => {
+                  if (isRequestCreateSubmitting) return
                   setShowRequestCreateModal(false)
                   setBroadcastMode(false)
+                  setBroadcastFranchiseId(null)
                 }}
-                className="text-gray-500 hover:text-gray-700 text-2xl"
+                disabled={isRequestCreateSubmitting}
+                className="text-gray-500 hover:text-gray-700 text-2xl disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 ×
               </button>
             </div>
 
-            <div className="mb-4 text-sm text-gray-600">
-              대상: {broadcastMode ? '전체 매장' : selectedStore?.store_name || ''}
-            </div>
+            {broadcastMode ? (
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-1">접수 대상</label>
+                <select
+                  value={broadcastFranchiseId ?? ''}
+                  onChange={(e) => setBroadcastFranchiseId(e.target.value || null)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+                >
+                  <option value="">전체 매장 ({sortedStores.length}개)</option>
+                  {franchises.map((f) => {
+                    const count = sortedStores.filter((s) => s.franchise_id === f.id).length
+                    if (count === 0) return null
+                    return (
+                      <option key={f.id} value={f.id}>
+                        {f.name} ({count}개 매장)
+                      </option>
+                    )
+                  })}
+                </select>
+              </div>
+            ) : (
+              <div className="mb-4 text-sm text-gray-600">
+                대상: {selectedStore?.store_name || ''}
+              </div>
+            )}
 
             <div className="space-y-4">
               <div>
@@ -4719,18 +4772,29 @@ export default function BusinessStoresStatusPage() {
               <div className="flex gap-2 pt-4">
                 <button
                   onClick={handleCreateRequest}
-                  disabled={!requestFormData.category || !requestFormData.description}
-                  className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed"
+                  disabled={!requestFormData.category || !requestFormData.description || isRequestCreateSubmitting}
+                  className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                 >
-                  등록하기
+                  {isRequestCreateSubmitting ? (
+                    <>
+                      <span className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent" />
+                      처리중...
+                    </>
+                  ) : (
+                    '등록하기'
+                  )}
                 </button>
                 <button
                   onClick={() => {
+                    if (isRequestCreateSubmitting) return
                     setShowRequestCreateModal(false)
+                    setBroadcastMode(false)
+                    setBroadcastFranchiseId(null)
                     setRequestFormData({ category: '', description: '', photos: [] })
                     setRequestPhotos([])
                   }}
-                  className="px-4 py-2 bg-gray-300 text-gray-700 rounded-md hover:bg-gray-400"
+                  disabled={isRequestCreateSubmitting}
+                  className="px-4 py-2 bg-gray-300 text-gray-700 rounded-md hover:bg-gray-400 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   취소
                 </button>

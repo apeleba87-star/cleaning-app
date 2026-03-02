@@ -32,10 +32,10 @@ async function fetchStoreStatusData(companyId: string, forDashboard = false) {
     const dataClient = adminSupabase || supabase
     const attendanceClient = adminSupabase || supabase
 
-    // 회사에 속한 모든 매장 조회 (RLS 우회 - API에서 company_id 검증 완료)
+    // 회사에 속한 모든 매장 조회 (RLS 우회 - API에서 company_id 검증 완료), franchise_id 포함(프렌차이즈별 요청접수용)
     const { data: stores, error: storesError } = await dataClient
       .from('stores')
-      .select('id, name, address, management_days, is_night_shift, work_start_hour, work_end_hour, updated_at, service_active')
+      .select('id, name, address, management_days, is_night_shift, work_start_hour, work_end_hour, updated_at, service_active, franchise_id')
       .eq('company_id', companyId)
       .is('deleted_at', null)
 
@@ -44,9 +44,15 @@ async function fetchStoreStatusData(companyId: string, forDashboard = false) {
     }
 
     if (!stores || stores.length === 0) {
+      const { data: franchisesEmpty } = await dataClient
+        .from('franchises')
+        .select('id, name')
+        .eq('company_id', companyId)
+        .order('name')
       const emptyResponse: any = {
         success: true,
         data: [],
+        franchises: franchisesEmpty || [],
         last_modified_at: new Date().toISOString(),
       }
       
@@ -702,6 +708,7 @@ async function fetchStoreStatusData(companyId: string, forDashboard = false) {
           store_id: store.id,
           store_name: store.name,
           store_address: store.address,
+          franchise_id: (store as any).franchise_id || null,
           management_days: store.management_days,
           work_day: store.management_days, // 정렬을 위해 추가
           is_work_day: isWorkDay,
@@ -754,6 +761,7 @@ async function fetchStoreStatusData(companyId: string, forDashboard = false) {
             store_id: store.id,
             store_name: store.name,
             store_address: store.address,
+            franchise_id: (store as any).franchise_id || null,
             management_days: store.management_days,
             work_day: store.management_days,
             service_active: store.service_active !== false,
@@ -805,10 +813,18 @@ async function fetchStoreStatusData(companyId: string, forDashboard = false) {
       ? allStoreUpdates.sort().reverse()[0] 
       : new Date().toISOString()
 
+    // 프렌차이즈 목록 (전체 요청접수 시 프렌차이즈별 선택용)
+    const { data: franchisesList } = await dataClient
+      .from('franchises')
+      .select('id, name')
+      .eq('company_id', companyId)
+      .order('name')
+
     // 프로덕션 성능 최적화: _debug 객체 제거
     const response: any = {
       success: true,
       data: storeStatuses,
+      franchises: franchisesList || [],
       last_modified_at: lastModifiedAt,
     }
 
