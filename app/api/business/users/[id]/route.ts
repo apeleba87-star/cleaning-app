@@ -1,6 +1,7 @@
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerUser } from '@/lib/supabase/server'
+import { createClient } from '@supabase/supabase-js'
 
 export async function PATCH(
   request: NextRequest,
@@ -17,6 +18,11 @@ export async function PATCH(
     }
 
     const supabase = await createServerSupabaseClient()
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+    const dataClient = serviceRoleKey && supabaseUrl
+      ? createClient(supabaseUrl, serviceRoleKey, { auth: { autoRefreshToken: false, persistSession: false } })
+      : supabase
 
     // business_owner와 franchise_manager는 자신의 회사 직원만 수정 가능
     if (user.role === 'business_owner' || user.role === 'franchise_manager') {
@@ -136,8 +142,24 @@ export async function PATCH(
       )
     }
 
-    // 매장 배정 처리
-    if (store_ids && Array.isArray(store_ids)) {
+    // 퇴사 처리 시 매장 배정을 자동 해제
+    if (updateData.employment_active === false) {
+      const { error: clearAssignError } = await dataClient
+        .from('store_assign')
+        .delete()
+        .eq('user_id', params.id)
+
+      if (clearAssignError) {
+        console.error('Error clearing store assignments on resignation:', clearAssignError)
+        return NextResponse.json(
+          { error: '퇴사 처리 중 매장 배정 해제에 실패했습니다.' },
+          { status: 500 }
+        )
+      }
+    }
+
+    // 매장 배정 처리 (재직 중인 사용자만 신규 배정 허용)
+    if (store_ids && Array.isArray(store_ids) && updateData.employment_active !== false) {
       // business_owner와 franchise_manager는 자신의 회사 매장만 배정 가능
       if ((user.role === 'business_owner' || user.role === 'franchise_manager') && store_ids.length > 0) {
         const { data: stores } = await supabase
@@ -155,10 +177,18 @@ export async function PATCH(
       }
 
       // 기존 배정 삭제
-      await supabase
+      const { error: deleteAssignError } = await dataClient
         .from('store_assign')
         .delete()
         .eq('user_id', params.id)
+
+      if (deleteAssignError) {
+        console.error('Error deleting existing store assignments:', deleteAssignError)
+        return NextResponse.json(
+          { error: '기존 매장 배정 삭제에 실패했습니다.' },
+          { status: 500 }
+        )
+      }
 
       // 새 배정 추가
       if (store_ids.length > 0) {
@@ -167,9 +197,17 @@ export async function PATCH(
           store_id: storeId,
         }))
 
-        await supabase
+        const { error: insertAssignError } = await dataClient
           .from('store_assign')
           .insert(assignments)
+
+        if (insertAssignError) {
+          console.error('Error inserting store assignments:', insertAssignError)
+          return NextResponse.json(
+            { error: '매장 배정 저장에 실패했습니다.' },
+            { status: 500 }
+          )
+        }
       }
     }
 

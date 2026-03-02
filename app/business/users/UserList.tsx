@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import { User, UserRole, Franchise, Store } from '@/types/db'
 
 type SortKey = 'name' | 'email' | 'role' | 'phone' | 'assigned_stores' | 'employment_active'
@@ -27,6 +27,7 @@ interface UserListProps {
 export default function UserList({ initialUsers, stores, franchises, userStoreMap, companyId, currentUserRole, premiumUnits = 0 }: UserListProps) {
   const hasPremium = premiumUnits >= 1
   const [users, setUsers] = useState<User[]>(initialUsers)
+  const [localUserStoreMap, setLocalUserStoreMap] = useState<Map<string, string[]>>(new Map(userStoreMap))
   const [editingUser, setEditingUser] = useState<User | null>(null)
   const [assigningUser, setAssigningUser] = useState<User | null>(null)
   const [showForm, setShowForm] = useState(false)
@@ -39,8 +40,15 @@ export default function UserList({ initialUsers, stores, franchises, userStoreMa
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc')
   const [mobilePage, setMobilePage] = useState(1)
   const [desktopPage, setDesktopPage] = useState(1)
+  const editorSectionRef = useRef<HTMLDivElement | null>(null)
   const MOBILE_ITEMS_PER_PAGE = 20
   const DESKTOP_ITEMS_PER_PAGE = 30
+
+  const scrollToEditor = () => {
+    setTimeout(() => {
+      editorSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }, 60)
+  }
 
   const handleSort = (key: SortKey) => {
     if (sortBy === key) {
@@ -126,6 +134,7 @@ export default function UserList({ initialUsers, stores, franchises, userStoreMa
     setShowCreateForm(false)
     setShowAssign(false)
     setError(null)
+    scrollToEditor()
   }
 
   const handleAssign = (user: User) => {
@@ -165,6 +174,7 @@ export default function UserList({ initialUsers, stores, franchises, userStoreMa
     setShowCreateForm(false)
     setShowForm(false)
     setError(null)
+    scrollToEditor()
   }
 
   const [roleChangingUser, setRoleChangingUser] = useState<{ id: string; newRole: UserRole } | null>(null)
@@ -240,6 +250,14 @@ export default function UserList({ initialUsers, stores, franchises, userStoreMa
         email: (existingUser as any)?.email || (user as any)?.email || null,
       }
       setUsers(users.map((u) => (u.id === user.id ? updatedUser : u)))
+      // 퇴사 저장 직후 배정 매장 표시를 즉시 제거
+      if (updatedUser.employment_active === false) {
+        setLocalUserStoreMap((prev) => {
+          const next = new Map(prev)
+          next.delete(user.id)
+          return next
+        })
+      }
     } else {
       setUsers([user, ...users])
     }
@@ -304,7 +322,7 @@ export default function UserList({ initialUsers, stores, franchises, userStoreMa
   }
 
   const getUserStores = (userId: string) => {
-    const storeIds = userStoreMap.get(userId) || []
+    const storeIds = localUserStoreMap.get(userId) || []
     return stores.filter((s) => storeIds.includes(s.id))
   }
 
@@ -419,6 +437,8 @@ export default function UserList({ initialUsers, stores, franchises, userStoreMa
         </div>
       )}
 
+      <div ref={editorSectionRef} />
+
       {showCreateForm && (
         <div className="mb-6">
           <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-4">
@@ -476,7 +496,7 @@ export default function UserList({ initialUsers, stores, franchises, userStoreMa
           <UserForm
             user={editingUser}
             stores={stores}
-            assignedStoreIds={userStoreMap.get(editingUser.id) || []}
+            assignedStoreIds={localUserStoreMap.get(editingUser.id) || []}
             premiumUnits={premiumUnits}
             onSuccess={handleFormSuccess}
             onCancel={handleFormCancel}
@@ -508,7 +528,7 @@ export default function UserList({ initialUsers, stores, franchises, userStoreMa
           <UserStoreAssign
             user={assigningUser}
             stores={stores}
-            assignedStoreIds={userStoreMap.get(assigningUser.id) || []}
+            assignedStoreIds={localUserStoreMap.get(assigningUser.id) || []}
             onSuccess={handleAssignSuccess}
             onCancel={handleAssignCancel}
           />

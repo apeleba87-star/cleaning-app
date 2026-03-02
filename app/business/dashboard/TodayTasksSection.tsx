@@ -321,24 +321,32 @@ export default function TodayTasksSection({
                   <div className="flex items-center gap-2">
                     {store.is_paid ? (
                       <span className="px-2 py-1 text-xs bg-green-100 text-green-700 rounded">
-                        {store.is_auto_payment ? '자동결제완료' : '결제완료'}
+                        결제완료
                       </span>
                     ) : (
                       <>
-                        <button
-                          onClick={() => handlePartialPayment(store.id, store.name)}
-                          disabled={submitting}
-                          className="px-2 py-1 text-xs bg-yellow-500 text-white rounded hover:bg-yellow-600 disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                          부분완납
-                        </button>
-                        <button
-                          onClick={() => handleFullPayment(store.id, store.name)}
-                          disabled={submitting}
-                          className="px-2 py-1 text-xs bg-green-500 text-white rounded hover:bg-green-600 disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                          전체완납
-                        </button>
+                        {store.is_auto_payment ? (
+                          <span className="px-2 py-1 text-xs bg-blue-100 text-blue-700 rounded">
+                            자동 처리 대기
+                          </span>
+                        ) : (
+                          <>
+                            <button
+                              onClick={() => handlePartialPayment(store.id, store.name)}
+                              disabled={submitting}
+                              className="px-2 py-1 text-xs bg-yellow-500 text-white rounded hover:bg-yellow-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                              부분완납
+                            </button>
+                            <button
+                              onClick={() => handleFullPayment(store.id, store.name)}
+                              disabled={submitting}
+                              className="px-2 py-1 text-xs bg-green-500 text-white rounded hover:bg-green-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                              전체완납
+                            </button>
+                          </>
+                        )}
                       </>
                     )}
                   </div>

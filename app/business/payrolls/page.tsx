@@ -163,6 +163,10 @@ export default function PayrollsPage() {
     }
   }
 
+  const applyUpdatedPayroll = (updatedPayroll: Payroll) => {
+    setPayrolls((prev) => prev.map((p) => (p.id === updatedPayroll.id ? { ...p, ...updatedPayroll } : p)))
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError(null)
@@ -409,9 +413,11 @@ export default function PayrollsPage() {
         const errorData = await response.json()
         throw new Error(errorData.error || '지급 완료 처리 실패')
       }
-
+      const result = await response.json()
+      if (result.success && result.data) {
+        applyUpdatedPayroll(result.data)
+      }
       alert('지급 완료 처리되었습니다.')
-      loadData()
     } catch (err: any) {
       setError(err.message || '지급 완료 처리 중 오류가 발생했습니다.')
       console.error('Mark as paid error:', err)
@@ -438,9 +444,11 @@ export default function PayrollsPage() {
         const errorData = await response.json()
         throw new Error(errorData.error || '지급 완료 처리 실패')
       }
-
+      const result = await response.json()
+      if (result.success && result.data) {
+        applyUpdatedPayroll(result.data)
+      }
       alert('지급 완료 처리되었습니다.')
-      loadData()
     } catch (err: any) {
       setError(err.message || '지급 완료 처리 중 오류가 발생했습니다.')
       console.error('Mark daily payroll as paid error:', err)
@@ -460,9 +468,11 @@ export default function PayrollsPage() {
         const errorData = await response.json()
         throw new Error(errorData.error || '수정 실패')
       }
-
+      const result = await response.json()
+      if (result.success && result.data) {
+        applyUpdatedPayroll(result.data)
+      }
       alert('일당 인건비가 수정되었습니다.')
-      loadData()
     } catch (err: any) {
       setError(err.message || '수정 중 오류가 발생했습니다.')
       console.error('Update daily payroll error:', err)
@@ -512,10 +522,12 @@ export default function PayrollsPage() {
         const errorData = await response.json()
         throw new Error(errorData.error || '수정 실패')
       }
-
+      const result = await response.json()
+      if (result.success && result.data) {
+        applyUpdatedPayroll(result.data)
+      }
       alert('인건비가 수정되었습니다.')
       handleCancelEdit()
-      loadData()
     } catch (err: any) {
       setError(err.message || '수정 중 오류가 발생했습니다.')
       console.error('Update error:', err)

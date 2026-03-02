@@ -618,6 +618,11 @@ export async function GET(request: NextRequest) {
         isPaid = totalReceived >= totalRevenue
       }
 
+      // 자동결제 매장은 수동 완납 대상에서 제외하고 결제완료 상태로 간주
+      if (isAutoPayment) {
+        isPaid = true
+      }
+
       return {
         id: store.id,
         name: store.name,

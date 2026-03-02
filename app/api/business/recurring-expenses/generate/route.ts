@@ -56,8 +56,10 @@ export async function POST(request: NextRequest) {
 
     const firstDayOfMonth = `${targetYear}-${String(targetMonth).padStart(2, '0')}-01`
 
-    // 활성화된 고정비 템플릿 조회
-    const { data: recurringExpenses, error: fetchError } = await supabase
+    const dataClient = adminSupabase || supabase
+
+    // 활성화된 고정비 템플릿 조회 (RLS 영향 제거)
+    const { data: recurringExpenses, error: fetchError } = await dataClient
       .from('recurring_expenses')
       .select('*')
       .eq('company_id', user.company_id)

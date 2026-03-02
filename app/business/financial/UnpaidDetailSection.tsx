@@ -121,8 +121,13 @@ export default function UnpaidDetailSection({ onRefresh }: UnpaidDetailSectionPr
       return
     }
 
+    let previousRows: UnpaidRevenue[] = []
     try {
       setSubmitting(true)
+      previousRows = unpaidRevenues
+      // 낙관적 업데이트: 완납 대상 건을 즉시 목록에서 제거
+      setUnpaidRevenues((prev) => prev.filter((row) => row.revenue_id !== item.revenue_id))
+
       const response = await fetch('/api/business/receipts', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -151,9 +156,10 @@ export default function UnpaidDetailSection({ onRefresh }: UnpaidDetailSectionPr
       }
 
       alert('전체 완납이 등록되었습니다.')
-      loadUnpaidRevenues()
       onRefresh()
     } catch (err: any) {
+      // 실패 시 롤백
+      setUnpaidRevenues(previousRows)
       console.error('[UnpaidDetailSection] Full payment error:', err)
       alert(err.message || '완납 처리 중 오류가 발생했습니다.')
     } finally {

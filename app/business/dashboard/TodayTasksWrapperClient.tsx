@@ -109,20 +109,34 @@ export default function TodayTasksWrapperClient({ companyId }: { companyId: stri
       return
     }
 
+    const targetStore = financialData?.today_payment_stores?.find((store) => store.id === storeId)
+    if (targetStore?.is_auto_payment) {
+      showToast('자동결제 매장은 수동 완납 처리 대상이 아닙니다.', 'error')
+      return
+    }
+
     // 낙관적 업데이트: 즉시 해당 매장을 결제완료로 표시
     if (financialData?.today_payment_stores) {
       const updatedStores = financialData.today_payment_stores.map((store) =>
         store.id === storeId ? { ...store, is_paid: true, is_auto_payment: false } : store
       )
+      const updatedUnpaidStores = (financialData.top_unpaid_stores || []).map((store) =>
+        store.store_id === storeId ? { ...store, unpaid_amount: 0 } : store
+      )
+      const reducedAmount =
+        (financialData.top_unpaid_stores || []).find((store) => store.store_id === storeId)?.unpaid_amount || 0
       setFinancialData({
         ...financialData,
         today_payment_stores: updatedStores,
+        top_unpaid_stores: updatedUnpaidStores,
+        unpaid_count: Math.max(0, (financialData.unpaid_count || 0) - 1),
+        total_unpaid: Math.max(0, (financialData.total_unpaid || 0) - reducedAmount),
       })
     }
 
     try {
       // 해당 매장의 미수금 매출 조회
-      const response = await fetch(`/api/business/revenues?store_id=${storeId}`)
+      const response = await fetch(`/api/business/revenues?store_id=${storeId}`, { cache: 'no-store' })
       if (!response.ok) {
         throw new Error('매출 정보를 불러올 수 없습니다.')
       }
@@ -192,6 +206,7 @@ export default function TodayTasksWrapperClient({ companyId }: { companyId: stri
       }
       const message = err.message || '전체 완납 처리 중 오류가 발생했습니다.'
       showToast(message, 'error')
+      loadFinancialData().catch((syncErr) => console.error('Failed to rollback financial data:', syncErr))
     }
   }
 

@@ -63,7 +63,7 @@ export function FinancialDataProvider({ children }: { children: ReactNode }) {
   const loadFinancialData = async () => {
     try {
       setLoading(true)
-      const response = await fetch('/api/business/financial-summary')
+      const response = await fetch('/api/business/financial-summary', { cache: 'no-store' })
       
       if (!response.ok) {
         const errorData = await response.json()
