@@ -3,6 +3,8 @@
 import { useState, useMemo, useRef, useEffect } from 'react'
 import { KAKAO_CHAT_URL } from '@/lib/constants'
 
+const LOADING_STEP_LABELS = ['① 입력값 확인', '② 업계 기준 매칭', '③ 운영 난이도 반영'] as const
+
 type CalcTab = 'area' | 'labor'
 
 const CLEAN_TYPES = [
@@ -220,21 +222,26 @@ export default function CleaningEstimateCalculator() {
   const [marginRate, setMarginRate] = useState<number>(20)
   /** 내 견적 분석하기 클릭 시 분석 모달 표시 */
   const [showAnalysisModal, setShowAnalysisModal] = useState(false)
-  /** 분석 전 로딩 연출 (스피너) */
+  /** 분석 전 로딩 연출 (단계 순차 표시) */
   const [showLoadingModal, setShowLoadingModal] = useState(false)
+  const [loadingStep, setLoadingStep] = useState(0)
   const hasAnalyzedInSessionRef = useRef(false)
 
   useEffect(() => {
     if (!showLoadingModal) return
     const isFirst = !hasAnalyzedInSessionRef.current
     const totalMs = isFirst ? 3000 : 1000
-    const t = setTimeout(() => {
+    const stepInterval = isFirst ? 1000 : 333
+    const t1 = setTimeout(() => setLoadingStep(1), stepInterval)
+    const t2 = setTimeout(() => setLoadingStep(2), stepInterval * 2)
+    const t3 = setTimeout(() => {
       setShowLoadingModal(false)
+      setLoadingStep(0)
       setShowAnalysisModal(true)
       setHasSharedForAnalysis(false)
       hasAnalyzedInSessionRef.current = true
     }, totalMs)
-    return () => clearTimeout(t)
+    return () => { clearTimeout(t1); clearTimeout(t2); clearTimeout(t3) }
   }, [showLoadingModal])
 
   /** 공유 후 업계 평균 단가·상세 단가 노출 여부 (모달 열 때마다 초기화) */
@@ -246,12 +253,12 @@ export default function CleaningEstimateCalculator() {
   const [copyToast, setCopyToast] = useState(false)
 
   const shareUrl = typeof window !== 'undefined' ? window.location.href : ''
-  const shareTitle = '🔍 내 단가 전략 점검 완료'
-  const shareText = '업계 평균 기준, 당신은 어디에 있나요?'
-  /** 모바일 기기에서만 공유 허용 (데스크톱은 navigator.share 지원해도 비활성화) */
+  const shareTitle = '[내 단가 전략 점검 완료] 업계 평균 기준, 당신은 어디에 있나요?'
+  const shareText = ''
+  /** 모바일 기기에서만 공유 허용 (카카오톡·삼성 인앱 브라우저 포함) */
   const isMobileDevice =
     typeof navigator !== 'undefined' &&
-    /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)
+    /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini|KakaoTalk|KAKAOTALK|KAKAO|Samsung/i.test(navigator.userAgent)
   const canUseShare = typeof navigator !== 'undefined' && !!navigator.share && isMobileDevice
 
   const handleShareAndUnlock = async () => {
@@ -962,7 +969,7 @@ export default function CleaningEstimateCalculator() {
 
             <button
               type="button"
-              onClick={() => setShowLoadingModal(true)}
+              onClick={() => { setShowLoadingModal(true); setLoadingStep(0) }}
               className="w-full py-3.5 rounded-xl bg-gradient-to-r from-blue-500 to-indigo-600 text-white font-semibold shadow-md hover:from-blue-600 hover:to-indigo-700 transition-all"
             >
               내 견적 분석하기
@@ -1126,9 +1133,23 @@ export default function CleaningEstimateCalculator() {
               <div className="p-6">
                 <h3 className="text-lg font-bold text-gray-900 text-center mb-1">내 견적 분석 중</h3>
                 <p className="text-sm text-gray-600 text-center mb-4">방문 빈도·옵션·운영 난이도를 반영하고 있어요.</p>
-                <p className="text-xs text-gray-500 text-center mb-6">평균 단가·운영 난이도·방문 빈도를 반영합니다.</p>
-                <div className="flex justify-center">
-                  <div className="h-10 w-10 animate-spin rounded-full border-2 border-slate-200 border-t-blue-500" aria-hidden />
+                <p className="text-xs text-gray-500 text-center mb-5">평균 단가·운영 난이도·방문 빈도를 반영합니다.</p>
+                <div className="space-y-2.5">
+                  {LOADING_STEP_LABELS.map((label, i) => (
+                    <div key={i} className="flex items-center gap-3">
+                      <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-medium transition-colors ${i < loadingStep ? 'bg-green-500 text-white' : i === loadingStep ? 'bg-blue-500 text-white' : 'bg-gray-100 text-gray-400'}`}>
+                        {i < loadingStep ? (
+                          <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" /></svg>
+                        ) : (
+                          i + 1
+                        )}
+                      </span>
+                      <span className={`text-sm ${i <= loadingStep ? 'text-gray-900 font-medium' : 'text-gray-400'}`}>{label}</span>
+                    </div>
+                  ))}
+                </div>
+                <div className="mt-4 flex justify-center">
+                  <div className="h-8 w-8 animate-spin rounded-full border-2 border-slate-200 border-t-blue-500" aria-hidden />
                 </div>
               </div>
             </div>
