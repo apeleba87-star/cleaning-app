@@ -3,12 +3,6 @@
 import { useState, useMemo, useRef, useEffect } from 'react'
 import { KAKAO_CHAT_URL } from '@/lib/constants'
 
-const LOADING_STEPS = [
-  { label: '입력값 확인' },
-  { label: '업계 기준 매칭' },
-  { label: '운영 난이도 반영' },
-] as const
-
 type CalcTab = 'area' | 'labor'
 
 const CLEAN_TYPES = [
@@ -226,26 +220,21 @@ export default function CleaningEstimateCalculator() {
   const [marginRate, setMarginRate] = useState<number>(20)
   /** 내 견적 분석하기 클릭 시 분석 모달 표시 */
   const [showAnalysisModal, setShowAnalysisModal] = useState(false)
-  /** 분석 전 로딩 연출 (단계형) */
+  /** 분석 전 로딩 연출 (스피너) */
   const [showLoadingModal, setShowLoadingModal] = useState(false)
-  const [loadingStep, setLoadingStep] = useState(0)
   const hasAnalyzedInSessionRef = useRef(false)
 
   useEffect(() => {
     if (!showLoadingModal) return
     const isFirst = !hasAnalyzedInSessionRef.current
-    const totalMs = isFirst ? 2000 : 800
-    const stepTimes = isFirst ? [700, 1400, 2000] : [266, 532, 800]
-    const t1 = setTimeout(() => setLoadingStep(1), stepTimes[0])
-    const t2 = setTimeout(() => setLoadingStep(2), stepTimes[1])
-    const t3 = setTimeout(() => {
+    const totalMs = isFirst ? 3000 : 1000
+    const t = setTimeout(() => {
       setShowLoadingModal(false)
-      setLoadingStep(0)
       setShowAnalysisModal(true)
       setHasSharedForAnalysis(false)
       hasAnalyzedInSessionRef.current = true
-    }, stepTimes[2])
-    return () => { clearTimeout(t1); clearTimeout(t2); clearTimeout(t3) }
+    }, totalMs)
+    return () => clearTimeout(t)
   }, [showLoadingModal])
 
   /** 공유 후 업계 평균 단가·상세 단가 노출 여부 (모달 열 때마다 초기화) */
@@ -257,8 +246,8 @@ export default function CleaningEstimateCalculator() {
   const [copyToast, setCopyToast] = useState(false)
 
   const shareUrl = typeof window !== 'undefined' ? window.location.href : ''
-  const shareTitle = '청소업 표준 견적 진단기'
-  const shareText = '견적을 계산해 봤어요. 업계 평균 단가와 비교해 보세요.'
+  const shareTitle = '🔍 내 단가 전략 점검 완료'
+  const shareText = '업계 평균 기준, 당신은 어디에 있나요?'
   /** 모바일 기기에서만 공유 허용 (데스크톱은 navigator.share 지원해도 비활성화) */
   const isMobileDevice =
     typeof navigator !== 'undefined' &&
@@ -464,35 +453,35 @@ export default function CleaningEstimateCalculator() {
     'w-full px-4 py-2.5 rounded-lg border border-gray-200 bg-white text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors text-sm'
 
   return (
-    <section id="cleaning-estimate-calculator" className="py-12 sm:py-16 px-4 sm:px-6 lg:px-8 bg-gradient-to-b from-blue-50/40 via-white to-slate-50/50 scroll-mt-20">
+    <section id="cleaning-estimate-calculator" className="py-6 sm:py-16 px-3 sm:px-6 lg:px-8 bg-gradient-to-b from-blue-50/40 via-white to-slate-50/50 scroll-mt-20">
       <div className="max-w-6xl mx-auto">
         {/* 헤더: 아이콘 + 제목 + 부제 + 스텝퍼 */}
-        <div className="text-center mb-10">
-          <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-blue-500 text-white mb-4 shadow-lg">
+        <div className="text-center mb-6 sm:mb-10">
+          <div className="inline-flex items-center justify-center w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-blue-500 text-white mb-3 sm:mb-4 shadow-lg">
             <IconStar />
           </div>
-          <h2 className="text-2xl sm:text-3xl font-bold text-slate-800 mb-2">
+          <h2 className="text-xl sm:text-3xl font-bold text-slate-800 mb-1 sm:mb-2">
             청소업 표준 견적 진단기
           </h2>
-          <p className="text-gray-500 text-sm sm:text-base mb-8">
+          <p className="text-gray-500 text-xs sm:text-base mb-4 sm:mb-8">
             면적 기준 또는 인건비 기준으로 견적을 산정하고, 내 견적을 분석할 수 있습니다.
           </p>
           {/* 스텝퍼 */}
           <div className="flex items-center justify-center gap-0 max-w-md mx-auto">
-            <div className="flex items-center gap-2">
-              <span className="flex items-center justify-center w-8 h-8 rounded-full bg-blue-500 text-white text-sm font-semibold">1</span>
-              <span className="text-sm font-medium text-blue-600">견적 정보 입력</span>
+            <div className="flex items-center gap-1 sm:gap-2">
+              <span className="flex items-center justify-center w-6 h-6 sm:w-8 sm:h-8 rounded-full bg-blue-500 text-white text-xs sm:text-sm font-semibold">1</span>
+              <span className="text-xs sm:text-sm font-medium text-blue-600">견적 정보 입력</span>
             </div>
-            <div className="flex-1 h-0.5 bg-gray-200 mx-2 min-w-[24px]" />
-            <div className="flex items-center gap-2">
-              <span className="flex items-center justify-center w-8 h-8 rounded-full bg-gray-200 text-gray-500 text-sm font-medium">2</span>
-              <span className="text-sm text-gray-400 hidden sm:inline">견적 비교</span>
+            <div className="flex-1 h-0.5 bg-gray-200 mx-1 sm:mx-2 min-w-[16px] sm:min-w-[24px]" />
+            <div className="flex items-center gap-1 sm:gap-2">
+              <span className="flex items-center justify-center w-6 h-6 sm:w-8 sm:h-8 rounded-full bg-gray-200 text-gray-500 text-xs sm:text-sm font-medium">2</span>
+              <span className="text-xs sm:text-sm text-gray-400 hidden sm:inline">견적 비교</span>
             </div>
           </div>
         </div>
 
         {/* 2단: 좌(입력) | 우(실시간 견적 + 비교) */}
-        <div className="grid lg:grid-cols-[1fr,340px] gap-8 items-start pb-32 lg:pb-0">
+        <div className="grid lg:grid-cols-[1fr,340px] gap-8 items-start pb-28 sm:pb-32 lg:pb-0">
           {/* 왼쪽: 견적 계산 방식 + 기본 정보 + 추가 옵션 */}
           <div className="space-y-6">
             {/* 견적 계산 방식 */}
@@ -973,7 +962,7 @@ export default function CleaningEstimateCalculator() {
 
             <button
               type="button"
-              onClick={() => { setShowLoadingModal(true); setLoadingStep(0) }}
+              onClick={() => setShowLoadingModal(true)}
               className="w-full py-3.5 rounded-xl bg-gradient-to-r from-blue-500 to-indigo-600 text-white font-semibold shadow-md hover:from-blue-600 hover:to-indigo-700 transition-all"
             >
               내 견적 분석하기
@@ -1085,45 +1074,45 @@ export default function CleaningEstimateCalculator() {
         </div>
 
         {/* 모바일 전용: 상담하기 + 하단 고정 실시간 견적 + 견적 비교 */}
-        <div className="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-white border-t border-gray-200 shadow-[0_-4px_12px_rgba(0,0,0,0.08)] px-5 pt-3 pb-[max(1rem,env(safe-area-inset-bottom))]">
-          <div className="max-w-6xl mx-auto space-y-3">
+        <div className="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-white border-t border-gray-200 shadow-[0_-2px_8px_rgba(0,0,0,0.06)] px-3 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
+          <div className="max-w-6xl mx-auto space-y-2">
             <a
               href={KAKAO_CHAT_URL}
               target="_blank"
               rel="noopener noreferrer"
-              className="flex items-center justify-center gap-2 w-full rounded-xl bg-[#FEE500] px-4 py-2.5 font-medium text-black shadow-sm hover:bg-[#FADA0A] transition-colors"
+              className="flex items-center justify-center gap-1.5 w-full rounded-lg bg-[#FEE500] px-3 py-2 text-sm font-medium text-black shadow-sm hover:bg-[#FADA0A] transition-colors"
               title="카카오톡으로 문의하기"
             >
-              <svg className="h-5 w-5 shrink-0" fill="currentColor" viewBox="0 0 24 24" aria-hidden>
+              <svg className="h-4 w-4 shrink-0" fill="currentColor" viewBox="0 0 24 24" aria-hidden>
                 <path d="M12 3c5.5 0 10 3.58 10 8s-4.5 8-10 8c-1.24 0-2.43-.18-3.53-.5C5.55 21 2 21 2 21c2.33-2.33 2.7-3.9 2.75-4.5C3.05 15.07 3 14.1 3 13c0-4.42 4.5-8 9-8z" />
               </svg>
               무플 상담하기
             </a>
-            <div className="space-y-2">
-            <div className="flex items-center justify-between gap-4">
-              <div className="flex items-center gap-2 min-w-0">
+            <div className="space-y-1">
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-1.5 min-w-0">
                 <IconStar />
-                <span className="text-lg font-semibold text-gray-700">실시간 견적</span>
+                <span className="text-sm font-semibold text-gray-700">실시간 견적</span>
               </div>
               <div className="text-right shrink-0">
-                <p className="text-5xl font-bold text-slate-800 tabular-nums">
+                <p className="text-2xl font-bold text-slate-800 tabular-nums leading-tight">
                   {displayAmount > 0 ? (
-                    <>{formatNumber(displayAmount)} <span className="text-3xl font-semibold text-slate-600">원</span></>
+                    <>{formatNumber(displayAmount)} <span className="text-lg font-semibold text-slate-600">원</span></>
                   ) : (
-                    <><span className="text-slate-800">0</span> <span className="text-3xl font-semibold text-slate-600">원</span></>
+                    <><span className="text-slate-800">0</span> <span className="text-lg font-semibold text-slate-600">원</span></>
                   )}
                 </p>
                 {displayAmount > 0 && (
-                  <p className="text-xs text-gray-500 mt-0.5">부가세 10% 포함 {formatNumber(Math.round(displayAmount * 1.1))} 원</p>
+                  <p className="text-[10px] text-gray-500 mt-0">부가세 10% 포함 {formatNumber(Math.round(displayAmount * 1.1))} 원</p>
                 )}
               </div>
             </div>
-            <div className="flex items-center justify-between gap-3 text-sm sm:text-base border-t border-gray-100 pt-2.5">
-              <span className="font-semibold text-gray-600">견적 비교</span>
-              <div className="flex items-center gap-2 text-right">
-                <span><span className="text-gray-500">면적</span> <span className="font-semibold text-slate-800 tabular-nums">{hasAreaResult ? formatWon(areaResult!.monthlyTotal) : formatWon(0)}</span></span>
-                <span className="text-gray-300">|</span>
-                <span><span className="text-gray-500">인건비</span> <span className="font-semibold text-slate-800 tabular-nums">{hasLaborResult ? formatWon(laborResult!.suggestedQuote) : formatWon(0)}</span></span>
+            <div className="flex justify-between items-center gap-2 text-xs border-t border-gray-100 pt-1.5">
+              <span className="font-medium text-gray-600">견적 비교</span>
+              <div className="flex items-center gap-1.5 text-right min-w-0">
+                <span className="truncate"><span className="text-gray-500">면적</span> <span className="font-semibold text-slate-800 tabular-nums">{hasAreaResult ? formatWon(areaResult!.monthlyTotal) : formatWon(0)}</span></span>
+                <span className="text-gray-300 shrink-0">|</span>
+                <span className="truncate"><span className="text-gray-500">인건비</span> <span className="font-semibold text-slate-800 tabular-nums">{hasLaborResult ? formatWon(laborResult!.suggestedQuote) : formatWon(0)}</span></span>
               </div>
             </div>
             </div>
@@ -1138,25 +1127,8 @@ export default function CleaningEstimateCalculator() {
                 <h3 className="text-lg font-bold text-gray-900 text-center mb-1">내 견적 분석 중</h3>
                 <p className="text-sm text-gray-600 text-center mb-4">방문 빈도·옵션·운영 난이도를 반영하고 있어요.</p>
                 <p className="text-xs text-gray-500 text-center mb-6">평균 단가·운영 난이도·방문 빈도를 반영합니다.</p>
-                <div className="space-y-3">
-                  {LOADING_STEPS.map((step, i) => (
-                    <div key={i} className="flex items-center gap-3">
-                      <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-medium transition-colors ${i < loadingStep ? 'bg-green-500 text-white' : i === loadingStep ? 'bg-blue-100 text-blue-600' : 'bg-gray-100 text-gray-400'}`}>
-                        {i < loadingStep ? (
-                          <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" /></svg>
-                        ) : (
-                          i + 1
-                        )}
-                      </span>
-                      <span className={`text-sm ${i <= loadingStep ? 'text-gray-900 font-medium' : 'text-gray-400'}`}>{step.label}</span>
-                    </div>
-                  ))}
-                </div>
-                <div className="mt-5 h-1 w-full rounded-full bg-gray-100 overflow-hidden">
-                  <div
-                    className="h-full rounded-full bg-gradient-to-r from-blue-500 to-indigo-500 transition-all duration-300 ease-out"
-                    style={{ width: `${((loadingStep + 1) / LOADING_STEPS.length) * 100}%` }}
-                  />
+                <div className="flex justify-center">
+                  <div className="h-10 w-10 animate-spin rounded-full border-2 border-slate-200 border-t-blue-500" aria-hidden />
                 </div>
               </div>
             </div>
