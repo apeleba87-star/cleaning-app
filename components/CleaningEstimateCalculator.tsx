@@ -253,13 +253,21 @@ export default function CleaningEstimateCalculator() {
   const [copyToast, setCopyToast] = useState(false)
 
   const shareUrl = typeof window !== 'undefined' ? window.location.href : ''
-  const shareTitle = '[내 단가 전략 점검 완료] 업계 평균 기준, 당신은 어디에 있나요?'
-  const shareText = ''
-  /** 모바일 기기에서만 공유 허용 (카카오톡·삼성 인앱 브라우저 포함) */
+  const shareMessage = '[내 단가 전략 점검 완료] 업계 평균 기준, 당신은 어디에 있나요?'
+  const shareTitle = shareMessage
+  const shareText = shareMessage
+  /** 모바일 기기에서만 공유 허용 (UA + 뷰포트로 판별, 카카오톡 인앱 대응) */
+  const [isNarrowViewport, setIsNarrowViewport] = useState(false)
+  useEffect(() => {
+    const check = () => setIsNarrowViewport(window.innerWidth <= 768)
+    check()
+    window.addEventListener('resize', check)
+    return () => window.removeEventListener('resize', check)
+  }, [])
   const isMobileDevice =
     typeof navigator !== 'undefined' &&
-    /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini|KakaoTalk|KAKAOTALK|KAKAO|Samsung/i.test(navigator.userAgent)
-  const canUseShare = typeof navigator !== 'undefined' && !!navigator.share && isMobileDevice
+    /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini|KakaoTalk|KAKAOTALK|KAKAO|Samsung|Mobile/i.test(navigator.userAgent)
+  const canUseShare = typeof navigator !== 'undefined' && !!navigator.share && (isMobileDevice || isNarrowViewport)
 
   const handleShareAndUnlock = async () => {
     if (!shareUrl || !canUseShare) return
