@@ -22,9 +22,9 @@ export default function EstimatePage() {
               <Link href="/pricing" className="text-sm sm:text-base text-gray-600 hover:text-gray-900 font-medium transition-colors">
                 요금제
               </Link>
-              <span className="text-sm sm:text-base text-blue-600 font-medium">
-                청소 표준 견적 계산기
-              </span>
+              <Link href="/estimate" className="text-sm sm:text-base text-blue-600 font-medium border-b-2 border-blue-600">
+                청소 표준 견적 진단기
+              </Link>
             </div>
             <Link href="/login" className="px-4 sm:px-5 py-2 bg-gray-900 text-white rounded-lg text-sm sm:text-base font-medium hover:bg-gray-800 transition-colors duration-200">
               로그인

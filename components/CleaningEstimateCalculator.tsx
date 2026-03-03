@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useMemo } from 'react'
+import { KAKAO_CHAT_URL } from '@/lib/constants'
 
 type CalcTab = 'area' | 'labor'
 
@@ -228,7 +229,7 @@ export default function CleaningEstimateCalculator() {
   const [copyToast, setCopyToast] = useState(false)
 
   const shareUrl = typeof window !== 'undefined' ? window.location.href : ''
-  const shareTitle = '청소업 표준 견적 계산기'
+  const shareTitle = '청소업 표준 견적 진단기'
   const shareText = '견적을 계산해 봤어요. 업계 평균 단가와 비교해 보세요.'
   /** 모바일 기기에서만 공유 허용 (데스크톱은 navigator.share 지원해도 비활성화) */
   const isMobileDevice =
@@ -443,7 +444,7 @@ export default function CleaningEstimateCalculator() {
             <IconStar />
           </div>
           <h2 className="text-2xl sm:text-3xl font-bold text-slate-800 mb-2">
-            청소업 표준 견적 계산기
+            청소업 표준 견적 진단기
           </h2>
           <p className="text-gray-500 text-sm sm:text-base mb-8">
             면적 기준 또는 인건비 기준으로 견적을 산정하고, 내 견적을 분석할 수 있습니다.
@@ -1055,9 +1056,22 @@ export default function CleaningEstimateCalculator() {
           </div>
         </div>
 
-        {/* 모바일 전용: 하단 고정 실시간 견적 + 견적 비교 */}
-        <div className="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-white border-t border-gray-200 shadow-[0_-4px_12px_rgba(0,0,0,0.08)] px-5 py-3 pb-[max(1rem,env(safe-area-inset-bottom))]">
-          <div className="max-w-6xl mx-auto space-y-2">
+        {/* 모바일 전용: 상담하기 + 하단 고정 실시간 견적 + 견적 비교 */}
+        <div className="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-white border-t border-gray-200 shadow-[0_-4px_12px_rgba(0,0,0,0.08)] px-5 pt-3 pb-[max(1rem,env(safe-area-inset-bottom))]">
+          <div className="max-w-6xl mx-auto space-y-3">
+            <a
+              href={KAKAO_CHAT_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center justify-center gap-2 w-full rounded-xl bg-[#FEE500] px-4 py-2.5 font-medium text-black shadow-sm hover:bg-[#FADA0A] transition-colors"
+              title="카카오톡으로 문의하기"
+            >
+              <svg className="h-5 w-5 shrink-0" fill="currentColor" viewBox="0 0 24 24" aria-hidden>
+                <path d="M12 3c5.5 0 10 3.58 10 8s-4.5 8-10 8c-1.24 0-2.43-.18-3.53-.5C5.55 21 2 21 2 21c2.33-2.33 2.7-3.9 2.75-4.5C3.05 15.07 3 14.1 3 13c0-4.42 4.5-8 9-8z" />
+              </svg>
+              무플 상담하기
+            </a>
+            <div className="space-y-2">
             <div className="flex items-center justify-between gap-4">
               <div className="flex items-center gap-2 min-w-0">
                 <IconStar />
@@ -1083,6 +1097,7 @@ export default function CleaningEstimateCalculator() {
                 <span className="text-gray-300">|</span>
                 <span><span className="text-gray-500">인건비</span> <span className="font-semibold text-slate-800 tabular-nums">{hasLaborResult ? formatWon(laborResult!.suggestedQuote) : formatWon(0)}</span></span>
               </div>
+            </div>
             </div>
           </div>
         </div>

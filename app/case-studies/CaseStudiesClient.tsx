@@ -52,6 +52,12 @@ export default function CaseStudiesClient({ caseStudies }: CaseStudiesClientProp
               >
                 요금제
               </Link>
+              <Link
+                href="/estimate"
+                className="text-sm sm:text-base text-gray-600 hover:text-gray-900 font-medium transition-colors"
+              >
+                청소 표준 견적 진단기
+              </Link>
             </div>
             <Link
               href="/login"

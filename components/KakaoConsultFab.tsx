@@ -21,7 +21,8 @@ export default function KakaoConsultFab() {
       href={KAKAO_CHAT_URL}
       target="_blank"
       rel="noopener noreferrer"
-      className="fixed bottom-6 right-6 z-[100] flex items-center gap-2 rounded-full bg-[#FEE500] px-4 py-3 shadow-lg transition hover:bg-[#FADA0A] hover:shadow-xl focus:outline-none focus:ring-2 focus:ring-[#FEE500] focus:ring-offset-2"
+      className="fixed right-6 z-[100] flex items-center gap-2 rounded-full bg-[#FEE500] px-4 py-3 shadow-lg transition hover:bg-[#FADA0A] hover:shadow-xl focus:outline-none focus:ring-2 focus:ring-[#FEE500] focus:ring-offset-2"
+      style={{ bottom: 'max(4rem, calc(env(safe-area-inset-bottom, 0px) + 2rem))' }}
       title="카카오톡으로 문의하기"
       aria-label="카카오톡 상담하기"
     >

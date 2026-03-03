@@ -85,7 +85,7 @@ export default function LandingPageClient({ heroImages, heroSettings, caseStudie
                 href="/estimate"
                 className="text-sm sm:text-base text-gray-600 hover:text-gray-900 font-medium transition-colors"
               >
-                청소 표준 견적 계산기
+                청소 표준 견적 진단기
               </Link>
             </div>
             <Link
