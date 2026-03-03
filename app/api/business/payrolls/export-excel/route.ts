@@ -83,7 +83,7 @@ export async function GET(request: NextRequest) {
     const dailyRows = list.filter((p: any) => p.user_id == null)
 
     // 정규 직원: user_sensitive에서 주민등록번호 복호화
-    const userIds = [...new Set(regularRows.map((p: any) => p.user_id).filter(Boolean))]
+    const userIds = Array.from(new Set(regularRows.map((p: any) => p.user_id).filter(Boolean)))
     let sensitiveMap: Record<string, string> = {}
     if (userIds.length > 0) {
       const { data: sensitiveList } = await dataClient
