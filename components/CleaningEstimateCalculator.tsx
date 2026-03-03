@@ -43,10 +43,112 @@ const JUDGE_LABELS: Record<string, string> = {
   high: '업계 평균보다 높은 견적입니다. 단가 근거(서비스 범위·품질)를 명확히 하는 것이 좋습니다.',
 }
 
+/** 판정 5단계별 견적 타입 카드 — 블록: title + items 또는 body */
+type JudgeTypeBlock = { title: string; items?: string[]; body?: string }
+type JudgeType = { emoji: string; title: string; tagline: string; blocks: JudgeTypeBlock[] }
+
+const JUDGE_TYPES: Record<string, JudgeType> = {
+  low: {
+    emoji: '💪',
+    title: '돌격 수주형',
+    tagline: '"일단 계약부터 따내자."\n당신은 현장에서 승부를 보는 대표입니다.',
+    blocks: [
+      { title: '이런 특징이 있습니다', items: ['가격 경쟁에서 밀리지 않음', '수주 성사율이 높은 편', '빠르게 거래처를 확보하는 스타일'] },
+      { title: '하지만 한 가지 질문이 있습니다.', body: '이 구조로 1년을 버틸 수 있습니까?' },
+      { title: '장기적으로 생길 수 있는 문제', items: ['인건비가 조금만 올라가도 압박', '직원 이탈 시 바로 흔들림', '대표의 체력에 의존하는 구조'] },
+      { title: '지금 필요한 것', body: '감(感)이 아니라\n최소 유지 가능한 단가를 정확히 아는 것입니다.' },
+    ],
+  },
+  slightlyLow: {
+    emoji: '⚡',
+    title: '공격적 확장형',
+    tagline: '지금은 시장을 넓히는 시기입니다.\n당신은 확장을 선택한 대표입니다.',
+    blocks: [
+      { title: '이런 운영 스타일입니다', items: ['신규 거래처 확보에 적극적', '가격으로 진입 후 관계를 쌓는 전략', '단기간 물량 확보에 강점'] },
+      { title: '하지만 확장이 커질수록 관리도 커집니다.' },
+      { title: '놓치기 쉬운 부분', items: ['현장 통제 누락', '관리 기록 부재', '얇아지는 마진'] },
+      { title: '지금 필요한 것', body: '수주보다 중요한 건\n구조 점검입니다.' },
+    ],
+  },
+  avg: {
+    emoji: '🧱',
+    title: '표준 운영형',
+    tagline: '시장 흐름에 맞춰 안정적으로 운영 중입니다.',
+    blocks: [
+      { title: '이런 특징이 있습니다', items: ['무리하지 않는 단가', '비교적 안정적인 계약 구조', '지속 운영에 적합'] },
+      { title: '현재는 균형 상태입니다.', body: '하지만 여기서 선택이 필요합니다.\n유지할 것인가\n한 단계 올릴 것인가' },
+      { title: '기회 요소', items: ['운영 효율 개선', '관리 체계 정비', '클레임 감소'] },
+      { title: '같은 구조라도', body: '운영 방식에 따라 결과는 달라집니다.' },
+    ],
+  },
+  slightlyHigh: {
+    emoji: '🎯',
+    title: '전략적 수익형',
+    tagline: '단가를 방어할 줄 아는 대표입니다.',
+    blocks: [
+      { title: '이런 운영을 하고 있습니다', items: ['거래처와 협상 가능', '품질로 설득', '신뢰 기반 계약 유지'] },
+      { title: '좋은 구간입니다.', body: '하지만 유지가 더 어렵습니다.' },
+      { title: '유지 조건', items: ['출퇴근 기록 관리', '전후 사진 증빙', '요청 처리 이력 관리'] },
+      { title: '단가는 설득으로 만들고,', body: '유지는 시스템으로 합니다.' },
+    ],
+  },
+  high: {
+    emoji: '👑',
+    title: '프리미엄 운영형',
+    tagline: '가격이 아니라 관리 체계로 계약하는 구조입니다.',
+    blocks: [
+      { title: '이런 특징이 있습니다', items: ['브랜드 중심 운영', '거래처 신뢰 확보', '고급 관리 전략'] },
+      { title: '이 단계는', body: '"설명"이 아니라 "증명"이 필요합니다.' },
+      { title: '반드시 필요한 것', items: ['기록 출퇴근 관리', '체크리스트 품질 관리', '클레임 대응 이력 관리', '리포트 자동화'] },
+      { title: '프리미엄 단가는', body: '감으로 유지되지 않습니다.' },
+    ],
+  },
+}
+/** 판정 5단계별 색상: 저가(빨강) → 다소낮음(주황) → 평균(초록) → 다소높음(파랑) → 고가(보라) */
+const JUDGE_STYLES: Record<string, { bg: string; border: string; borderL: string; icon: string; text: string }> = {
+  low: { bg: 'from-red-50 to-red-100/80', border: 'border-red-200', borderL: 'border-l-red-500', icon: 'bg-red-500', text: 'text-red-900' },
+  slightlyLow: { bg: 'from-orange-50 to-amber-50', border: 'border-orange-200', borderL: 'border-l-orange-500', icon: 'bg-orange-500', text: 'text-orange-900' },
+  avg: { bg: 'from-green-50 to-emerald-50', border: 'border-green-200', borderL: 'border-l-green-500', icon: 'bg-green-500', text: 'text-green-900' },
+  slightlyHigh: { bg: 'from-blue-50 to-indigo-50', border: 'border-blue-200', borderL: 'border-l-blue-500', icon: 'bg-blue-500', text: 'text-blue-900' },
+  high: { bg: 'from-purple-50 to-violet-50', border: 'border-purple-200', borderL: 'border-l-purple-500', icon: 'bg-purple-500', text: 'text-purple-900' },
+}
+
 const formatWon = (n: number) =>
   new Intl.NumberFormat('ko-KR', { style: 'decimal', maximumFractionDigits: 0 }).format(n) + ' 원'
 const formatNumber = (n: number) =>
   new Intl.NumberFormat('ko-KR', { style: 'decimal', maximumFractionDigits: 0 }).format(n)
+
+const DAILY_UNLOCK_LIMIT = 5
+const DAILY_UNLOCK_KEY = 'cleaning-estimate-daily-unlocks'
+
+function getTodayStr(): string {
+  if (typeof window === 'undefined') return ''
+  return new Date().toISOString().slice(0, 10)
+}
+
+function getDailyUnlockCount(): number {
+  if (typeof window === 'undefined') return 0
+  try {
+    const raw = localStorage.getItem(DAILY_UNLOCK_KEY)
+    if (!raw) return 0
+    const data = JSON.parse(raw) as { date?: string; count?: number }
+    if (!data || data.date !== getTodayStr()) return 0
+    return Math.max(0, Number(data.count) || 0)
+  } catch {
+    return 0
+  }
+}
+
+function incrementDailyUnlock(): void {
+  if (typeof window === 'undefined') return
+  const today = getTodayStr()
+  const current = getDailyUnlockCount()
+  try {
+    localStorage.setItem(DAILY_UNLOCK_KEY, JSON.stringify({ date: today, count: current + 1 }))
+  } catch {
+    // ignore
+  }
+}
 
 // 아이콘 (인라인 SVG)
 const IconStar = () => (
@@ -86,7 +188,7 @@ export default function CleaningEstimateCalculator() {
 
   const [cleanType, setCleanType] = useState<string>('office')
   const [areaPyeong, setAreaPyeong] = useState<string>('')
-  const [officeUnitPrice, setOfficeUnitPrice] = useState<string>('2000')
+  const [officeUnitPrice, setOfficeUnitPrice] = useState<string>('0')
   const [officeDiscountRate, setOfficeDiscountRate] = useState<number>(0)
   const [visitsPerWeek, setVisitsPerWeek] = useState<number>(1)
   const [toiletStalls, setToiletStalls] = useState<number>(0)
@@ -98,12 +200,12 @@ export default function CleaningEstimateCalculator() {
   const [customExtraItems, setCustomExtraItems] = useState<{ id: number; label: string; amount: string }[]>([])
   const [customExtraNextId, setCustomExtraNextId] = useState(0)
   /** 추가 옵션 - 항목별 금액 수정 (기본값 유지, 빈 값이면 상수 사용) */
-  const [customOptionElevator, setCustomOptionElevator] = useState<string>('15000')
-  const [customOptionParking, setCustomOptionParking] = useState<string>('10000')
-  const [customOptionWindowDust, setCustomOptionWindowDust] = useState<string>('5000')
-  const [customOptionRecycling, setCustomOptionRecycling] = useState<string>('15000')
-  /** 화장실 단가 (월), 기본 20,000원 */
-  const [customOptionToiletAmount, setCustomOptionToiletAmount] = useState<string>('20000')
+  const [customOptionElevator, setCustomOptionElevator] = useState<string>('0')
+  const [customOptionParking, setCustomOptionParking] = useState<string>('0')
+  const [customOptionWindowDust, setCustomOptionWindowDust] = useState<string>('0')
+  const [customOptionRecycling, setCustomOptionRecycling] = useState<string>('0')
+  /** 화장실 단가 (월), 기본 0원 */
+  const [customOptionToiletAmount, setCustomOptionToiletAmount] = useState<string>('0')
   const [stairsFloors, setStairsFloors] = useState<number>(4)
   /** 계단 청소 할인률 0~50% */
   const [stairsDiscountRate, setStairsDiscountRate] = useState<number>(0)
@@ -117,6 +219,43 @@ export default function CleaningEstimateCalculator() {
   const [marginRate, setMarginRate] = useState<number>(20)
   /** 내 견적 분석하기 클릭 시 분석 모달 표시 */
   const [showAnalysisModal, setShowAnalysisModal] = useState(false)
+  /** 공유 후 업계 평균 단가·상세 단가 노출 여부 (모달 열 때마다 초기화) */
+  const [hasSharedForAnalysis, setHasSharedForAnalysis] = useState(false)
+  /** 공유 취소 시 안내 (모바일) */
+  const [shareCancelled, setShareCancelled] = useState(false)
+  /** 일일 열람 횟수 초과 */
+  const [dailyLimitReached, setDailyLimitReached] = useState(false)
+  const [copyToast, setCopyToast] = useState(false)
+
+  const shareUrl = typeof window !== 'undefined' ? window.location.href : ''
+  const shareTitle = '청소업 표준 견적 계산기'
+  const shareText = '견적을 계산해 봤어요. 업계 평균 단가와 비교해 보세요.'
+  /** 모바일 기기에서만 공유 허용 (데스크톱은 navigator.share 지원해도 비활성화) */
+  const isMobileDevice =
+    typeof navigator !== 'undefined' &&
+    /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)
+  const canUseShare = typeof navigator !== 'undefined' && !!navigator.share && isMobileDevice
+
+  const handleShareAndUnlock = async () => {
+    if (!shareUrl || !canUseShare) return
+    setShareCancelled(false)
+    setDailyLimitReached(false)
+    try {
+      await navigator.share({
+        title: shareTitle,
+        text: shareText,
+        url: shareUrl,
+      })
+      if (getDailyUnlockCount() >= DAILY_UNLOCK_LIMIT) {
+        setDailyLimitReached(true)
+        return
+      }
+      incrementDailyUnlock()
+      setHasSharedForAnalysis(true)
+    } catch {
+      setShareCancelled(true)
+    }
+  }
 
   const areaResult = useMemo(() => {
     const pyeong = Number(areaPyeong) || 0
@@ -124,11 +263,11 @@ export default function CleaningEstimateCalculator() {
     if (cleanType === 'office') {
       if (pyeong <= 0) return null
       const extraAmount = customExtraItems.reduce((sum, it) => sum + (Number(it.amount?.replace(/\D/g, '')) || 0), 0)
-      const unitPrice = Number(officeUnitPrice) || 2000
+      const unitPrice = Number(officeUnitPrice) || 0
       const baseMonthly = pyeong * unitPrice * monthlyVisits
-      const elevatorAmt = Number(customOptionElevator?.replace(/\D/g, '')) || ELEVATOR_OPTION_OFFICE_MONTHLY
-      const recyclingAmt = Number(customOptionRecycling?.replace(/\D/g, '')) || RECYCLING_OPTION_OFFICE_MONTHLY
-      const toiletUnitOffice = Number(customOptionToiletAmount?.replace(/\D/g, '')) || TOILET_PER_STALL_OFFICE_MONTHLY
+      const elevatorAmt = Number(customOptionElevator?.replace(/\D/g, '')) || 0
+      const recyclingAmt = Number(customOptionRecycling?.replace(/\D/g, '')) || 0
+      const toiletUnitOffice = Number(customOptionToiletAmount?.replace(/\D/g, '')) || 0
       const optionMonthly =
         toiletStalls * toiletUnitOffice +
         (hasRecycling ? recyclingAmt : 0) +
@@ -165,11 +304,11 @@ export default function CleaningEstimateCalculator() {
         STAIRS_BASE_MONTHLY_1VISIT + Math.max(0, stairsFloors - 4) * STAIRS_EXTRA_PER_FLOOR
       const baseMonthly = baseMonthly1 * visitsPerWeek
       const extraAmount = customExtraItems.reduce((sum, it) => sum + (Number(it.amount?.replace(/\D/g, '')) || 0), 0)
-      const elevAmt = Number(customOptionElevator?.replace(/\D/g, '')) || STAIRS_OPTION_ELEVATOR_MONTHLY
-      const parkAmt = Number(customOptionParking?.replace(/\D/g, '')) || STAIRS_OPTION_PARKING_MONTHLY
-      const windowAmt = Number(customOptionWindowDust?.replace(/\D/g, '')) || STAIRS_OPTION_WINDOW_MONTHLY
-      const recyAmt = Number(customOptionRecycling?.replace(/\D/g, '')) || STAIRS_OPTION_RECYCLING_MONTHLY
-      const toiletUnitStairs = Number(customOptionToiletAmount?.replace(/\D/g, '')) || STAIRS_OPTION_TOILET_MONTHLY
+      const elevAmt = Number(customOptionElevator?.replace(/\D/g, '')) || 0
+      const parkAmt = Number(customOptionParking?.replace(/\D/g, '')) || 0
+      const windowAmt = Number(customOptionWindowDust?.replace(/\D/g, '')) || 0
+      const recyAmt = Number(customOptionRecycling?.replace(/\D/g, '')) || 0
+      const toiletUnitStairs = Number(customOptionToiletAmount?.replace(/\D/g, '')) || 0
       const optionMonthly =
         (hasElevator ? elevAmt : 0) +
         (hasParking ? parkAmt : 0) +
@@ -256,13 +395,14 @@ export default function CleaningEstimateCalculator() {
       const idx = Math.min(6, Math.max(0, visitsPerWeek - 1))
       const avgUnit = OFFICE_AVG_UNIT_BY_VISITS[idx]
       const diffRate = (userUnitPerVisit - avgUnit) / avgUnit
+      const isExtreme = diffRate <= -0.7 || diffRate >= 2.0
       let judgment: keyof typeof JUDGE_LABELS
       if (diffRate <= -0.15) judgment = 'low'
       else if (diffRate < -0.05) judgment = 'slightlyLow'
       else if (diffRate <= 0.05) judgment = 'avg'
       else if (diffRate <= 0.15) judgment = 'slightlyHigh'
       else judgment = 'high'
-      return { diffRate, judgment, message: JUDGE_LABELS[judgment], avgAmount: avgUnit * monthlyVisits * pyeong }
+      return { diffRate, judgment, message: JUDGE_LABELS[judgment], avgAmount: avgUnit * monthlyVisits * pyeong, isExtreme }
     }
 
     if (cleanType === 'stairs') {
@@ -278,13 +418,14 @@ export default function CleaningEstimateCalculator() {
       const avgAmount = Math.round(basePerWeek * multiplier)
       if (avgAmount <= 0) return null
       const diffRate = (userAmount - avgAmount) / avgAmount
+      const isExtreme = diffRate <= -0.7 || diffRate >= 2.0
       let judgment: keyof typeof JUDGE_LABELS
       if (diffRate <= -0.15) judgment = 'low'
       else if (diffRate < -0.05) judgment = 'slightlyLow'
       else if (diffRate <= 0.05) judgment = 'avg'
       else if (diffRate <= 0.15) judgment = 'slightlyHigh'
       else judgment = 'high'
-      return { diffRate, judgment, message: JUDGE_LABELS[judgment], avgAmount }
+      return { diffRate, judgment, message: JUDGE_LABELS[judgment], avgAmount, isExtreme }
     }
 
     return null
@@ -305,7 +446,7 @@ export default function CleaningEstimateCalculator() {
             청소업 표준 견적 계산기
           </h2>
           <p className="text-gray-500 text-sm sm:text-base mb-8">
-            면적 기준 또는 인건비 기준으로 견적을 산정하고, PDF로 다운로드할 수 있습니다.
+            면적 기준 또는 인건비 기준으로 견적을 산정하고, 내 견적을 분석할 수 있습니다.
           </p>
           {/* 스텝퍼 */}
           <div className="flex items-center justify-center gap-0 max-w-md mx-auto">
@@ -317,11 +458,6 @@ export default function CleaningEstimateCalculator() {
             <div className="flex items-center gap-2">
               <span className="flex items-center justify-center w-8 h-8 rounded-full bg-gray-200 text-gray-500 text-sm font-medium">2</span>
               <span className="text-sm text-gray-400 hidden sm:inline">견적 비교</span>
-            </div>
-            <div className="flex-1 h-0.5 bg-gray-200 mx-2 min-w-[24px]" />
-            <div className="flex items-center gap-2">
-              <span className="flex items-center justify-center w-8 h-8 rounded-full bg-gray-200 text-gray-500 text-sm font-medium">3</span>
-              <span className="text-sm text-gray-400 hidden sm:inline">견적서 다운로드</span>
             </div>
           </div>
         </div>
@@ -430,7 +566,7 @@ export default function CleaningEstimateCalculator() {
                               inputMode="numeric"
                               value={officeUnitPrice === '' ? '' : formatNumber(Number(officeUnitPrice) || 0)}
                               onChange={(e) => setOfficeUnitPrice(e.target.value.replace(/\D/g, ''))}
-                              placeholder="예: 2,000"
+                              placeholder="0"
                               className={inputBase}
                             />
                             <span className="text-gray-600 text-sm">원</span>
@@ -705,9 +841,9 @@ export default function CleaningEstimateCalculator() {
                       <input
                         type="text"
                         inputMode="numeric"
-                        value={customOptionToiletAmount === '' ? '' : formatNumber(Number(customOptionToiletAmount?.replace(/\D/g, '')) || (cleanType === 'stairs' ? 20000 : 10000))}
+                        value={customOptionToiletAmount === '' ? '' : formatNumber(Number(customOptionToiletAmount?.replace(/\D/g, '')) || 0)}
                         onChange={(e) => setCustomOptionToiletAmount(e.target.value.replace(/\D/g, ''))}
-                        placeholder={cleanType === 'stairs' ? '20,000' : '10,000'}
+                        placeholder="0"
                         className="w-20 px-2 py-1.5 rounded-lg border border-gray-200 bg-white text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-right tabular-nums"
                       />
                       <span className="text-gray-600 text-sm">원</span>
@@ -719,7 +855,7 @@ export default function CleaningEstimateCalculator() {
                       <span className="text-sm font-medium text-gray-700">엘리베이터</span>
                     </label>
                     <div className="flex items-center gap-1 w-[120px] justify-end">
-                      <input type="text" inputMode="numeric" value={customOptionElevator === '' ? '' : formatNumber(Number(customOptionElevator?.replace(/\D/g, '')) || 15000)} onChange={(e) => setCustomOptionElevator(e.target.value.replace(/\D/g, ''))} placeholder="15,000" className="w-20 px-2 py-1.5 rounded-lg border border-gray-200 bg-white text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-right tabular-nums" />
+                      <input type="text" inputMode="numeric" value={customOptionElevator === '' ? '' : formatNumber(Number(customOptionElevator?.replace(/\D/g, '')) || 0)} onChange={(e) => setCustomOptionElevator(e.target.value.replace(/\D/g, ''))} placeholder="0" className="w-20 px-2 py-1.5 rounded-lg border border-gray-200 bg-white text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-right tabular-nums" />
                       <span className="text-gray-600 text-sm">원</span>
                     </div>
                   </div>
@@ -731,7 +867,7 @@ export default function CleaningEstimateCalculator() {
                           <span className="text-sm font-medium text-gray-700">외부 주차장</span>
                         </label>
                         <div className="flex items-center gap-1 w-[120px] justify-end">
-                          <input type="text" inputMode="numeric" value={customOptionParking === '' ? '' : formatNumber(Number(customOptionParking?.replace(/\D/g, '')) || 10000)} onChange={(e) => setCustomOptionParking(e.target.value.replace(/\D/g, ''))} placeholder="10,000" className="w-20 px-2 py-1.5 rounded-lg border border-gray-200 bg-white text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-right tabular-nums" />
+                          <input type="text" inputMode="numeric" value={customOptionParking === '' ? '' : formatNumber(Number(customOptionParking?.replace(/\D/g, '')) || 0)} onChange={(e) => setCustomOptionParking(e.target.value.replace(/\D/g, ''))} placeholder="0" className="w-20 px-2 py-1.5 rounded-lg border border-gray-200 bg-white text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-right tabular-nums" />
                           <span className="text-gray-600 text-sm">원</span>
                         </div>
                       </div>
@@ -741,7 +877,7 @@ export default function CleaningEstimateCalculator() {
                           <span className="text-sm font-medium text-gray-700">창틀 먼지 제거</span>
                         </label>
                         <div className="flex items-center gap-1 w-[120px] justify-end">
-                          <input type="text" inputMode="numeric" value={customOptionWindowDust === '' ? '' : formatNumber(Number(customOptionWindowDust?.replace(/\D/g, '')) || 5000)} onChange={(e) => setCustomOptionWindowDust(e.target.value.replace(/\D/g, ''))} placeholder="5,000" className="w-20 px-2 py-1.5 rounded-lg border border-gray-200 bg-white text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-right tabular-nums" />
+                          <input type="text" inputMode="numeric" value={customOptionWindowDust === '' ? '' : formatNumber(Number(customOptionWindowDust?.replace(/\D/g, '')) || 0)} onChange={(e) => setCustomOptionWindowDust(e.target.value.replace(/\D/g, ''))} placeholder="0" className="w-20 px-2 py-1.5 rounded-lg border border-gray-200 bg-white text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-right tabular-nums" />
                           <span className="text-gray-600 text-sm">원</span>
                         </div>
                       </div>
@@ -753,7 +889,7 @@ export default function CleaningEstimateCalculator() {
                       <span className="text-sm font-medium text-gray-700">분리수거</span>
                     </label>
                     <div className="flex items-center gap-1 w-[120px] justify-end">
-                      <input type="text" inputMode="numeric" value={customOptionRecycling === '' ? '' : formatNumber(Number(customOptionRecycling?.replace(/\D/g, '')) || 15000)} onChange={(e) => setCustomOptionRecycling(e.target.value.replace(/\D/g, ''))} placeholder="15,000" className="w-20 px-2 py-1.5 rounded-lg border border-gray-200 bg-white text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-right tabular-nums" />
+                      <input type="text" inputMode="numeric" value={customOptionRecycling === '' ? '' : formatNumber(Number(customOptionRecycling?.replace(/\D/g, '')) || 0)} onChange={(e) => setCustomOptionRecycling(e.target.value.replace(/\D/g, ''))} placeholder="0" className="w-20 px-2 py-1.5 rounded-lg border border-gray-200 bg-white text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-right tabular-nums" />
                       <span className="text-gray-600 text-sm">원</span>
                     </div>
                   </div>
@@ -808,7 +944,7 @@ export default function CleaningEstimateCalculator() {
 
             <button
               type="button"
-              onClick={() => setShowAnalysisModal(true)}
+              onClick={() => { setShowAnalysisModal(true); setHasSharedForAnalysis(false) }}
               className="w-full py-3.5 rounded-xl bg-gradient-to-r from-blue-500 to-indigo-600 text-white font-semibold shadow-md hover:from-blue-600 hover:to-indigo-700 transition-all"
             >
               내 견적 분석하기
@@ -916,13 +1052,6 @@ export default function CleaningEstimateCalculator() {
                 </ul>
               </div>
             </div>
-
-            <button
-              type="button"
-              className="w-full py-3.5 rounded-xl bg-slate-800 text-white font-semibold hover:bg-slate-700 transition-colors"
-            >
-              견적서 다운로드 (PDF)
-            </button>
           </div>
         </div>
 
@@ -958,11 +1087,11 @@ export default function CleaningEstimateCalculator() {
           </div>
         </div>
 
-        {/* 내 견적 분석 모달 (방법 A: 버튼 클릭 시에만 표시) */}
+        {/* 내 견적 분석 모달 — 참고 디자인: 예상 견적 · 업계 평균 대비(파란 박스) · 상세 내역 · 결과 · 확인 */}
         {showAnalysisModal && (
           <div
             className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50"
-            onClick={() => setShowAnalysisModal(false)}
+            onClick={() => { setShowAnalysisModal(false); setShareCancelled(false); setDailyLimitReached(false) }}
             role="dialog"
             aria-modal="true"
             aria-labelledby="analysis-modal-title"
@@ -972,97 +1101,216 @@ export default function CleaningEstimateCalculator() {
               onClick={(e) => e.stopPropagation()}
             >
               <div className="sticky top-0 bg-white border-b border-gray-100 px-5 py-4 flex items-center justify-between rounded-t-2xl">
-                <h2 id="analysis-modal-title" className="text-lg font-semibold text-gray-900">견적 분석 결과</h2>
+                <h2 id="analysis-modal-title" className="text-lg font-bold text-gray-900">업계 평균 단가 · 내 견적</h2>
                 <button
                   type="button"
-                  onClick={() => setShowAnalysisModal(false)}
-                  className="p-2 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
+                  onClick={() => { setShowAnalysisModal(false); setShareCancelled(false); setDailyLimitReached(false) }}
+                  className="p-1.5 rounded-full text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
                   aria-label="닫기"
                 >
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
                 </button>
               </div>
-              <div className="p-5 space-y-4">
+              <div className="p-5 space-y-5">
                 {activeTab === 'area' && areaResult ? (
                   <>
-                    <div>
-                      <p className="text-xs font-medium text-gray-500 mb-1">입력 요약</p>
-                      <p className="text-sm text-gray-700">
-                        {cleanType === 'office' ? '정기 청소' : '건물 계단 청소'}
-                        {cleanType === 'office' ? ` · ${areaPyeong || 0}평` : ` · ${stairsFloors}층`}
-                        {` · 주 ${visitsPerWeek}회 방문`}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-xs font-medium text-gray-500 mb-1">예상 금액</p>
-                      <p className="text-lg font-bold text-slate-800">{formatWon(areaResult.monthlyTotal)}</p>
-                      <p className="text-sm text-gray-500">부가세 10% 포함 {formatWon(Math.round(areaResult.monthlyTotal * 1.1))}</p>
-                    </div>
-                    {industryCompare && (
-                      <div className="rounded-lg border border-gray-200 bg-slate-50/80 p-3">
-                        <p className="text-xs font-medium text-gray-600 mb-1">업계 평균 대비</p>
-                        <p className="text-sm text-gray-700 leading-snug">{industryCompare.message}</p>
-                      </div>
+                    {!hasSharedForAnalysis ? (
+                      <>
+                        {industryCompare?.isExtreme ? (
+                          <div className="rounded-xl bg-amber-50 border-2 border-amber-200 border-l-4 border-l-amber-500 p-5 shadow-md">
+                            <p className="text-lg text-amber-900 font-medium leading-relaxed text-center">
+                              입력하신 단가가 일반 시장 범위와 많이 다릅니다. 평당 금액·옵션 금액을 다시 확인해 주세요.
+                            </p>
+                            <p className="text-sm text-amber-800/90 text-center mt-4">조건을 수정한 뒤 다시 분석해 보세요.</p>
+                          </div>
+                        ) : dailyLimitReached ? (
+                          <div className="rounded-xl bg-amber-50 border-2 border-amber-200 p-5 text-center">
+                            <p className="text-lg font-medium text-amber-900">오늘 횟수를 모두 사용했습니다.</p>
+                            <p className="text-sm text-amber-800 mt-2">내일 다시 시도해 주세요. (일일 {DAILY_UNLOCK_LIMIT}회 제한)</p>
+                          </div>
+                        ) : shareCancelled ? (
+                          <div className="rounded-xl border-2 border-blue-200 bg-blue-50/50 p-5 text-center">
+                            <p className="text-sm text-gray-700">공유를 완료하면 결과를 확인할 수 있어요.</p>
+                            <p className="text-xs text-gray-500 mt-2">다시 공유하기 버튼을 눌러 주세요.</p>
+                          </div>
+                        ) : !canUseShare ? (
+                          <div className="rounded-xl border-2 border-gray-200 bg-gray-50 p-5 text-center space-y-2">
+                            <p className="text-base font-medium text-gray-800">업계 평균 단가는 모바일에서만 확인할 수 있어요.</p>
+                            <p className="text-sm text-gray-600">모바일 기기로 접속한 뒤 공유하기를 눌러 주세요.</p>
+                          </div>
+                        ) : industryCompare ? (() => {
+                          const style = JUDGE_STYLES[industryCompare.judgment] ?? JUDGE_STYLES.avg
+                          const typeInfo = JUDGE_TYPES[industryCompare.judgment] ?? JUDGE_TYPES.avg
+                          return (
+                            <>
+                              <div className={`rounded-xl bg-white border-2 ${style.border} border-l-4 ${style.borderL} shadow-md overflow-hidden`}>
+                                <div className={`px-4 py-3 ${style.bg} border-b ${style.border}`}>
+                                  <div className="flex items-center gap-3">
+                                    <span className="text-4xl" aria-hidden>{typeInfo.emoji}</span>
+                                    <h3 className={`text-2xl font-bold ${style.text}`}>{typeInfo.title}</h3>
+                                  </div>
+                                </div>
+                                <div className="p-4 space-y-4 max-h-[60vh] overflow-y-auto">
+                                  <div className="rounded-xl bg-white border border-gray-100 py-4 px-4">
+                                    <p className="text-lg text-gray-700 leading-relaxed whitespace-pre-line">{typeInfo.tagline}</p>
+                                  </div>
+                                  {typeInfo.blocks.map((block, bi) => {
+                                    const cardStyles = [
+                                      { bg: 'bg-white', border: 'border-gray-100', bullet: 'bg-green-500', title: 'text-green-900' },
+                                      { bg: 'bg-blue-50', border: 'border-blue-100', bullet: 'bg-blue-500', title: 'text-blue-900' },
+                                      { bg: 'bg-amber-50', border: 'border-amber-100', bullet: 'bg-amber-500', title: 'text-amber-900' },
+                                      { bg: 'bg-purple-50', border: 'border-purple-100', bullet: 'bg-purple-500', title: 'text-purple-900' },
+                                    ]
+                                    const card = cardStyles[bi % cardStyles.length]
+                                    return (
+                                      <section key={bi} className={`rounded-xl border py-4 px-4 ${card.bg} ${card.border}`}>
+                                        <h4 className={`text-base font-bold ${card.title} mb-2`}>{block.title}</h4>
+                                        {block.items ? (
+                                          <ul className="space-y-2 text-lg text-gray-800">
+                                            {block.items.map((item, i) => (
+                                              <li key={i} className="flex items-start gap-2">
+                                                <span className={`mt-2.5 w-2.5 h-2.5 rounded-full shrink-0 ${card.bullet}`} />
+                                                <span>{item}</span>
+                                              </li>
+                                            ))}
+                                          </ul>
+                                        ) : block.body ? (
+                                          <p className="text-lg text-gray-800 leading-relaxed whitespace-pre-line">{block.body}</p>
+                                        ) : null}
+                                      </section>
+                                    )
+                                  })}
+                                </div>
+                              </div>
+                              <p className="text-sm text-gray-500 text-center pt-1">공유하면 업계 평균 단가와 상세 단가를 확인할 수 있어요.</p>
+                            </>
+                          )
+                        })() : (
+                          <p className="text-sm text-gray-600 text-center py-4">공유하면 예상 견적과 상세 단가를 확인할 수 있어요.</p>
+                        )}
+                      </>
+                    ) : (
+                      <>
+                        {/* 1) 내 견적 상세 내역 */}
+                        <div className="rounded-xl border border-gray-200 bg-gray-50/50 p-4">
+                          <p className="text-sm font-bold text-gray-900 mb-3">내 견적 상세 내역</p>
+                          <div className="mb-3">
+                            <p className="text-sm font-medium text-gray-500 mb-0.5">예상 견적</p>
+                            <p className="text-2xl font-bold text-gray-900 tabular-nums">{formatWon(areaResult.monthlyTotal)}</p>
+                            <p className="text-sm text-gray-500 mt-0.5">부가세 10% 포함 {formatWon(Math.round(areaResult.monthlyTotal * 1.1))}</p>
+                          </div>
+                          {areaResult && 'breakdown' in areaResult && (areaResult as { breakdown?: { label: string; amount: number }[] }).breakdown?.length ? (
+                            <ul className="space-y-2 text-sm">
+                              {(areaResult as { breakdown: { label: string; amount: number }[] }).breakdown.map((row, i) => (
+                                <li
+                                  key={i}
+                                  className={`flex justify-between items-center gap-2 py-1.5 px-2 -mx-2 rounded-lg ${row.amount < 0 ? 'bg-blue-50' : ''}`}
+                                >
+                                  <span className="text-gray-700">{row.label}</span>
+                                  <span className={`font-medium tabular-nums ${row.amount < 0 ? 'text-blue-600' : 'text-gray-900'}`}>
+                                    {row.amount < 0 ? '-' : ''}{formatNumber(Math.abs(row.amount))} 원
+                                  </span>
+                                </li>
+                              ))}
+                            </ul>
+                          ) : null}
+                          <div className="flex justify-between items-center gap-2 mt-3 pt-3 border-t border-gray-200">
+                            <span className="text-sm font-bold text-gray-900">결과</span>
+                            <span className="text-sm font-bold text-gray-900 tabular-nums">{formatNumber(areaResult.monthlyTotal)} 원</span>
+                          </div>
+                        </div>
+                        {/* 2) 업계 평균 단가 */}
+                        {industryCompare && (() => {
+                          const style = JUDGE_STYLES[industryCompare.judgment] ?? JUDGE_STYLES.avg
+                          const avg = industryCompare.avgAmount
+                          const low = Math.round(avg * 0.95)
+                          const high = Math.round(avg * 1.05)
+                          return (
+                            <div className={`rounded-xl bg-gradient-to-br ${style.bg} border-2 ${style.border} border-l-4 ${style.borderL} p-6 shadow-lg ring-1 ring-black/5`}>
+                              <div className="flex items-center gap-3 mb-4">
+                                <span className={`flex items-center justify-center w-12 h-12 rounded-xl ${style.icon} text-white shadow-lg [&_svg]:!text-white [&_svg]:!stroke-white [&_svg]:w-6 [&_svg]:h-6`}>
+                                  <IconChart />
+                                </span>
+                                <p className={`text-lg font-bold ${style.text}`}>업계 평균 단가</p>
+                              </div>
+                              <div className="bg-white/70 rounded-lg py-4 px-4 mb-4">
+                                <p className="text-2xl sm:text-3xl font-bold text-gray-900 tabular-nums text-center">
+                                  {formatNumber(low)} ~ {formatNumber(high)} <span className="text-xl font-semibold text-gray-600">원</span>
+                                </p>
+                                <p className="text-sm text-gray-600 text-center mt-2">
+                                  부가세 10% 포함 {formatNumber(Math.round(low * 1.1))} ~ {formatNumber(Math.round(high * 1.1))} 원
+                                </p>
+                              </div>
+                              <p className={`text-sm ${style.text} font-medium leading-relaxed`}>{industryCompare.message}</p>
+                            </div>
+                          )
+                        })()}
+                      </>
                     )}
-                    {areaResult && 'breakdown' in areaResult && (areaResult as { breakdown?: { label: string; amount: number }[] }).breakdown?.length ? (
-                      <div>
-                        <p className="text-xs font-medium text-gray-500 mb-2">상세 내역</p>
-                        <ul className="space-y-1.5 text-sm">
-                          {(areaResult as { breakdown: { label: string; amount: number }[] }).breakdown.map((row, i) => (
-                            <li key={i} className="flex justify-between items-center gap-2">
-                              <span className="text-gray-700">{row.label}</span>
-                              <span className={row.amount < 0 ? 'text-blue-600 font-medium' : 'text-slate-800 font-medium tabular-nums'}>
-                                {row.amount < 0 ? '-' : ''}{formatNumber(Math.abs(row.amount))} 원
-                              </span>
-                            </li>
-                          ))}
-                          <li className="flex justify-between items-center gap-2 pt-1.5 border-t border-gray-100 font-semibold text-slate-800">
-                            <span>합계</span>
-                            <span className="tabular-nums">{formatNumber(areaResult.monthlyTotal)} 원</span>
-                          </li>
-                        </ul>
-                      </div>
-                    ) : null}
                   </>
                 ) : activeTab === 'labor' && laborResult ? (
                   <>
-                    <div>
-                      <p className="text-xs font-medium text-gray-500 mb-1">입력 요약</p>
-                      <p className="text-sm text-gray-700">
-                        정직원 {regularCount}명 · 알바 {partTimeCount}명 · 작업 {workHoursNum}시간 {workMinutesNum}분 · 주 {laborVisitsPerWeek}회 · 마진 {marginRate}%
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-xs font-medium text-gray-500 mb-1">예상 금액</p>
-                      <p className="text-lg font-bold text-slate-800">{formatWon(laborResult.suggestedQuote)}</p>
-                      <p className="text-sm text-gray-500">부가세 10% 포함 {formatWon(Math.round(laborResult.suggestedQuote * 1.1))}</p>
-                    </div>
-                    <div className="rounded-lg border border-amber-100 bg-amber-50/80 p-3">
-                      <p className="text-sm text-amber-800">
-                        업계 평균 대비 분석은 면적 기준 견적에서만 제공됩니다. 면적 기준 탭에서 견적을 입력하시면 업계 대비 분석을 확인하실 수 있습니다.
-                      </p>
-                    </div>
-                    {laborResult.breakdown?.length ? (
-                      <div>
-                        <p className="text-xs font-medium text-gray-500 mb-2">상세 내역</p>
-                        <ul className="space-y-1.5 text-sm">
-                          {laborResult.breakdown.map((row, i) => (
-                            <li key={i} className="flex justify-between items-center gap-2">
-                              <span className="text-gray-700">{row.label}</span>
-                              <span className="text-slate-800 font-medium tabular-nums">{formatNumber(row.amount)} 원</span>
-                            </li>
-                          ))}
-                          <li className="flex justify-between items-center gap-2 pt-1.5 border-t border-gray-100 font-semibold text-slate-800">
-                            <span>합계</span>
-                            <span className="tabular-nums">{formatNumber(laborResult.suggestedQuote)} 원</span>
-                          </li>
-                        </ul>
-                      </div>
-                    ) : null}
+                    {!hasSharedForAnalysis ? (
+                      <>
+                        <div className="rounded-xl bg-gradient-to-br from-blue-50 to-indigo-50 border-2 border-blue-200 border-l-4 border-l-blue-500 p-5 shadow-md ring-1 ring-black/5">
+                          <div className="flex items-center gap-3 mb-3">
+                            <span className="flex items-center justify-center w-10 h-10 rounded-xl bg-blue-500 text-white shadow [&_svg]:!text-white [&_svg]:!stroke-white [&_svg]:w-5 [&_svg]:h-5">
+                              <IconChart />
+                            </span>
+                            <p className="text-base font-bold text-blue-900">업계 평균 대비</p>
+                          </div>
+                          <p className="text-base text-blue-900 font-medium leading-relaxed pl-[3.25rem]">
+                            업계 평균 대비 분석은 면적 기준 견적에서만 제공됩니다. 면적 기준 탭에서 견적을 입력하시면 업계 단가와 비교 분석을 확인할 수 있어요.
+                          </p>
+                        </div>
+                        <p className="text-sm text-gray-600 text-center">면적 기준으로 이동해 보세요.</p>
+                      </>
+                    ) : (
+                      <>
+                        <div>
+                          <p className="text-sm font-medium text-gray-500 mb-1">예상 견적</p>
+                          <p className="text-3xl font-bold text-gray-900 tabular-nums">{formatWon(laborResult.suggestedQuote)}</p>
+                          <p className="text-sm text-gray-500 mt-0.5">부가세 10% 포함 {formatWon(Math.round(laborResult.suggestedQuote * 1.1))}</p>
+                        </div>
+                        <div className="rounded-xl bg-gradient-to-br from-blue-50 to-indigo-50 border-2 border-blue-200 border-l-4 border-l-blue-500 p-5 shadow-md ring-1 ring-black/5">
+                          <div className="flex items-center gap-3 mb-3">
+                            <span className="flex items-center justify-center w-10 h-10 rounded-xl bg-blue-500 text-white shadow [&_svg]:!text-white [&_svg]:!stroke-white [&_svg]:w-5 [&_svg]:h-5">
+                              <IconChart />
+                            </span>
+                            <p className="text-base font-bold text-blue-900">업계 평균 대비</p>
+                          </div>
+                          <p className="text-base text-blue-900 font-medium leading-relaxed pl-[3.25rem]">
+                            업계 평균 대비 분석은 면적 기준 견적에서만 제공됩니다. 면적 기준 탭에서 견적을 입력하시면 업계 대비 분석을 확인하실 수 있습니다.
+                          </p>
+                        </div>
+                        {laborResult.breakdown?.length ? (
+                          <div>
+                            <p className="text-sm font-bold text-gray-900 mb-3">상세 내역</p>
+                            <ul className="space-y-2 text-sm">
+                              {laborResult.breakdown.map((row, i) => (
+                                <li key={i} className="flex justify-between items-center gap-2 py-1.5">
+                                  <span className="text-gray-700">{row.label}</span>
+                                  <span className="font-medium text-gray-900 tabular-nums">{formatNumber(row.amount)} 원</span>
+                                </li>
+                              ))}
+                            </ul>
+                            <div className="flex justify-between items-center gap-2 mt-3 pt-3 border-t border-gray-200">
+                              <span className="text-sm font-bold text-gray-900">결과</span>
+                              <span className="text-sm font-bold text-gray-900 tabular-nums">{formatNumber(laborResult.suggestedQuote)} 원</span>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="flex justify-between items-center gap-2 pt-2">
+                            <span className="text-sm font-bold text-gray-900">결과</span>
+                            <span className="text-sm font-bold text-gray-900 tabular-nums">{formatNumber(laborResult.suggestedQuote)} 원</span>
+                          </div>
+                        )}
+                      </>
+                    )}
                   </>
                 ) : (
-                  <div className="py-6 text-center">
-                    <p className="text-gray-600">
+                  <div className="py-8 text-center">
+                    <p className="text-sm text-gray-600">
                       {activeTab === 'area'
                         ? '면적(평수), 방문 빈도 등 견적 정보를 입력한 후 분석해 주세요.'
                         : '시급, 인원, 작업 시간 등 견적 정보를 입력한 후 분석해 주세요.'}
@@ -1070,14 +1318,73 @@ export default function CleaningEstimateCalculator() {
                   </div>
                 )}
               </div>
-              <div className="sticky bottom-0 bg-white border-t border-gray-100 px-5 py-4 rounded-b-2xl">
-                <button
-                  type="button"
-                  onClick={() => setShowAnalysisModal(false)}
-                  className="w-full py-3 rounded-xl bg-slate-800 text-white font-semibold hover:bg-slate-700 transition-colors"
-                >
-                  확인
-                </button>
+              <div className="sticky bottom-0 bg-white border-t border-gray-100 px-5 py-4 rounded-b-2xl space-y-2">
+                {copyToast && (
+                  <p className="text-center text-sm text-green-600 font-medium">링크가 복사되었어요. 업계 평균 단가와 상세 단가를 확인하세요.</p>
+                )}
+                {activeTab === 'labor' && laborResult ? (
+                  !hasSharedForAnalysis ? (
+                    <button
+                      type="button"
+                      onClick={() => { setActiveTab('area'); setShowAnalysisModal(false); }}
+                      className="w-full py-3.5 rounded-xl bg-blue-600 text-white font-bold hover:bg-blue-700 transition-colors"
+                    >
+                      면적 기준으로 이동
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => { setShowAnalysisModal(false); setShareCancelled(false); setDailyLimitReached(false) }}
+                      className="w-full py-3.5 rounded-xl bg-slate-800 text-white font-bold hover:bg-slate-700 transition-colors"
+                    >
+                      확인
+                    </button>
+                  )
+                ) : (activeTab === 'area' && areaResult) ? (
+                  !hasSharedForAnalysis && !industryCompare?.isExtreme ? (
+                    dailyLimitReached ? (
+                      <button
+                        type="button"
+                        onClick={() => { setShowAnalysisModal(false); setDailyLimitReached(false) }}
+                        className="w-full py-3.5 rounded-xl bg-slate-800 text-white font-bold hover:bg-slate-700 transition-colors"
+                      >
+                        확인
+                      </button>
+                    ) : canUseShare ? (
+                      <button
+                        type="button"
+                        onClick={handleShareAndUnlock}
+                        className="w-full py-3.5 rounded-xl bg-blue-600 text-white font-bold hover:bg-blue-700 transition-colors"
+                      >
+                        공유하고 업계 평균 단가 보기
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        disabled
+                        className="w-full py-3.5 rounded-xl bg-gray-300 text-gray-500 font-bold cursor-not-allowed"
+                      >
+                        모바일에서 사용해 주세요
+                      </button>
+                    )
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => { setShowAnalysisModal(false); setShareCancelled(false); setDailyLimitReached(false) }}
+                      className="w-full py-3.5 rounded-xl bg-slate-800 text-white font-bold hover:bg-slate-700 transition-colors"
+                    >
+                      {industryCompare?.isExtreme ? '다시 시도하기' : '확인'}
+                    </button>
+                  )
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => { setShowAnalysisModal(false); setShareCancelled(false); setDailyLimitReached(false) }}
+                    className="w-full py-3.5 rounded-xl bg-slate-800 text-white font-bold hover:bg-slate-700 transition-colors"
+                  >
+                    확인
+                  </button>
+                )}
               </div>
             </div>
           </div>
