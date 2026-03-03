@@ -1,7 +1,13 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useRef, useEffect } from 'react'
 import { KAKAO_CHAT_URL } from '@/lib/constants'
+
+const LOADING_STEPS = [
+  { label: '입력값 확인' },
+  { label: '업계 기준 매칭' },
+  { label: '운영 난이도 반영' },
+] as const
 
 type CalcTab = 'area' | 'labor'
 
@@ -220,6 +226,28 @@ export default function CleaningEstimateCalculator() {
   const [marginRate, setMarginRate] = useState<number>(20)
   /** 내 견적 분석하기 클릭 시 분석 모달 표시 */
   const [showAnalysisModal, setShowAnalysisModal] = useState(false)
+  /** 분석 전 로딩 연출 (단계형) */
+  const [showLoadingModal, setShowLoadingModal] = useState(false)
+  const [loadingStep, setLoadingStep] = useState(0)
+  const hasAnalyzedInSessionRef = useRef(false)
+
+  useEffect(() => {
+    if (!showLoadingModal) return
+    const isFirst = !hasAnalyzedInSessionRef.current
+    const totalMs = isFirst ? 2000 : 800
+    const stepTimes = isFirst ? [700, 1400, 2000] : [266, 532, 800]
+    const t1 = setTimeout(() => setLoadingStep(1), stepTimes[0])
+    const t2 = setTimeout(() => setLoadingStep(2), stepTimes[1])
+    const t3 = setTimeout(() => {
+      setShowLoadingModal(false)
+      setLoadingStep(0)
+      setShowAnalysisModal(true)
+      setHasSharedForAnalysis(false)
+      hasAnalyzedInSessionRef.current = true
+    }, stepTimes[2])
+    return () => { clearTimeout(t1); clearTimeout(t2); clearTimeout(t3) }
+  }, [showLoadingModal])
+
   /** 공유 후 업계 평균 단가·상세 단가 노출 여부 (모달 열 때마다 초기화) */
   const [hasSharedForAnalysis, setHasSharedForAnalysis] = useState(false)
   /** 공유 취소 시 안내 (모바일) */
@@ -945,7 +973,7 @@ export default function CleaningEstimateCalculator() {
 
             <button
               type="button"
-              onClick={() => { setShowAnalysisModal(true); setHasSharedForAnalysis(false) }}
+              onClick={() => { setShowLoadingModal(true); setLoadingStep(0) }}
               className="w-full py-3.5 rounded-xl bg-gradient-to-r from-blue-500 to-indigo-600 text-white font-semibold shadow-md hover:from-blue-600 hover:to-indigo-700 transition-all"
             >
               내 견적 분석하기
@@ -1101,6 +1129,39 @@ export default function CleaningEstimateCalculator() {
             </div>
           </div>
         </div>
+
+        {/* 분석 전 로딩 연출 모달 */}
+        {showLoadingModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50" role="dialog" aria-modal="true" aria-busy="true" aria-label="견적 분석 중">
+            <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm overflow-hidden" onClick={(e) => e.stopPropagation()}>
+              <div className="p-6">
+                <h3 className="text-lg font-bold text-gray-900 text-center mb-1">내 견적 분석 중</h3>
+                <p className="text-sm text-gray-600 text-center mb-4">방문 빈도·옵션·운영 난이도를 반영하고 있어요.</p>
+                <p className="text-xs text-gray-500 text-center mb-6">평균 단가·운영 난이도·방문 빈도를 반영합니다.</p>
+                <div className="space-y-3">
+                  {LOADING_STEPS.map((step, i) => (
+                    <div key={i} className="flex items-center gap-3">
+                      <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-medium transition-colors ${i < loadingStep ? 'bg-green-500 text-white' : i === loadingStep ? 'bg-blue-100 text-blue-600' : 'bg-gray-100 text-gray-400'}`}>
+                        {i < loadingStep ? (
+                          <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" /></svg>
+                        ) : (
+                          i + 1
+                        )}
+                      </span>
+                      <span className={`text-sm ${i <= loadingStep ? 'text-gray-900 font-medium' : 'text-gray-400'}`}>{step.label}</span>
+                    </div>
+                  ))}
+                </div>
+                <div className="mt-5 h-1 w-full rounded-full bg-gray-100 overflow-hidden">
+                  <div
+                    className="h-full rounded-full bg-gradient-to-r from-blue-500 to-indigo-500 transition-all duration-300 ease-out"
+                    style={{ width: `${((loadingStep + 1) / LOADING_STEPS.length) * 100}%` }}
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* 내 견적 분석 모달 — 참고 디자인: 예상 견적 · 업계 평균 대비(파란 박스) · 상세 내역 · 결과 · 확인 */}
         {showAnalysisModal && (
