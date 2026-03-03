@@ -1,8 +1,11 @@
 import type { Metadata, Viewport } from 'next'
+import Script from 'next/script'
 import { Inter } from 'next/font/google'
 import './globals.css'
 import PWARegister from '@/components/PWARegister'
 import KakaoConsultFab from '@/components/KakaoConsultFab'
+
+const NAVER_ANALYTICS_WA = '6ee301d54f8f28'
 
 const inter = Inter({ subsets: ['latin'] })
 
@@ -76,6 +79,14 @@ export default function RootLayout({
         <PWARegister />
         <KakaoConsultFab />
         {children}
+        {/* 네이버 애널리틱스 - 사이트 통계 (닫는 body 앞) */}
+        <Script
+          src="https://wcs.pstatic.net/wcslog.js"
+          strategy="afterInteractive"
+        />
+        <Script id="naver-analytics-wa" strategy="afterInteractive">
+          {`if(!wcs_add) var wcs_add = {}; wcs_add["wa"] = "${NAVER_ANALYTICS_WA}"; if(window.wcs) { wcs_do(); }`}
+        </Script>
       </body>
     </html>
   )
