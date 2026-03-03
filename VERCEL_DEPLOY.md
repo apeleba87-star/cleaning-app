@@ -38,10 +38,11 @@ Vercel 대시보드에서 다음 환경 변수를 추가하세요:
    - `NEXT_PUBLIC_SUPABASE_ANON_KEY`: Supabase Anon Key
    - `SUPABASE_SERVICE_ROLE_KEY`: Supabase Service Role Key (Supabase 대시보드 → Settings → API → service_role key)
 
+### 선택 환경 변수 (견적 진단기 카카오톡 공유):
+- `NEXT_PUBLIC_KAKAO_JS_KEY`: [Kakao Developers](https://developers.kakao.com/console/app) 앱의 JavaScript 키. 설정 시 카카오톡 인앱에서 「공유하고 업계 평균 단가 보기」가 카카오 공유로 동작합니다.
+- **자세한 설정 방법**: [docs/KAKAO_SHARE_SETUP.md](docs/KAKAO_SHARE_SETUP.md) 참고 (앱 생성 → 플랫폼 Web 추가 → 사이트 도메인 등록 → JavaScript 키 복사 → 환경 변수 추가).
+
 ### 환경 변수 확인 방법:
-1. Vercel 대시보드 → 프로젝트 → Settings → Environment Variables
-2. 모든 환경 변수가 Production, Preview, Development에 설정되어 있는지 확인
-3. 변수 이름에 오타가 없는지 확인 (대소문자 구분)
 
 ## 5. 배포 실행
 1. "Deploy" 버튼 클릭

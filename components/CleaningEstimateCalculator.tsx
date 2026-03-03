@@ -3,6 +3,9 @@
 import { useState, useMemo, useRef, useEffect } from 'react'
 import { KAKAO_CHAT_URL } from '@/lib/constants'
 
+const KAKAO_SDK_VERSION = '2.7.0'
+const KAKAO_SDK_URL = `https://t1.kakaocdn.net/kakao_js_sdk/${KAKAO_SDK_VERSION}/kakao.min.js`
+
 const LOADING_STEP_LABELS = ['① 입력값 확인', '② 업계 기준 매칭', '③ 운영 난이도 반영'] as const
 
 type CalcTab = 'area' | 'labor'
@@ -251,6 +254,7 @@ export default function CleaningEstimateCalculator() {
   /** 일일 열람 횟수 초과 */
   const [dailyLimitReached, setDailyLimitReached] = useState(false)
   const [copyToast, setCopyToast] = useState(false)
+  const [kakaoShareReady, setKakaoShareReady] = useState(false)
 
   const shareUrl = typeof window !== 'undefined' ? window.location.href : ''
   const shareMessage = '[내 단가 전략 점검 완료] 업계 평균 기준, 당신은 어디에 있나요?'
@@ -274,6 +278,28 @@ export default function CleaningEstimateCalculator() {
     window.addEventListener('resize', check)
     return () => window.removeEventListener('resize', check)
   }, [])
+
+  /** 카카오톡 인앱에서 공유 시 카카오 SDK 사용. Kakao Developers 앱의 JavaScript 키 필요. */
+  const kakaoJsKey = typeof process !== 'undefined' ? process.env.NEXT_PUBLIC_KAKAO_JS_KEY : ''
+  useEffect(() => {
+    if (!kakaoJsKey || typeof document === 'undefined') return
+    const w = window as unknown as { Kakao?: { init: (k: string) => void; isInitialized?: () => boolean } }
+    const ensureKakaoReady = () => {
+      if (w.Kakao && !w.Kakao.isInitialized?.()) w.Kakao.init(kakaoJsKey)
+      setKakaoShareReady(true)
+    }
+    if (document.querySelector(`script[src*="kakao_js_sdk"]`)) {
+      ensureKakaoReady()
+      return
+    }
+    const script = document.createElement('script')
+    script.src = KAKAO_SDK_URL
+    script.crossOrigin = 'anonymous'
+    script.async = true
+    script.onload = ensureKakaoReady
+    document.head.appendChild(script)
+  }, [kakaoJsKey])
+
   const isMobileDevice =
     typeof navigator !== 'undefined' &&
     /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini|KakaoTalk|KAKAOTALK|KAKAO|Samsung|Mobile/i.test(navigator.userAgent)
@@ -282,13 +308,15 @@ export default function CleaningEstimateCalculator() {
   const fromKakao =
     /kakao|daum|kakaotalk/i.test(referrer) || /KakaoTalk|KAKAOTALK|KAKAO|kakao|daum/i.test(ua)
   const isMobileContext = isMobileDevice || isLikelyMobile || fromKakao
-  const canUseShare = typeof navigator !== 'undefined' && !!navigator.share && isMobileContext
-  /** 카카오톡에서 들어온 경우 링크 복사로 열람 허용하지 않음 → 공유하기만 가능(3·4번 정상 플로우) */
+  const hasNativeShare = typeof navigator !== 'undefined' && !!navigator.share
+  const hasKakaoShare = fromKakao && kakaoShareReady && !!kakaoJsKey
+  const canUseShare = isMobileContext && (hasNativeShare || hasKakaoShare)
+  /** 공유(Web Share 또는 카카오 공유) 없을 때만: 링크 복사로 결과 열람 */
   const canUseCopyFallback =
     isMobileContext &&
     typeof navigator !== 'undefined' &&
-    !navigator.share &&
-    !fromKakao
+    !hasNativeShare &&
+    !hasKakaoShare
 
   const doUnlockAfterShare = () => {
     if (getDailyUnlockCount() >= DAILY_UNLOCK_LIMIT) {
@@ -304,12 +332,25 @@ export default function CleaningEstimateCalculator() {
     setShareCancelled(false)
     setDailyLimitReached(false)
     try {
-      await navigator.share({
-        title: shareTitle,
-        text: shareText,
-        url: shareUrl,
-      })
-      doUnlockAfterShare()
+      const win = typeof window !== 'undefined' ? window : null
+      const Kakao = win ? (win as unknown as { Kakao?: { Share?: { sendDefault: (opts: unknown) => Promise<unknown> }; isInitialized?: () => boolean; init?: (k: string) => void } }).Kakao : null
+      if (fromKakao && hasKakaoShare && Kakao?.Share?.sendDefault) {
+        await Kakao.Share.sendDefault({
+          objectType: 'text',
+          text: shareMessage,
+          link: { mobileWebUrl: shareUrl, webUrl: shareUrl },
+        })
+        doUnlockAfterShare()
+        return
+      }
+      if (hasNativeShare) {
+        await navigator.share({
+          title: shareTitle,
+          text: shareText,
+          url: shareUrl,
+        })
+        doUnlockAfterShare()
+      }
     } catch {
       setShareCancelled(true)
     }
