@@ -277,7 +277,10 @@ export default function CleaningEstimateCalculator() {
   const isMobileDevice =
     typeof navigator !== 'undefined' &&
     /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini|KakaoTalk|KAKAOTALK|KAKAO|Samsung|Mobile/i.test(navigator.userAgent)
-  const fromKakao = typeof document !== 'undefined' && /kakao|daum/i.test(document.referrer || '')
+  const ua = typeof navigator !== 'undefined' ? navigator.userAgent : ''
+  const referrer = typeof document !== 'undefined' ? document.referrer || '' : ''
+  const fromKakao =
+    /kakao|daum|kakaotalk/i.test(referrer) || /KakaoTalk|KAKAOTALK|KAKAO|kakao|daum/i.test(ua)
   const isMobileContext = isMobileDevice || isLikelyMobile || fromKakao
   const canUseShare = typeof navigator !== 'undefined' && !!navigator.share && isMobileContext
   /** 카카오톡에서 들어온 경우 링크 복사로 열람 허용하지 않음 → 공유하기만 가능(3·4번 정상 플로우) */
