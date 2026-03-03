@@ -123,9 +123,10 @@ export async function GET(request: NextRequest) {
     ]
     for (const p of dailyRows) {
       let rrn = ''
-      if ((p as any).resident_registration_number_encrypted) {
+      const encryptedRrn = (p as any).resident_registration_number_encrypted ?? (p as any).residentRegistrationNumberEncrypted
+      if (encryptedRrn && typeof encryptedRrn === 'string') {
         try {
-          rrn = decrypt((p as any).resident_registration_number_encrypted)
+          rrn = decrypt(encryptedRrn)
         } catch {
           rrn = ''
         }

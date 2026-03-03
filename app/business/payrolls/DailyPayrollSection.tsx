@@ -30,7 +30,7 @@ interface DailyPayrollSectionProps {
   existingDailyPayrolls?: DailyPayroll[]
   onDelete?: (id: string) => void
   onMarkAsPaid?: (id: string, workerName: string) => void
-  onUpdate?: (id: string, data: { amount?: number; paid_at?: string | null; status?: 'scheduled' | 'paid'; memo?: string | null }) => Promise<void>
+  onUpdate?: (id: string, data: { amount?: number; paid_at?: string | null; status?: 'scheduled' | 'paid'; memo?: string | null; resident_registration_number?: string | null }) => Promise<void>
   searchTerm?: string
 }
 
@@ -53,6 +53,7 @@ export default function DailyPayrollSection({
   const [editPaidAt, setEditPaidAt] = useState('')
   const [editStatus, setEditStatus] = useState<'scheduled' | 'paid'>('scheduled')
   const [editMemo, setEditMemo] = useState('')
+  const [editResidentNumber, setEditResidentNumber] = useState('')
   const [currentPage, setCurrentPage] = useState(1)
   const PAGE_SIZE = 30
 
@@ -133,6 +134,18 @@ export default function DailyPayrollSection({
     }).format(amount)
   }
 
+  /** 주민등록번호 표시: 13자리 숫자 → "900506 - 1721915" 형식 */
+  const formatRrnDisplay = (digits: string) => {
+    const d = digits.replace(/\D/g, '')
+    if (d.length <= 6) return d
+    return d.slice(0, 6) + ' - ' + d.slice(6, 13)
+  }
+
+  const handleRrnChange = (value: string) => {
+    const raw = value.replace(/\D/g, '')
+    if (raw.length <= 13) setEditResidentNumber(raw)
+  }
+
   const handleMarkAsPaidInternal = async (id: string, workerName: string) => {
     if (onMarkAsPaid) {
       setSubmitting(id)
@@ -158,6 +171,7 @@ export default function DailyPayrollSection({
     setEditPaidAt('')
     setEditStatus('scheduled')
     setEditMemo('')
+    setEditResidentNumber('')
   }
 
   const handleUpdatePayroll = async () => {
@@ -170,6 +184,7 @@ export default function DailyPayrollSection({
         paid_at: editPaidAt || null,
         status: editStatus,
         memo: editMemo || null,
+        resident_registration_number: editResidentNumber.trim() || undefined,
       })
       handleCancelEdit()
     } catch (err: any) {
@@ -303,11 +318,21 @@ export default function DailyPayrollSection({
                       </div>
                     </div>
                     {editingPayroll?.id === payroll.id && (
-                      <div className="pt-2 border-t border-gray-200">
+                      <div className="pt-2 border-t border-gray-200 space-y-2">
+                        <div>
+                          <label className="block text-xs text-gray-500 mb-1">주민등록번호 (수정 시 입력)</label>
+                          <input
+                            type="text"
+                            value={formatRrnDisplay(editResidentNumber)}
+                            onChange={(e) => handleRrnChange(e.target.value)}
+                            placeholder="900506 - 0000000"
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                          />
+                        </div>
                         <select
                           value={editStatus}
                           onChange={(e) => setEditStatus(e.target.value as 'scheduled' | 'paid')}
-                          className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg text-sm mb-2"
+                          className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg text-sm"
                         >
                           <option value="scheduled">예정</option>
                           <option value="paid">지급완료</option>
@@ -378,6 +403,7 @@ export default function DailyPayrollSection({
                     <th className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">총액</th>
                     <th className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">지급일</th>
                     <th className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">상태</th>
+                    <th className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">주민등록번호</th>
                     <th className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">작업</th>
                   </tr>
                 </thead>
@@ -441,6 +467,19 @@ export default function DailyPayrollSection({
                           >
                             {payroll.status === 'paid' ? '지급완료' : '예정'}
                           </span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-gray-500">
+                        {editingPayroll?.id === payroll.id ? (
+                          <input
+                            type="text"
+                            value={formatRrnDisplay(editResidentNumber)}
+                            onChange={(e) => handleRrnChange(e.target.value)}
+                            placeholder="900506 - 0000000"
+                            className="w-40 px-2 py-1 border border-gray-300 rounded text-sm"
+                          />
+                        ) : (
+                          '-'
                         )}
                       </td>
                       <td className="px-4 py-3 text-sm">

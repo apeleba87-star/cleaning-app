@@ -456,7 +456,7 @@ export default function PayrollsPage() {
     }
   }
 
-  const handleUpdateDailyPayroll = async (id: string, data: { amount?: number; paid_at?: string | null; status?: 'scheduled' | 'paid'; memo?: string | null }) => {
+  const handleUpdateDailyPayroll = async (id: string, data: { amount?: number; paid_at?: string | null; status?: 'scheduled' | 'paid'; memo?: string | null; resident_registration_number?: string | null }) => {
     try {
       setError(null)
       const response = await fetch(`/api/business/payrolls/${id}`, {
