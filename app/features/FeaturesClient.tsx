@@ -2,6 +2,7 @@
 
 import Link from 'next/link'
 import { useState, useEffect } from 'react'
+import PublicHeader from '@/components/PublicHeader'
 
 interface Feature {
   id: string
@@ -28,51 +29,9 @@ export default function FeaturesClient({ features }: FeaturesClientProps) {
 
   return (
     <div className="min-h-screen bg-white">
-      {/* 헤더 - 랜딩 페이지와 동일한 스타일 */}
-      <header className="fixed top-0 left-0 right-0 z-50 bg-white/90 backdrop-blur-sm border-b border-gray-200">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
-            <div className="flex items-center gap-4 sm:gap-8">
-              <Link href="/" className="text-xl sm:text-2xl font-bold text-gray-900 hover:text-gray-700 transition-colors">
-                무플
-              </Link>
-              <Link
-                href="/features"
-                className="text-sm sm:text-base text-blue-600 hover:text-blue-700 font-medium transition-colors border-b-2 border-blue-600"
-              >
-                기능 소개
-              </Link>
-              <Link
-                href="/case-studies"
-                className="text-sm sm:text-base text-gray-600 hover:text-gray-900 font-medium transition-colors"
-              >
-                관리 사례
-              </Link>
-              <Link
-                href="/pricing"
-                className="text-sm sm:text-base text-gray-600 hover:text-gray-900 font-medium transition-colors"
-              >
-                요금제
-              </Link>
-              <Link
-                href="/estimate"
-                className="text-sm sm:text-base text-gray-600 hover:text-gray-900 font-medium transition-colors"
-              >
-                청소 표준 견적 진단기
-              </Link>
-            </div>
-            <Link
-              href="/login"
-              className="px-4 sm:px-5 py-2 bg-gray-900 text-white rounded-lg text-sm sm:text-base font-medium hover:bg-gray-800 transition-colors duration-200"
-            >
-              로그인
-            </Link>
-          </div>
-        </div>
-      </header>
+      <PublicHeader active="features" />
 
-      {/* 히어로 섹션 */}
-      <section className="pt-32 pb-24 px-4 sm:px-6 lg:px-8 bg-gradient-to-br from-slate-50 via-blue-50/30 to-indigo-50/50 relative overflow-hidden">
+      <section className="pt-24 sm:pt-28 md:pt-32 pb-16 sm:pb-24 px-4 sm:px-6 lg:px-8 bg-gradient-to-br from-slate-50 via-blue-50/30 to-indigo-50/50 relative overflow-hidden">
         {/* 배경 장식 */}
         <div className="absolute inset-0 overflow-hidden">
           <div className="absolute -top-40 -right-40 w-80 h-80 bg-blue-400/20 rounded-full blur-3xl"></div>
@@ -92,12 +51,12 @@ export default function FeaturesClient({ features }: FeaturesClientProps) {
               </svg>
               <span className="text-sm font-semibold text-blue-700">10가지 핵심 기능</span>
             </div>
-            <h1 className="text-5xl sm:text-6xl lg:text-7xl font-extrabold text-gray-900 mb-6 leading-tight">
+            <h1 className="text-3xl sm:text-5xl lg:text-6xl xl:text-7xl font-extrabold text-gray-900 mb-4 sm:mb-6 leading-tight">
               <span className="bg-gradient-to-r from-gray-900 via-blue-800 to-indigo-900 bg-clip-text text-transparent">
                 무플의 핵심 기능
               </span>
             </h1>
-            <p className="text-xl sm:text-2xl text-gray-600 max-w-3xl mx-auto mb-8 leading-relaxed">
+            <p className="text-base sm:text-xl lg:text-2xl text-gray-600 max-w-3xl mx-auto mb-6 sm:mb-8 leading-relaxed">
               현장을 유지하는 운영 구조를 만드는<br className="hidden sm:block" /> 10가지 핵심 기능을 확인하세요
             </p>
             <div className="flex items-center justify-center gap-4 text-sm text-gray-500">
@@ -126,8 +85,7 @@ export default function FeaturesClient({ features }: FeaturesClientProps) {
         </div>
       </section>
 
-      {/* 기능 그리드 섹션 */}
-      <section className="py-20 px-4 sm:px-6 lg:px-8 bg-white relative overflow-hidden">
+      <section className="py-12 sm:py-20 px-4 sm:px-6 lg:px-8 bg-white relative overflow-hidden">
         {/* 배경 장식 */}
         <div className="absolute inset-0 opacity-5">
           <div className="absolute top-0 left-1/4 w-96 h-96 bg-blue-400 rounded-full blur-3xl"></div>
@@ -190,7 +148,7 @@ export default function FeaturesClient({ features }: FeaturesClientProps) {
                   ></div>
                 </div>
 
-                <div className="relative p-8 lg:p-10">
+                <div className="relative p-5 sm:p-6 lg:p-10">
                   {/* 아이콘 */}
                   <div className="relative mb-6">
                     <div

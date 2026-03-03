@@ -6,7 +6,9 @@
   .safe-area-bottom {
     padding-bottom: env(safe-area-inset-bottom);
   }
-  
+  .safe-area-inset-top {
+    padding-top: env(safe-area-inset-top, 0px);
+  }
   .touch-manipulation {
     touch-action: manipulation;
   }

@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
+import PublicHeader from '@/components/PublicHeader'
 
 export default function PricingClient() {
   const [isVisible, setIsVisible] = useState(false)
@@ -66,52 +67,9 @@ export default function PricingClient() {
 
   return (
     <div className="min-h-screen bg-white">
-      {/* 헤더 */}
-      <header className="fixed top-0 left-0 right-0 z-50 bg-white/90 backdrop-blur-sm border-b border-gray-200">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
-            <div className="flex items-center gap-4 sm:gap-8">
-              <Link href="/" className="text-xl sm:text-2xl font-bold text-gray-900 hover:text-gray-700 transition-colors">
-                무플
-              </Link>
-              <Link
-                href="/features"
-                className="text-sm sm:text-base text-gray-600 hover:text-gray-900 font-medium transition-colors"
-              >
-                기능 소개
-              </Link>
-              <Link
-                href="/case-studies"
-                className="text-sm sm:text-base text-gray-600 hover:text-gray-900 font-medium transition-colors"
-              >
-                관리 사례
-              </Link>
-              <Link
-                href="/pricing"
-                className="text-sm sm:text-base text-gray-900 font-semibold border-b-2 border-gray-900 transition-colors"
-              >
-                요금제
-              </Link>
-              <Link
-                href="/estimate"
-                className="text-sm sm:text-base text-gray-600 hover:text-gray-900 font-medium transition-colors"
-              >
-                청소 표준 견적 진단기
-              </Link>
-            </div>
-            <Link
-              href="/login"
-              className="px-4 sm:px-5 py-2 bg-gray-900 text-white rounded-lg text-sm sm:text-base font-medium hover:bg-gray-800 transition-colors duration-200"
-            >
-              로그인
-            </Link>
-          </div>
-        </div>
-      </header>
+      <PublicHeader active="pricing" />
 
-      {/* 히어로 섹션 */}
-      <section className="pt-32 pb-24 px-4 sm:px-6 lg:px-8 bg-gradient-to-br from-slate-50 via-blue-50/30 to-indigo-50/50 relative overflow-hidden">
-        {/* 배경 장식 */}
+      <section className="pt-24 sm:pt-28 md:pt-32 pb-16 sm:pb-24 px-4 sm:px-6 lg:px-8 bg-gradient-to-br from-slate-50 via-blue-50/30 to-indigo-50/50 relative overflow-hidden">
         <div className="absolute inset-0 overflow-hidden">
           <div className="absolute -top-40 -right-40 w-80 h-80 bg-blue-400/20 rounded-full blur-3xl"></div>
           <div className="absolute -bottom-40 -left-40 w-80 h-80 bg-indigo-400/20 rounded-full blur-3xl"></div>
@@ -123,19 +81,19 @@ export default function PricingClient() {
               isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'
             }`}
           >
-            <div className="text-center mb-16">
-              <div className="inline-flex items-center gap-2 px-4 py-2 bg-blue-100/50 rounded-full mb-6">
+            <div className="text-center mb-10 sm:mb-16">
+              <div className="inline-flex items-center gap-2 px-4 py-2 bg-blue-100/50 rounded-full mb-4 sm:mb-6">
                 <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
                 <span className="text-sm font-semibold text-blue-700">투명한 가격 정책</span>
               </div>
-              <h1 className="text-5xl sm:text-6xl lg:text-7xl font-extrabold text-gray-900 mb-6 leading-tight">
+              <h1 className="text-3xl sm:text-5xl lg:text-6xl xl:text-7xl font-extrabold text-gray-900 mb-4 sm:mb-6 leading-tight">
                 <span className="bg-gradient-to-r from-gray-900 via-blue-800 to-indigo-900 bg-clip-text text-transparent">
                   합리적인 요금제
                 </span>
               </h1>
-              <p className="text-xl sm:text-2xl text-gray-600 max-w-3xl mx-auto mb-8 leading-relaxed">
+              <p className="text-base sm:text-xl lg:text-2xl text-gray-600 max-w-3xl mx-auto mb-6 sm:mb-8 leading-relaxed">
                 매장당 명확한 가격으로<br className="hidden sm:block" /> 현장을 유지하는 운영 구조를 시작하세요
               </p>
               <div className="flex items-center justify-center gap-4 text-sm text-gray-500">
@@ -165,10 +123,9 @@ export default function PricingClient() {
         </div>
       </section>
 
-      {/* 요금제 카드 */}
-      <section className="py-20 px-4 sm:px-6 lg:px-8 bg-white relative overflow-hidden">
+      <section className="py-12 sm:py-20 px-4 sm:px-6 lg:px-8 bg-white relative overflow-hidden">
         <div className="max-w-7xl mx-auto relative z-10">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-12 mb-20">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 sm:gap-8 lg:gap-12 mb-12 sm:mb-20">
             {plans.map((plan, index) => (
               <div
                 key={plan.name}
@@ -197,7 +154,7 @@ export default function PricingClient() {
                   }}></div>
                 </div>
 
-                <div className={`relative p-8 lg:p-10 ${plan.popular ? 'pt-14 lg:pt-16' : ''}`}>
+                <div className={`relative p-5 sm:p-6 lg:p-10 ${plan.popular ? 'pt-12 sm:pt-14 lg:pt-16' : ''}`}>
                   {/* 인기 배지 - 카드 안쪽에 배치해 잘리지 않도록 */}
                   {plan.popular && (
                     <div className="absolute top-4 left-1/2 transform -translate-x-1/2 z-20">

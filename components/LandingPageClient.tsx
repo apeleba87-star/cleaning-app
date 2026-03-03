@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { useState, useEffect } from 'react'
 import { KAKAO_CHAT_URL } from '@/lib/constants'
 import HeroSlider from './HeroSlider'
+import PublicHeader from './PublicHeader'
 
 interface HeroSettings {
   tagline: string
@@ -55,111 +56,61 @@ export default function LandingPageClient({ heroImages, heroSettings, caseStudie
 
   return (
     <div className="min-h-screen bg-white">
-      {/* 헤더 - 브라우니 스타일: 심플하고 깔끔한 헤더 */}
-      <header className="fixed top-0 left-0 right-0 z-50 bg-white/90 backdrop-blur-sm border-b border-gray-200">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
-            <div className="flex items-center gap-4 sm:gap-8">
-              <Link href="/" className="text-xl sm:text-2xl font-bold text-gray-900 hover:text-gray-700 transition-colors">
-                무플
-              </Link>
-              <Link
-                href="/features"
-                className="text-sm sm:text-base text-gray-600 hover:text-gray-900 font-medium transition-colors"
-              >
-                기능 소개
-              </Link>
-              <Link
-                href="/case-studies"
-                className="text-sm sm:text-base text-gray-600 hover:text-gray-900 font-medium transition-colors"
-              >
-                관리 사례
-              </Link>
-              <Link
-                href="/pricing"
-                className="text-sm sm:text-base text-gray-600 hover:text-gray-900 font-medium transition-colors"
-              >
-                요금제
-              </Link>
-              <Link
-                href="/estimate"
-                className="text-sm sm:text-base text-gray-600 hover:text-gray-900 font-medium transition-colors"
-              >
-                청소 표준 견적 진단기
-              </Link>
-            </div>
-            <Link
-              href="/login"
-              className="px-4 sm:px-5 py-2 bg-gray-900 text-white rounded-lg text-sm sm:text-base font-medium hover:bg-gray-800 transition-colors duration-200"
-            >
-              로그인
-            </Link>
-          </div>
-        </div>
-      </header>
+      <PublicHeader />
 
-      {/* 히어로 섹션 - 브라우니와 동일한 스타일 */}
-      <section className="relative h-screen flex items-center justify-center overflow-hidden">
-        {/* 배경 이미지 슬라이더 */}
+      {/* 히어로 섹션 - 모바일(S25) 최적화: 작은 폰트, FAB 겹침 방지 */}
+      <section className="relative min-h-screen flex items-center justify-center overflow-hidden">
         <HeroSlider images={heroImages} interval={heroSettings.sliderInterval || 5000} />
 
-        {/* 히어로 콘텐츠 - 브라우니와 동일한 레이아웃 */}
-        <div className="relative z-10 w-full px-4 sm:px-6 lg:px-8 text-center">
+        <div className="relative z-10 w-full px-4 sm:px-6 lg:px-8 text-center pb-28 sm:pb-24">
           <div className="max-w-4xl mx-auto">
-            {/* 태그라인 - 브라우니 스타일: 작은 텍스트, 대괄호 */}
-            <div className="mb-8">
-              <p className="text-white/90 text-sm sm:text-base font-normal tracking-wide">
+            <div className="mb-4 sm:mb-8">
+              <p className="text-white/90 text-xs sm:text-base font-normal tracking-wide">
                 {heroSettings.tagline}
               </p>
             </div>
 
-            {/* 메인 헤드라인 - 브라우니 스타일: 매우 큰 텍스트 */}
-            <div className="mb-6 leading-tight">
-              <h1 className={`${heroSettings.fontSize?.headline1 || 'text-5xl sm:text-6xl md:text-7xl lg:text-8xl'} font-bold text-white`}>
+            <div className="mb-4 sm:mb-6 leading-tight">
+              <h1 className={`${heroSettings.fontSize?.headline1 || 'text-3xl sm:text-4xl md:text-5xl lg:text-6xl xl:text-7xl 2xl:text-8xl'} font-bold text-white`}>
                 {heroSettings.headline1}
               </h1>
-              <h2 className={`${heroSettings.fontSize?.headline2 || 'text-5xl sm:text-6xl md:text-7xl lg:text-8xl'} font-bold text-white`}>
+              <h2 className={`${heroSettings.fontSize?.headline2 || 'text-3xl sm:text-4xl md:text-5xl lg:text-6xl xl:text-7xl 2xl:text-8xl'} font-bold text-white`}>
                 {heroSettings.headline2}
               </h2>
             </div>
 
-            {/* 브랜드명 - 브라우니 스타일: 작은 볼드 텍스트 */}
-            <p className={`${heroSettings.fontSize?.brandName || 'text-2xl sm:text-3xl md:text-4xl'} font-bold text-white mb-12`}>
+            <p className={`${heroSettings.fontSize?.brandName || 'text-xl sm:text-2xl md:text-3xl lg:text-4xl'} font-bold text-white mb-6 sm:mb-12`}>
               {heroSettings.brandName}
             </p>
 
-            {/* 서브 타이틀 */}
-            <p className={`${heroSettings.fontSize?.subtitle || 'text-lg sm:text-xl md:text-2xl'} text-white/90 mb-12 font-normal`}>
+            <p className={`${heroSettings.fontSize?.subtitle || 'text-base sm:text-lg md:text-xl lg:text-2xl'} text-white/90 mb-6 sm:mb-12 font-normal`}>
               {heroSettings.subtitle}
             </p>
 
-            {/* CTA 버튼들 - 브라우니 스타일: 두 개의 버튼 */}
-            <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
-              {/* 메인 CTA 버튼 - 파란색, 아이콘 포함 */}
+            <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 justify-center items-center">
               {heroSettings.ctaButton1.visible && (
                 <a
                   href={KAKAO_CHAT_URL}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center justify-center gap-3 px-8 py-4 bg-blue-600 hover:bg-blue-700 text-white text-base sm:text-lg font-semibold rounded-lg transition-all duration-200 shadow-lg hover:shadow-xl min-w-[200px]"
+                  className="inline-flex items-center justify-center gap-2 sm:gap-3 px-5 sm:px-8 py-3.5 sm:py-4 bg-blue-600 hover:bg-blue-700 text-white text-sm sm:text-lg font-semibold rounded-lg transition-all duration-200 shadow-lg hover:shadow-xl w-full sm:w-auto sm:min-w-[200px]"
                 >
-                  <span className="w-7 h-7 rounded-full bg-white/20 flex items-center justify-center flex-shrink-0">
-                    <span className="text-white text-sm font-bold">m</span>
+                  <span className="w-6 h-6 sm:w-7 sm:h-7 rounded-full bg-white/20 flex items-center justify-center flex-shrink-0">
+                    <span className="text-white text-xs sm:text-sm font-bold">m</span>
                   </span>
                   {heroSettings.ctaButton1.text}
                 </a>
               )}
 
-              {/* 보조 CTA 버튼 - 흰색, 문서 아이콘 */}
               {heroSettings.ctaButton2.visible && (
                 <a
                   href={KAKAO_CHAT_URL}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center justify-center gap-3 px-8 py-4 bg-white/10 hover:bg-white/20 backdrop-blur-sm text-white text-base sm:text-lg font-semibold rounded-lg transition-all duration-200 border border-white/30 min-w-[200px]"
+                  className="inline-flex items-center justify-center gap-2 sm:gap-3 px-5 sm:px-8 py-3.5 sm:py-4 bg-white/10 hover:bg-white/20 backdrop-blur-sm text-white text-sm sm:text-lg font-semibold rounded-lg transition-all duration-200 border border-white/30 w-full sm:w-auto sm:min-w-[200px]"
                 >
                   <svg
-                    className="w-5 h-5"
+                    className="w-4 h-4 sm:w-5 sm:h-5"
                     fill="none"
                     strokeLinecap="round"
                     strokeLinejoin="round"
@@ -176,8 +127,7 @@ export default function LandingPageClient({ heroImages, heroSettings, caseStudie
           </div>
         </div>
 
-        {/* 스크롤 인디케이터 - 브라우니 스타일 */}
-        <div className="absolute bottom-8 left-1/2 transform -translate-x-1/2 z-10">
+        <div className="absolute bottom-20 sm:bottom-8 left-1/2 transform -translate-x-1/2 z-10 pointer-events-none">
           <svg
             className="w-5 h-5 text-white animate-bounce"
             fill="none"
@@ -192,8 +142,7 @@ export default function LandingPageClient({ heroImages, heroSettings, caseStudie
         </div>
       </section>
 
-      {/* 문제 인식 섹션 - 다이나믹하고 시각적인 디자인 */}
-      <section className="py-24 px-4 sm:px-6 lg:px-8 bg-gradient-to-b from-white to-gray-50 relative overflow-hidden">
+      <section className="py-12 sm:py-20 lg:py-24 px-4 sm:px-6 lg:px-8 bg-gradient-to-b from-white to-gray-50 relative overflow-hidden">
         {/* 배경 장식 요소 */}
         <div className="absolute top-0 left-0 w-full h-full opacity-5">
           <div className="absolute top-20 left-10 w-72 h-72 bg-blue-500 rounded-full blur-3xl"></div>
@@ -274,8 +223,7 @@ export default function LandingPageClient({ heroImages, heroSettings, caseStudie
         </div>
       </section>
 
-      {/* 무플의 철학 섹션 - 다이나믹한 대비 디자인 */}
-      <section className="py-24 px-4 sm:px-6 lg:px-8 bg-white relative overflow-hidden">
+      <section className="py-12 sm:py-20 lg:py-24 px-4 sm:px-6 lg:px-8 bg-white relative overflow-hidden">
         {/* 배경 장식 */}
         <div className="absolute inset-0 opacity-5">
           <div className="absolute top-0 left-1/4 w-96 h-96 bg-blue-400 rounded-full blur-3xl"></div>
@@ -288,8 +236,8 @@ export default function LandingPageClient({ heroImages, heroSettings, caseStudie
               isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'
             }`}
           >
-            <div className="text-center mb-16">
-              <h3 className="text-5xl sm:text-6xl font-bold text-gray-900 mb-4 bg-gradient-to-r from-gray-900 via-gray-700 to-gray-900 bg-clip-text text-transparent">
+            <div className="text-center mb-10 sm:mb-16">
+              <h3 className="text-3xl sm:text-5xl lg:text-6xl font-bold text-gray-900 mb-4 bg-gradient-to-r from-gray-900 via-gray-700 to-gray-900 bg-clip-text text-transparent">
                 관리가 아닌 유지
               </h3>
               <div className="w-24 h-1 bg-gradient-to-r from-blue-500 to-indigo-600 mx-auto rounded-full"></div>

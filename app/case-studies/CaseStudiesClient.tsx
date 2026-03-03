@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
+import PublicHeader from '@/components/PublicHeader'
 
 interface CaseStudy {
   id: string
@@ -26,62 +27,20 @@ export default function CaseStudiesClient({ caseStudies }: CaseStudiesClientProp
 
   return (
     <div className="min-h-screen bg-white">
-      {/* 헤더 - 기능 소개 페이지와 동일한 스타일 */}
-      <header className="fixed top-0 left-0 right-0 z-50 bg-white/90 backdrop-blur-sm border-b border-gray-200">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
-            <div className="flex items-center gap-4 sm:gap-8">
-              <Link href="/" className="text-xl sm:text-2xl font-bold text-gray-900 hover:text-gray-700 transition-colors">
-                무플
-              </Link>
-              <Link
-                href="/features"
-                className="text-sm sm:text-base text-gray-600 hover:text-gray-900 font-medium transition-colors"
-              >
-                기능 소개
-              </Link>
-              <Link
-                href="/case-studies"
-                className="text-sm sm:text-base text-gray-900 font-semibold border-b-2 border-gray-900 transition-colors"
-              >
-                관리 사례
-              </Link>
-              <Link
-                href="/pricing"
-                className="text-sm sm:text-base text-gray-600 hover:text-gray-900 font-medium transition-colors"
-              >
-                요금제
-              </Link>
-              <Link
-                href="/estimate"
-                className="text-sm sm:text-base text-gray-600 hover:text-gray-900 font-medium transition-colors"
-              >
-                청소 표준 견적 진단기
-              </Link>
-            </div>
-            <Link
-              href="/login"
-              className="px-4 sm:px-5 py-2 bg-gray-900 text-white rounded-lg text-sm sm:text-base font-medium hover:bg-gray-800 transition-colors duration-200"
-            >
-              로그인
-            </Link>
-          </div>
-        </div>
-      </header>
+      <PublicHeader active="case-studies" />
 
-      {/* 히어로 섹션 */}
-      <section className="pt-32 pb-20 px-4 sm:px-6 lg:px-8 bg-gradient-to-b from-gray-50 to-white">
+      <section className="pt-24 sm:pt-28 md:pt-32 pb-12 sm:pb-20 px-4 sm:px-6 lg:px-8 bg-gradient-to-b from-gray-50 to-white">
         <div className="max-w-7xl mx-auto">
           <div
             className={`transition-all duration-1000 delay-100 ${
               isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'
             }`}
           >
-            <div className="text-center mb-16">
-              <h1 className="text-5xl sm:text-6xl font-bold text-gray-900 mb-6 bg-gradient-to-r from-gray-900 via-gray-700 to-gray-900 bg-clip-text text-transparent">
+            <div className="text-center mb-10 sm:mb-16">
+              <h1 className="text-3xl sm:text-5xl lg:text-6xl font-bold text-gray-900 mb-4 sm:mb-6 bg-gradient-to-r from-gray-900 via-gray-700 to-gray-900 bg-clip-text text-transparent">
                 관리 사례
               </h1>
-              <p className="text-xl sm:text-2xl text-gray-600 max-w-3xl mx-auto mb-6">
+              <p className="text-base sm:text-xl lg:text-2xl text-gray-600 max-w-3xl mx-auto mb-4 sm:mb-6">
                 무플로 현장을 유지하는 실제 사례를 확인하세요
               </p>
               <div className="w-32 h-1 bg-gradient-to-r from-green-500 to-blue-600 mx-auto rounded-full"></div>
