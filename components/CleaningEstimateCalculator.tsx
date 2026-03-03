@@ -1151,6 +1151,7 @@ export default function CleaningEstimateCalculator() {
                     </ul>
                   </div>
                 ) : null}
+                <p className="text-xs text-gray-500 mt-4 pt-3 border-t border-gray-100">※ 본 견적은 참고용이며, 실제 계약 금액과 다를 수 있습니다.</p>
               </div>
             </div>
 
@@ -1236,6 +1237,7 @@ export default function CleaningEstimateCalculator() {
                 <span className="truncate"><span className="text-gray-500">인건비</span> <span className="font-semibold text-slate-800 tabular-nums">{hasLaborResult ? formatWon(laborResult!.suggestedQuote) : formatWon(0)}</span></span>
               </div>
             </div>
+            <p className="text-[10px] text-gray-500 pt-1">※ 본 견적은 참고용이며, 실제 계약 금액과 다를 수 있습니다.</p>
             </div>
           </div>
         </div>
