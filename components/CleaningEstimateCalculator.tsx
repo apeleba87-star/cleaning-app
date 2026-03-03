@@ -280,7 +280,12 @@ export default function CleaningEstimateCalculator() {
   const fromKakao = typeof document !== 'undefined' && /kakao|daum/i.test(document.referrer || '')
   const isMobileContext = isMobileDevice || isLikelyMobile || fromKakao
   const canUseShare = typeof navigator !== 'undefined' && !!navigator.share && isMobileContext
-  const canUseCopyFallback = isMobileContext && typeof navigator !== 'undefined' && !navigator.share
+  /** 카카오톡에서 들어온 경우 링크 복사로 열람 허용하지 않음 → 공유하기만 가능(3·4번 정상 플로우) */
+  const canUseCopyFallback =
+    isMobileContext &&
+    typeof navigator !== 'undefined' &&
+    !navigator.share &&
+    !fromKakao
 
   const doUnlockAfterShare = () => {
     if (getDailyUnlockCount() >= DAILY_UNLOCK_LIMIT) {
