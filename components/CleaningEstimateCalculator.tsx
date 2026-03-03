@@ -336,6 +336,15 @@ export default function CleaningEstimateCalculator() {
     setDailyLimitReached(false)
     setKakaoSharePending(false)
     try {
+      if (hasNativeShare) {
+        await navigator.share({
+          title: shareTitle,
+          text: shareText,
+          url: shareUrl,
+        })
+        doUnlockAfterShare()
+        return
+      }
       const win = typeof window !== 'undefined' ? window : null
       const Kakao = win ? (win as unknown as { Kakao?: { Share?: { sendDefault: (opts: unknown) => Promise<unknown> }; isInitialized?: () => boolean; init?: (k: string) => void } }).Kakao : null
       if (fromKakao && hasKakaoShare && Kakao?.Share?.sendDefault) {
@@ -345,15 +354,6 @@ export default function CleaningEstimateCalculator() {
           link: { mobileWebUrl: shareUrl, webUrl: shareUrl },
         })
         setKakaoSharePending(true)
-        return
-      }
-      if (hasNativeShare) {
-        await navigator.share({
-          title: shareTitle,
-          text: shareText,
-          url: shareUrl,
-        })
-        doUnlockAfterShare()
       }
     } catch {
       setShareCancelled(true)
