@@ -39,7 +39,8 @@ export default function PayrollsPage() {
   const [dailySearchTerm, setDailySearchTerm] = useState('')
   const [subcontractSearchTerm, setSubcontractSearchTerm] = useState('')
   const [regularPage, setRegularPage] = useState(1)
-  
+  const [exportingExcel, setExportingExcel] = useState(false)
+
   // 대량 등록용 상태
   const [bulkEntries, setBulkEntries] = useState<Array<{
     workerName: string
@@ -593,17 +594,55 @@ export default function PayrollsPage() {
         </div>
       )}
 
-      {/* 기간 선택 */}
+      {/* 기간 선택 + 엑셀 다운로드 */}
       <div className="bg-white rounded-lg shadow-md p-4 sm:p-6 mb-6">
-        <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:space-x-4">
-          <label className="text-sm font-medium text-gray-700">기간 선택:</label>
-          <input
-            type="month"
-            value={selectedPeriod}
-            onChange={(e) => setSelectedPeriod(e.target.value)}
-            className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 w-full sm:w-auto"
-          />
+        <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4">
+          <div className="flex items-center gap-2">
+            <label className="text-sm font-medium text-gray-700">기간 선택:</label>
+            <input
+              type="month"
+              value={selectedPeriod}
+              onChange={(e) => setSelectedPeriod(e.target.value)}
+              className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 w-full sm:w-auto"
+            />
+          </div>
+          <button
+            type="button"
+            onClick={async () => {
+              if (!selectedPeriod) {
+                alert('기간을 선택해주세요.')
+                return
+              }
+              setExportingExcel(true)
+              try {
+                const res = await fetch(`/api/business/payrolls/export-excel?period=${encodeURIComponent(selectedPeriod)}`)
+                if (!res.ok) {
+                  const err = await res.json().catch(() => ({}))
+                  throw new Error(err.error || '엑셀 다운로드에 실패했습니다.')
+                }
+                const blob = await res.blob()
+                const url = URL.createObjectURL(blob)
+                const a = document.createElement('a')
+                a.href = url
+                const [y, m] = selectedPeriod.split('-')
+                a.download = `인건비_${y}년${m}월.xlsx`
+                document.body.appendChild(a)
+                a.click()
+                document.body.removeChild(a)
+                URL.revokeObjectURL(url)
+              } catch (e: any) {
+                alert(e.message || '엑셀 다운로드에 실패했습니다.')
+              } finally {
+                setExportingExcel(false)
+              }
+            }}
+            disabled={!selectedPeriod || exportingExcel}
+            className="px-4 py-2 rounded-md text-sm font-medium bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+          >
+            {exportingExcel ? '다운로드 중...' : '엑셀 다운로드'}
+          </button>
         </div>
+        <p className="text-xs text-gray-500 mt-2">선택한 월 기준으로 정규직원·일당 인건비를 한 번에 엑셀로 받습니다. (시트 2개)</p>
       </div>
 
       {/* 탭 메뉴 */}
