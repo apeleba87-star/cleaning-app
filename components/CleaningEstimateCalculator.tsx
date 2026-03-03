@@ -256,10 +256,20 @@ export default function CleaningEstimateCalculator() {
   const shareMessage = '[내 단가 전략 점검 완료] 업계 평균 기준, 당신은 어디에 있나요?'
   const shareTitle = shareMessage
   const shareText = shareMessage
-  /** 모바일 기기에서만 공유 허용 (UA + 뷰포트로 판별, 카카오톡 인앱 대응) */
-  const [isNarrowViewport, setIsNarrowViewport] = useState(false)
+  /** 모바일 기기에서만 공유 허용 (UA + 뷰포트 + 실제 화면 너비, 카카오톡 인앱 대응) */
+  const [isLikelyMobile, setIsLikelyMobile] = useState(false)
   useEffect(() => {
-    const check = () => setIsNarrowViewport(window.innerWidth <= 768)
+    const check = () => {
+      const inner = typeof window !== 'undefined' ? window.innerWidth : 0
+      const screenW = typeof screen !== 'undefined' ? screen.width : 0
+      const touch = typeof navigator !== 'undefined' && navigator.maxTouchPoints > 0
+      setIsLikelyMobile(
+        inner <= 768 ||
+        screenW <= 768 ||
+        (touch && screenW <= 1024) ||
+        (screenW > 0 && screenW <= 480)
+      )
+    }
     check()
     window.addEventListener('resize', check)
     return () => window.removeEventListener('resize', check)
@@ -267,7 +277,19 @@ export default function CleaningEstimateCalculator() {
   const isMobileDevice =
     typeof navigator !== 'undefined' &&
     /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini|KakaoTalk|KAKAOTALK|KAKAO|Samsung|Mobile/i.test(navigator.userAgent)
-  const canUseShare = typeof navigator !== 'undefined' && !!navigator.share && (isMobileDevice || isNarrowViewport)
+  const fromKakao = typeof document !== 'undefined' && /kakao|daum/i.test(document.referrer || '')
+  const isMobileContext = isMobileDevice || isLikelyMobile || fromKakao
+  const canUseShare = typeof navigator !== 'undefined' && !!navigator.share && isMobileContext
+  const canUseCopyFallback = isMobileContext && typeof navigator !== 'undefined' && !navigator.share
+
+  const doUnlockAfterShare = () => {
+    if (getDailyUnlockCount() >= DAILY_UNLOCK_LIMIT) {
+      setDailyLimitReached(true)
+      return
+    }
+    incrementDailyUnlock()
+    setHasSharedForAnalysis(true)
+  }
 
   const handleShareAndUnlock = async () => {
     if (!shareUrl || !canUseShare) return
@@ -279,12 +301,22 @@ export default function CleaningEstimateCalculator() {
         text: shareText,
         url: shareUrl,
       })
-      if (getDailyUnlockCount() >= DAILY_UNLOCK_LIMIT) {
-        setDailyLimitReached(true)
-        return
-      }
-      incrementDailyUnlock()
-      setHasSharedForAnalysis(true)
+      doUnlockAfterShare()
+    } catch {
+      setShareCancelled(true)
+    }
+  }
+
+  const handleCopyAndUnlock = async () => {
+    if (!shareUrl || !canUseCopyFallback) return
+    setShareCancelled(false)
+    setDailyLimitReached(false)
+    try {
+      const body = shareText ? `${shareText}\n${shareUrl}` : shareUrl
+      await navigator.clipboard.writeText(body)
+      setCopyToast(true)
+      setTimeout(() => setCopyToast(false), 2000)
+      doUnlockAfterShare()
     } catch {
       setShareCancelled(true)
     }
@@ -1210,7 +1242,7 @@ export default function CleaningEstimateCalculator() {
                             <p className="text-sm text-gray-700">공유를 완료하면 결과를 확인할 수 있어요.</p>
                             <p className="text-xs text-gray-500 mt-2">다시 공유하기 버튼을 눌러 주세요.</p>
                           </div>
-                        ) : !canUseShare ? (
+                        ) : !canUseShare && !canUseCopyFallback ? (
                           <div className="rounded-xl border-2 border-gray-200 bg-gray-50 p-5 text-center space-y-2">
                             <p className="text-base font-medium text-gray-800">업계 평균 단가는 모바일에서만 확인할 수 있어요.</p>
                             <p className="text-sm text-gray-600">모바일 기기로 접속한 뒤 공유하기를 눌러 주세요.</p>
@@ -1434,6 +1466,14 @@ export default function CleaningEstimateCalculator() {
                         className="w-full py-3.5 rounded-xl bg-blue-600 text-white font-bold hover:bg-blue-700 transition-colors"
                       >
                         공유하고 업계 평균 단가 보기
+                      </button>
+                    ) : canUseCopyFallback ? (
+                      <button
+                        type="button"
+                        onClick={handleCopyAndUnlock}
+                        className="w-full py-3.5 rounded-xl bg-blue-600 text-white font-bold hover:bg-blue-700 transition-colors"
+                      >
+                        링크 복사 후 결과 보기
                       </button>
                     ) : (
                       <button
