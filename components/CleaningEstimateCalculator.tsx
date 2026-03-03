@@ -242,6 +242,7 @@ export default function CleaningEstimateCalculator() {
       setLoadingStep(0)
       setShowAnalysisModal(true)
       setHasSharedForAnalysis(false)
+      setKakaoSharePending(false)
       hasAnalyzedInSessionRef.current = true
     }, totalMs)
     return () => { clearTimeout(t1); clearTimeout(t2); clearTimeout(t3) }
@@ -251,6 +252,8 @@ export default function CleaningEstimateCalculator() {
   const [hasSharedForAnalysis, setHasSharedForAnalysis] = useState(false)
   /** 공유 취소 시 안내 (모바일) */
   const [shareCancelled, setShareCancelled] = useState(false)
+  /** 카카오 공유 창 연 뒤, 사용자가 공유 완료 후 결과 보기 대기 (악용 방지) */
+  const [kakaoSharePending, setKakaoSharePending] = useState(false)
   /** 일일 열람 횟수 초과 */
   const [dailyLimitReached, setDailyLimitReached] = useState(false)
   const [copyToast, setCopyToast] = useState(false)
@@ -331,6 +334,7 @@ export default function CleaningEstimateCalculator() {
     if (!shareUrl || !canUseShare) return
     setShareCancelled(false)
     setDailyLimitReached(false)
+    setKakaoSharePending(false)
     try {
       const win = typeof window !== 'undefined' ? window : null
       const Kakao = win ? (win as unknown as { Kakao?: { Share?: { sendDefault: (opts: unknown) => Promise<unknown> }; isInitialized?: () => boolean; init?: (k: string) => void } }).Kakao : null
@@ -340,7 +344,7 @@ export default function CleaningEstimateCalculator() {
           text: shareMessage,
           link: { mobileWebUrl: shareUrl, webUrl: shareUrl },
         })
-        doUnlockAfterShare()
+        setKakaoSharePending(true)
         return
       }
       if (hasNativeShare) {
@@ -351,6 +355,27 @@ export default function CleaningEstimateCalculator() {
         })
         doUnlockAfterShare()
       }
+    } catch {
+      setShareCancelled(true)
+    }
+  }
+
+  const handleKakaoShareConfirm = () => {
+    setKakaoSharePending(false)
+    doUnlockAfterShare()
+  }
+
+  const handleShareOtherApps = async () => {
+    if (!shareUrl || !hasNativeShare) return
+    setShareCancelled(false)
+    setDailyLimitReached(false)
+    try {
+      await navigator.share({
+        title: shareTitle,
+        text: shareText,
+        url: shareUrl,
+      })
+      doUnlockAfterShare()
     } catch {
       setShareCancelled(true)
     }
@@ -1249,7 +1274,7 @@ export default function CleaningEstimateCalculator() {
         {showAnalysisModal && (
           <div
             className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50"
-            onClick={() => { setShowAnalysisModal(false); setShareCancelled(false); setDailyLimitReached(false) }}
+            onClick={() => { setShowAnalysisModal(false); setShareCancelled(false); setDailyLimitReached(false); setKakaoSharePending(false) }}
             role="dialog"
             aria-modal="true"
             aria-labelledby="analysis-modal-title"
@@ -1262,7 +1287,7 @@ export default function CleaningEstimateCalculator() {
                 <h2 id="analysis-modal-title" className="text-lg font-bold text-gray-900">업계 평균 단가 · 내 견적</h2>
                 <button
                   type="button"
-                  onClick={() => { setShowAnalysisModal(false); setShareCancelled(false); setDailyLimitReached(false) }}
+                  onClick={() => { setShowAnalysisModal(false); setShareCancelled(false); setDailyLimitReached(false); setKakaoSharePending(false) }}
                   className="p-1.5 rounded-full text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
                   aria-label="닫기"
                 >
@@ -1274,7 +1299,12 @@ export default function CleaningEstimateCalculator() {
                   <>
                     {!hasSharedForAnalysis ? (
                       <>
-                        {industryCompare?.isExtreme ? (
+                        {kakaoSharePending ? (
+                          <div className="rounded-xl border-2 border-blue-200 bg-blue-50/50 p-5 text-center space-y-4">
+                            <p className="text-base font-medium text-gray-800">카카오톡으로 공유를 완료하셨나요?</p>
+                            <p className="text-sm text-gray-600">아래 버튼을 누르면 업계 평균 단가와 상세 견적을 확인할 수 있어요.</p>
+                          </div>
+                        ) : industryCompare?.isExtreme ? (
                           <div className="rounded-xl bg-amber-50 border-2 border-amber-200 border-l-4 border-l-amber-500 p-5 shadow-md">
                             <p className="text-lg text-amber-900 font-medium leading-relaxed text-center">
                               입력하신 단가가 일반 시장 범위와 많이 다릅니다. 평당 금액·옵션 금액을 다시 확인해 주세요.
@@ -1341,6 +1371,9 @@ export default function CleaningEstimateCalculator() {
                                 </div>
                               </div>
                               <p className="text-sm text-gray-500 text-center pt-1">공유하면 업계 평균 단가와 상세 단가를 확인할 수 있어요.</p>
+                              {fromKakao && hasKakaoShare && hasNativeShare && (
+                                <p className="text-xs text-gray-400 text-center pt-0.5">카카오톡으로 공유하거나 더보기에서 다른 앱으로 공유할 수 있어요.</p>
+                              )}
                             </>
                           )
                         })() : (
@@ -1492,7 +1525,7 @@ export default function CleaningEstimateCalculator() {
                   ) : (
                     <button
                       type="button"
-                      onClick={() => { setShowAnalysisModal(false); setShareCancelled(false); setDailyLimitReached(false) }}
+                      onClick={() => { setShowAnalysisModal(false); setShareCancelled(false); setDailyLimitReached(false); setKakaoSharePending(false) }}
                       className="w-full py-3.5 rounded-xl bg-slate-800 text-white font-bold hover:bg-slate-700 transition-colors"
                     >
                       확인
@@ -1500,7 +1533,15 @@ export default function CleaningEstimateCalculator() {
                   )
                 ) : (activeTab === 'area' && areaResult) ? (
                   !hasSharedForAnalysis && !industryCompare?.isExtreme ? (
-                    dailyLimitReached ? (
+                    kakaoSharePending ? (
+                      <button
+                        type="button"
+                        onClick={handleKakaoShareConfirm}
+                        className="w-full py-3.5 rounded-xl bg-blue-600 text-white font-bold hover:bg-blue-700 transition-colors"
+                      >
+                        공유했어요, 결과 보기
+                      </button>
+                    ) : dailyLimitReached ? (
                       <button
                         type="button"
                         onClick={() => { setShowAnalysisModal(false); setDailyLimitReached(false) }}
@@ -1509,13 +1550,24 @@ export default function CleaningEstimateCalculator() {
                         확인
                       </button>
                     ) : canUseShare ? (
-                      <button
-                        type="button"
-                        onClick={handleShareAndUnlock}
-                        className="w-full py-3.5 rounded-xl bg-blue-600 text-white font-bold hover:bg-blue-700 transition-colors"
-                      >
-                        공유하고 업계 평균 단가 보기
-                      </button>
+                      <div className="space-y-2">
+                        <button
+                          type="button"
+                          onClick={handleShareAndUnlock}
+                          className="w-full py-3.5 rounded-xl bg-blue-600 text-white font-bold hover:bg-blue-700 transition-colors"
+                        >
+                          공유하고 업계 평균 단가 보기
+                        </button>
+                        {fromKakao && hasKakaoShare && hasNativeShare && (
+                          <button
+                            type="button"
+                            onClick={handleShareOtherApps}
+                            className="w-full py-3 rounded-xl border-2 border-gray-300 text-gray-700 font-medium hover:bg-gray-50 transition-colors"
+                          >
+                            더보기 · 다른 앱으로 공유
+                          </button>
+                        )}
+                      </div>
                     ) : canUseCopyFallback ? (
                       <button
                         type="button"
@@ -1536,7 +1588,7 @@ export default function CleaningEstimateCalculator() {
                   ) : (
                     <button
                       type="button"
-                      onClick={() => { setShowAnalysisModal(false); setShareCancelled(false); setDailyLimitReached(false) }}
+                      onClick={() => { setShowAnalysisModal(false); setShareCancelled(false); setDailyLimitReached(false); setKakaoSharePending(false) }}
                       className="w-full py-3.5 rounded-xl bg-slate-800 text-white font-bold hover:bg-slate-700 transition-colors"
                     >
                       {industryCompare?.isExtreme ? '다시 시도하기' : '확인'}
@@ -1545,7 +1597,7 @@ export default function CleaningEstimateCalculator() {
                 ) : (
                   <button
                     type="button"
-                    onClick={() => { setShowAnalysisModal(false); setShareCancelled(false); setDailyLimitReached(false) }}
+                    onClick={() => { setShowAnalysisModal(false); setShareCancelled(false); setDailyLimitReached(false); setKakaoSharePending(false) }}
                     className="w-full py-3.5 rounded-xl bg-slate-800 text-white font-bold hover:bg-slate-700 transition-colors"
                   >
                     확인
