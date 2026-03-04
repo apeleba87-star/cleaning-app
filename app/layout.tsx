@@ -6,6 +6,7 @@ import PWARegister from '@/components/PWARegister'
 import KakaoConsultFab from '@/components/KakaoConsultFab'
 
 const NAVER_ANALYTICS_WA = '6ee301d54f8f28'
+const GTM_ID = 'GTM-MHC6FP8Z'
 
 const inter = Inter({ subsets: ['latin'] })
 
@@ -57,6 +58,14 @@ export default function RootLayout({
   return (
     <html lang="ko">
       <head>
+        {/* Google Tag Manager - head 상단 */}
+        <Script id="gtm-head" strategy="beforeInteractive">
+          {`(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
+new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
+j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
+'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
+})(window,document,'script','dataLayer','${GTM_ID}');`}
+        </Script>
         <link rel="manifest" href="/manifest.json" />
         <link rel="icon" href="/favicon.ico" sizes="any" />
         <link rel="icon" type="image/png" sizes="32x32" href="/icon-192x192.png" />
@@ -76,6 +85,16 @@ export default function RootLayout({
         <meta name="naver-site-verification" content="dd8aa4e731fa35e5850c8e12fcd0e3eb39fd36ab" />
       </head>
       <body className={inter.className}>
+        {/* Google Tag Manager (noscript) - body 직후 */}
+        <noscript>
+          <iframe
+            src={`https://www.googletagmanager.com/ns.html?id=${GTM_ID}`}
+            height="0"
+            width="0"
+            style={{ display: 'none', visibility: 'hidden' }}
+            title="Google Tag Manager"
+          />
+        </noscript>
         <PWARegister />
         <KakaoConsultFab />
         {children}
