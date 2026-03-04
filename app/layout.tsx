@@ -7,6 +7,7 @@ import KakaoConsultFab from '@/components/KakaoConsultFab'
 
 const NAVER_ANALYTICS_WA = '6ee301d54f8f28'
 const GTM_ID = 'GTM-MHC6FP8Z'
+const GA_MEASUREMENT_ID = 'G-HC84YK3YF1'
 
 const inter = Inter({ subsets: ['latin'] })
 
@@ -65,6 +66,17 @@ new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
 j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
 })(window,document,'script','dataLayer','${GTM_ID}');`}
+        </Script>
+        {/* Google tag (gtag.js) - GA4 직접 설치 */}
+        <Script
+          src={`https://www.googletagmanager.com/gtag/js?id=${GA_MEASUREMENT_ID}`}
+          strategy="afterInteractive"
+        />
+        <Script id="gtag-config" strategy="afterInteractive">
+          {`window.dataLayer = window.dataLayer || [];
+function gtag(){dataLayer.push(arguments);}
+gtag('js', new Date());
+gtag('config', '${GA_MEASUREMENT_ID}');`}
         </Script>
         <link rel="manifest" href="/manifest.json" />
         <link rel="icon" href="/favicon.ico" sizes="any" />
