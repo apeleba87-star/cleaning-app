@@ -55,18 +55,45 @@ export default function LoginPage() {
         setError(errorMessage)
         setLoading(false)
       } else if (data.session) {
-        // 승인 상태 확인
-        const { data: userData, error: userError } = await supabase
+        let { data: userData, error: userError } = await supabase
           .from('users')
           .select('approval_status, rejection_reason, role')
           .eq('id', data.session.user.id)
           .single()
 
         if (userError || !userData) {
-          // 사용자 정보가 없는 경우 (일반적으로 발생하지 않음)
-          console.error('User data error:', userError)
-        } else {
-          // 승인 상태 확인
+          const completeRes = await fetch('/api/auth/complete-signup', {
+            method: 'POST',
+            credentials: 'include',
+            headers: { 'Content-Type': 'application/json' },
+          })
+          const completeJson = await completeRes.json().catch(() => ({}))
+          if (!completeRes.ok) {
+            await supabase.auth.signOut()
+            setError(
+              completeJson?.error ||
+                '가입 정보를 완료할 수 없습니다. 이메일 인증 후 다시 로그인해 주세요.'
+            )
+            setLoading(false)
+            return
+          }
+          const retry = await supabase
+            .from('users')
+            .select('approval_status, rejection_reason, role')
+            .eq('id', data.session.user.id)
+            .single()
+          userData = retry.data
+          userError = retry.error
+        }
+
+        if (userError || !userData) {
+          await supabase.auth.signOut()
+          setError('사용자 정보를 불러올 수 없습니다. 잠시 후 다시 시도해 주세요.')
+          setLoading(false)
+          return
+        }
+
+        {
           if (userData.approval_status === 'pending') {
             // 로그아웃 (승인 대기 중이면 세션 삭제)
             await supabase.auth.signOut()
@@ -156,12 +183,18 @@ export default function LoginPage() {
           }
         }
 
-        // 승인된 사용자는 로그인 성공
-        // 세션이 생성되면 router.refresh()를 호출하여 서버 컴포넌트가 세션을 읽을 수 있도록 함
+        // 로그인 성공 — 역할별로 이동 경로 지정 (업체관리자는 직원 앱이 아닌 업체 대시보드로)
         router.refresh()
-        // 잠시 대기 후 홈으로 이동
         await new Promise(resolve => setTimeout(resolve, 500))
-        window.location.href = '/'
+        const roleRedirect: Record<string, string> = {
+          business_owner: '/business/dashboard',
+          franchise_manager: '/franchise/dashboard',
+          store_manager: '/store-manager/dashboard',
+          platform_admin: '/platform/dashboard',
+          admin: '/dashboard',
+          manager: '/reviews',
+        }
+        window.location.href = roleRedirect[userData.role] ?? '/'
       } else {
         setError('로그인에 실패했습니다. 세션을 생성할 수 없습니다.')
         setLoading(false)

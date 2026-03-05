@@ -10,9 +10,15 @@ export async function middleware(request: NextRequest) {
     },
   })
 
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+  if (!supabaseUrl || !supabaseAnonKey) {
+    return supabaseResponse
+  }
+
   const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    supabaseUrl,
+    supabaseAnonKey,
     {
       cookies: {
         getAll() {
@@ -68,16 +74,23 @@ export async function middleware(request: NextRequest) {
         }
       }
 
-      // 사용자 정보 조회
       const { data: userData } = await supabase
         .from('users')
         .select('role, approval_status, company_id')
         .eq('id', user.id)
         .single()
 
+      if (!userData) {
+        const noProfilePaths = ['/login', '/signup', '/auth/complete-signup']
+        const isApi = pathname.startsWith('/api')
+        const allowed = noProfilePaths.some((p) => pathname.startsWith(p))
+        if (!isApi && !allowed) {
+          return NextResponse.redirect(new URL('/auth/complete-signup', request.url))
+        }
+      }
+
       if (userData) {
-        // 승인 대기 계정은 로그인 이후 서비스 화면 접근 차단
-        const pendingAllowedPaths = ['/signup/pending', '/login', '/signup']
+        const pendingAllowedPaths = ['/signup/pending', '/signup/verify-email', '/login', '/signup']
         const isApiRoute = pathname.startsWith('/api')
         const isPendingAllowedPath = pendingAllowedPaths.some((path) => pathname.startsWith(path))
         if (userData.approval_status === 'pending' && !isApiRoute && !isPendingAllowedPath) {

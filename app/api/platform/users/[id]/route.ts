@@ -4,6 +4,77 @@ import { getServerUser } from '@/lib/supabase/server'
 import { UserRole } from '@/types/db'
 import { createClient } from '@supabase/supabase-js'
 
+async function getAdminSupabase() {
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+  if (!serviceRoleKey || !supabaseUrl) throw new Error('서버 설정 오류')
+  return createClient(supabaseUrl, serviceRoleKey, {
+    auth: { autoRefreshToken: false, persistSession: false },
+  })
+}
+
+/** 사용자 삭제 시 연관 데이터 모두 제거 후 auth.users 삭제 */
+export async function DELETE(
+  _request: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  try {
+    const user = await getServerUser()
+    if (!user || user.role !== 'platform_admin') {
+      return NextResponse.json({ error: '권한이 없습니다.' }, { status: 403 })
+    }
+
+    const id = params.id
+    if (!id) {
+      return NextResponse.json({ error: '사용자 ID가 필요합니다.' }, { status: 400 })
+    }
+    if (id === user.id) {
+      return NextResponse.json({ error: '본인 계정은 삭제할 수 없습니다.' }, { status: 400 })
+    }
+
+    const adminSupabase = await getAdminSupabase()
+
+    // 1) 세션
+    await adminSupabase.from('user_sessions').delete().eq('user_id', id)
+    // 2) 매장 배정
+    await adminSupabase.from('store_assign').delete().eq('user_id', id)
+    // 3) 민감정보 (user_sensitive)
+    await adminSupabase.from('user_sensitive').delete().eq('user_id', id)
+    // 4) 출퇴근
+    await adminSupabase.from('attendance').delete().eq('user_id', id)
+    // 5) 문제/요청 리포트
+    await adminSupabase.from('problem_reports').delete().eq('user_id', id)
+    // 6) 인건비(급여) - 해당 사용자 건
+    await adminSupabase.from('payrolls').delete().eq('user_id', id)
+    // 7) public.users
+    const { error: userDelError } = await adminSupabase.from('users').delete().eq('id', id)
+    if (userDelError) {
+      console.error('users delete error:', userDelError)
+      return NextResponse.json(
+        { error: '사용자 삭제에 실패했습니다. 연관 데이터를 확인해 주세요.' },
+        { status: 500 }
+      )
+    }
+    // 8) Auth 사용자 삭제
+    const { error: authError } = await adminSupabase.auth.admin.deleteUser(id)
+    if (authError) {
+      console.error('auth deleteUser error:', authError)
+      return NextResponse.json(
+        { error: '인증 계정 삭제에 실패했습니다.' },
+        { status: 500 }
+      )
+    }
+
+    return NextResponse.json({ success: true })
+  } catch (err: unknown) {
+    console.error('DELETE /api/platform/users/[id]:', err)
+    return NextResponse.json(
+      { error: err instanceof Error ? err.message : '서버 오류가 발생했습니다.' },
+      { status: 500 }
+    )
+  }
+}
+
 export async function PATCH(
   request: NextRequest,
   { params }: { params: { id: string } }

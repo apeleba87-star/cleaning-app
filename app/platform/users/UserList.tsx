@@ -32,6 +32,8 @@ export default function UserList({ initialUsers, stores, companies, userStoreMap
   const [showCreateForm, setShowCreateForm] = useState(false)
   const [editingUser, setEditingUser] = useState<UserWithCompany | null>(null)
   const [showEditForm, setShowEditForm] = useState(false)
+  const [deleteConfirmUser, setDeleteConfirmUser] = useState<UserWithCompany | null>(null)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
 
   const filteredUsers = users.filter(user => {
     if (filterRole !== 'all' && user.role !== filterRole) return false
@@ -92,6 +94,31 @@ export default function UserList({ initialUsers, stores, companies, userStoreMap
     setEditingUser(null)
   }
 
+  const handleDeleteClick = (user: UserWithCompany) => {
+    setDeleteConfirmUser(user)
+  }
+
+  const handleDeleteConfirm = async () => {
+    if (!deleteConfirmUser) return
+    setDeletingId(deleteConfirmUser.id)
+    try {
+      const res = await fetch(`/api/platform/users/${deleteConfirmUser.id}`, { method: 'DELETE' })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        alert(data?.error || '삭제에 실패했습니다.')
+        return
+      }
+      setUsers(users.filter((u) => u.id !== deleteConfirmUser.id))
+      setDeleteConfirmUser(null)
+    } finally {
+      setDeletingId(null)
+    }
+  }
+
+  const handleDeleteCancel = () => {
+    setDeleteConfirmUser(null)
+  }
+
   return (
     <div>
       <div className="mb-4 flex justify-between items-center">
@@ -144,6 +171,35 @@ export default function UserList({ initialUsers, stores, companies, userStoreMap
         </div>
       )}
 
+      {deleteConfirmUser && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">사용자 삭제</h3>
+            <p className="text-gray-600 mb-4">
+              <span className="font-medium">{deleteConfirmUser.name}</span>
+              ({deleteConfirmUser.email || deleteConfirmUser.id})를
+              삭제하시겠습니까? 사용자와 연관된 세션·매장 배정·출퇴근·인건비 등 모든 데이터가 삭제됩니다.
+            </p>
+            <div className="flex justify-end gap-2">
+              <button
+                onClick={handleDeleteCancel}
+                disabled={!!deletingId}
+                className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+              >
+                취소
+              </button>
+              <button
+                onClick={handleDeleteConfirm}
+                disabled={!!deletingId}
+                className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 disabled:opacity-50"
+              >
+                {deletingId ? '삭제 중...' : '삭제'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {showEditForm && editingUser && (
         <div className="mb-6">
           <UserForm
@@ -157,8 +213,8 @@ export default function UserList({ initialUsers, stores, companies, userStoreMap
         </div>
       )}
 
-      <div className="bg-white rounded-lg shadow-md overflow-hidden">
-        <table className="w-full">
+      <div className="bg-white rounded-lg shadow-md overflow-x-auto">
+        <table className="w-full min-w-[900px]">
           <thead className="bg-gray-50">
             <tr>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -185,7 +241,7 @@ export default function UserList({ initialUsers, stores, companies, userStoreMap
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 가입일
               </th>
-              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider sticky right-0 bg-gray-50 whitespace-nowrap w-28">
                 작업
               </th>
             </tr>
@@ -264,13 +320,22 @@ export default function UserList({ initialUsers, stores, companies, userStoreMap
                       {new Date(user.created_at).toLocaleDateString('ko-KR')}
                     </div>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                    <button
-                      onClick={() => handleEdit(user)}
-                      className="text-blue-600 hover:text-blue-900"
-                    >
-                      수정
-                    </button>
+                  <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium sticky right-0 bg-white hover:bg-gray-50">
+                    <div className="flex items-center justify-end gap-2">
+                      <button
+                        onClick={() => handleEdit(user)}
+                        className="px-2 py-1 text-blue-600 hover:text-blue-900 hover:underline"
+                      >
+                        수정
+                      </button>
+                      <button
+                        onClick={() => handleDeleteClick(user)}
+                        className="px-2 py-1 text-red-600 hover:text-red-900 hover:underline"
+                        disabled={!!deletingId}
+                      >
+                        삭제
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))

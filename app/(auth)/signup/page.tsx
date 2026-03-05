@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
+import { createClient } from '@/lib/supabase/client'
 
 export default function SignupPage() {
   const [companyName, setCompanyName] = useState('')
@@ -82,29 +83,35 @@ export default function SignupPage() {
     }
 
     try {
-      const response = await fetch('/api/auth/signup', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
+      const supabase = createClient()
+      const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
+        email: email.trim().toLowerCase(),
+        password,
+        options: {
+          data: {
+            name: name.trim(),
+            company_name: companyName.trim(),
+            phone: phone.trim() || null,
+            business_registration_number: businessRegistrationNumber.trim() || null,
+          },
         },
-        body: JSON.stringify({
-          company_name: companyName.trim(),
-          business_registration_number: businessRegistrationNumber.trim() || null,
-          name: name.trim(),
-          email: email.trim(),
-          password: password,
-          phone: phone.trim() || null,
-        }),
       })
 
-      const data = await response.json()
-
-      if (!response.ok) {
-        throw new Error(data.error || '회원가입에 실패했습니다.')
+      if (signUpError) {
+        if (
+          signUpError.message?.includes('already registered') ||
+          signUpError.message?.includes('already exists')
+        ) {
+          throw new Error('이미 가입된 이메일입니다.')
+        }
+        throw new Error(signUpError.message || '회원가입에 실패했습니다.')
       }
 
-      // 업체관리자 가입은 승인 대기 페이지로 이동
-      router.push('/signup/pending')
+      if (!signUpData.user) {
+        throw new Error('회원가입 처리 중 오류가 발생했습니다.')
+      }
+
+      router.push('/signup/verify-email')
     } catch (err: any) {
       console.error('Signup error:', err)
       setError(err.message || '회원가입 중 오류가 발생했습니다.')
@@ -267,7 +274,7 @@ export default function SignupPage() {
 
           <div className="text-center text-sm text-gray-600 pt-2">
             <p className="mb-2">
-              ℹ️ 가입 신청 후 시스템 관리자 승인이 필요합니다.
+              ℹ️ 가입 후 이메일 인증을 완료하시면 1주일 무료 체험이 자동 적용됩니다.
             </p>
             <Link href="/login" className="text-blue-600 hover:text-blue-800">
               이미 계정이 있으신가요? 로그인

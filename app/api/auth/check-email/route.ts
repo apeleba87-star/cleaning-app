@@ -38,23 +38,38 @@ export async function GET(request: NextRequest) {
     })
 
     const normalizedEmail = email.toLowerCase()
-    const { data: authUsersData, error } = await adminSupabase.auth.admin.listUsers()
+    const perPage = 1000
+    const maxPages = 50
+    let page = 1
+    let exists = false
 
-    if (error) {
-      console.error('Error checking duplicate email:', error)
-      return NextResponse.json(
-        { available: false, error: '이메일 중복 확인에 실패했습니다.' },
-        { status: 500 }
-      )
+    while (page <= maxPages) {
+      const { data: authUsersData, error } = await adminSupabase.auth.admin.listUsers({
+        page,
+        perPage,
+      })
+
+      if (error) {
+        console.error('Error checking duplicate email:', error)
+        return NextResponse.json(
+          { available: false, error: '이메일 중복 확인에 실패했습니다.' },
+          { status: 500 }
+        )
+      }
+
+      const users = authUsersData?.users ?? []
+      if (users.some((u) => (u.email ?? '').toLowerCase() === normalizedEmail)) {
+        exists = true
+        break
+      }
+      if (users.length < perPage) break
+      page += 1
     }
-
-    const exists = (authUsersData?.users || []).some(
-      (user) => user.email?.toLowerCase() === normalizedEmail
-    )
 
     return NextResponse.json({
       available: !exists,
       message: exists ? '이미 가입된 이메일입니다.' : '사용 가능한 이메일입니다.',
+      ...(exists && { error: '이미 가입된 이메일입니다.' }),
     })
   } catch (error) {
     console.error('Error in GET /api/auth/check-email:', error)
