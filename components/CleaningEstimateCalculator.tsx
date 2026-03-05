@@ -30,6 +30,8 @@ const STAIRS_OPTION_RECYCLING_MONTHLY = 15_000  // 분리 수거장 포함
 const PARKING_OPTION = 10_000
 const WINDOW_DUST_OPTION = 5_000
 const WEEKS_PER_MONTH = 4.3
+/** 1평 = 3.3㎡ (제곱미터 입력 시 평으로 변환해 계산) */
+const SQM_PER_PYEONG = 3.3
 
 // 정기 청소: 주 1~7회 업계 평균 회당 평단가 (원)
 const OFFICE_AVG_UNIT_BY_VISITS = [2000, 1850, 1750, 1650, 1550, 1480, 1420]
@@ -193,7 +195,10 @@ export default function CleaningEstimateCalculator() {
   const [activeTab, setActiveTab] = useState<CalcTab>('area')
 
   const [cleanType, setCleanType] = useState<string>('office')
-  const [areaPyeong, setAreaPyeong] = useState<string>('')
+  /** 면적 입력값 (단위에 따라 평 또는 ㎡) */
+  const [areaValue, setAreaValue] = useState<string>('')
+  /** 면적 단위: 평 또는 제곱미터(㎡) */
+  const [areaUnit, setAreaUnit] = useState<'pyeong' | 'sqm'>('pyeong')
   const [officeUnitPrice, setOfficeUnitPrice] = useState<string>('0')
   const [officeDiscountRate, setOfficeDiscountRate] = useState<number>(0)
   const [visitsPerWeek, setVisitsPerWeek] = useState<number>(1)
@@ -396,8 +401,14 @@ export default function CleaningEstimateCalculator() {
     }
   }
 
+  /** 입력 단위에 따라 평수로 환산 (1평 = 3.3㎡) */
+  const areaPyeongForCalc = useMemo(() => {
+    const raw = Number(areaValue) || 0
+    return areaUnit === 'sqm' ? raw / SQM_PER_PYEONG : raw
+  }, [areaValue, areaUnit])
+
   const areaResult = useMemo(() => {
-    const pyeong = Number(areaPyeong) || 0
+    const pyeong = areaPyeongForCalc
     const monthlyVisits = visitsPerWeek * WEEKS_PER_MONTH
     if (cleanType === 'office') {
       if (pyeong <= 0) return null
@@ -487,7 +498,7 @@ export default function CleaningEstimateCalculator() {
       }
     }
     return null
-  }, [cleanType, areaPyeong, visitsPerWeek, officeUnitPrice, officeDiscountRate, toiletStalls, hasRecycling, hasElevator, hasParking, hasWindowDust, stairsFloors, stairsDiscountRate, customExtraItems, customOptionElevator, customOptionParking, customOptionWindowDust, customOptionRecycling, customOptionToiletAmount])
+  }, [cleanType, areaPyeongForCalc, visitsPerWeek, officeUnitPrice, officeDiscountRate, toiletStalls, hasRecycling, hasElevator, hasParking, hasWindowDust, stairsFloors, stairsDiscountRate, customExtraItems, customOptionElevator, customOptionParking, customOptionWindowDust, customOptionRecycling, customOptionToiletAmount])
 
   const laborResult = useMemo(() => {
     const regularWage = Number(regularHourlyWage) || 0
@@ -527,7 +538,7 @@ export default function CleaningEstimateCalculator() {
     if (userAmount <= 0) return null
 
     if (cleanType === 'office') {
-      const pyeong = Number(areaPyeong) || 0
+      const pyeong = areaPyeongForCalc
       const monthlyVisits = visitsPerWeek * WEEKS_PER_MONTH
       if (pyeong <= 0 || monthlyVisits <= 0) return null
       const userUnitPerVisit = userAmount / monthlyVisits / pyeong
@@ -568,7 +579,7 @@ export default function CleaningEstimateCalculator() {
     }
 
     return null
-  }, [areaResult, cleanType, areaPyeong, visitsPerWeek, stairsFloors, toiletStalls, hasParking, hasWindowDust, hasRecycling])
+  }, [areaResult, cleanType, areaPyeongForCalc, visitsPerWeek, stairsFloors, toiletStalls, hasParking, hasWindowDust, hasRecycling])
 
   const inputBase =
     'w-full px-4 py-2.5 rounded-lg border border-gray-200 bg-white text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors text-sm'
@@ -684,16 +695,59 @@ export default function CleaningEstimateCalculator() {
                       <>
                         <div>
                           <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-1.5">
-                            <IconPin /> 면적(평)
+                            <IconPin /> 면적
                           </label>
-                          <input
-                            type="number"
-                            min={1}
-                            value={areaPyeong}
-                            onChange={(e) => setAreaPyeong(e.target.value)}
-                            placeholder="예: 100"
-                            className={inputBase}
-                          />
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <div className="flex rounded-lg border border-gray-200 overflow-hidden">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const num = Number(areaValue) || 0
+                                  if (areaUnit === 'sqm') {
+                                    setAreaUnit('pyeong')
+                                    setAreaValue(num ? (num / SQM_PER_PYEONG).toFixed(1).replace(/\.0$/, '') : '')
+                                  }
+                                }}
+                                className={`px-3 py-2.5 text-sm font-medium transition-colors ${
+                                  areaUnit === 'pyeong'
+                                    ? 'bg-blue-600 text-white'
+                                    : 'bg-white text-gray-600 hover:bg-gray-50'
+                                }`}
+                              >
+                                평
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const num = Number(areaValue) || 0
+                                  if (areaUnit === 'pyeong') {
+                                    setAreaUnit('sqm')
+                                    setAreaValue(num ? String(Math.round(num * SQM_PER_PYEONG)) : '')
+                                  }
+                                }}
+                                className={`px-3 py-2.5 text-sm font-medium transition-colors ${
+                                  areaUnit === 'sqm'
+                                    ? 'bg-blue-600 text-white'
+                                    : 'bg-white text-gray-600 hover:bg-gray-50'
+                                }`}
+                              >
+                                ㎡
+                              </button>
+                            </div>
+                            <input
+                              type="number"
+                              min={0}
+                              step={areaUnit === 'sqm' ? 1 : 0.1}
+                              value={areaValue}
+                              onChange={(e) => setAreaValue(e.target.value)}
+                              placeholder={areaUnit === 'pyeong' ? '예: 100' : '예: 330'}
+                              className={`${inputBase} flex-1 min-w-[100px]`}
+                            />
+                            <span className="text-gray-600 text-sm shrink-0">
+                              {areaUnit === 'pyeong' ? '평' : '㎡'}
+                            </span>
+                          </div>
+                          <p className="text-xs text-gray-500 mt-1">1평 = 3.3㎡ 기준</p>
                         </div>
                         <div>
                           <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-1.5">
