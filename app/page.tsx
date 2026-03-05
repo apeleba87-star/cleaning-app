@@ -16,10 +16,9 @@ export default async function HomePage() {
     // 사용자 정보 가져오기
     const user = await getServerUser()
 
-    // 사용자 정보가 없으면 기본값으로 처리
+    // 세션은 있지만 users 테이블에 없으면 complete-signup으로 (업체관리자 가입 완료)
     if (!user) {
-      // 세션은 있지만 users 테이블에 없으면 기본 staff로 처리
-      redirect('/attendance')
+      redirect('/auth/complete-signup')
     }
 
     // 역할별 리다이렉트

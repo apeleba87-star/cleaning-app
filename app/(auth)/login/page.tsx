@@ -57,11 +57,17 @@ export default function LoginPage() {
       } else if (data.session) {
         let { data: userData, error: userError } = await supabase
           .from('users')
-          .select('approval_status, rejection_reason, role')
+          .select('approval_status, rejection_reason, role, company_id')
           .eq('id', data.session.user.id)
           .single()
 
-        if (userError || !userData) {
+        // users 행이 없거나, 트리거로 생성된 직원(role=staff, company_id 없음)인 경우 complete-signup 호출
+        const needsCompleteSignup =
+          userError ||
+          !userData ||
+          (userData.role === 'staff' && !userData.company_id)
+
+        if (needsCompleteSignup) {
           const completeRes = await fetch('/api/auth/complete-signup', {
             method: 'POST',
             credentials: 'include',
@@ -79,7 +85,7 @@ export default function LoginPage() {
           }
           const retry = await supabase
             .from('users')
-            .select('approval_status, rejection_reason, role')
+            .select('approval_status, rejection_reason, role, company_id')
             .eq('id', data.session.user.id)
             .single()
           userData = retry.data

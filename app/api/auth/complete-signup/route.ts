@@ -55,6 +55,7 @@ export async function POST() {
     }
 
     const trialEndsAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString()
+    // 회사 생성 (default_role: 'staff' = 이후 업체관리자가 초대하는 직원의 기본 역할)
     const { data: company, error: companyError } = await adminSupabase
       .from('companies')
       .insert({

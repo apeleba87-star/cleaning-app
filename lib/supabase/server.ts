@@ -78,49 +78,10 @@ export async function getServerUser() {
       .eq('id', user.id)
       .single()
 
-    // users 테이블에 데이터가 없으면 기본값 반환
-    if (error) {
-      // RLS 에러일 경우, 기본값 반환
-      if (error.code === 'PGRST116' || error.message.includes('permission')) {
-        return {
-          ...user,
-          role: 'staff' as const,
-          name: user.email?.split('@')[0] || 'User',
-          phone: null,
-          company_id: null,
-          employment_contract_date: null,
-          salary_date: null,
-          salary_amount: null,
-          employment_active: true,
-        }
-      }
-      
-      // 다른 에러도 기본값 반환
-      return {
-        ...user,
-        role: 'staff' as const,
-        name: user.email?.split('@')[0] || 'User',
-        phone: null,
-        company_id: null,
-        employment_contract_date: null,
-        salary_date: null,
-        salary_amount: null,
-        employment_active: true,
-      }
-    }
-  
-    if (!data) {
-      return {
-        ...user,
-        role: 'staff' as const,
-        name: user.email?.split('@')[0] || 'User',
-        phone: null,
-        company_id: null,
-        employment_contract_date: null,
-        salary_date: null,
-        salary_amount: null,
-        employment_active: true,
-      }
+    // users 테이블에 행이 없으면 null 반환 (회원가입 직후·complete-signup 미완료 시)
+    // → 앱에서 /auth/complete-signup으로 보내 업체관리자로 설정하게 함. 기본값 'staff' 반환 금지.
+    if (error || !data) {
+      return null
     }
   
     return { ...user, ...data }
