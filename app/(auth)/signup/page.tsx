@@ -34,6 +34,22 @@ export default function SignupPage() {
       return
     }
 
+    // 흔한 도메인 오타 검사 (gmail 등)
+    const domain = email.trim().toLowerCase().split('@')[1] || ''
+    const domainTypoMap: Record<string, string> = {
+      'gamil.com': 'gmail.com',
+      'gmial.com': 'gmail.com',
+      'gmai.com': 'gmail.com',
+      'gnail.com': 'gmail.com',
+    }
+    if (domainTypoMap[domain]) {
+      setEmailValidation({
+        status: 'invalid',
+        message: `도메인 오타로 보입니다. '${domainTypoMap[domain]}'을(를) 사용하시나요?`,
+      })
+      return
+    }
+
     const timer = setTimeout(async () => {
       setEmailValidation({ status: 'validating', message: '이메일을 확인 중...' })
 
@@ -104,7 +120,12 @@ export default function SignupPage() {
         ) {
           throw new Error('이미 가입된 이메일입니다.')
         }
-        throw new Error(signUpError.message || '회원가입에 실패했습니다.')
+        const msg = signUpError.message || '회원가입에 실패했습니다.'
+        // 이메일 형식/유효성 오류 시 실시간 검사 상태도 invalid로 맞춤 (초록 문구 제거)
+        if (signUpError.message?.toLowerCase().includes('invalid') || signUpError.message?.includes('유효')) {
+          setEmailValidation({ status: 'invalid', message: msg })
+        }
+        throw new Error(msg)
       }
 
       if (!signUpData.user) {
