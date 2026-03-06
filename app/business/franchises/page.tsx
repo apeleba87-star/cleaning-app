@@ -54,12 +54,12 @@ export default async function BusinessFranchisesPage() {
   }
 
   return (
-    <div className="max-w-6xl mx-auto">
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-bold">프렌차이즈 관리</h1>
+    <div className="w-full max-w-[96vw] sm:max-w-6xl lg:max-w-6xl xl:max-w-7xl 2xl:max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 xl:px-10 2xl:px-12 py-4 sm:py-6 lg:py-8">
+      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 lg:gap-6 mb-4 sm:mb-6 lg:mb-8">
+        <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-900">프렌차이즈 등록·관리</h1>
         <a
           href="/business/dashboard"
-          className="text-blue-600 hover:text-blue-800 text-sm"
+          className="text-sm lg:text-base text-blue-600 hover:text-blue-800 whitespace-nowrap"
         >
           ← 대시보드로
         </a>

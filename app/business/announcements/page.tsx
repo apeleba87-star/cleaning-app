@@ -141,15 +141,23 @@ export default function AnnouncementsPage() {
   }
 
   return (
-    <div className="max-w-6xl mx-auto p-6">
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-bold">공지사항 관리</h1>
-        <button
-          onClick={() => setShowCreateModal(true)}
-          className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
-        >
-          공지사항 작성
-        </button>
+    <div className="w-full max-w-[96vw] sm:max-w-6xl lg:max-w-6xl xl:max-w-7xl 2xl:max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 xl:px-10 2xl:px-12 py-4 sm:py-6 lg:py-8">
+      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 lg:gap-6 mb-4 sm:mb-6 lg:mb-8">
+        <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-900">공지사항 등록·관리</h1>
+        <div className="flex items-center gap-3 flex-wrap">
+          <a
+            href="/business/dashboard"
+            className="text-sm lg:text-base text-blue-600 hover:text-blue-800 whitespace-nowrap"
+          >
+            ← 대시보드로
+          </a>
+          <button
+            onClick={() => setShowCreateModal(true)}
+            className="px-3 py-1.5 sm:px-4 sm:py-2 lg:px-5 lg:py-2.5 text-sm sm:text-base bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+          >
+            공지사항 작성
+          </button>
+        </div>
       </div>
 
       <div className="space-y-4">

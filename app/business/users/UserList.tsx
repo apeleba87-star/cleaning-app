@@ -63,9 +63,9 @@ export default function UserList({ initialUsers, stores, franchises, userStoreMa
 
   const SortIcon = ({ column }: { column: SortKey }) => {
     if (sortBy !== column) {
-      return <span className="ml-1 text-gray-400">↕</span>
+      return <span className="ml-1 shrink-0 text-gray-400 inline">↕</span>
     }
-    return <span className="ml-1">{sortOrder === 'asc' ? '↑' : '↓'}</span>
+    return <span className="ml-1 shrink-0 inline">{sortOrder === 'asc' ? '↑' : '↓'}</span>
   }
 
   const handleCreate = () => {
@@ -407,11 +407,11 @@ export default function UserList({ initialUsers, stores, franchises, userStoreMa
       {/* 승인 대기 섹션 */}
       <PendingUsersSection stores={stores} onApprove={handleApprovalComplete} />
 
-      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center mb-4 gap-3 sm:gap-4">
+      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center mb-4 lg:mb-6 gap-3 sm:gap-4 lg:gap-6 xl:gap-8">
         <button
           onClick={handleCreate}
           disabled={showForm || showAssign}
-          className={`px-3 py-1.5 sm:px-4 sm:py-2 text-sm sm:text-base rounded-md transition-colors ${
+          className={`shrink-0 px-3 py-1.5 sm:px-4 sm:py-2 lg:px-5 lg:py-2.5 text-sm sm:text-base rounded-md transition-colors ${
             showForm || showAssign
               ? 'bg-gray-400 text-white cursor-not-allowed'
               : 'bg-blue-600 text-white hover:bg-blue-700'
@@ -420,13 +420,13 @@ export default function UserList({ initialUsers, stores, franchises, userStoreMa
         >
           + 새 사용자 초대
         </button>
-        <div className="flex-1 sm:max-w-md">
+        <div className="w-full sm:flex-1 sm:min-w-0 lg:max-w-xl xl:max-w-2xl 2xl:max-w-[28rem]">
           <input
             type="text"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             placeholder="이름, 이메일, 전화번호, 역할, 배정 매장으로 검색..."
-            className="w-full px-3 py-1.5 sm:px-4 sm:py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full px-3 py-1.5 sm:px-4 sm:py-2 lg:px-4 lg:py-2.5 text-sm lg:text-base border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
         </div>
       </div>
@@ -755,54 +755,57 @@ export default function UserList({ initialUsers, stores, franchises, userStoreMa
           )}
         </div>
 
-        {/* 데스크톱: 테이블 형태 */}
-        <div className="hidden sm:block overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200">
+        {/* 데스크톱: 테이블 형태 — sm~2xl 구간 반응형 열 너비·패딩 */}
+        <div className="hidden sm:block overflow-x-auto rounded-b-lg">
+          <table className="w-full min-w-[720px] md:min-w-[800px] lg:min-w-0 lg:table-fixed divide-y divide-gray-200">
+            <colgroup>
+              <col className="w-[10%] md:w-[9%] lg:w-[8%]" />
+              <col className="w-[20%] md:w-[19%] lg:w-[20%]" />
+              <col className="w-[14%] md:w-[14%] lg:w-[14%]" />
+              <col className="w-0 md:w-[12%] lg:w-[12%]" />
+              <col className="w-0 lg:w-[8%]" />
+              <col className="min-w-[120px] md:min-w-[140px] lg:w-[24%]" />
+              <col className="w-[14%] md:w-[14%] lg:w-[14%]" />
+            </colgroup>
             <thead className="bg-gray-50">
               <tr>
                 <th
-                  className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 select-none"
+                  className="px-3 sm:px-4 lg:px-5 xl:px-6 py-3 text-left text-xs lg:text-sm font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 select-none whitespace-nowrap"
                   onClick={() => handleSort('name')}
                 >
-                  이름
-                  <SortIcon column="name" />
+                  <span className="inline-flex items-center">이름<SortIcon column="name" /></span>
                 </th>
                 <th
-                  className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 select-none"
+                  className="px-3 sm:px-4 lg:px-5 xl:px-6 py-3 text-left text-xs lg:text-sm font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 select-none whitespace-nowrap"
                   onClick={() => handleSort('email')}
                 >
-                  이메일
-                  <SortIcon column="email" />
+                  <span className="inline-flex items-center">이메일<SortIcon column="email" /></span>
                 </th>
                 <th
-                  className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 select-none"
+                  className="px-3 sm:px-4 lg:px-5 xl:px-6 py-3 text-left text-xs lg:text-sm font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 select-none whitespace-nowrap"
                   onClick={() => handleSort('role')}
                 >
-                  역할
-                  <SortIcon column="role" />
+                  <span className="inline-flex items-center">역할<SortIcon column="role" /></span>
                 </th>
                 <th
-                  className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider hidden md:table-cell cursor-pointer hover:bg-gray-100 select-none"
+                  className="px-3 sm:px-4 lg:px-5 xl:px-6 py-3 text-left text-xs lg:text-sm font-medium text-gray-500 uppercase tracking-wider hidden md:table-cell cursor-pointer hover:bg-gray-100 select-none whitespace-nowrap"
                   onClick={() => handleSort('phone')}
                 >
-                  전화번호
-                  <SortIcon column="phone" />
+                  <span className="inline-flex items-center">전화번호<SortIcon column="phone" /></span>
                 </th>
                 <th
-                  className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 select-none"
-                  onClick={() => handleSort('assigned_stores')}
-                >
-                  배정 매장
-                  <SortIcon column="assigned_stores" />
-                </th>
-                <th
-                  className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider hidden lg:table-cell cursor-pointer hover:bg-gray-100 select-none"
+                  className="px-3 sm:px-4 lg:px-5 xl:px-6 py-3 text-left text-xs lg:text-sm font-medium text-gray-500 uppercase tracking-wider hidden lg:table-cell cursor-pointer hover:bg-gray-100 select-none whitespace-nowrap"
                   onClick={() => handleSort('employment_active')}
                 >
-                  근무여부
-                  <SortIcon column="employment_active" />
+                  <span className="inline-flex items-center">근무여부<SortIcon column="employment_active" /></span>
                 </th>
-                <th className="px-4 lg:px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th
+                  className="px-3 sm:px-4 lg:px-5 xl:px-6 py-3 text-left text-xs lg:text-sm font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 select-none whitespace-nowrap"
+                  onClick={() => handleSort('assigned_stores')}
+                >
+                  <span className="inline-flex items-center">배정 매장<SortIcon column="assigned_stores" /></span>
+                </th>
+                <th className="px-3 sm:px-4 lg:px-5 xl:px-6 py-3 text-right text-xs lg:text-sm font-medium text-gray-500 uppercase tracking-wider">
                   작업
                 </th>
               </tr>
@@ -810,27 +813,27 @@ export default function UserList({ initialUsers, stores, franchises, userStoreMa
             <tbody className="bg-white divide-y divide-gray-200">
               {desktopUsers.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-4 lg:px-6 py-4 text-center text-gray-500 text-sm">
+                  <td colSpan={7} className="px-3 sm:px-4 lg:px-5 xl:px-6 py-6 lg:py-8 text-center text-gray-500 text-sm lg:text-base">
                     {searchTerm ? '검색 결과가 없습니다.' : '등록된 사용자가 없습니다.'}
                   </td>
                 </tr>
               ) : (
                 desktopUsers.map((user) => (
-                  <tr key={user.id} className="hover:bg-gray-50">
-                    <td className="px-4 lg:px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm font-medium text-gray-900">
+                  <tr key={user.id} className="hover:bg-gray-50 transition-colors">
+                    <td className="px-3 sm:px-4 lg:px-5 xl:px-6 py-3 lg:py-4 whitespace-nowrap">
+                      <div className="text-sm lg:text-base font-medium text-gray-900">
                         {user.name}
                       </div>
                     </td>
-                    <td className="px-4 lg:px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm text-gray-500">
+                    <td className="px-3 sm:px-4 lg:px-5 xl:px-6 py-3 lg:py-4 whitespace-nowrap min-w-0">
+                      <div className="text-sm lg:text-base text-gray-500 truncate max-w-[12rem] lg:max-w-none" title={(user as any).email || undefined}>
                         {(user as any).email || '-'}
                       </div>
                     </td>
-                    <td className="px-4 lg:px-6 py-4">
+                    <td className="px-3 sm:px-4 lg:px-5 xl:px-6 py-3 lg:py-4">
                       <div className="space-y-2">
                         {user.role === 'business_owner' || user.role === 'platform_admin' ? (
-                          <div className="text-sm font-medium text-gray-900">
+                          <div className="text-sm lg:text-base font-medium text-gray-900">
                             {getRoleLabel(user.role)}
                           </div>
                         ) : (
@@ -839,7 +842,7 @@ export default function UserList({ initialUsers, stores, franchises, userStoreMa
                               value={user.role}
                               onChange={(e) => handleRoleChange(user.id, e.target.value as UserRole)}
                               disabled={loading}
-                              className="text-sm border border-gray-300 rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100"
+                              className="text-sm lg:text-base border border-gray-300 rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100 w-full max-w-[10rem] lg:max-w-[11rem]"
                             >
                               <option value="staff">직원</option>
                               {user.role === 'manager' ? <option value="manager">매니저</option> : null}
@@ -853,7 +856,7 @@ export default function UserList({ initialUsers, stores, franchises, userStoreMa
                               <option value="subcontract_company">도급(업체)</option>
                             </select>
                             {user.role === 'franchise_manager' && user.franchise_id && (
-                              <div className="text-xs text-gray-500">
+                              <div className="text-xs lg:text-sm text-gray-500">
                                 {franchises.find(f => f.id === user.franchise_id)?.name || '프렌차이즈 연결됨'}
                               </div>
                             )}
@@ -861,19 +864,34 @@ export default function UserList({ initialUsers, stores, franchises, userStoreMa
                         )}
                       </div>
                     </td>
-                    <td className="px-4 lg:px-6 py-4 whitespace-nowrap hidden md:table-cell">
-                      <div className="text-sm text-gray-500">
+                    <td className="px-3 sm:px-4 lg:px-5 xl:px-6 py-3 lg:py-4 whitespace-nowrap hidden md:table-cell">
+                      <div className="text-sm lg:text-base text-gray-500">
                         {user.phone || '-'}
                       </div>
                     </td>
-                    <td className="px-4 lg:px-6 py-4">
-                      <div className="text-sm text-gray-500">
+                    <td className="px-3 sm:px-4 lg:px-5 xl:px-6 py-3 lg:py-4 whitespace-nowrap hidden lg:table-cell">
+                      <span
+                        className={`inline-flex px-2 py-1 text-xs lg:text-sm font-semibold rounded-full ${
+                          user.employment_active
+                            ? 'bg-green-100 text-green-800'
+                            : 'bg-red-100 text-red-800'
+                        }`}
+                      >
+                        {user.employment_active ? '근무중' : '퇴사'}
+                      </span>
+                    </td>
+                    <td
+                      className="px-3 sm:px-4 lg:px-5 xl:px-6 py-3 lg:py-4"
+                      title={getUserStores(user.id).length > 0 ? getUserStores(user.id).map((s) => s.name).join(', ') : undefined}
+                    >
+                      <div className="text-sm lg:text-base text-gray-500 min-w-0">
                         {getUserStores(user.id).length > 0 ? (
                           <div className="flex flex-wrap gap-1">
                             {getUserStores(user.id).map((store) => (
                               <span
                                 key={store.id}
                                 className="inline-block bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded"
+                                title={store.name}
                               >
                                 {store.name}
                               </span>
@@ -884,19 +902,8 @@ export default function UserList({ initialUsers, stores, franchises, userStoreMa
                         )}
                       </div>
                     </td>
-                    <td className="px-4 lg:px-6 py-4 whitespace-nowrap hidden lg:table-cell">
-                      <span
-                        className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                          user.employment_active
-                            ? 'bg-green-100 text-green-800'
-                            : 'bg-red-100 text-red-800'
-                        }`}
-                      >
-                        {user.employment_active ? '근무중' : '퇴사'}
-                      </span>
-                    </td>
-                    <td className="px-4 lg:px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                      <div className="flex justify-end gap-4">
+                    <td className="px-3 sm:px-4 lg:px-5 xl:px-6 py-3 lg:py-4 whitespace-nowrap text-right text-sm lg:text-base font-medium">
+                      <div className="flex justify-end gap-2 sm:gap-3 lg:gap-4">
                         <button
                           onClick={() => handleEdit(user)}
                           disabled={showCreateForm || (showForm && editingUser?.id !== user.id) || showAssign}
@@ -948,7 +955,7 @@ export default function UserList({ initialUsers, stores, franchises, userStoreMa
         
         {/* 데스크톱 페이지네이션 */}
         {sortedUsers.length > DESKTOP_ITEMS_PER_PAGE && (
-          <div className="hidden sm:flex items-center justify-between border-t border-gray-200 bg-white px-4 py-3">
+          <div className="hidden sm:flex items-center justify-between border-t border-gray-200 bg-white px-3 sm:px-4 lg:px-5 xl:px-6 py-3 lg:py-4">
             <div className="flex flex-1 justify-between sm:hidden">
               <button
                 onClick={() => setDesktopPage(prev => Math.max(1, prev - 1))}
