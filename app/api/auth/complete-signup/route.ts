@@ -36,23 +36,18 @@ export async function POST() {
     }
 
     const meta = (user.user_metadata || {}) as Record<string, unknown>
-    const name = typeof meta.name === 'string' ? meta.name.trim() : ''
-    const company_name = typeof meta.company_name === 'string' ? meta.company_name.trim() : ''
+    const email = typeof user.email === 'string' ? user.email.trim() : ''
+    const nameFromMeta = typeof meta.name === 'string' ? meta.name.trim() : ''
+    const companyNameFromMeta = typeof meta.company_name === 'string' ? meta.company_name.trim() : ''
     const phone = typeof meta.phone === 'string' ? meta.phone.trim() || null : null
     const business_registration_number =
       typeof meta.business_registration_number === 'string'
         ? meta.business_registration_number.trim() || null
         : null
 
-    if (!name || !company_name) {
-      return NextResponse.json(
-        {
-          error:
-            '가입 정보가 없습니다. 이메일 인증 후 회원가입을 다시 진행해 주세요. (이름·회사명 필요)',
-        },
-        { status: 400 }
-      )
-    }
+    // 신규 공개 가입은 무조건 업체관리자로 처리. 메타데이터가 비어 있으면 기본값 사용(트리거로 직원 행이 생긴 경우 대비)
+    const name = nameFromMeta || (email ? email.split('@')[0] : '') || '사용자'
+    const company_name = companyNameFromMeta || (email ? `미등록 업체 (${email})` : '미등록 업체')
 
     const trialEndsAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString()
     // 회사 생성 (default_role: 'staff' = 이후 업체관리자가 초대하는 직원의 기본 역할)

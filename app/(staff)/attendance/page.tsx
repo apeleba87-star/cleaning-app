@@ -62,6 +62,11 @@ export default function AttendancePage() {
   const [error, setError] = useState<string | null>(null)
   const [selectedStoreId, setSelectedStoreId] = useState<string>('')
   const [checklistProgress, setChecklistProgress] = useState<Record<string, { completed: number; total: number; percentage: number }>>({})
+  // 요청란/체크리스트 미완료 건수 (매장별) — 관리종료 버튼 차단용 (대시보드와 동일)
+  const [incompleteChecklists, setIncompleteChecklists] = useState<Record<string, number>>({})
+  const [incompleteRequests, setIncompleteRequests] = useState<Record<string, number>>({})
+  // 금일 수행 미션 남음 경고 (대시보드와 동일 UI)
+  const [pendingMissionWarning, setPendingMissionWarning] = useState<{ storeId: string; checklistCount: number; requestCount: number } | null>(null)
   
   // Context의 refresh 함수 가져오기 (출근/퇴근 후 전역 상태 업데이트용)
   const { refresh: refreshAttendanceContext } = useTodayAttendance()
@@ -129,6 +134,10 @@ export default function AttendancePage() {
   // 관리종료 버튼용: 현재 관리 중인 매장 1개 (퇴근 전)
   const activeAttendance = todayAttendances.find(a => !a.clock_out_at)
   const activeStoreName = activeAttendance ? (activeAttendance as AttendanceWithStore).stores?.name : null
+  // 해당 매장에 미수행 요청란/체크리스트가 있는지 (관리종료 차단용, 대시보드와 동일)
+  const hasPendingMissions = useCallback((storeId: string) => {
+    return (incompleteChecklists[storeId] ?? 0) > 0 || (incompleteRequests[storeId] ?? 0) > 0
+  }, [incompleteChecklists, incompleteRequests])
   // 선택한 매장이 오늘 이미 관리완료된 매장인지 (관리시작 버튼 비활성화용)
   const isSelectedStoreCompletedToday = Boolean(
     selectedStoreId && todayAttendances.some(
@@ -213,6 +222,27 @@ export default function AttendancePage() {
       setChecklistProgress({})
     }
   }, [todayAttendances.length, loadChecklistProgress])
+
+  // 관리 중인 매장이 있을 때 요청란/체크리스트 미완료 건수 로드 (대시보드와 동일 — 관리종료 차단용)
+  useEffect(() => {
+    const clockedIn = todayAttendances.filter(a => !a.clock_out_at)
+    if (clockedIn.length === 0) {
+      setIncompleteChecklists({})
+      setIncompleteRequests({})
+      setPendingMissionWarning(null)
+      return
+    }
+    let cancelled = false
+    fetch('/api/staff/checklist-progress')
+      .then(res => res.json())
+      .then(json => {
+        if (cancelled || !json?.success || !json?.data) return
+        setIncompleteChecklists(json.data.incompleteChecklists || {})
+        setIncompleteRequests(json.data.incompleteRequests || {})
+      })
+      .catch(() => {})
+    return () => { cancelled = true }
+  }, [todayAttendances])
 
   // 체크리스트 업데이트 이벤트 리스너
   useEffect(() => {
@@ -364,8 +394,18 @@ export default function AttendancePage() {
       return
     }
 
-    setSubmitting(true)
+    // 대시보드와 동일: 요청란/체크리스트 미수행이 있으면 관리종료 불가
+    const checklistCount = incompleteChecklists[storeId] ?? 0
+    const requestCount = incompleteRequests[storeId] ?? 0
+    if (checklistCount > 0 || requestCount > 0) {
+      setPendingMissionWarning({ storeId, checklistCount, requestCount })
+      setError('금일 수행 미션이 남아 있습니다. 체크리스트와 요청란을 완료한 뒤 관리종료해 주세요.')
+      return
+    }
+    setPendingMissionWarning(null)
     setError(null)
+
+    setSubmitting(true)
 
     // 낙관적 업데이트: 퇴근 시간 즉시 반영
     const clockOutTime = new Date().toISOString()
@@ -384,6 +424,7 @@ export default function AttendancePage() {
       if (result.success && result.data) {
         console.log('Clock-out successful:', result.data)
         setError(null)
+        setPendingMissionWarning(null)
         const storeName = (todayAttendances.find(a => a.store_id === storeId) as AttendanceWithStore)?.stores?.name
         showToast(`${storeName || '매장'} 관리가 완료되었습니다.`, 'success')
 
@@ -527,20 +568,47 @@ export default function AttendancePage() {
               </p>
             )}
             {hasActiveAttendance && activeAttendance && (
-              <button
-                onClick={() => handleClockOut(activeAttendance.store_id)}
-                disabled={!location || submitting}
-                className="w-full mt-4 px-4 py-3 min-h-[44px] bg-red-600 text-white rounded-md hover:bg-red-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors font-medium flex items-center justify-center gap-2 touch-manipulation text-base"
-              >
-                {submitting ? (
-                  <>
-                    <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white" />
-                    <span>처리 중...</span>
-                  </>
-                ) : (
-                  activeStoreName ? `${activeStoreName} 관리종료` : '관리종료'
+              <>
+                {pendingMissionWarning && pendingMissionWarning.storeId === activeAttendance.store_id && (
+                  <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded-md text-yellow-800 text-sm">
+                    <p className="font-medium mb-1">금일 수행 미션이 남아 있습니다</p>
+                    <div className="space-y-0.5 text-xs text-yellow-700">
+                      {pendingMissionWarning.checklistCount > 0 && (
+                        <p>- 체크리스트 {pendingMissionWarning.checklistCount}건</p>
+                      )}
+                      {pendingMissionWarning.requestCount > 0 && (
+                        <p>- 요청란 {pendingMissionWarning.requestCount}건</p>
+                      )}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => { setPendingMissionWarning(null); setError(null); }}
+                      className="mt-2 px-3 py-1 bg-yellow-200 text-yellow-800 rounded text-xs hover:bg-yellow-300"
+                    >
+                      확인
+                    </button>
+                  </div>
                 )}
-              </button>
+                {hasPendingMissions(activeAttendance.store_id) && !pendingMissionWarning && (
+                  <p className="mt-2 text-sm text-amber-600">
+                    체크리스트와 요청란을 모두 완료한 뒤 관리종료할 수 있습니다.
+                  </p>
+                )}
+                <button
+                  onClick={() => handleClockOut(activeAttendance.store_id)}
+                  disabled={!location || submitting || hasPendingMissions(activeAttendance.store_id)}
+                  className="w-full mt-4 px-4 py-3 min-h-[44px] bg-red-600 text-white rounded-md hover:bg-red-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors font-medium flex items-center justify-center gap-2 touch-manipulation text-base"
+                >
+                  {submitting ? (
+                    <>
+                      <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white" />
+                      <span>처리 중...</span>
+                    </>
+                  ) : (
+                    activeStoreName ? `${activeStoreName} 관리종료` : '관리종료'
+                  )}
+                </button>
+              </>
             )}
             {isSelectedStoreCompletedToday && (
               <p className="mt-2 text-sm text-gray-600 bg-gray-100 px-3 py-2 rounded-md">
@@ -771,7 +839,7 @@ export default function AttendancePage() {
                     {!attendance.clock_out_at && (
                       <button
                         onClick={() => handleClockOut(attendance.store_id)}
-                        disabled={!location || submitting}
+                        disabled={!location || submitting || hasPendingMissions(attendance.store_id)}
                         className="flex-shrink-0 ml-2 px-3 md:px-4 py-2 min-h-[44px] bg-red-600 text-white rounded-md hover:bg-red-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors font-medium text-xs md:text-sm whitespace-nowrap flex items-center justify-center gap-2 touch-manipulation"
                       >
                         {submitting ? (
