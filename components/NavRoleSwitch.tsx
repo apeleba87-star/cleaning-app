@@ -192,6 +192,7 @@ export function NavRoleSwitch({
             items: [
               { href: '/business/stores', label: '매장 등록/관리', feature: 'stores' },
               { href: '/business/stores/status', label: '매장 상태', feature: 'stores_status' },
+              { href: '/business/average-management-time', label: '평균 관리시간', feature: 'stores_status' },
               { href: '/business/attendance-report', label: '미관리 매장 확인', feature: 'attendance_report' },
               { href: '/business/franchises', label: '프렌차이즈 등록/관리', feature: 'franchises' },
             ],
