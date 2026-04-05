@@ -1,6 +1,11 @@
 import { NextRequest } from 'next/server'
 import { createServerSupabaseClient, getServerUser } from '@/lib/supabase/server'
 import { handleApiError, UnauthorizedError, ForbiddenError } from '@/lib/errors'
+import {
+  RateLimitPresets,
+  rateLimitHit,
+  rateLimitResponse,
+} from '@/lib/rate-limit'
 import { calculateChecklistProgress } from '@/lib/utils/checklist'
 import { createClient } from '@supabase/supabase-js'
 import { getTodayDateKST, getCurrentHourKST, isWithinManagementPeriod, calculateWorkDateForNightShift, isManagementDay } from '@/lib/utils/date'
@@ -878,6 +883,16 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url)
     const forceRefresh = searchParams.get('refresh') === 'true'
     const forDashboard = searchParams.get('for_dashboard') === '1' || searchParams.get('for_dashboard') === 'true'
+
+    if (forceRefresh) {
+      const rl = rateLimitHit(
+        `store-status-refresh:${user.company_id}`,
+        RateLimitPresets.heavyRefreshPerCompany
+      )
+      if (rl.ok === false) {
+        return rateLimitResponse(rl.retryAfterSec)
+      }
+    }
 
     // 캐시 키 생성 (company_id + 대시보드 여부별 분리)
     const cacheKey = `store-status-${user.company_id}-${forDashboard ? 'dashboard' : 'full'}`

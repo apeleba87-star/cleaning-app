@@ -1,9 +1,18 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
+
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+
+const DOMAIN_TYPO_MAP: Record<string, string> = {
+  'gamil.com': 'gmail.com',
+  'gmial.com': 'gmail.com',
+  'gmai.com': 'gmail.com',
+  'gnail.com': 'gmail.com',
+}
 
 export default function SignupPage() {
   const [companyName, setCompanyName] = useState('')
@@ -15,69 +24,29 @@ export default function SignupPage() {
   const [phone, setPhone] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [emailValidation, setEmailValidation] = useState<{
-    status: 'idle' | 'validating' | 'valid' | 'invalid'
-    message: string
-  }>({ status: 'idle', message: '' })
   const router = useRouter()
 
-  // 이메일 중복 확인 (디바운스)
-  useEffect(() => {
-    if (!email || email.trim().length === 0) {
-      setEmailValidation({ status: 'idle', message: '' })
-      return
+  const emailHint = useMemo(() => {
+    const trimmed = email.trim()
+    if (!trimmed) return { kind: 'idle' as const, text: '' }
+    if (!EMAIL_REGEX.test(trimmed)) {
+      return { kind: 'invalid' as const, text: '올바른 이메일 형식이 아닙니다.' }
     }
-
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-    if (!emailRegex.test(email.trim())) {
-      setEmailValidation({ status: 'invalid', message: '올바른 이메일 형식이 아닙니다.' })
-      return
-    }
-
-    // 흔한 도메인 오타 검사 (gmail 등)
-    const domain = email.trim().toLowerCase().split('@')[1] || ''
-    const domainTypoMap: Record<string, string> = {
-      'gamil.com': 'gmail.com',
-      'gmial.com': 'gmail.com',
-      'gmai.com': 'gmail.com',
-      'gnail.com': 'gmail.com',
-    }
-    if (domainTypoMap[domain]) {
-      setEmailValidation({
-        status: 'invalid',
-        message: `도메인 오타로 보입니다. '${domainTypoMap[domain]}'을(를) 사용하시나요?`,
-      })
-      return
-    }
-
-    const timer = setTimeout(async () => {
-      setEmailValidation({ status: 'validating', message: '이메일을 확인 중...' })
-
-      try {
-        const response = await fetch(`/api/auth/check-email?email=${encodeURIComponent(email.trim())}`)
-        const data = await response.json()
-
-        if (response.ok && data.available) {
-          setEmailValidation({
-            status: 'valid',
-            message: '사용 가능한 이메일입니다.',
-          })
-        } else {
-          setEmailValidation({
-            status: 'invalid',
-            message: data.error || data.message || '이미 가입된 이메일입니다.',
-          })
-        }
-      } catch {
-        setEmailValidation({
-          status: 'invalid',
-          message: '이메일 확인 중 오류가 발생했습니다.',
-        })
+    const domain = trimmed.toLowerCase().split('@')[1] || ''
+    if (DOMAIN_TYPO_MAP[domain]) {
+      return {
+        kind: 'invalid' as const,
+        text: `도메인 오타로 보입니다. '${DOMAIN_TYPO_MAP[domain]}'을(를) 사용하시나요?`,
       }
-    }, 400)
-
-    return () => clearTimeout(timer)
+    }
+    return {
+      kind: 'info' as const,
+      text: '가입하기를 누르면 이메일 중복 여부가 확인됩니다.',
+    }
   }, [email])
+
+  const canSubmit =
+    EMAIL_REGEX.test(email.trim()) && emailHint.kind !== 'invalid' && !loading
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -91,9 +60,8 @@ export default function SignupPage() {
       return
     }
 
-    // 이메일 중복 확인 상태
-    if (emailValidation.status !== 'valid') {
-      setError('사용 가능한 이메일을 입력해주세요.')
+    if (!EMAIL_REGEX.test(email.trim()) || emailHint.kind === 'invalid') {
+      setError('올바른 이메일을 입력해주세요.')
       setLoading(false)
       return
     }
@@ -122,9 +90,6 @@ export default function SignupPage() {
         }
         const msg = signUpError.message || '회원가입에 실패했습니다.'
         // 이메일 형식/유효성 오류 시 실시간 검사 상태도 invalid로 맞춤 (초록 문구 제거)
-        if (signUpError.message?.toLowerCase().includes('invalid') || signUpError.message?.includes('유효')) {
-          setEmailValidation({ status: 'invalid', message: msg })
-        }
         throw new Error(msg)
       }
 
@@ -136,6 +101,7 @@ export default function SignupPage() {
     } catch (err: any) {
       console.error('Signup error:', err)
       setError(err.message || '회원가입 중 오류가 발생했습니다.')
+    } finally {
       setLoading(false)
     }
   }
@@ -211,25 +177,25 @@ export default function SignupPage() {
               required
               placeholder="이메일을 입력하세요"
               className={`w-full px-4 py-3 border-2 rounded-md focus:outline-none focus:ring-2 ${
-                emailValidation.status === 'valid'
-                  ? 'border-green-500 focus:border-green-500 focus:ring-green-200'
-                  : emailValidation.status === 'invalid'
+                emailHint.kind === 'invalid'
                   ? 'border-red-500 focus:border-red-500 focus:ring-red-200'
+                  : emailHint.kind === 'info'
+                  ? 'border-gray-300 focus:border-blue-500 focus:ring-blue-200'
                   : 'border-gray-300 focus:border-blue-500 focus:ring-blue-200'
               }`}
               autoComplete="email"
             />
-            {emailValidation.message && (
+            {emailHint.text && (
               <p
                 className={`text-sm ${
-                  emailValidation.status === 'valid'
-                    ? 'text-green-600'
-                    : emailValidation.status === 'invalid'
+                  emailHint.kind === 'invalid'
                     ? 'text-red-600'
-                    : 'text-gray-600'
+                    : emailHint.kind === 'info'
+                    ? 'text-gray-600'
+                    : 'text-gray-500'
                 }`}
               >
-                {emailValidation.message}
+                {emailHint.text}
               </p>
             )}
           </div>
@@ -286,7 +252,7 @@ export default function SignupPage() {
           <div className="pt-2">
             <button
               type="submit"
-              disabled={loading || emailValidation.status !== 'valid'}
+              disabled={!canSubmit}
               className="w-full px-4 py-3 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors font-medium text-base"
             >
               {loading ? '가입 중...' : '가입하기'}

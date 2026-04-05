@@ -1,8 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { authEmailExists } from '@/lib/auth-email-exists'
+import {
+  RateLimitPresets,
+  getClientIp,
+  rateLimitHit,
+  rateLimitResponse,
+} from '@/lib/rate-limit'
 
 export async function POST(request: NextRequest) {
   try {
+    const ip = getClientIp(request)
+    const rl = rateLimitHit(`signup:${ip}`, RateLimitPresets.anonymousSignup)
+    if (rl.ok === false) {
+      return rateLimitResponse(rl.retryAfterSec)
+    }
+
     const body = await request.json()
     const {
       email,
@@ -69,35 +82,18 @@ export async function POST(request: NextRequest) {
       },
     })
 
-    // 이메일 중복 사전 체크 (listUsers는 기본 50명만 반환하므로 페이지네이션)
     const normalizedEmail = email.trim().toLowerCase()
-    const perPage = 1000
-    const maxPages = 50
-    let page = 1
-    let hasDuplicateEmail = false
-
-    while (page <= maxPages) {
-      const { data: existingUsers, error: listError } = await adminSupabase.auth.admin.listUsers({
-        page,
-        perPage,
-      })
-      if (listError) {
-        console.error('Error checking duplicate email:', listError)
-        return NextResponse.json(
-          { error: '이메일 확인 중 오류가 발생했습니다.' },
-          { status: 500 }
-        )
-      }
-      const users = existingUsers?.users ?? []
-      if (users.some((u) => (u.email ?? '').toLowerCase() === normalizedEmail)) {
-        hasDuplicateEmail = true
-        break
-      }
-      if (users.length < perPage) break
-      page += 1
+    const { exists: emailTaken, error: dupCheckError } = await authEmailExists(
+      adminSupabase,
+      normalizedEmail
+    )
+    if (dupCheckError) {
+      return NextResponse.json(
+        { error: dupCheckError },
+        { status: 503 }
+      )
     }
-
-    if (hasDuplicateEmail) {
+    if (emailTaken) {
       return NextResponse.json(
         { error: '이미 가입된 이메일입니다.' },
         { status: 400 }

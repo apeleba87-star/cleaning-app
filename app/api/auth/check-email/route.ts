@@ -1,8 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { authEmailExists } from '@/lib/auth-email-exists'
+import {
+  RateLimitPresets,
+  getClientIp,
+  rateLimitHit,
+  rateLimitResponse,
+} from '@/lib/rate-limit'
 
 export async function GET(request: NextRequest) {
   try {
+    const ip = getClientIp(request)
+    const rl = rateLimitHit(`check-email:${ip}`, RateLimitPresets.anonymousPublic)
+    if (rl.ok === false) {
+      return rateLimitResponse(rl.retryAfterSec)
+    }
+
     const email = request.nextUrl.searchParams.get('email')?.trim() || ''
 
     if (!email) {
@@ -37,33 +50,12 @@ export async function GET(request: NextRequest) {
       },
     })
 
-    const normalizedEmail = email.toLowerCase()
-    const perPage = 1000
-    const maxPages = 50
-    let page = 1
-    let exists = false
-
-    while (page <= maxPages) {
-      const { data: authUsersData, error } = await adminSupabase.auth.admin.listUsers({
-        page,
-        perPage,
-      })
-
-      if (error) {
-        console.error('Error checking duplicate email:', error)
-        return NextResponse.json(
-          { available: false, error: '이메일 중복 확인에 실패했습니다.' },
-          { status: 500 }
-        )
-      }
-
-      const users = authUsersData?.users ?? []
-      if (users.some((u) => (u.email ?? '').toLowerCase() === normalizedEmail)) {
-        exists = true
-        break
-      }
-      if (users.length < perPage) break
-      page += 1
+    const { exists, error } = await authEmailExists(adminSupabase, email)
+    if (error) {
+      return NextResponse.json(
+        { available: false, error },
+        { status: 503 }
+      )
     }
 
     return NextResponse.json({
