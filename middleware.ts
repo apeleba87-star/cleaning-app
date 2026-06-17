@@ -52,6 +52,26 @@ export async function middleware(request: NextRequest) {
   } = await supabase.auth.getUser()
 
   const pathname = request.nextUrl.pathname
+  const isV2App =
+    pathname.startsWith('/v2') ||
+    pathname.startsWith('/v2-store-manager') ||
+    pathname.startsWith('/api/v2')
+
+  // V2: Auth만 공유. V1 users/trial/session PATCH 미적용 (속도·비용)
+  if (isV2App) {
+    if (!user) {
+      const isApi = pathname.startsWith('/api/v2')
+      if (isApi) {
+        return NextResponse.json({ error: '로그인이 필요합니다.' }, { status: 401 })
+      }
+      if (!pathname.startsWith('/login')) {
+        const login = new URL('/login', request.url)
+        login.searchParams.set('next', pathname)
+        return NextResponse.redirect(login)
+      }
+    }
+    return supabaseResponse
+  }
 
   // 사용자가 있고, 동시 접속 제한이 필요한 역할인 경우 세션 갱신
   if (user) {

@@ -55,6 +55,18 @@ export default function LoginPage() {
         setError(errorMessage)
         setLoading(false)
       } else if (data.session) {
+        const nextUrl =
+          typeof window !== 'undefined'
+            ? new URLSearchParams(window.location.search).get('next')
+            : null
+        const isV2Login = nextUrl?.startsWith('/v2') || nextUrl?.startsWith('/v2-store-manager')
+
+        if (isV2Login && nextUrl) {
+          router.refresh()
+          window.location.href = nextUrl
+          return
+        }
+
         let { data: userData, error: userError } = await supabase
           .from('users')
           .select('approval_status, rejection_reason, role, company_id')
@@ -276,9 +288,12 @@ export default function LoginPage() {
             {loading ? '로그인 중...' : '로그인'}
           </button>
         </form>
-        <div className="mt-4 text-center text-sm">
-          <Link href="/signup" className="text-blue-600 hover:text-blue-800">
+        <div className="mt-4 text-center text-sm space-y-2">
+          <Link href="/signup" className="text-blue-600 hover:text-blue-800 block">
             계정이 없으신가요? 회원가입
+          </Link>
+          <Link href="/login?next=/v2" className="text-emerald-700 hover:text-emerald-900 block font-medium">
+            무플 V2 (무료) 시작하기 →
           </Link>
         </div>
       </div>

@@ -39,21 +39,43 @@ export default async function BusinessUsersPage() {
     usersError = queryError
   } else {
     users = usersData || []
-    if (adminSupabase) {
+
+    // auth.admin.listUsers() 1회 호출은 페이지 단위 결과만 반환되어
+    // 일부 사용자의 이메일이 누락될 수 있어, 현재 화면의 user.id 기준으로 직접 조회합니다.
+    if (adminSupabase && users.length > 0) {
       try {
-        const { data: authUsersData, error: authError } = await adminSupabase.auth.admin.listUsers()
-        if (!authError && authUsersData?.users) {
-          const emailMap = new Map<string, string>()
-          authUsersData.users.forEach((authUser: any) => {
-            if (authUser.email) emailMap.set(authUser.id, authUser.email)
+        const userIds = Array.from(
+          new Set(
+            users
+              .map((u: any) => u.id)
+              .filter((id: any): id is string => typeof id === 'string' && id.length > 0)
+          )
+        )
+
+        const emailMap = new Map<string, string>()
+        const BATCH_SIZE = 10
+
+        for (let i = 0; i < userIds.length; i += BATCH_SIZE) {
+          const batch = userIds.slice(i, i + BATCH_SIZE)
+          const results = await Promise.all(
+            batch.map((id) => adminSupabase.auth.admin.getUserById(id))
+          )
+
+          results.forEach((result, idx) => {
+            if (result.error) return
+            const authUser = result.data.user
+            if (authUser?.email) {
+              emailMap.set(batch[idx], authUser.email)
+            }
           })
-          users = users.map((u: any) => ({
-            ...u,
-            email: emailMap.get(u.id) || null,
-          }))
         }
+
+        users = users.map((u: any) => ({
+          ...u,
+          email: emailMap.get(u.id) || null,
+        }))
       } catch (authErr) {
-        console.error('Error fetching auth users:', authErr)
+        console.error('Error fetching auth user emails:', authErr)
       }
     }
   }
