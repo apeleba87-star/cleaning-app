@@ -266,7 +266,6 @@ export default function CleaningEstimateCalculator() {
 
   const shareUrl = typeof window !== 'undefined' ? window.location.href : ''
   const shareMessage = '[내 단가 전략 점검 완료] 업계 평균 기준, 당신은 어디에 있나요?'
-  const shareTitle = shareMessage
   const shareText = shareMessage
   /** 모바일 기기에서만 공유 허용 (UA + 뷰포트 + 실제 화면 너비, 카카오톡 인앱 대응) */
   const [isLikelyMobile, setIsLikelyMobile] = useState(false)
@@ -343,7 +342,6 @@ export default function CleaningEstimateCalculator() {
     try {
       if (hasNativeShare) {
         await navigator.share({
-          title: shareTitle,
           text: shareText,
           url: shareUrl,
         })
@@ -376,7 +374,6 @@ export default function CleaningEstimateCalculator() {
     setDailyLimitReached(false)
     try {
       await navigator.share({
-        title: shareTitle,
         text: shareText,
         url: shareUrl,
       })

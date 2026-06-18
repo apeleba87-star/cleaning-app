@@ -40,6 +40,29 @@ export async function POST(request: Request) {
     await assertV2StoreAccess(user, body.store_id)
 
     const client = getV2AdminClient()
+    const { data: existing } = await client
+      .from('v2_checklist_templates')
+      .select('id')
+      .eq('store_id', body.store_id)
+      .order('created_at', { ascending: true })
+      .limit(1)
+      .maybeSingle()
+
+    if (existing) {
+      const { data, error } = await client
+        .from('v2_checklist_templates')
+        .update({
+          title: body.title || '기본 체크리스트',
+          items: body.items || [],
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', existing.id)
+        .select()
+        .single()
+      if (error) throw error
+      return v2Json({ template: data })
+    }
+
     const { data, error } = await client
       .from('v2_checklist_templates')
       .insert({

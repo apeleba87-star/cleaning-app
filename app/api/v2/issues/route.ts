@@ -27,7 +27,7 @@ export async function GET(request: Request) {
       q = q.eq('store_id', storeId)
     } else if (user.role === 'business_owner' && user.company_id) {
       q = q.eq('company_id', user.company_id)
-    } else if (user.role === 'store_manager') {
+    } else if (user.role === 'store_manager' || user.role === 'staff') {
       const { data: assigns } = await client
         .from('v2_store_assignments')
         .select('store_id')
@@ -52,7 +52,17 @@ export async function POST(request: Request) {
     if (!user) throw new V2UnauthorizedError()
 
     const body = await request.json()
-    const { store_id, title, description, issue_type, needs_approval } = body
+    const {
+      store_id,
+      title,
+      description,
+      issue_type,
+      needs_approval,
+      item_name,
+      requested_quantity,
+      urgency,
+      resolution_type,
+    } = body
     if (!store_id || !title?.trim()) throw new V2ApiError('매장과 제목이 필요합니다.')
 
     const { company_id } = await assertV2StoreAccess(user, store_id)
@@ -60,20 +70,38 @@ export async function POST(request: Request) {
 
     const status = needs_approval ? 'pending' : 'approved'
 
-    const { data, error } = await client
+    const payload = {
+      store_id,
+      company_id,
+      created_by: user.id,
+      title: title.trim(),
+      description: description?.trim() || null,
+      issue_type: issue_type || 'problem',
+      needs_approval: !!needs_approval,
+      status,
+      item_name: item_name?.trim() || null,
+      requested_quantity: requested_quantity?.trim() || null,
+      urgency: urgency || 'normal',
+      resolution_type: resolution_type || null,
+    }
+
+    let { data, error } = await client
       .from('v2_store_issues')
-      .insert({
-        store_id,
-        company_id,
-        created_by: user.id,
-        title: title.trim(),
-        description: description?.trim() || null,
-        issue_type: issue_type || 'problem',
-        needs_approval: !!needs_approval,
-        status,
-      })
+      .insert(payload)
       .select()
       .single()
+
+    if ((error as any)?.code === '42703') {
+      const { item_name, requested_quantity, urgency, resolution_type, ...legacyPayload } = payload
+      const retry = await client
+        .from('v2_store_issues')
+        .insert(legacyPayload)
+        .select()
+        .single()
+      data = retry.data
+      error = retry.error
+    }
+
     if (error) throw error
 
     await client.from('v2_issue_events').insert({

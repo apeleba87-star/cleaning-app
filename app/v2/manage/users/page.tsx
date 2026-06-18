@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { v2Fetch } from '@/lib/v2/client'
+import { v2Fetch, v2GetCached, v2InvalidateCache } from '@/lib/v2/client'
 
 export default function V2ManageUsersPage() {
   const [users, setUsers] = useState<any[]>([])
@@ -13,8 +13,8 @@ export default function V2ManageUsersPage() {
   const [storeIds, setStoreIds] = useState<string[]>([])
 
   const load = () => {
-    v2Fetch<{ users: any[] }>('/api/v2/users').then((d) => setUsers(d.users || []))
-    v2Fetch<{ stores: any[] }>('/api/v2/stores').then((d) => setStores(d.stores || []))
+    v2GetCached<{ users: any[] }>('/api/v2/users', 60_000).then((d) => setUsers(d.users || []))
+    v2GetCached<{ stores: any[] }>('/api/v2/stores', 60_000).then((d) => setStores(d.stores || []))
   }
 
   useEffect(() => {
@@ -28,6 +28,7 @@ export default function V2ManageUsersPage() {
         method: 'POST',
         body: JSON.stringify({ email, password, name, role, store_ids: storeIds }),
       })
+      v2InvalidateCache('/api/v2/users')
       setEmail('')
       setPassword('')
       setName('')

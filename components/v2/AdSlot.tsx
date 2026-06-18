@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
+import { v2GetCached } from '@/lib/v2/client'
 import type { V2AdPayload } from '@/types/v2'
 
 type AdSlotProps = {
@@ -17,14 +18,16 @@ export default function V2AdSlot({ slot, className = '', forcedDelaySeconds = 0 
 
   useEffect(() => {
     let cancelled = false
-    fetch(`/api/v2/ads?slot=${encodeURIComponent(slot)}`)
-      .then((r) => r.json())
-      .then((d) => {
-        if (!cancelled) setAd(d.ad || null)
-      })
-      .catch(() => {})
+    const timer = window.setTimeout(() => {
+      v2GetCached<{ ad: V2AdPayload | null }>(`/api/v2/ads?slot=${encodeURIComponent(slot)}`, 60_000)
+        .then((d) => {
+          if (!cancelled) setAd(d.ad || null)
+        })
+        .catch(() => {})
+    }, 400)
     return () => {
       cancelled = true
+      window.clearTimeout(timer)
     }
   }, [slot])
 

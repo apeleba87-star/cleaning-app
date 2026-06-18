@@ -65,6 +65,8 @@ CREATE TABLE IF NOT EXISTS v2_stores (
   company_id UUID NOT NULL REFERENCES v2_companies(id) ON DELETE CASCADE,
   name TEXT NOT NULL,
   address TEXT,
+  region_sido TEXT,
+  region_sigungu TEXT,
   management_days TEXT,
   is_night_shift BOOLEAN NOT NULL DEFAULT false,
   work_start_hour INT NOT NULL DEFAULT 18,
@@ -76,6 +78,7 @@ CREATE TABLE IF NOT EXISTS v2_stores (
 );
 
 CREATE INDEX IF NOT EXISTS idx_v2_stores_company ON v2_stores(company_id) WHERE deleted_at IS NULL;
+CREATE INDEX IF NOT EXISTS idx_v2_stores_region ON v2_stores(region_sido, region_sigungu) WHERE deleted_at IS NULL;
 
 CREATE TABLE IF NOT EXISTS v2_store_assignments (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -159,12 +162,20 @@ CREATE TABLE IF NOT EXISTS v2_photo_assets (
   store_id UUID NOT NULL REFERENCES v2_stores(id) ON DELETE CASCADE,
   checklist_run_id UUID REFERENCES v2_checklist_runs(id) ON DELETE SET NULL,
   issue_id UUID,
+  user_id UUID REFERENCES v2_users(id) ON DELETE SET NULL,
+  work_date DATE,
   kind TEXT NOT NULL DEFAULT 'after',
   storage_path TEXT NOT NULL,
   thumb_path TEXT,
   size_bytes INT,
+  memo TEXT,
+  upload_status TEXT NOT NULL DEFAULT 'uploaded',
+  client_created_at TIMESTAMPTZ,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+CREATE INDEX IF NOT EXISTS idx_v2_photos_store_date ON v2_photo_assets(store_id, work_date, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_v2_photos_issue ON v2_photo_assets(issue_id) WHERE issue_id IS NOT NULL;
 
 -- ---------------------------------------------------------------------------
 -- Issues
@@ -177,6 +188,10 @@ CREATE TABLE IF NOT EXISTS v2_store_issues (
   issue_type v2_issue_type NOT NULL DEFAULT 'problem',
   title TEXT NOT NULL,
   description TEXT,
+  item_name TEXT,
+  requested_quantity TEXT,
+  urgency TEXT NOT NULL DEFAULT 'normal',
+  resolution_type TEXT,
   status v2_issue_status NOT NULL DEFAULT 'pending',
   needs_approval BOOLEAN NOT NULL DEFAULT false,
   acknowledged_by UUID REFERENCES v2_users(id),

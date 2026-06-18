@@ -14,17 +14,32 @@ export async function GET() {
     requireV2Role(user, ['business_owner', 'platform_admin'])
 
     const client = getV2AdminClient()
-    let q = client
-      .from('v2_stores')
-      .select('id, name, address, management_days, is_night_shift, service_active, created_at')
-      .is('deleted_at', null)
-      .order('name')
+    const buildQuery = (select: string) => {
+      let q = client
+        .from('v2_stores')
+        .select(select)
+        .is('deleted_at', null)
+        .order('name')
 
-    if (user.role !== 'platform_admin' && user.company_id) {
-      q = q.eq('company_id', user.company_id)
+      if (user.role !== 'platform_admin' && user.company_id) {
+        q = q.eq('company_id', user.company_id)
+      }
+
+      return q
     }
 
-    const { data, error } = await q
+    let { data, error } = await buildQuery(
+      'id, name, address, region_sido, region_sigungu, management_days, is_night_shift, service_active, created_at'
+    )
+
+    if ((error as any)?.code === '42703') {
+      const retry = await buildQuery(
+        'id, name, address, management_days, is_night_shift, service_active, created_at'
+      )
+      data = retry.data
+      error = retry.error
+    }
+
     if (error) throw error
     return v2Json({ stores: data || [] })
   } catch (e) {
@@ -42,20 +57,35 @@ export async function POST(request: Request) {
     const body = await request.json()
     const client = getV2AdminClient()
 
-    const { data, error } = await client
+    const payload = {
+      company_id: user.company_id,
+      name: body.name?.trim(),
+      address: body.address?.trim() || null,
+      region_sido: body.region_sido?.trim() || null,
+      region_sigungu: body.region_sigungu?.trim() || null,
+      management_days: body.management_days || null,
+      is_night_shift: !!body.is_night_shift,
+      work_start_hour: body.work_start_hour ?? 18,
+      work_end_hour: body.work_end_hour ?? 8,
+      service_active: body.service_active !== false,
+    }
+
+    let { data, error } = await client
       .from('v2_stores')
-      .insert({
-        company_id: user.company_id,
-        name: body.name?.trim(),
-        address: body.address?.trim() || null,
-        management_days: body.management_days || null,
-        is_night_shift: !!body.is_night_shift,
-        work_start_hour: body.work_start_hour ?? 18,
-        work_end_hour: body.work_end_hour ?? 8,
-        service_active: body.service_active !== false,
-      })
+      .insert(payload)
       .select()
       .single()
+
+    if ((error as any)?.code === '42703') {
+      const { region_sido, region_sigungu, ...legacyPayload } = payload
+      const retry = await client
+        .from('v2_stores')
+        .insert(legacyPayload)
+        .select()
+        .single()
+      data = retry.data
+      error = retry.error
+    }
 
     if (error) throw error
 

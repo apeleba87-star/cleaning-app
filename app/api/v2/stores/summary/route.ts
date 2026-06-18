@@ -27,30 +27,36 @@ export async function GET() {
     }
 
     const { data: stores } = await storeQuery
+    const storeIds = (stores || []).map((store) => store.id)
 
-    const summaries = await Promise.all(
-      (stores || []).map(async (store) => {
-        const [{ count: att }, { count: issues }] = await Promise.all([
+    const [attendanceResult, issuesResult] = storeIds.length
+      ? await Promise.all([
           client
             .from('v2_attendance')
-            .select('id', { count: 'exact', head: true })
-            .eq('store_id', store.id)
+            .select('store_id')
+            .in('store_id', storeIds)
             .eq('work_date', today),
           client
             .from('v2_store_issues')
-            .select('id', { count: 'exact', head: true })
-            .eq('store_id', store.id)
+            .select('store_id')
+            .in('store_id', storeIds)
             .in('status', ['pending', 'approved']),
         ])
-        return {
-          id: store.id,
-          name: store.name,
-          service_active: store.service_active,
-          clocked_in_today: (att || 0) > 0,
-          open_issues: issues || 0,
-        }
-      })
-    )
+      : [{ data: [] }, { data: [] }]
+
+    const clockedStoreIds = new Set((attendanceResult.data || []).map((row) => row.store_id))
+    const openIssueCountByStore = new Map<string, number>()
+    for (const row of issuesResult.data || []) {
+      openIssueCountByStore.set(row.store_id, (openIssueCountByStore.get(row.store_id) || 0) + 1)
+    }
+
+    const summaries = (stores || []).map((store) => ({
+      id: store.id,
+      name: store.name,
+      service_active: store.service_active,
+      clocked_in_today: clockedStoreIds.has(store.id),
+      open_issues: openIssueCountByStore.get(store.id) || 0,
+    }))
 
     return v2Json({ stores: summaries, date: today })
   } catch (e) {

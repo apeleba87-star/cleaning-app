@@ -1,13 +1,13 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { v2Fetch } from '@/lib/v2/client'
+import { v2Fetch, v2GetCached, v2InvalidateCache } from '@/lib/v2/client'
 
 export default function V2ManageIssuesPage() {
   const [issues, setIssues] = useState<any[]>([])
 
   const load = () => {
-    v2Fetch<{ issues: any[] }>('/api/v2/issues').then((d) => setIssues(d.issues || []))
+    v2GetCached<{ issues: any[] }>('/api/v2/issues', 60_000).then((d) => setIssues(d.issues || []))
   }
 
   useEffect(() => {
@@ -35,6 +35,8 @@ export default function V2ManageIssuesPage() {
         method: 'PATCH',
         body: JSON.stringify({ action }),
       })
+      v2InvalidateCache('/api/v2/issues')
+      v2InvalidateCache('/api/v2/stores/summary')
     } catch (e: any) {
       alert(e.message)
       load()

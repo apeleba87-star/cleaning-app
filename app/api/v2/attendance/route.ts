@@ -22,20 +22,26 @@ export async function POST(request: Request) {
 
     const client = getV2AdminClient()
 
-    const { data: assign } = await client
-      .from('v2_store_assignments')
-      .select('id')
-      .eq('store_id', store_id)
-      .eq('user_id', user.id)
-      .maybeSingle()
-    if (!assign) throw new V2ApiError('배정된 매장이 아닙니다.', 403)
-
     const { data: store } = await client
       .from('v2_stores')
       .select('*')
       .eq('id', store_id)
       .single()
     if (!store?.service_active) throw new V2ApiError('비활성 매장입니다.', 400)
+
+    if (user.role === 'business_owner') {
+      if (!user.company_id || store.company_id !== user.company_id) {
+        throw new V2ApiError('소속 회사 매장이 아닙니다.', 403)
+      }
+    } else {
+      const { data: assign } = await client
+        .from('v2_store_assignments')
+        .select('id')
+        .eq('store_id', store_id)
+        .eq('user_id', user.id)
+        .maybeSingle()
+      if (!assign) throw new V2ApiError('배정된 매장이 아닙니다.', 403)
+    }
 
     const workDate = v2WorkDateForStore(store)
 
