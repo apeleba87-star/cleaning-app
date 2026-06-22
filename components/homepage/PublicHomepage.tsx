@@ -525,7 +525,7 @@ function ComparisonSection({ palette }: { palette: HomepagePalette }) {
             <p className="font-black">{title}</p>
             <p className={`text-sm leading-6 ${palette.subtext}`}>{text}</p>
             <p className={`font-black ${palette.accentText}`}>{ours}</p>
-            <p className="text-sm text-gray-400">{others}</p>
+            <p className="text-sm font-bold text-gray-600">{others}</p>
           </div>
         ))}
       </div>
