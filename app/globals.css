@@ -78,3 +78,208 @@ html {
   width: 100%;
   height: 100%;
 }
+
+/* Homepage templates: premium cleaning-company typography and spacing */
+.homepage-site {
+  background: var(--hp-bg);
+  color: var(--hp-text);
+  font-family:
+    Pretendard,
+    "Noto Sans KR",
+    "Apple SD Gothic Neo",
+    "Malgun Gothic",
+    system-ui,
+    -apple-system,
+    BlinkMacSystemFont,
+    sans-serif;
+  letter-spacing: -0.035em;
+  word-break: keep-all;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+}
+
+.homepage-site::selection {
+  background: var(--hp-accent);
+  color: var(--hp-dark);
+}
+
+.homepage-site .hp-surface {
+  background: var(--hp-surface) !important;
+}
+
+.homepage-site .hp-soft {
+  background: var(--hp-soft) !important;
+}
+
+.homepage-site .hp-primary {
+  background: var(--hp-primary) !important;
+  color: #fff !important;
+}
+
+.homepage-site .hp-dark {
+  background: var(--hp-dark) !important;
+  color: #fff !important;
+}
+
+.homepage-site .hp-accent {
+  background: var(--hp-accent) !important;
+}
+
+.homepage-site .hp-muted-text {
+  color: var(--hp-muted) !important;
+}
+
+.homepage-site .hp-border {
+  border-color: var(--hp-border) !important;
+}
+
+.homepage-site .hp-section {
+  padding-block: clamp(72px, 9vw, 132px);
+}
+
+.homepage-site .hp-container {
+  width: min(1120px, calc(100% - 32px));
+  margin-inline: auto;
+}
+
+.homepage-site .hp-display {
+  font-size: clamp(3rem, 8vw, 6.8rem);
+  line-height: 0.96;
+  letter-spacing: -0.085em;
+}
+
+.homepage-site .hp-title {
+  font-size: clamp(2.1rem, 4.8vw, 4.8rem);
+  line-height: 1.03;
+  letter-spacing: -0.075em;
+}
+
+.homepage-site .hp-copy {
+  color: var(--hp-muted);
+  font-size: clamp(1rem, 1.6vw, 1.18rem);
+  line-height: 1.85;
+}
+
+.homepage-site .hp-photo-frame {
+  background:
+    linear-gradient(135deg, color-mix(in srgb, var(--hp-accent) 34%, transparent), transparent 42%),
+    linear-gradient(180deg, var(--hp-soft), var(--hp-surface));
+  border: 1px solid var(--hp-border);
+}
+
+.homepage-site .hp-cta {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 3.4rem;
+  padding-inline: 1.35rem;
+  border-radius: 999px;
+  font-weight: 900;
+}
+
+.homepage-site h1,
+.homepage-site h2,
+.homepage-site h3 {
+  letter-spacing: -0.07em;
+}
+
+.homepage-site [class*="rounded-"] {
+  border-radius: 18px !important;
+}
+
+.homepage-site [class*="shadow"] {
+  box-shadow: 0 24px 70px rgba(15, 23, 42, 0.08) !important;
+}
+
+.homepage-site .homepage-flat {
+  box-shadow: none !important;
+}
+
+.homepage-site .homepage-label {
+  letter-spacing: 0.18em;
+}
+
+@keyframes homepageFadeInUp {
+  from {
+    opacity: 0;
+    filter: blur(10px);
+    transform: translate3d(0, 96px, 0) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    filter: blur(0);
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+}
+
+.homepage-site .homepage-reveal {
+  opacity: 0;
+  filter: blur(18px);
+  transform: translate3d(0, 170px, 0) scale(0.92);
+  transition:
+    opacity 1250ms cubic-bezier(0.16, 1, 0.3, 1),
+    filter 1250ms cubic-bezier(0.16, 1, 0.3, 1),
+    transform 1250ms cubic-bezier(0.16, 1, 0.3, 1);
+  transition-delay: var(--reveal-delay, 0ms);
+  will-change: opacity, filter, transform;
+}
+
+.homepage-site .homepage-reveal.homepage-revealed {
+  opacity: 1;
+  filter: blur(0);
+  transform: translate3d(0, 0, 0) scale(1);
+}
+
+.homepage-site .hp-photo-frame.homepage-reveal {
+  transform: translate3d(0, 190px, 0) scale(0.88);
+}
+
+.homepage-site .hp-photo-frame.homepage-reveal.homepage-revealed {
+  transform: translate3d(0, 0, 0) scale(1);
+}
+
+.homepage-site .homepage-reveal img {
+  transform: scale(1.18);
+  transition: transform 1450ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.homepage-site .homepage-reveal.homepage-revealed img {
+  transform: scale(1);
+}
+
+.homepage-site .homepage-reveal:nth-child(2n) {
+  transform: translate3d(0, 190px, 0) scale(0.9);
+}
+
+.homepage-site .homepage-reveal:nth-child(2n).homepage-revealed {
+  transform: translate3d(0, 0, 0) scale(1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .homepage-site .homepage-reveal,
+  .homepage-site .hp-photo-frame.homepage-reveal {
+    opacity: 1;
+    filter: none;
+    transform: none;
+    transition: none;
+  }
+
+  .homepage-site .homepage-reveal img {
+    transform: none;
+    transition: none;
+  }
+}
+
+@media (max-width: 640px) {
+  .homepage-site .hp-section {
+    padding-block: 56px;
+  }
+
+  .homepage-site .hp-container {
+    width: min(100% - 24px, 1120px);
+  }
+
+  .homepage-site .hp-display {
+    font-size: clamp(2.7rem, 15vw, 4.4rem);
+  }
+}

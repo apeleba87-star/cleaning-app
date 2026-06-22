@@ -3,7 +3,66 @@ import { NextResponse, type NextRequest } from 'next/server'
 
 const BARCODE_PRODUCTS_ALLOWED_EMAILS = new Set(['apeleba2@naver.com'])
 
+function normalizeHost(host: string | null) {
+  return (host || '').toLowerCase().replace(/:\d+$/, '').replace(/^www\./, '')
+}
+
+function getConfiguredHost(value: string | undefined) {
+  if (!value) return ''
+  try {
+    return normalizeHost(new URL(value).host)
+  } catch {
+    return normalizeHost(value)
+  }
+}
+
+function isMUPLHost(host: string) {
+  const configuredHosts = [
+    getConfiguredHost(process.env.NEXT_PUBLIC_APP_HOST),
+    getConfiguredHost(process.env.NEXT_PUBLIC_SITE_URL),
+    getConfiguredHost(process.env.VERCEL_PROJECT_PRODUCTION_URL),
+  ].filter(Boolean)
+
+  return (
+    !host ||
+    host === 'localhost' ||
+    host === '127.0.0.1' ||
+    host.endsWith('.localhost') ||
+    host.endsWith('.vercel.app') ||
+    configuredHosts.includes(host)
+  )
+}
+
+function isHomepageFastPath(pathname: string) {
+  return (
+    pathname.startsWith('/_homepage') ||
+    pathname.startsWith('/t/') ||
+    pathname.startsWith('/api/homepage/public') ||
+    pathname.startsWith('/api/homepage/blog/sync-public')
+  )
+}
+
 export async function middleware(request: NextRequest) {
+  const pathname = request.nextUrl.pathname
+  const host = normalizeHost(request.headers.get('host'))
+  const isStaticOrWellKnown =
+    pathname.startsWith('/_next') ||
+    pathname.startsWith('/api') ||
+    pathname.startsWith('/homepage-admin') ||
+    pathname.startsWith('/login') ||
+    pathname.startsWith('/signup') ||
+    pathname.startsWith('/favicon') ||
+    pathname.startsWith('/manifest') ||
+    pathname.startsWith('/sw.js') ||
+    pathname.includes('.')
+
+  if (!isStaticOrWellKnown && !isMUPLHost(host)) {
+    const url = request.nextUrl.clone()
+    url.pathname = `/_homepage/domain/${encodeURIComponent(host)}${pathname === '/' ? '' : pathname}`
+    url.searchParams.set('path', pathname)
+    return NextResponse.rewrite(url)
+  }
+
   let supabaseResponse = NextResponse.next({
     request: {
       headers: request.headers,
@@ -13,6 +72,10 @@ export async function middleware(request: NextRequest) {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
   if (!supabaseUrl || !supabaseAnonKey) {
+    return supabaseResponse
+  }
+
+  if (isHomepageFastPath(pathname)) {
     return supabaseResponse
   }
 
@@ -51,16 +114,18 @@ export async function middleware(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser()
 
-  const pathname = request.nextUrl.pathname
   const isV2App =
     pathname.startsWith('/v2') ||
     pathname.startsWith('/v2-store-manager') ||
     pathname.startsWith('/api/v2')
+  const isHomepageApp =
+    pathname.startsWith('/homepage-admin') ||
+    pathname.startsWith('/api/homepage')
 
-  // V2: Auth만 공유. V1 users/trial/session PATCH 미적용 (속도·비용)
-  if (isV2App) {
+  // V2/홈페이지 관리자: Auth만 공유. V1 users/trial/session PATCH 미적용 (속도·비용)
+  if (isV2App || isHomepageApp) {
     if (!user) {
-      const isApi = pathname.startsWith('/api/v2')
+      const isApi = pathname.startsWith('/api/v2') || pathname.startsWith('/api/homepage')
       if (isApi) {
         return NextResponse.json({ error: '로그인이 필요합니다.' }, { status: 401 })
       }
