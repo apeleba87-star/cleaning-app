@@ -17,7 +17,18 @@ export default function HomepageSiteAdminPage({ params }: Props) {
   const [blogSource, setBlogSource] = useState<any>(null)
   const [blogPosts, setBlogPosts] = useState<any[]>([])
   const [submissions, setSubmissions] = useState<any[]>([])
+  const [mediaItems, setMediaItems] = useState<any[]>([])
+  const [pushSubscriptions, setPushSubscriptions] = useState<any[]>([])
+  const [notifications, setNotifications] = useState<any[]>([])
   const [domainText, setDomainText] = useState('')
+  const [mediaDraft, setMediaDraft] = useState({
+    item_type: 'after_photo',
+    title: '',
+    image_url: '',
+    description: '',
+    sort_order: 0,
+    is_visible: true,
+  })
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
   const [saving, setSaving] = useState<string | null>(null)
@@ -33,6 +44,9 @@ export default function HomepageSiteAdminPage({ params }: Props) {
         setBlogSource(data.blogSource)
         setBlogPosts(data.blogPosts || [])
         setSubmissions(data.submissions || [])
+        setMediaItems(data.mediaItems || [])
+        setPushSubscriptions(data.pushSubscriptions || [])
+        setNotifications(data.notifications || [])
         setDomainText((data.domains || []).map((d: any) => d.domain).join('\n'))
       })
       .catch((err) => setError(err.message || '홈페이지 정보를 불러오지 못했습니다.'))
@@ -50,6 +64,38 @@ export default function HomepageSiteAdminPage({ params }: Props) {
     setCalculator((prev: any) => ({ ...prev, [key]: value }))
   }
 
+  const updateChecklist = (key: string, value: boolean) => {
+    setSite((prev: any) => ({
+      ...prev,
+      onboarding_checklist: { ...(prev.onboarding_checklist || {}), [key]: value },
+    }))
+  }
+
+  const updateTrustBadge = (index: number, key: 'title' | 'description', value: string) => {
+    setSite((prev: any) => {
+      const trustBadges = [...(prev.trust_badges || [])]
+      trustBadges[index] = { ...(trustBadges[index] || {}), [key]: value }
+      return { ...prev, trust_badges: trustBadges }
+    })
+  }
+
+  const updateDomainField = (domainName: string, key: string, value: any) => {
+    setDomains((prev) => prev.map((domain) => (domain.domain === domainName ? { ...domain, [key]: value } : domain)))
+  }
+
+  const domainPayload = () => {
+    const existing = new Map(domains.map((domain) => [domain.domain, domain]))
+    return domainText
+      .split('\n')
+      .map((value) => value.trim())
+      .filter(Boolean)
+      .map((domain, index) => ({
+        ...(existing.get(domain) || {}),
+        domain,
+        is_primary: index === 0,
+      }))
+  }
+
   const saveSite = async () => {
     setSaving('site')
     setError('')
@@ -59,7 +105,7 @@ export default function HomepageSiteAdminPage({ params }: Props) {
         method: 'PATCH',
         body: JSON.stringify({
           ...site,
-          domains: domainText.split('\n').map((value) => value.trim()).filter(Boolean),
+          domains: domainPayload(),
         }),
       })
       homepageInvalidateCache('/api/homepage')
@@ -134,6 +180,68 @@ export default function HomepageSiteAdminPage({ params }: Props) {
       setMessage('이 기기에서 견적 알림을 받을 수 있습니다.')
     } catch (err: any) {
       setError(err.message || '알림 설정에 실패했습니다.')
+    } finally {
+      setSaving(null)
+    }
+  }
+
+  const testPush = async () => {
+    setSaving('push-test')
+    setError('')
+    setMessage('')
+    try {
+      const result = await homepageFetch<{ sent: number; skipped?: boolean }>(`/api/homepage/sites/${params.siteId}/push-test`, {
+        method: 'POST',
+      })
+      setMessage(result.skipped ? '푸시 키가 설정되지 않았습니다.' : `테스트 알림 ${result.sent}건을 보냈습니다.`)
+      load()
+    } catch (err: any) {
+      setError(err.message || '테스트 알림을 보내지 못했습니다.')
+    } finally {
+      setSaving(null)
+    }
+  }
+
+  const saveMedia = async (item?: any) => {
+    setSaving('media')
+    setError('')
+    setMessage('')
+    try {
+      await homepageFetch(`/api/homepage/sites/${params.siteId}/media`, {
+        method: item?.id ? 'PATCH' : 'POST',
+        body: JSON.stringify(item?.id ? item : mediaDraft),
+      })
+      setMediaDraft({
+        item_type: 'after_photo',
+        title: '',
+        image_url: '',
+        description: '',
+        sort_order: 0,
+        is_visible: true,
+      })
+      homepageInvalidateCache('/api/homepage')
+      setMessage('사진/사례를 저장했습니다.')
+      load()
+    } catch (err: any) {
+      setError(err.message || '사진/사례를 저장하지 못했습니다.')
+    } finally {
+      setSaving(null)
+    }
+  }
+
+  const deleteMedia = async (id: string) => {
+    setSaving('media')
+    setError('')
+    setMessage('')
+    try {
+      await homepageFetch(`/api/homepage/sites/${params.siteId}/media?id=${encodeURIComponent(id)}`, {
+        method: 'DELETE',
+      })
+      homepageInvalidateCache('/api/homepage')
+      setMessage('사진/사례를 삭제했습니다.')
+      load()
+    } catch (err: any) {
+      setError(err.message || '사진/사례를 삭제하지 못했습니다.')
     } finally {
       setSaving(null)
     }
@@ -216,8 +324,26 @@ export default function HomepageSiteAdminPage({ params }: Props) {
             <Input label="영업시간" value={site.business_hours || ''} onChange={(v) => updateSiteField('business_hours', v)} />
             <Input label="주소" value={site.address || ''} onChange={(v) => updateSiteField('address', v)} />
             <Input label="서비스 지역" value={site.service_area || ''} onChange={(v) => updateSiteField('service_area', v)} />
+            <Input label="로고 이미지 주소" value={site.logo_image_url || ''} onChange={(v) => updateSiteField('logo_image_url', v)} />
           </div>
         </div>
+      </section>
+
+      <section className="rounded-2xl border bg-white p-4 shadow-sm">
+        <h2 className="text-lg font-black">하단 사업자 정보</h2>
+        <p className="mt-1 text-sm text-gray-600">홈페이지 맨 아래에 표시될 사업자/법적 안내 정보입니다. 비워두면 기본 정보가 사용됩니다.</p>
+        <div className="mt-4 grid gap-3 md:grid-cols-2">
+          <Input label="상호명" value={site.footer_company_name || ''} onChange={(v) => updateSiteField('footer_company_name', v)} />
+          <Input label="대표자명" value={site.footer_representative || ''} onChange={(v) => updateSiteField('footer_representative', v)} />
+          <Input label="사업자등록번호" value={site.footer_business_number || ''} onChange={(v) => updateSiteField('footer_business_number', v)} />
+          <Input label="이메일" value={site.footer_email || ''} onChange={(v) => updateSiteField('footer_email', v)} />
+          <Input label="하단 전화번호" value={site.footer_phone || ''} onChange={(v) => updateSiteField('footer_phone', v)} />
+          <Input label="하단 영업시간" value={site.footer_business_hours || ''} onChange={(v) => updateSiteField('footer_business_hours', v)} />
+          <Input label="개인정보처리방침 URL" value={site.footer_privacy_url || ''} onChange={(v) => updateSiteField('footer_privacy_url', v)} />
+          <Input label="이용약관 URL" value={site.footer_terms_url || ''} onChange={(v) => updateSiteField('footer_terms_url', v)} />
+        </div>
+        <Textarea label="하단 주소" value={site.footer_address || ''} onChange={(v) => updateSiteField('footer_address', v)} />
+        <Textarea label="하단 안내 문구" value={site.footer_note || ''} onChange={(v) => updateSiteField('footer_note', v)} />
       </section>
 
       <section className="rounded-2xl border bg-white p-4 shadow-sm">
@@ -232,6 +358,20 @@ export default function HomepageSiteAdminPage({ params }: Props) {
             onChange={(v) => updateSiteField('seo_keywords', v.split(',').map((x) => x.trim()).filter(Boolean))}
           />
           <Input label="대표 이미지 주소" value={site.hero_image_url || ''} onChange={(v) => updateSiteField('hero_image_url', v)} />
+          <Input label="공유 이미지 주소(OG)" value={site.seo_og_image_url || ''} onChange={(v) => updateSiteField('seo_og_image_url', v)} />
+          <Input label="대표 주소(canonical)" value={site.seo_canonical_url || ''} onChange={(v) => updateSiteField('seo_canonical_url', v)} />
+          <div className="grid gap-3 md:grid-cols-2">
+            <Input label="네이버 사이트 인증값" value={site.seo_naver_verification || ''} onChange={(v) => updateSiteField('seo_naver_verification', v)} />
+            <Input label="구글 사이트 인증값" value={site.seo_google_verification || ''} onChange={(v) => updateSiteField('seo_google_verification', v)} />
+          </div>
+          <label className="flex items-center gap-2 rounded-xl border px-3 py-3 text-sm font-bold">
+            <input
+              type="checkbox"
+              checked={!!site.seo_noindex}
+              onChange={(e) => updateSiteField('seo_noindex', e.target.checked)}
+            />
+            검색엔진에 노출하지 않기
+          </label>
         </div>
       </section>
 
@@ -246,15 +386,96 @@ export default function HomepageSiteAdminPage({ params }: Props) {
       </section>
 
       <section className="rounded-2xl border bg-white p-4 shadow-sm">
+        <h2 className="text-lg font-black">상품 / 온보딩 / 신뢰 정보</h2>
+        <p className="mt-1 text-sm text-gray-600">판매 후 고객 세팅에 필요한 운영 정보를 관리합니다.</p>
+        <div className="mt-4 grid gap-3 md:grid-cols-2">
+          <Input label="판매 상품명" value={site.product_name || ''} onChange={(v) => updateSiteField('product_name', v)} />
+          <Input label="제작비/월관리비 안내" value={site.product_price_note || ''} onChange={(v) => updateSiteField('product_price_note', v)} />
+        </div>
+        <Textarea
+          label="포함 기능(한 줄에 하나)"
+          value={(site.product_included_features || []).join('\n')}
+          onChange={(v) => updateSiteField('product_included_features', v.split('\n').map((x) => x.trim()).filter(Boolean))}
+          rows={5}
+        />
+        <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+          {[
+            ['logo', '로고 수집'],
+            ['photos', '대표 사진'],
+            ['contact', '전화/카톡'],
+            ['businessInfo', '사업자 정보'],
+            ['pricing', '가격 기준'],
+            ['reviews', '후기'],
+            ['domain', '도메인'],
+            ['push', '알림 설정'],
+          ].map(([key, label]) => (
+            <label key={key} className="flex items-center gap-2 rounded-xl border px-3 py-3 text-sm font-bold">
+              <input
+                type="checkbox"
+                checked={!!site.onboarding_checklist?.[key]}
+                onChange={(e) => updateChecklist(key, e.target.checked)}
+              />
+              {label}
+            </label>
+          ))}
+        </div>
+        <div className="mt-4 grid gap-3 md:grid-cols-3">
+          {[0, 1, 2].map((index) => (
+            <div key={index} className="rounded-xl border p-3">
+              <Input
+                label={`신뢰 배지 ${index + 1}`}
+                value={site.trust_badges?.[index]?.title || ''}
+                onChange={(v) => updateTrustBadge(index, 'title', v)}
+              />
+              <Textarea
+                label="설명"
+                value={site.trust_badges?.[index]?.description || ''}
+                onChange={(v) => updateTrustBadge(index, 'description', v)}
+              />
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section className="rounded-2xl border bg-white p-4 shadow-sm">
         <h2 className="text-lg font-black">도메인 연결</h2>
         <p className="mt-1 text-sm text-gray-600">고객 도메인을 한 줄에 하나씩 입력합니다. Vercel 연결 후 검증 상태를 공개에 사용합니다.</p>
         <Textarea label="도메인" value={domainText} onChange={setDomainText} rows={4} />
         {domains.length > 0 && (
-          <div className="mt-3 flex flex-wrap gap-2">
+          <div className="mt-3 grid gap-3 md:grid-cols-2">
             {domains.map((domain) => (
-              <span key={domain.id} className="rounded-full bg-gray-100 px-3 py-1 text-xs">
-                {domain.domain} · {domain.verified ? '검증됨' : '검증 대기'}
-              </span>
+              <div key={domain.id} className="rounded-xl border bg-gray-50 p-3 text-xs">
+                <p className="font-black">{domain.domain}</p>
+                <div className="mt-2 grid gap-2">
+                  <select
+                    className="rounded-lg border px-2 py-2"
+                    value={domain.verification_status || (domain.verified ? 'verified' : 'pending')}
+                    onChange={(e) => updateDomainField(domain.domain, 'verification_status', e.target.value)}
+                  >
+                    <option value="pending">검증 대기</option>
+                    <option value="verified">검증됨</option>
+                    <option value="error">오류</option>
+                  </select>
+                  <input
+                    className="rounded-lg border px-2 py-2"
+                    placeholder="DNS 안내값"
+                    value={domain.dns_target || ''}
+                    onChange={(e) => updateDomainField(domain.domain, 'dns_target', e.target.value)}
+                  />
+                  <input
+                    className="rounded-lg border px-2 py-2"
+                    placeholder="검증 토큰"
+                    value={domain.verification_token || ''}
+                    onChange={(e) => updateDomainField(domain.domain, 'verification_token', e.target.value)}
+                  />
+                  <input
+                    className="rounded-lg border px-2 py-2"
+                    placeholder="오류 메모"
+                    value={domain.verification_error || ''}
+                    onChange={(e) => updateDomainField(domain.domain, 'verification_error', e.target.value)}
+                  />
+                </div>
+              </div>
             ))}
           </div>
         )}
@@ -323,7 +544,81 @@ export default function HomepageSiteAdminPage({ params }: Props) {
       </section>
 
       <section className="rounded-2xl border bg-white p-4 shadow-sm">
-        <h2 className="text-lg font-black">견적 문의</h2>
+        <h2 className="text-lg font-black">사진 / 사례 직접 등록</h2>
+        <p className="mt-1 text-sm text-gray-600">블로그 없이도 공개 홈페이지 전후사진, 청소 후 사진, 포트폴리오에 사용할 이미지를 등록합니다.</p>
+        <div className="mt-4 grid gap-3 md:grid-cols-2">
+          <Select
+            label="표시 위치"
+            value={mediaDraft.item_type}
+            onChange={(v) => setMediaDraft((prev) => ({ ...prev, item_type: v }))}
+            options={[
+              ['after_photo', '청소 후 자동 슬라이더'],
+              ['before_after', '전후사진'],
+              ['portfolio', '현장 사례'],
+              ['gallery', '갤러리'],
+            ]}
+          />
+          <Input label="제목" value={mediaDraft.title} onChange={(v) => setMediaDraft((prev) => ({ ...prev, title: v }))} />
+          <Input label="이미지 주소" value={mediaDraft.image_url} onChange={(v) => setMediaDraft((prev) => ({ ...prev, image_url: v }))} />
+          <MoneyInput label="정렬 순서" value={mediaDraft.sort_order} onChange={(v) => setMediaDraft((prev) => ({ ...prev, sort_order: v }))} />
+        </div>
+        <Textarea label="설명" value={mediaDraft.description} onChange={(v) => setMediaDraft((prev) => ({ ...prev, description: v }))} />
+        <button
+          onClick={() => saveMedia()}
+          disabled={saving === 'media' || !mediaDraft.image_url}
+          className="mt-3 w-full rounded-xl bg-gray-950 py-3 font-bold text-white disabled:opacity-60"
+        >
+          사진/사례 추가
+        </button>
+        <div className="mt-4 grid gap-3 md:grid-cols-3">
+          {mediaItems.map((item) => (
+            <div key={item.id} className="overflow-hidden rounded-xl border">
+              <div className="h-32 bg-gray-100">
+                <img src={item.image_url} alt={item.alt_text || item.title || ''} className="h-full w-full object-cover" />
+              </div>
+              <div className="space-y-2 p-3 text-sm">
+                <p className="font-black">{item.title || '제목 없음'}</p>
+                <p className="text-xs text-gray-500">{item.item_type} · 순서 {item.sort_order}</p>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    onClick={() => saveMedia({ ...item, is_visible: !item.is_visible })}
+                    className="rounded-lg border px-3 py-2 text-xs font-bold"
+                  >
+                    {item.is_visible ? '숨기기' : '보이기'}
+                  </button>
+                  <button
+                    onClick={() => deleteMedia(item.id)}
+                    className="rounded-lg border border-red-200 px-3 py-2 text-xs font-bold text-red-600"
+                  >
+                    삭제
+                  </button>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section className="rounded-2xl border bg-white p-4 shadow-sm">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h2 className="text-lg font-black">견적 문의</h2>
+            <p className="text-sm text-gray-600">실제 연락처 제출은 높은 우선순위로, 전화/카톡 클릭 로그는 낮은 우선순위로 구분됩니다.</p>
+          </div>
+          <div className="flex gap-2">
+            <button onClick={enablePush} className="rounded-xl bg-gray-950 px-4 py-3 text-sm font-bold text-white">
+              알림 켜기
+            </button>
+            <button onClick={testPush} className="rounded-xl border bg-white px-4 py-3 text-sm font-bold">
+              테스트 알림
+            </button>
+          </div>
+        </div>
+        <div className="mt-4 grid gap-2 text-xs text-gray-600 sm:grid-cols-3">
+          <div className="rounded-xl bg-gray-50 p-3">활성 구독 {pushSubscriptions.filter((item) => item.active).length}개</div>
+          <div className="rounded-xl bg-gray-50 p-3">최근 알림 {notifications.length}건</div>
+          <div className="rounded-xl bg-gray-50 p-3">마지막 상태 {notifications[0]?.status || '없음'}</div>
+        </div>
         <div className="mt-4 space-y-3">
           {submissions.length ? (
             submissions.map((submission) => (
@@ -337,19 +632,54 @@ export default function HomepageSiteAdminPage({ params }: Props) {
                       {submission.region || '-'} / {submission.area_pyeong || '-'}평 /{' '}
                       {Number(submission.estimated_amount || 0).toLocaleString('ko-KR')}원~
                     </p>
+                    <p className="mt-1 text-xs text-gray-500">
+                      {submission.contact_method || 'form'} · 우선순위 {submission.priority || 'normal'} ·{' '}
+                      {submission.created_at?.slice(0, 16).replace('T', ' ') || ''}
+                    </p>
                     {submission.message && <p className="mt-2 text-sm text-gray-700">{submission.message}</p>}
                   </div>
-                  <select
+                  <div className="grid gap-2 sm:w-44">
+                    <select
+                      className="rounded-lg border px-3 py-2 text-sm"
+                      value={submission.status}
+                      onChange={(e) => updateSubmission(submission.id, { status: e.target.value })}
+                    >
+                      <option value="new">신규</option>
+                      <option value="checked">확인</option>
+                      <option value="consulting">상담중</option>
+                      <option value="completed">완료</option>
+                      <option value="hold">보류</option>
+                    </select>
+                    <select
+                      className="rounded-lg border px-3 py-2 text-sm"
+                      value={submission.priority || 'normal'}
+                      onChange={(e) => updateSubmission(submission.id, { priority: e.target.value })}
+                    >
+                      <option value="low">낮음</option>
+                      <option value="normal">보통</option>
+                      <option value="high">높음</option>
+                    </select>
+                  </div>
+                </div>
+                <div className="mt-2 grid gap-2 sm:grid-cols-3">
+                  <input
                     className="rounded-lg border px-3 py-2 text-sm"
-                    value={submission.status}
-                    onChange={(e) => updateSubmission(submission.id, { status: e.target.value })}
-                  >
-                    <option value="new">신규</option>
-                    <option value="checked">확인</option>
-                    <option value="consulting">상담중</option>
-                    <option value="completed">완료</option>
-                    <option value="hold">보류</option>
-                  </select>
+                    type="datetime-local"
+                    defaultValue={submission.contacted_at?.slice(0, 16) || ''}
+                    onBlur={(e) => updateSubmission(submission.id, { contacted_at: e.target.value })}
+                  />
+                  <input
+                    className="rounded-lg border px-3 py-2 text-sm"
+                    type="datetime-local"
+                    defaultValue={submission.scheduled_at?.slice(0, 16) || ''}
+                    onBlur={(e) => updateSubmission(submission.id, { scheduled_at: e.target.value })}
+                  />
+                  <input
+                    className="rounded-lg border px-3 py-2 text-sm"
+                    placeholder="보류/실패 사유"
+                    defaultValue={submission.lost_reason || ''}
+                    onBlur={(e) => updateSubmission(submission.id, { lost_reason: e.target.value })}
+                  />
                 </div>
                 <input
                   className="mt-2 w-full rounded-lg border px-3 py-2 text-sm"
@@ -363,6 +693,19 @@ export default function HomepageSiteAdminPage({ params }: Props) {
             <p className="text-sm text-gray-500">아직 견적 문의가 없습니다.</p>
           )}
         </div>
+        {notifications.length > 0 && (
+          <div className="mt-5 rounded-xl bg-gray-50 p-3">
+            <p className="text-sm font-black">최근 알림 이력</p>
+            <div className="mt-2 space-y-1 text-xs text-gray-600">
+              {notifications.slice(0, 5).map((notification) => (
+                <p key={notification.id}>
+                  {notification.created_at?.slice(0, 16).replace('T', ' ')} · {notification.channel} · {notification.status}
+                  {notification.error ? ` · ${notification.error}` : ''}
+                </p>
+              ))}
+            </div>
+          </div>
+        )}
       </section>
     </main>
   )

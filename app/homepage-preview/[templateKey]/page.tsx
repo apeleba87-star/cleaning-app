@@ -8,13 +8,20 @@ export default function HomepageTemplatePreviewPage({
   searchParams,
 }: {
   params: { templateKey: string }
-  searchParams?: { palette?: string }
+  searchParams?: { palette?: string; embed?: string }
 }) {
   if (!HOMEPAGE_PREVIEW_TEMPLATE_KEYS.includes(params.templateKey as any)) notFound()
+  const data = createHomepagePreviewPackage(params.templateKey, searchParams?.palette as any)
+  if (searchParams?.embed === '1') {
+    data.site.slug = `embed-${params.templateKey}`
+  }
+
   return (
     <>
-      <PalettePreviewSwitcher templateKey={params.templateKey} currentPalette={searchParams?.palette} />
-      <PublicHomepage data={createHomepagePreviewPackage(params.templateKey, searchParams?.palette as any)} page="home" />
+      {searchParams?.embed !== '1' && (
+        <PalettePreviewSwitcher templateKey={params.templateKey} currentPalette={searchParams?.palette} />
+      )}
+      <PublicHomepage data={data} page="home" />
     </>
   )
 }

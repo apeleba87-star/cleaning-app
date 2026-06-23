@@ -5,6 +5,7 @@ import { DEFAULT_HOMEPAGE_CALCULATOR } from '@/lib/homepage/calculator'
 import type {
   HomepageCalculatorSettings,
   HomepageDomain,
+  HomepageMediaItem,
   HomepagePublicPackage,
   HomepageSite,
 } from '@/types/homepage'
@@ -148,7 +149,7 @@ export async function listHomepageSitesForUser() {
 export async function getHomepageAdminPackage(siteId: string) {
   await assertHomepageSiteAccess(siteId)
   const client = getHomepageAdminClient()
-  const [site, domains, calculator, blogSource, blogPosts, submissions] = await Promise.all([
+  const [site, domains, calculator, blogSource, blogPosts, submissions, mediaItems, pushSubscriptions, notifications] = await Promise.all([
     client.from('homepage_sites').select('*').eq('id', siteId).maybeSingle(),
     client.from('homepage_domains').select('*').eq('site_id', siteId).order('is_primary', { ascending: false }),
     client.from('homepage_calculator_settings').select('*').eq('site_id', siteId).maybeSingle(),
@@ -166,6 +167,26 @@ export async function getHomepageAdminPackage(siteId: string) {
       .eq('site_id', siteId)
       .order('created_at', { ascending: false })
       .limit(50),
+    client
+      .from('homepage_media_items')
+      .select('*')
+      .eq('site_id', siteId)
+      .order('item_type', { ascending: true })
+      .order('sort_order', { ascending: true })
+      .order('created_at', { ascending: false })
+      .limit(80),
+    client
+      .from('homepage_push_subscriptions')
+      .select('id, site_id, user_id, endpoint, user_agent, active, last_seen_at, created_at')
+      .eq('site_id', siteId)
+      .order('last_seen_at', { ascending: false })
+      .limit(20),
+    client
+      .from('homepage_notifications')
+      .select('*')
+      .eq('site_id', siteId)
+      .order('created_at', { ascending: false })
+      .limit(20),
   ])
 
   if (site.error) throw site.error
@@ -175,6 +196,9 @@ export async function getHomepageAdminPackage(siteId: string) {
   if (blogSource.error) throw blogSource.error
   if (blogPosts.error) throw blogPosts.error
   if (submissions.error) throw submissions.error
+  if (mediaItems.error) throw mediaItems.error
+  if (pushSubscriptions.error) throw pushSubscriptions.error
+  if (notifications.error) throw notifications.error
 
   return {
     site: site.data,
@@ -183,6 +207,9 @@ export async function getHomepageAdminPackage(siteId: string) {
     blogSource: blogSource.data || null,
     blogPosts: blogPosts.data || [],
     submissions: submissions.data || [],
+    mediaItems: mediaItems.data || [],
+    pushSubscriptions: pushSubscriptions.data || [],
+    notifications: notifications.data || [],
   }
 }
 
@@ -214,7 +241,7 @@ async function loadHomepagePublicPackageBy(field: 'slug' | 'domain', value: stri
 
   if (!site || site.status !== 'published') return null
 
-  const [domainsResult, calculatorResult, blogPostsResult] = await Promise.all([
+  const [domainsResult, calculatorResult, blogPostsResult, mediaItemsResult] = await Promise.all([
     client.from('homepage_domains').select('*').eq('site_id', site.id),
     client.from('homepage_calculator_settings').select('*').eq('site_id', site.id).eq('enabled', true).maybeSingle(),
     client
@@ -225,11 +252,20 @@ async function loadHomepagePublicPackageBy(field: 'slug' | 'domain', value: stri
       .order('is_pinned', { ascending: false })
       .order('published_at', { ascending: false })
       .limit(12),
+    client
+      .from('homepage_media_items')
+      .select('*')
+      .eq('site_id', site.id)
+      .eq('is_visible', true)
+      .order('item_type', { ascending: true })
+      .order('sort_order', { ascending: true })
+      .limit(40),
   ])
 
   if (domainsResult.error) throw domainsResult.error
   if (calculatorResult.error) throw calculatorResult.error
   if (blogPostsResult.error) throw blogPostsResult.error
+  if (mediaItemsResult.error) throw mediaItemsResult.error
   domains = domainsResult.data || []
 
   const calculator = calculatorResult.data
@@ -241,6 +277,7 @@ async function loadHomepagePublicPackageBy(field: 'slug' | 'domain', value: stri
     domains,
     calculator,
     blogPosts: blogPostsResult.data || [],
+    mediaItems: (mediaItemsResult.data || []) as HomepageMediaItem[],
   }
 }
 

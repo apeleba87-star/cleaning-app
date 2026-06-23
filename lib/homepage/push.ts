@@ -104,3 +104,78 @@ export async function sendHomepageEstimatePush(siteId: string, submissionId: str
 
   return { sent, skipped: false }
 }
+
+export async function sendHomepageTestPush(siteId: string) {
+  const config = getWebPushConfig()
+  if (!config) return { sent: 0, skipped: true }
+
+  const webpush = require('web-push')
+  webpush.setVapidDetails(config.subject, config.publicKey, config.privateKey)
+
+  const client = getHomepageAdminClient()
+  const { data: subscriptions, error } = await client
+    .from('homepage_push_subscriptions')
+    .select('id, endpoint, p256dh, auth')
+    .eq('site_id', siteId)
+    .eq('active', true)
+  if (error) throw error
+  if (!subscriptions?.length) return { sent: 0, skipped: false }
+
+  const payload = JSON.stringify({
+    title: '홈페이지 알림 테스트',
+    body: '이 기기에서 새 문의 알림을 받을 수 있습니다.',
+    url: `/homepage-admin/sites/${siteId}`,
+  })
+
+  const notificationResult = await client
+    .from('homepage_notifications')
+    .insert({
+      site_id: siteId,
+      submission_id: null,
+      channel: 'pwa-test',
+      status: 'pending',
+      payload,
+    })
+    .select()
+    .single()
+
+  let sent = 0
+  const errors: string[] = []
+
+  await Promise.all(
+    (subscriptions as PushSubscriptionRow[]).map(async (subscription) => {
+      try {
+        await webpush.sendNotification(
+          {
+            endpoint: subscription.endpoint,
+            keys: {
+              p256dh: subscription.p256dh,
+              auth: subscription.auth,
+            },
+          },
+          payload,
+          { TTL: 60 * 10 }
+        )
+        sent += 1
+      } catch (error: any) {
+        errors.push(error.message || 'push failed')
+        if (error.statusCode === 404 || error.statusCode === 410) {
+          await client.from('homepage_push_subscriptions').update({ active: false }).eq('id', subscription.id)
+        }
+      }
+    })
+  )
+
+  if (notificationResult.data) {
+    await client
+      .from('homepage_notifications')
+      .update({
+        status: sent > 0 ? 'sent' : 'failed',
+        sent_at: sent > 0 ? new Date().toISOString() : null,
+        error: errors.slice(0, 3).join(' | ') || null,
+      })
+      .eq('id', notificationResult.data.id)
+  }
+
+  return { sent, skipped: false }
+}

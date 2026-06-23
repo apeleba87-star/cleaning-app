@@ -25,6 +25,13 @@ export function createHomepagePreviewPackage(
 ): HomepagePublicPackage {
   const template = getHomepageTemplate(templateKey)
   const key = template.key as HomepageTemplateKey
+  const isPremium = key === 'showcase-portfolio'
+  const isLocal = key === 'showcase-local'
+  const isReviewSales = key === 'sales-reviews'
+  const isPriceSales = key === 'sales-services'
+  const isUrgentSales = key === 'sales-fast-contact'
+  const isStepInteractive = key === 'interactive-steps'
+  const isRecommendInteractive = key === 'interactive-campaign'
 
   return {
     site: {
@@ -36,30 +43,90 @@ export function createHomepagePreviewPackage(
       template_category: template.category,
       color_palette: paletteKey || template.defaultPalette,
       status: 'published',
-      business_name: '무플 클린',
+      business_name: isPremium ? '오브제 스튜디오' : '무플 클린',
       headline:
-        template.category === 'interactive'
+        isPremium
+          ? '공간의 가치를 완성합니다'
+          : isLocal
+            ? '강서구 입주청소 당일 상담 가능'
+            : isReviewSales
+              ? '입주청소 평당 15,000원~'
+              : isPriceSales
+                ? '원룸 15만원부터 시작합니다'
+                : isUrgentSales
+                  ? '당일 상담 가능'
+                  : isStepInteractive
+                    ? '질문에 답하면 견적이 완성됩니다'
+                    : isRecommendInteractive
+                      ? '우리집에 맞는 청소를 추천합니다'
+            : template.category === 'interactive'
           ? '우리집 청소 예상 견적을 바로 확인하세요'
           : template.category === 'sales'
             ? '믿을 수 있는 청소업체, 견적까지 빠르게'
             : '깔끔한 현장을 만드는 청소 전문 업체',
-      subheadline: '입주청소, 이사청소, 상가청소까지 현장 상황에 맞춰 빠르게 안내드립니다.',
-      description: '상담부터 청소 완료까지 사진과 설명으로 투명하게 안내드립니다.',
+      subheadline: isPremium
+        ? '인테리어 · 리모델링 전문'
+        : isLocal
+          ? '서울 서부권 빠른 방문 상담, 전화 한 번으로 일정을 확인하세요.'
+          : isReviewSales
+            ? '상담 1분, 견적 3분. 후기로 확인하고 예상비용까지 바로 안내받으세요.'
+            : isPriceSales
+              ? '원룸 15만원~, 20평 30만원~, 30평 42만원~ 기준으로 먼저 확인하세요.'
+              : isUrgentSales
+                ? '오늘 가능한 일정을 확인하고 전화 또는 카카오톡으로 빠르게 안내받으세요.'
+                : isStepInteractive
+                  ? '지역, 평수, 서비스만 차례대로 답하면 예상 결과를 바로 보여드립니다.'
+                  : isRecommendInteractive
+                    ? '걱정되는 공간을 선택하면 필요한 청소 범위와 예상 비용을 추천합니다.'
+          : '입주청소, 이사청소, 상가청소까지 현장 상황에 맞춰 빠르게 안내드립니다.',
+      description: isPremium
+        ? '오래 머무는 공간에는 이유가 있습니다.'
+        : '상담부터 청소 완료까지 사진과 설명으로 투명하게 안내드립니다.',
       phone: '010-1234-5678',
       kakao_url: 'https://pf.kakao.com/_demo',
       blog_url: 'https://blog.naver.com/demo',
       naver_place_url: null,
       instagram_url: null,
-      address: '서울 강남구',
-      service_area: '서울 전지역 / 경기 일부',
+      logo_image_url: null,
+      address: isLocal ? '서울 강서구' : '서울 강남구',
+      service_area: isLocal ? '강서구 / 양천구 / 마포구 / 은평구' : '서울 전지역 / 경기 일부',
       business_hours: '매일 08:00 - 20:00',
-      seo_title: '무플 클린 입주청소',
-      seo_description: '입주청소와 이사청소 예상 견적을 바로 확인하세요.',
-      seo_keywords: ['입주청소', '이사청소', '청소견적'],
-      hero_image_url: HOMEPAGE_PREVIEW_IMAGES[0],
-      portfolio_title: '최근 현장 사례',
+      seo_title: isPremium ? '오브제 스튜디오 인테리어' : '무플 클린 입주청소',
+      seo_description: isPremium ? '인테리어와 리모델링 포트폴리오를 확인하세요.' : '입주청소와 이사청소 예상 견적을 바로 확인하세요.',
+      seo_keywords: isPremium ? ['인테리어', '리모델링', '상업공간'] : ['입주청소', '이사청소', '청소견적'],
+      seo_og_image_url: HOMEPAGE_PREVIEW_IMAGES[isPremium ? 12 : 0],
+      seo_canonical_url: null,
+      seo_noindex: false,
+      seo_naver_verification: null,
+      seo_google_verification: null,
+      hero_image_url: HOMEPAGE_PREVIEW_IMAGES[isPremium ? 12 : 0],
+      portfolio_title: isPremium ? 'Selected projects' : isLocal ? '우리 동네 현장 사례' : '최근 현장 사례',
       portfolio_enabled: true,
       calculator_enabled: template.calculatorPosition !== 'none',
+      footer_company_name: isPremium ? '오브제 스튜디오' : '무플 클린',
+      footer_representative: '홍길동',
+      footer_business_number: '123-45-67890',
+      footer_email: 'hello@example.com',
+      footer_address: isLocal ? '서울 강서구 공항대로 00' : '서울 강남구 테헤란로 00',
+      footer_phone: '010-1234-5678',
+      footer_business_hours: '매일 08:00 - 20:00',
+      footer_privacy_url: null,
+      footer_terms_url: null,
+      footer_note: '상담 후 현장 상황에 따라 최종 견적이 확정됩니다.',
+      product_name: template.name,
+      product_price_note: '제작비와 월 관리비는 상담 후 안내',
+      product_included_features: ['모바일 최적화', '문의 저장', '웹푸시 알림', 'SEO 기본 설정'],
+      onboarding_checklist: {
+        logo: false,
+        photos: true,
+        contact: true,
+        domain: false,
+      },
+      trust_badges: [
+        { title: 'A/S 안내', description: '작업 후 미흡한 부분을 확인합니다.' },
+        { title: '직접 관리', description: '상담부터 검수까지 기준을 맞춥니다.' },
+        { title: '사업자 정보 공개', description: '하단에 사업자 정보를 표시합니다.' },
+      ],
     },
     domains: [],
     calculator: {
@@ -70,10 +137,10 @@ export function createHomepagePreviewPackage(
       {
         id: 'preview-post-1',
         site_id: `preview-${key}`,
-        title: '강남 입주청소 현장 다녀왔습니다',
+        title: isPremium ? '논현동 라운지 리모델링' : isLocal ? '강서구 입주청소 현장' : '강남 입주청소 현장 다녀왔습니다',
         url: '#',
-        summary: '신축 아파트 분진과 창틀 오염을 집중적으로 관리한 사례입니다.',
-        thumbnail_url: HOMEPAGE_PREVIEW_IMAGES[1],
+        summary: isPremium ? '조명과 마감재의 밀도를 높인 상업공간 프로젝트입니다.' : '신축 아파트 분진과 창틀 오염을 집중적으로 관리한 사례입니다.',
+        thumbnail_url: HOMEPAGE_PREVIEW_IMAGES[isPremium ? 13 : 1],
         published_at: new Date().toISOString(),
         is_visible: true,
         is_pinned: true,
@@ -81,10 +148,10 @@ export function createHomepagePreviewPackage(
       {
         id: 'preview-post-2',
         site_id: `preview-${key}`,
-        title: '송파 이사청소 전후 비교',
+        title: isPremium ? '성수 쇼룸 공간 디자인' : isLocal ? '양천구 이사청소 전후 비교' : '송파 이사청소 전후 비교',
         url: '#',
-        summary: '주방 기름때와 욕실 물때를 중심으로 작업했습니다.',
-        thumbnail_url: HOMEPAGE_PREVIEW_IMAGES[2],
+        summary: isPremium ? '브랜드 분위기가 오래 남도록 동선과 조도를 정리했습니다.' : '주방 기름때와 욕실 물때를 중심으로 작업했습니다.',
+        thumbnail_url: HOMEPAGE_PREVIEW_IMAGES[isPremium ? 10 : 2],
         published_at: new Date(Date.now() - 86400000).toISOString(),
         is_visible: true,
         is_pinned: false,
@@ -92,15 +159,28 @@ export function createHomepagePreviewPackage(
       {
         id: 'preview-post-3',
         site_id: `preview-${key}`,
-        title: '분당 상가청소 정기관리 사례',
+        title: isPremium ? '청담 주거공간 리모델링' : isLocal ? '마포구 상가청소 빠른 방문' : '분당 상가청소 정기관리 사례',
         url: '#',
-        summary: '영업 전후 동선에 맞춰 빠르게 관리한 현장입니다.',
-        thumbnail_url: HOMEPAGE_PREVIEW_IMAGES[3],
+        summary: isPremium ? '불필요한 장식을 줄이고 소재의 깊이를 살린 현장입니다.' : '영업 전후 동선에 맞춰 빠르게 관리한 현장입니다.',
+        thumbnail_url: HOMEPAGE_PREVIEW_IMAGES[isPremium ? 11 : 3],
         published_at: new Date(Date.now() - 172800000).toISOString(),
         is_visible: true,
         is_pinned: false,
       },
     ],
+    mediaItems: HOMEPAGE_PREVIEW_IMAGES.slice(4, 10).map((imageUrl, index) => ({
+      id: `preview-media-${index + 1}`,
+      site_id: `preview-${key}`,
+      item_type: index < 3 ? 'after_photo' : 'portfolio',
+      title: ['창틀 청소 후', '욕실 청소 후', '주방 청소 후', '현장 사례', '바닥 마감', '디테일 점검'][index] || '현장 사진',
+      description: '실제 판매 페이지에서는 관리자에서 직접 등록한 사진이 표시됩니다.',
+      image_url: imageUrl,
+      before_image_url: null,
+      after_image_url: null,
+      alt_text: '청소 후 현장 사진',
+      sort_order: index,
+      is_visible: true,
+    })),
   }
 }
 

@@ -37,6 +37,9 @@ export async function POST(request: Request) {
     const siteId = sanitizeText(body.site_id, 80)
     const customerName = sanitizeText(body.customer_name, 40)
     const customerPhone = sanitizeText(body.customer_phone, 40)
+    const contactMethod = ['form', 'phone_click', 'kakao_click', 'test'].includes(String(body.contact_method))
+      ? String(body.contact_method)
+      : 'form'
     if (!siteId || !customerName || !customerPhone) {
       throw new HomepageApiError('이름과 연락처가 필요합니다.')
     }
@@ -76,6 +79,10 @@ export async function POST(request: Request) {
         estimated_amount: result.estimatedAmount,
         message: sanitizeText(body.message, 500),
         source_page: sanitizeText(body.source_page, 300),
+        contact_method: contactMethod,
+        consent_marketing: !!body.consent_marketing,
+        priority: contactMethod === 'form' ? 'high' : 'low',
+        source_campaign: sanitizeText(body.source_campaign, 120),
         user_agent: sanitizeText(request.headers.get('user-agent'), 300),
         ip_hash: ipHash,
       })
@@ -83,9 +90,11 @@ export async function POST(request: Request) {
       .single()
     if (error) throw error
 
-    sendHomepageEstimatePush(siteId, data.id).catch((err) => {
-      console.error('[homepage push]', err)
-    })
+    if (contactMethod === 'form' || contactMethod === 'test') {
+      sendHomepageEstimatePush(siteId, data.id).catch((err) => {
+        console.error('[homepage push]', err)
+      })
+    }
 
     return homepageJson({ submission: data }, 201)
   } catch (error) {

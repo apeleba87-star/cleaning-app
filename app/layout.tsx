@@ -1,6 +1,6 @@
 import type { Metadata, Viewport } from 'next'
 import Script from 'next/script'
-import { Inter } from 'next/font/google'
+import { Inter, Noto_Sans_KR } from 'next/font/google'
 import './globals.css'
 import PWARegister from '@/components/PWARegister'
 import KakaoConsultFab from '@/components/KakaoConsultFab'
@@ -10,6 +10,11 @@ const GTM_ID = 'GTM-MHC6FP8Z'
 const GA_MEASUREMENT_ID = 'G-HC84YK3YF1'
 
 const inter = Inter({ subsets: ['latin'] })
+const notoSansKr = Noto_Sans_KR({
+  subsets: ['latin'],
+  weight: ['400', '500', '700', '900'],
+  variable: '--font-noto-sans-kr',
+})
 
 export const metadata: Metadata = {
   title: '무플 청소 관리 솔루션',
@@ -96,7 +101,7 @@ gtag('config', '${GA_MEASUREMENT_ID}');`}
         <meta name="twitter:description" content="새로운 현장을 늘리는 것보다, 지금의 현장을 지켜내는 게 더 중요합니다." />
         <meta name="naver-site-verification" content="dd8aa4e731fa35e5850c8e12fcd0e3eb39fd36ab" />
       </head>
-      <body className={inter.className}>
+      <body className={`${inter.className} ${notoSansKr.variable}`}>
         {/* Google Tag Manager (noscript) - body 직후 */}
         <noscript>
           <iframe

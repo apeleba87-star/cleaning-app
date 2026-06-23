@@ -1,72 +1,83 @@
 import Link from 'next/link'
 import { getHomepagePalettes, HOMEPAGE_PAGE_LABELS, HOMEPAGE_TEMPLATES } from '@/lib/homepage/templates'
 
-const REPRESENTATIVE_TEMPLATE_KEYS = ['showcase-basic', 'sales-reviews', 'interactive-calculator']
+const CATEGORY_SECTIONS = [
+  {
+    key: 'showcase',
+    label: '전시형',
+    eyebrow: 'Showcase',
+    description: '업체 소개, 신뢰 요소, 현장 사례, 사진을 차분하게 보여주는 홈페이지입니다.',
+  },
+  {
+    key: 'sales',
+    label: '영업형',
+    eyebrow: 'Sales',
+    description: '후기, 가격, 전화/카카오톡 문의처럼 전환에 필요한 요소를 앞쪽에 배치합니다.',
+  },
+  {
+    key: 'interactive',
+    label: '참여형',
+    eyebrow: 'Interactive',
+    description: '고객이 평수와 조건을 입력하며 견적을 확인하고 상담으로 이어지는 구조입니다.',
+  },
+] as const
+
+const CATEGORY_LABELS = {
+  showcase: '전시형',
+  sales: '영업형',
+  interactive: '참여형',
+} as const
 
 export default function HomepagePreviewIndexPage() {
-  const representativeTemplates = HOMEPAGE_TEMPLATES.filter((template) =>
-    REPRESENTATIVE_TEMPLATE_KEYS.includes(template.key)
-  )
-  const additionalTemplates = HOMEPAGE_TEMPLATES.filter(
-    (template) => !REPRESENTATIVE_TEMPLATE_KEYS.includes(template.key)
-  )
-
   return (
     <main className="min-h-screen bg-[#f4f1eb] p-4 text-gray-950 sm:p-6">
       <div className="mx-auto max-w-6xl">
         <header className="border border-black/10 bg-white p-6 sm:p-12">
-          <p className="text-sm font-black uppercase tracking-[0.35em] text-gray-500">Premium templates</p>
+          <p className="text-sm font-black uppercase tracking-[0.35em] text-gray-500">Homepage templates</p>
           <div className="mt-4 grid gap-6 lg:grid-cols-[1.1fr_0.9fr] lg:items-end">
             <div>
-              <h1 className="text-5xl font-black leading-[0.98] tracking-[-0.075em] sm:text-7xl">청소업체 홈페이지 컬렉션</h1>
+              <h1 className="text-5xl font-black leading-[0.98] tracking-[-0.075em] sm:text-7xl">홈페이지 템플릿</h1>
               <p className="mt-5 max-w-2xl text-base leading-8 text-gray-600">
-                먼저 전시형, 영업형, 참여형 대표 디자인을 프리미엄 기준으로 정리했습니다. 색상보다 레이아웃과 첫인상이 다르게 보이도록 구성합니다.
+                전시형, 영업형, 참여형으로 나누어 고객이 목적에 맞는 홈페이지 구조를 바로 비교할 수 있게 정리했습니다. 각 템플릿은 실제 미리보기 화면으로 확인할 수 있습니다.
               </p>
             </div>
             <div className="grid grid-cols-3 gap-2">
               <GalleryStat value="9" label="템플릿" />
-              <GalleryStat value="6~7" label="페이지" />
-              <GalleryStat value="LIVE" label="블로그" />
+              <GalleryStat value="3" label="카테고리" />
+              <GalleryStat value="LIVE" label="미리보기" />
             </div>
           </div>
         </header>
 
         <div className="mt-5 flex gap-2 overflow-x-auto pb-1 text-sm">
-          {['대표 3종 우선', '전시형', '영업형', '참여형', '모바일 최적화'].map((label) => (
-            <span key={label} className="shrink-0 rounded-full border border-black/10 bg-white px-4 py-2 font-black">
+          {['전시형', '영업형', '참여형', '실제 미리보기', '모바일 최적화'].map((label) => (
+            <a key={label} href={label.endsWith('형') ? `#${label}` : '#templates'} className="shrink-0 rounded-full border border-black/10 bg-white px-4 py-2 font-black">
               {label}
-            </span>
+            </a>
           ))}
         </div>
 
-        <section className="mt-8">
-          <div className="mb-4 flex items-end justify-between gap-3">
-            <div>
-              <p className="text-xs font-black uppercase tracking-[0.25em] text-gray-500">Representative 3</p>
-              <h2 className="mt-2 text-3xl font-black tracking-[-0.06em]">대표 3종</h2>
-            </div>
-            <p className="hidden max-w-md text-right text-sm leading-6 text-gray-500 sm:block">
-              전시형, 영업형, 참여형의 기준이 되는 우선 완성 템플릿입니다.
-            </p>
-          </div>
-          <div className="grid gap-4 md:grid-cols-3">
-            {representativeTemplates.map((template, index) => (
-              <TemplateCard key={template.key} template={template} index={index} featured />
-            ))}
-          </div>
-        </section>
-
-        <section className="mt-10 pb-10">
-          <div className="mb-4">
-            <p className="text-xs font-black uppercase tracking-[0.25em] text-gray-500">Additional templates</p>
-            <h2 className="mt-2 text-3xl font-black tracking-[-0.06em]">추가 템플릿 6종</h2>
-          </div>
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-            {additionalTemplates.map((template, index) => (
-              <TemplateCard key={template.key} template={template} index={index + representativeTemplates.length} />
-            ))}
-          </div>
-        </section>
+        <div id="templates" className="space-y-12 pb-10">
+          {CATEGORY_SECTIONS.map((section) => {
+            const templates = HOMEPAGE_TEMPLATES.filter((template) => template.category === section.key)
+            return (
+              <section key={section.key} id={section.label} className="mt-8 scroll-mt-8">
+                <div className="mb-4 flex items-end justify-between gap-3">
+                  <div>
+                    <p className="text-xs font-black uppercase tracking-[0.25em] text-gray-500">{section.eyebrow}</p>
+                    <h2 className="mt-2 text-3xl font-black tracking-[-0.06em]">{section.label}</h2>
+                  </div>
+                  <p className="hidden max-w-md text-right text-sm leading-6 text-gray-500 sm:block">{section.description}</p>
+                </div>
+                <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                  {templates.map((template, index) => (
+                    <TemplateCard key={template.key} template={template} index={index} />
+                  ))}
+                </div>
+              </section>
+            )
+          })}
+        </div>
       </div>
     </main>
   )
@@ -75,38 +86,34 @@ export default function HomepagePreviewIndexPage() {
 function TemplateCard({
   template,
   index,
-  featured = false,
 }: {
   template: (typeof HOMEPAGE_TEMPLATES)[number]
   index: number
-  featured?: boolean
 }) {
+  const previewHref = `/homepage-preview/${template.key}`
+
   return (
-    <Link
-      href={`/homepage-preview/${template.key}`}
+    <article
       data-cursor="active"
-      className={`group overflow-hidden border bg-white transition duration-300 hover:-translate-y-1 hover:shadow-2xl ${
-        featured ? 'border-gray-950' : 'border-black/10'
-      }`}
+      className="group overflow-hidden border border-black/10 bg-white transition duration-300 hover:-translate-y-1 hover:shadow-2xl"
     >
-      <div className={`flex aspect-[4/3] items-center justify-center p-5 ${featured ? 'bg-gray-950' : 'bg-[#ebe7df]'}`}>
-        <div className="w-full border border-black/10 bg-white p-4 transition group-hover:scale-[1.02]">
-          <p className="text-xs font-black text-gray-500">
-            {featured ? '대표' : 'NO'}
-            {String(index + 1).padStart(2, '0')}
-          </p>
-          <div className="mt-8 h-3 w-24 bg-gray-950" />
-          <div className="mt-5 grid grid-cols-[1fr_0.7fr] gap-3">
-            <div className="h-24 bg-gray-100" />
-            <div className="h-24 bg-gray-950" />
+      <Link href={previewHref} className="block bg-[#ebe7df] p-3">
+        <div className="relative aspect-[4/3] overflow-hidden border border-black/10 bg-white">
+          <iframe
+            src={`/homepage-preview/${template.key}?embed=1`}
+            title={`${template.name} 미리보기`}
+            className="h-[400%] w-[400%] origin-top-left scale-[0.25] border-0"
+            loading="lazy"
+          />
+          <div className="pointer-events-none absolute inset-0 ring-1 ring-inset ring-black/5" />
+          <div className="absolute left-3 top-3 rounded-full bg-white/90 px-3 py-1 text-xs font-black shadow-sm backdrop-blur">
+            {CATEGORY_LABELS[template.category]} {String(index + 1).padStart(2, '0')}
           </div>
-          <div className="mt-3 h-2 w-full bg-gray-200" />
-          <div className="mt-2 h-2 w-2/3 bg-gray-200" />
         </div>
-      </div>
+      </Link>
       <div className="p-5">
         <div className="flex items-center justify-between gap-2">
-          <p className="text-xs font-black uppercase tracking-[0.2em] text-gray-500">{template.category}</p>
+          <p className="text-xs font-black uppercase tracking-[0.2em] text-gray-500">{CATEGORY_LABELS[template.category]}</p>
           <span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-bold">{template.pages.length}페이지</span>
         </div>
         <h2 className="mt-2 text-xl font-black">{template.name}</h2>
@@ -128,9 +135,16 @@ function TemplateCard({
             </span>
           ))}
         </div>
-        <p className="mt-5 text-sm font-black text-gray-950">디자인 확인하기</p>
+        <div className="mt-5 grid grid-cols-2 gap-2">
+          <Link href={previewHref} className="rounded-xl bg-gray-950 px-3 py-3 text-center text-sm font-black text-white">
+            전체 미리보기
+          </Link>
+          <Link href={previewHref} className="rounded-xl border border-black/10 px-3 py-3 text-center text-sm font-black">
+            홈 보기
+          </Link>
+        </div>
       </div>
-    </Link>
+    </article>
   )
 }
 

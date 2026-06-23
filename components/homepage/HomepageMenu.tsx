@@ -18,6 +18,7 @@ type Props = {
   currentPage: HomepagePageSlug
   palette: HomepagePalette
   showCalculator: boolean
+  inverseButton?: boolean
 }
 
 export default function HomepageMenu({
@@ -26,6 +27,7 @@ export default function HomepageMenu({
   currentPage,
   palette,
   showCalculator,
+  inverseButton = false,
 }: Props) {
   const [open, setOpen] = useState(false)
 
@@ -34,70 +36,80 @@ export default function HomepageMenu({
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="group flex h-11 w-11 items-center justify-center rounded-full border border-gray-950 bg-white"
+        className={`group flex h-12 w-12 items-center justify-center rounded-full border ${
+          inverseButton ? 'border-white/35 bg-white/8' : `hp-surface ${palette.border}`
+        }`}
         aria-label="메뉴 열기"
       >
         <span className="space-y-1.5">
-          <span className="block h-0.5 w-5 bg-gray-950" />
-          <span className="block h-0.5 w-5 bg-gray-950" />
-          <span className="block h-0.5 w-5 bg-gray-950" />
+          <span className="block h-0.5 w-5" style={{ background: inverseButton ? '#fff' : 'var(--hp-text)' }} />
+          <span className="block h-0.5 w-5" style={{ background: inverseButton ? '#fff' : 'var(--hp-text)' }} />
+          <span className="block h-0.5 w-5" style={{ background: inverseButton ? '#fff' : 'var(--hp-text)' }} />
         </span>
       </button>
 
       {open && createPortal(
-        <div className="fixed inset-0 z-[80]">
+        <div className="fixed inset-0 z-[80] p-3 sm:p-5">
           <button
             type="button"
             aria-label="메뉴 닫기"
-            className="absolute inset-0 bg-black/55 backdrop-blur-sm"
+            className="absolute inset-0 bg-black/45 backdrop-blur-md"
             onClick={() => setOpen(false)}
           />
           <aside
-            className="absolute right-0 top-0 flex h-full w-[min(460px,94vw)] flex-col overflow-hidden bg-white text-gray-950"
+            className="homepage-site relative ml-auto flex h-full w-[min(440px,94vw)] flex-col overflow-hidden border border-white/20 bg-white text-gray-950 shadow-2xl"
             style={palette.cssVars as CSSProperties}
           >
-            <div className="hp-dark border-b border-gray-200 p-6">
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <p className="homepage-label text-xs font-black uppercase opacity-70">Navigation</p>
-                  <h2 className="mt-3 text-3xl font-black leading-tight">{site.business_name || site.name}</h2>
-                  <p className="mt-2 text-sm opacity-70">{items.length}페이지 구성 · {site.service_area || '청소 전문'}</p>
+            <button
+              type="button"
+              onClick={() => setOpen(false)}
+              className="absolute right-4 top-4 z-10 flex h-11 w-11 items-center justify-center rounded-full bg-white/95 text-2xl font-light leading-none text-gray-950 shadow-lg ring-1 ring-black/10"
+              aria-label="메뉴 닫기"
+            >
+              ×
+            </button>
+            <div className="hp-dark relative overflow-hidden p-7">
+              <div className="absolute -right-16 -top-16 h-44 w-44 rounded-full bg-white/10" />
+              <div className="absolute bottom-0 right-8 h-20 w-20 rounded-full bg-white/5" />
+              <div className="relative pr-12">
+                <p className="homepage-label text-xs font-black uppercase text-white/55">Navigation</p>
+                <h2 className="mt-4 text-4xl font-black leading-none text-white">{site.business_name || site.name}</h2>
+                <div className="mt-4 flex flex-wrap gap-2">
+                  <span className="rounded-full bg-white/10 px-3 py-1 text-xs font-bold text-white/75">{items.length}페이지 구성</span>
+                  <span className="rounded-full bg-white/10 px-3 py-1 text-xs font-bold text-white/75">{site.service_area || '청소 전문'}</span>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => setOpen(false)}
-                  className="h-10 w-10 rounded-full border border-white/20 bg-white/10 text-xl font-light text-white"
-                  aria-label="메뉴 닫기"
-                >
-                  ×
-                </button>
               </div>
             </div>
 
-            <nav className="min-h-0 flex-1 overflow-y-auto bg-white p-5 sm:p-6">
-              <div>
-                {items.map((item, index) => (
+            <nav className="min-h-0 flex-1 overflow-y-auto bg-white p-4 text-gray-950 sm:p-5">
+              <div className="grid gap-2">
+                {items.map((item) => (
                   <a
                     key={item.slug}
                     href={item.href}
                     onClick={() => setOpen(false)}
-                    className={`grid grid-cols-[3rem_1fr_auto] items-center gap-3 border-b border-gray-200 py-4 transition hover:bg-gray-50 ${
-                      currentPage === item.slug ? 'font-black text-gray-950' : 'text-gray-700'
+                    className={`block rounded-2xl px-5 py-4 transition ${
+                      currentPage === item.slug
+                        ? 'shadow-sm'
+                        : 'bg-white text-gray-950 hover:-translate-y-0.5 hover:bg-black/[0.03]'
                     }`}
+                    style={currentPage === item.slug ? { background: 'var(--hp-primary)', color: inverseButton ? '#111827' : '#ffffff' } : undefined}
                   >
-                    <span className={`text-sm font-black ${palette.accentText}`}>{String(index + 1).padStart(2, '0')}</span>
                     <span className="text-lg font-black">{HOMEPAGE_PAGE_LABELS[item.slug]}</span>
-                    <span className={currentPage === item.slug ? palette.accentText : palette.subtext}>
-                      {currentPage === item.slug ? '현재' : '보기'}
-                    </span>
                   </a>
                 ))}
               </div>
             </nav>
 
-            <div className="shrink-0 border-t border-gray-200 bg-white p-5 sm:p-6">
-              <div className="hp-soft border border-gray-200 p-4">
-                <p className="text-base font-black">바로 상담</p>
+            <div className="shrink-0 border-t border-black/10 bg-white p-4 text-gray-950 sm:p-5">
+              <div className={`border bg-gray-50 p-5 ${palette.border}`}>
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-base font-black">바로 상담</p>
+                    <p className="mt-1 text-xs font-bold text-gray-500">빠른 연결</p>
+                  </div>
+                  <span className={`h-3 w-3 rounded-full ${palette.primary}`} />
+                </div>
                 <p className={`mt-1 text-sm ${palette.subtext}`}>
                   {site.service_area || '서비스 지역'} · {site.business_hours || '상담 가능 시간 안내'}
                 </p>
@@ -106,7 +118,7 @@ export default function HomepageMenu({
                     <a
                       href={items.find((item) => item.slug === 'estimate')?.href || '#'}
                       onClick={() => setOpen(false)}
-                      className="hp-primary px-4 py-3 text-center text-sm font-black"
+                      className="hp-primary rounded-full px-4 py-3 text-center text-sm font-black"
                     >
                       견적계산
                     </a>
@@ -114,13 +126,13 @@ export default function HomepageMenu({
                   {site.phone && (
                     <a
                       href={`tel:${site.phone}`}
-                      className="bg-gray-950 px-4 py-3 text-center text-sm font-black text-white"
+                      className="hp-dark rounded-full px-4 py-3 text-center text-sm font-black"
                     >
                       전화문의
                     </a>
                   )}
                   {site.kakao_url && (
-                    <a href={site.kakao_url} className="bg-yellow-300 px-4 py-3 text-center text-sm font-black text-gray-950">
+                    <a href={site.kakao_url} className="rounded-full bg-yellow-300 px-4 py-3 text-center text-sm font-black text-gray-950">
                       카카오톡 상담
                     </a>
                   )}

@@ -28,7 +28,7 @@ export const DEFAULT_HOMEPAGE_CALCULATOR: HomepageCalculatorSettings = {
   },
   discount_rate: 0,
   result_notice: '실제 견적은 오염도, 구조, 현장 상황에 따라 달라질 수 있습니다.',
-  caution_note: '방문 상담 후 최종 금액이 확정됩니다.',
+  caution_note: '상담후 최종 금액이 확정 됩니다.',
 }
 
 export function toNumber(value: unknown, fallback = 0) {
