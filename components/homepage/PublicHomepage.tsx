@@ -85,7 +85,7 @@ export default function PublicHomepage({ data, page = 'home' }: Props) {
           </a>
           <div className="flex shrink-0 items-center gap-2">
             {site.phone && (
-              <a href={`tel:${site.phone}`} className={`hidden rounded-full px-4 py-2 text-sm font-black sm:inline-flex ${palette.primary} ${palette.primaryText}`}>
+              <a href={`tel:${site.phone}`} className="hp-primary hidden rounded-full px-4 py-2 text-sm font-black sm:inline-flex">
                 전화
               </a>
             )}
@@ -132,7 +132,7 @@ export default function PublicHomepage({ data, page = 'home' }: Props) {
         <div className="fixed inset-x-0 bottom-0 z-40 border-t border-black/10 bg-white/92 p-3 shadow-lg backdrop-blur-xl">
           <div className="mx-auto flex max-w-2xl gap-2">
             {showCalculator && (
-              <a href={pageHref('estimate')} className={`flex-1 rounded-full ${palette.primary} py-3 text-center font-black ${palette.primaryText}`}>
+              <a href={pageHref('estimate')} className="hp-primary flex-1 rounded-full py-3 text-center font-black">
                 견적 계산
               </a>
             )}
@@ -169,10 +169,10 @@ function HomepageRevealScript() {
       var targets = Array.from(new Set(Array.from(root.querySelectorAll(selector))));
       targets.forEach(function (target, index) {
         target.classList.add('homepage-reveal');
-        target.style.setProperty('--reveal-delay', String(Math.min(index % 4, 3) * 140) + 'ms');
+        target.style.setProperty('--reveal-delay', String(Math.min(index % 3, 2) * 70) + 'ms');
       });
       function checkReveal() {
-        var triggerLine = window.innerHeight * 0.76;
+        var triggerLine = window.innerHeight * 0.92;
         targets.forEach(function (target) {
           if (target.classList.contains('homepage-revealed')) return;
           var rect = target.getBoundingClientRect();
@@ -203,7 +203,7 @@ function HomepageRevealScript() {
           entry.target.classList.add('homepage-revealed');
           observer.unobserve(entry.target);
         });
-      }, { rootMargin: '0px 0px -42% 0px', threshold: 0.08 });
+      }, { rootMargin: '0px 0px 18% 0px', threshold: 0.02 });
       targets.forEach(function (target) {
         if (target.classList.contains('homepage-revealed')) return;
         observer.observe(target);
@@ -308,7 +308,7 @@ function TemplateHero({
               고객은 전화하기 전에 금액을 먼저 확인합니다. 첫 화면에서 평수와 옵션을 입력하고 바로 전화/카카오톡 상담으로 이어지게 만듭니다.
             </p>
             <div className="mt-8 flex flex-wrap gap-3">
-              <a href={pageHref('estimate')} className={`hp-cta ${palette.primary} ${palette.primaryText}`}>견적 계산 시작</a>
+              <a href={pageHref('estimate')} className="hp-cta hp-primary">견적 계산 시작</a>
               {site.phone && <a href={`tel:${site.phone}`} className={`hp-cta border ${palette.border} bg-white ${palette.text}`}>전화 문의</a>}
             </div>
           </div>
@@ -329,9 +329,9 @@ function TemplateHero({
             <h1 className="hp-display font-black">{site.headline}</h1>
             <p className="mt-6 max-w-2xl text-lg leading-9 opacity-75">{site.subheadline}</p>
             <div className="mt-8 grid gap-3 sm:grid-cols-3">
-              <LocalBadge label="상담" value="전화/카톡" palette={palette} />
-              <LocalBadge label="확인" value="전후 사진" palette={palette} />
-              <LocalBadge label="견적" value="기준 공개" palette={palette} />
+              <LocalBadge label="상담" value="전화/카톡" palette={palette} variant="dark" />
+              <LocalBadge label="확인" value="전후 사진" palette={palette} variant="dark" />
+              <LocalBadge label="견적" value="기준 공개" palette={palette} variant="dark" />
             </div>
           </div>
           <ContactTicket site={site} palette={palette} large />
@@ -373,7 +373,7 @@ function HeroCopy({
       <h1 className="hp-display font-black">{site.headline}</h1>
       <p className="hp-copy mt-6 max-w-2xl">{site.subheadline}</p>
       <div className="mt-8 flex flex-wrap gap-3">
-        <a href={ctaHref} className={`hp-cta ${palette.primary} ${palette.primaryText}`}>
+        <a href={ctaHref} className="hp-cta hp-primary">
           {ctaLabel}
         </a>
         {site.blog_url && (
@@ -399,7 +399,7 @@ function SceneMosaic({ palette, usePreviewImages = false }: { palette: HomepageP
           style={
             usePreviewImages
               ? {
-                  backgroundImage: `linear-gradient(180deg, rgba(0,0,0,0.08), rgba(0,0,0,0.34) 42%, rgba(0,0,0,0.78)), url(${HOMEPAGE_PREVIEW_IMAGES[index]})`,
+                  backgroundImage: `linear-gradient(180deg, rgba(0,0,0,0.62), rgba(0,0,0,0.48) 42%, rgba(0,0,0,0.84)), url(${HOMEPAGE_PREVIEW_IMAGES[index]})`,
                   backgroundPosition: 'center',
                   backgroundSize: 'cover',
                 }
@@ -602,7 +602,7 @@ function FinalCta({
             <p className="hp-copy mt-4 max-w-2xl">평수와 현장 상태를 알려주시면 가능한 일정과 예상 비용을 빠르게 안내합니다.</p>
           </div>
           <div className="grid gap-2 sm:min-w-72">
-            {showCalculator && <a href={pageHref('estimate')} className={`hp-cta ${palette.primary} ${palette.primaryText}`}>예상 견적 확인</a>}
+            {showCalculator && <a href={pageHref('estimate')} className="hp-cta hp-primary">예상 견적 확인</a>}
             {site.phone && <a href={`tel:${site.phone}`} className="hp-cta hp-dark">전화 문의</a>}
             {site.kakao_url && <a href={site.kakao_url} className="hp-cta bg-yellow-300 text-gray-950">카카오톡 문의</a>}
           </div>
@@ -612,9 +612,28 @@ function FinalCta({
   )
 }
 
-function LocalBadge({ label, value, palette }: { label: string; value: string; palette: HomepagePalette }) {
+function LocalBadge({
+  label,
+  value,
+  palette,
+  variant = 'light',
+}: {
+  label: string
+  value: string
+  palette: HomepagePalette
+  variant?: 'light' | 'dark'
+}) {
+  if (variant === 'dark') {
+    return (
+      <div className="border border-white/15 bg-white/8 p-4 text-white">
+        <p className="text-xs font-bold text-white/60">{label}</p>
+        <p className="mt-1 font-black text-white">{value}</p>
+      </div>
+    )
+  }
+
   return (
-    <div className={`${palette.surface} border ${palette.border} p-4`}>
+    <div className={`${palette.surface} border ${palette.border} p-4 ${palette.text}`}>
       <p className={`text-xs font-bold ${palette.subtext}`}>{label}</p>
       <p className="mt-1 font-black">{value}</p>
     </div>
@@ -636,7 +655,7 @@ function ContactTicket({
       <p className="mt-8 text-4xl font-black">{site.phone || '010-1234-5678'}</p>
       <p className="mt-3 text-sm opacity-75">전화가 어려우면 카카오톡으로 사진과 평수를 보내주세요.</p>
       <div className="mt-6 grid gap-2">
-        {site.phone && <a href={`tel:${site.phone}`} className={`hp-cta ${palette.surface} ${palette.text}`}>전화 바로 연결</a>}
+        {site.phone && <a href={`tel:${site.phone}`} className="hp-cta bg-white text-gray-950">전화 바로 연결</a>}
         {site.kakao_url && <a href={site.kakao_url} className="hp-cta bg-yellow-300 text-gray-950">카카오톡 상담</a>}
       </div>
     </div>
@@ -876,7 +895,7 @@ function ContactPage({ data, palette }: { data: HomepagePublicPackage; palette: 
         <p className="mt-3 text-gray-300">{site.description || '현장 상황에 맞춰 빠르게 안내드리겠습니다.'}</p>
         <div className="mt-6 flex flex-wrap gap-2">
           {site.phone && (
-            <a href={`tel:${site.phone}`} className={`hp-cta ${palette.surface} ${palette.text}`}>
+            <a href={`tel:${site.phone}`} className="hp-cta bg-white text-gray-950">
               전화 문의
             </a>
           )}

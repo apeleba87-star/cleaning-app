@@ -106,7 +106,7 @@ export default function HomepageMenu({
                     <a
                       href={items.find((item) => item.slug === 'estimate')?.href || '#'}
                       onClick={() => setOpen(false)}
-                      className={`px-4 py-3 text-center text-sm font-black ${palette.primary} ${palette.primaryText}`}
+                      className="hp-primary px-4 py-3 text-center text-sm font-black"
                     >
                       견적계산
                     </a>
