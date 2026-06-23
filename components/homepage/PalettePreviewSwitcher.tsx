@@ -33,7 +33,7 @@ export default function PalettePreviewSwitcher({ templateKey, currentPalette, pa
           홈 보기
         </a>
         <span className="shrink-0 rounded-full bg-gray-100 px-3 py-1.5 text-xs font-black text-gray-600">
-          {template.name} 미리보기 중
+          {template.name} 확인 중
         </span>
         <span className="ml-2 shrink-0 text-xs font-black text-gray-500">전체 분위기</span>
         {palettes.map((palette) => {

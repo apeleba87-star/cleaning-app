@@ -463,7 +463,7 @@ function InteractiveSurveyHomePage({
                 질문에 답하면 견적이 완성됩니다
               </h1>
               <p className="relative mt-6 max-w-xl text-base font-medium leading-8 text-[#52506d]">
-                한 번에 하나씩 고르는 설문형 화면입니다. 내부 계산과 상담 저장은 계산기 첫화면형과 같은 로직을 사용합니다.
+                평수와 서비스만 차례대로 선택하면 우리집 예상 견적을 바로 확인할 수 있습니다.
               </p>
               <div className="relative mt-8 grid gap-3">
                 {['STEP 1 평수 입력', 'STEP 2 서비스 선택', 'STEP 3 예상 결과 확인'].map((item, index) => (
@@ -535,7 +535,7 @@ function InteractiveDiagnosisHomePage({
                 우리집 상태에 맞는 청소를 추천합니다
               </h1>
               <p className="mt-6 max-w-2xl text-base font-medium leading-8 text-[#73513e]">
-                고객은 먼저 문제를 고르고, 같은 계산기 로직으로 예상 비용과 상담 접수를 진행합니다. 겉보기는 진단형 랜딩처럼 설계합니다.
+                걱정되는 공간을 먼저 고르면 필요한 청소 범위와 예상 비용을 쉽게 확인할 수 있습니다.
               </p>
               <div className="mt-8 grid gap-3 sm:grid-cols-2">
                 {diagnosisCards.map(([title, text]) => (
@@ -560,9 +560,9 @@ function InteractiveDiagnosisHomePage({
 
             <div className="rounded-[2.4rem] border border-[#fed7aa] bg-white p-4 shadow-[0_40px_120px_rgba(194,65,12,0.16)]">
               <div className="mb-4 rounded-[1.6rem] bg-[#fff7ed] p-5">
-                <p className="text-sm font-black text-[#c2410c]">추천 결과 미리보기</p>
+                <p className="text-sm font-black text-[#c2410c]">추천 결과</p>
                 <p className="mt-2 text-3xl font-black text-[#2b160d]">입주청소 + 창틀 집중관리</p>
-                <p className="mt-2 text-sm leading-6 text-[#73513e]">선택한 상태에 따라 상담 문구와 견적 조건을 함께 저장합니다.</p>
+                <p className="mt-2 text-sm leading-6 text-[#73513e]">선택한 상태에 맞춰 필요한 청소 범위와 예상 비용을 안내합니다.</p>
               </div>
               {calculator && <EstimateCalculator site={site} calculator={calculator} />}
             </div>
@@ -1477,7 +1477,7 @@ function BeforeAfterSection({
     ? managedScenes.slice(0, 4).map((item, index) => [
         index % 2 === 0 ? 'Before' : 'After',
         item.title || '현장 사진',
-        item.description || '관리자가 등록한 현장 사진입니다.',
+        item.description || '현장에서 확인한 청소 사진입니다.',
         item.image_url,
         item.alt_text || item.title || '',
       ])
@@ -2148,7 +2148,7 @@ function PortfolioSection({
       <div className="mb-6">
         <p className={`homepage-label text-sm font-bold uppercase ${palette.accentText}`}>Live portfolio</p>
         <h1 className="mt-1 text-3xl font-black">{siteTitle}</h1>
-        <p className="mt-2 text-sm text-gray-600">관리자가 등록한 사례와 블로그 현장 글을 함께 표시합니다.</p>
+        <p className="mt-2 text-sm text-gray-600">실제 현장 사례와 작업 사진을 확인해보세요.</p>
       </div>
       <div className="grid gap-3 md:grid-cols-3">
         {visibleManagedItems.map((item) => (

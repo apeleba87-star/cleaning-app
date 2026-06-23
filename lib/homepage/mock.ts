@@ -115,7 +115,7 @@ export function createHomepagePreviewPackage(
       footer_note: '상담 후 현장 상황에 따라 최종 견적이 확정됩니다.',
       product_name: template.name,
       product_price_note: '제작비와 월 관리비는 상담 후 안내',
-      product_included_features: ['모바일 최적화', '문의 저장', '웹푸시 알림', 'SEO 기본 설정'],
+      product_included_features: ['모바일 최적화', '빠른 문의 연결', '알림 기능', '검색 노출 기본 설정'],
       onboarding_checklist: {
         logo: false,
         photos: true,
@@ -173,7 +173,7 @@ export function createHomepagePreviewPackage(
       site_id: `preview-${key}`,
       item_type: index < 3 ? 'after_photo' : 'portfolio',
       title: ['창틀 청소 후', '욕실 청소 후', '주방 청소 후', '현장 사례', '바닥 마감', '디테일 점검'][index] || '현장 사진',
-      description: '실제 판매 페이지에서는 관리자에서 직접 등록한 사진이 표시됩니다.',
+      description: '현장에서 확인할 수 있는 청소 후 사진입니다.',
       image_url: imageUrl,
       before_image_url: null,
       after_image_url: null,

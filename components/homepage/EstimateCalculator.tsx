@@ -42,6 +42,7 @@ export default function EstimateCalculator({ site, calculator }: Props) {
   const [error, setError] = useState('')
 
   const result = useMemo(() => calculateHomepageEstimate(input, calculator), [input, calculator])
+  const isTemplatePreview = site.id?.startsWith('preview-') || site.slug?.startsWith('preview-') || site.slug?.startsWith('embed-')
   const hasArea = input.area_pyeong > 0
   const estimatedHours = input.area_pyeong >= 30 ? '6~7시간' : input.area_pyeong >= 20 ? '5~6시간' : '3~4시간'
   const recommendedPeople = input.area_pyeong >= 30 ? '3명' : '2명'
@@ -70,6 +71,8 @@ export default function EstimateCalculator({ site, calculator }: Props) {
     : null
 
   const trackContactClick = (method: 'phone' | 'kakao') => {
+    if (isTemplatePreview) return
+
     const payload = {
       site_id: site.id,
       customer_name: '계산기 클릭',
@@ -105,6 +108,12 @@ export default function EstimateCalculator({ site, calculator }: Props) {
     setSaved(false)
 
     try {
+      if (isTemplatePreview) {
+        setSaved(true)
+        setPhone('')
+        return
+      }
+
       const res = await fetch('/api/homepage/public/estimate-submissions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -328,7 +337,7 @@ export default function EstimateCalculator({ site, calculator }: Props) {
                   required
                 />
                 {error && <p className="text-sm text-red-600">{error}</p>}
-                {saved && <p className="text-sm font-bold text-green-700">상담 신청이 접수되었습니다.</p>}
+                {saved && <p className="text-sm font-bold text-green-700">접수가 완료 되었습니다.</p>}
                 <div>
                   <button
                     type="submit"
