@@ -20,38 +20,55 @@ const CATEGORY_SECTIONS = [
 ] as const
 
 type CategoryKey = (typeof CATEGORY_SECTIONS)[number]['key']
+type AudienceKey = 'cleaning' | 'general'
 
 export default function HomepagePreviewIndexPage({
   searchParams,
 }: {
-  searchParams?: { category?: string }
+  searchParams?: { category?: string; audience?: string }
 }) {
+  const audience: AudienceKey = searchParams?.audience === 'general' ? 'general' : 'cleaning'
+  const categorySections = audience === 'general'
+    ? CATEGORY_SECTIONS.filter((section) => section.key !== 'interactive')
+    : CATEGORY_SECTIONS
   const activeCategory = CATEGORY_SECTIONS.some((section) => section.key === searchParams?.category)
     ? (searchParams?.category as CategoryKey)
     : null
   const visibleSections = activeCategory
-    ? CATEGORY_SECTIONS.filter((section) => section.key === activeCategory)
-    : CATEGORY_SECTIONS
+    ? categorySections.filter((section) => section.key === activeCategory)
+    : categorySections
+  const baseHref = audience === 'general' ? '/homepage-preview?audience=general' : '/homepage-preview'
 
   return (
     <main className="min-h-screen bg-[#f4f1eb] p-4 text-gray-950 sm:p-6">
       <div className="mx-auto max-w-6xl">
         <header className="border border-black/10 bg-white p-6 sm:p-12">
-          <p className="text-sm font-black uppercase tracking-[0.35em] text-gray-500">Homepage templates</p>
+          <p className="text-sm font-black uppercase tracking-[0.35em] text-gray-500">
+            {audience === 'general' ? 'Field service templates' : 'Homepage templates'}
+          </p>
           <div className="mt-4">
-            <h1 className="text-5xl font-black leading-[0.98] tracking-[-0.075em] sm:text-7xl">홈페이지 템플릿</h1>
+            <h1 className="text-5xl font-black leading-[0.98] tracking-[-0.075em] sm:text-7xl">
+              {audience === 'general' ? '범용 현장업 템플릿' : '홈페이지 템플릿'}
+            </h1>
             <p className="mt-5 max-w-2xl text-base leading-8 text-gray-600">
-              원하는 유형을 선택해 디자인을 확인하세요.
+              {audience === 'general'
+                ? '줄눈시공, 인테리어, 목공, 타일처럼 현장 사례가 중요한 업종에 맞춘 템플릿입니다.'
+                : '원하는 유형을 선택해 디자인을 확인하세요.'}
             </p>
           </div>
         </header>
 
         <div className="mt-5 flex gap-2 overflow-x-auto pb-1 text-sm">
-          <CategoryButton href="/homepage-preview" active={!activeCategory} label="전체" />
-          {CATEGORY_SECTIONS.map((section) => (
+          <CategoryButton href="/homepage-preview" active={audience === 'cleaning'} label="청소업 템플릿" />
+          <CategoryButton href="/homepage-preview?audience=general" active={audience === 'general'} label="범용 현장업" />
+        </div>
+
+        <div className="mt-5 flex gap-2 overflow-x-auto pb-1 text-sm">
+          <CategoryButton href={baseHref} active={!activeCategory} label="전체" />
+          {categorySections.map((section) => (
             <CategoryButton
               key={section.key}
-              href={`/homepage-preview?category=${section.key}`}
+              href={`${baseHref}${baseHref.includes('?') ? '&' : '?'}category=${section.key}`}
               active={activeCategory === section.key}
               label={section.label}
             />
@@ -69,7 +86,7 @@ export default function HomepagePreviewIndexPage({
                 </div>
                 <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
                   {templates.map((template) => (
-                    <TemplateCard key={template.key} template={template} />
+                    <TemplateCard key={template.key} template={template} audience={audience} />
                   ))}
                 </div>
               </section>
@@ -94,10 +111,13 @@ function CategoryButton({ href, active, label }: { href: string; active: boolean
   )
 }
 
-function TemplateCard({ template }: {
+function TemplateCard({ template, audience }: {
   template: (typeof HOMEPAGE_TEMPLATES)[number]
+  audience: AudienceKey
 }) {
-  const previewHref = `/homepage-preview/${template.key}`
+  const audienceQuery = audience === 'general' ? '?audience=general' : ''
+  const embedQuery = audience === 'general' ? '?embed=1&audience=general' : '?embed=1'
+  const previewHref = `/homepage-preview/${template.key}${audienceQuery}`
 
   return (
     <article
@@ -107,7 +127,7 @@ function TemplateCard({ template }: {
       <Link href={previewHref} className="block bg-[#ebe7df] p-3">
         <div className="relative aspect-[4/3] overflow-hidden border border-black/10 bg-white">
           <iframe
-            src={`/homepage-preview/${template.key}?embed=1`}
+            src={`/homepage-preview/${template.key}${embedQuery}`}
             title={`${template.name} 디자인`}
             className="h-[400%] w-[400%] origin-top-left scale-[0.25] border-0"
             loading="lazy"

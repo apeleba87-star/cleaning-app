@@ -21,6 +21,12 @@ const serviceCards = [
   ['상가/사무실', '영업 동선, 바닥 상태, 화장실 사용량에 맞춰 정기 또는 단기 청소를 진행합니다.'],
 ]
 
+const generalServiceCards = [
+  ['줄눈/타일 시공', '욕실, 주방, 베란다처럼 사용 빈도가 높은 공간의 마감 상태를 정리합니다.'],
+  ['목공/맞춤 제작', '선반, 수납장, 몰딩, 문틀처럼 공간에 맞는 제작과 설치를 상담합니다.'],
+  ['인테리어/부분 공사', '상가, 주거공간, 부분 보수처럼 현장 범위에 맞춰 시공을 안내합니다.'],
+]
+
 const reviews = [
   '창틀이랑 욕실 사진을 전후로 보내줘서 확인이 쉬웠어요.',
   '입주 전날 급하게 문의했는데 가능한 시간부터 바로 안내해줬습니다.',
@@ -45,10 +51,34 @@ const reviewCards = [
   },
 ]
 
+const generalReviewCards = [
+  {
+    id: 'site**',
+    rating: 5,
+    review: '작업 전후 사진을 보고 상담할 수 있어서 믿음이 갔습니다.',
+  },
+  {
+    id: 'home**',
+    rating: 5,
+    review: '현장 상황과 시공 범위를 이해하기 쉽게 안내해줬습니다.',
+  },
+  {
+    id: 'work**',
+    rating: 5,
+    review: '일정과 비용 기준을 미리 설명해줘서 결정이 쉬웠습니다.',
+  },
+]
+
 const faqRows = [
   ['견적 금액은 확정 금액인가요?', '홈페이지 계산 금액은 예상 견적이며 현장 구조와 오염도에 따라 달라질 수 있습니다.'],
   ['당일 예약도 가능한가요?', '일정이 비어 있으면 가능합니다. 전화나 카카오톡으로 빠르게 확인해주세요.'],
   ['청소 전후 사진을 받을 수 있나요?', '요청 시 작업 전후 사진을 공유해드립니다.'],
+]
+
+const generalFaqRows = [
+  ['상담 후 비용이 바뀔 수 있나요?', '현장 상태, 자재, 시공 범위에 따라 최종 비용은 달라질 수 있습니다.'],
+  ['방문 상담도 가능한가요?', '일정이 맞으면 방문 상담 또는 사진 상담으로 먼저 안내드립니다.'],
+  ['시공 전후 사진을 볼 수 있나요?', '요청 시 작업 사례와 전후 사진을 확인하실 수 있습니다.'],
 ]
 
 const cleaningScenes = [
@@ -56,6 +86,13 @@ const cleaningScenes = [
   ['After', '욕실 물때', '수전, 유리, 배수구 주변 디테일'],
   ['Check', '주방 기름때', '후드와 상판 오염 확인'],
   ['Finish', '바닥 마감', '청소 후 동선별 최종 점검'],
+]
+
+const generalScenes = [
+  ['Before', '시공 전 현장', '현장 상태와 필요한 범위를 먼저 확인합니다.'],
+  ['Work', '시공 디테일', '자재, 마감, 치수에 맞춰 작업합니다.'],
+  ['After', '완료 후 모습', '작업 후 결과물을 사진으로 확인합니다.'],
+  ['Check', '마감 점검', '사용 동선과 마감 상태를 최종 점검합니다.'],
 ]
 
 const confidenceRows = [
@@ -70,8 +107,13 @@ const compareRows = [
   ['작업 확인', '전후 사진으로 청소 상태를 확인합니다.', '가능', '제한적'],
 ]
 
+function isGeneralPreviewSite(site: HomepagePublicPackage['site']) {
+  return site.business_name === '온사이트 스튜디오' || site.seo_keywords?.includes('현장업')
+}
+
 export default function PublicHomepage({ data, page = 'home' }: Props) {
   const { site, calculator, blogPosts, mediaItems } = data
+  const isGeneral = isGeneralPreviewSite(site)
   const template = getHomepageTemplate(site.template_key)
   const palette = getHomepagePalette(site.template_key, site.color_palette)
   const currentPage = normalizeHomepagePageSlug(page, site.template_key)
@@ -134,7 +176,7 @@ export default function PublicHomepage({ data, page = 'home' }: Props) {
         />
       )}
       {currentPage === 'about' && <AboutPage data={data} palette={palette} />}
-      {currentPage === 'services' && <ServicesPage showEstimateCta={!!showCalculator} pageHref={pageHref} palette={palette} />}
+      {currentPage === 'services' && <ServicesPage showEstimateCta={!!showCalculator} pageHref={pageHref} palette={palette} general={isGeneral} />}
       {currentPage === 'portfolio' && (
         <PortfolioSection
           palette={palette}
@@ -149,8 +191,8 @@ export default function PublicHomepage({ data, page = 'home' }: Props) {
         </section>
       )}
       {currentPage === 'estimate' && !showCalculator && <ContactPage data={data} palette={palette} />}
-      {currentPage === 'reviews' && <ReviewsPage palette={palette} />}
-      {currentPage === 'faq' && <FaqPage palette={palette} />}
+      {currentPage === 'reviews' && <ReviewsPage palette={palette} general={isGeneral} />}
+      {currentPage === 'faq' && <FaqPage palette={palette} general={isGeneral} />}
       {currentPage === 'contact' && <ContactPage data={data} palette={palette} />}
 
       <HomepageFooter site={site} palette={palette} />
@@ -297,6 +339,7 @@ function HomePage({
   palette: HomepagePalette
 }) {
   const { site, blogPosts } = data
+  const general = isGeneralPreviewSite(site)
   const usePreviewImages = site.slug?.startsWith('preview-')
 
   if (site.template_key === 'showcase-portfolio') {
@@ -376,15 +419,15 @@ function HomePage({
         secondaryCalculator={secondaryCalculator}
         isCampaign={isCampaign}
       />
-      <TrustStrip palette={palette} />
-      <ServicesPage compact showEstimateCta={secondaryCalculator} pageHref={pageHref} palette={palette} />
+      <TrustStrip palette={palette} general={general} />
+      <ServicesPage compact showEstimateCta={secondaryCalculator} pageHref={pageHref} palette={palette} general={general} />
       {blogPosts.length > 0 && (
         <PortfolioSection compact palette={palette} siteTitle={site.portfolio_title || '최근 현장 사례'} posts={blogPosts.slice(0, 3)} mediaItems={data.mediaItems} />
       )}
-      <BeforeAfterSection palette={palette} usePreviewImages={usePreviewImages} mediaItems={data.mediaItems} />
-      <ProcessSection palette={palette} compact />
-      <ReviewsPage compact palette={palette} />
-      <HomepageFaqSection palette={palette} />
+      <BeforeAfterSection palette={palette} usePreviewImages={usePreviewImages} mediaItems={data.mediaItems} general={general} />
+      <ProcessSection palette={palette} compact general={general} />
+      <ReviewsPage compact palette={palette} general={general} />
+      <HomepageFaqSection palette={palette} general={general} />
       <AreaSection site={site} palette={palette} />
       <FinalCta data={data} palette={palette} pageHref={pageHref} showCalculator={heroCalculator || secondaryCalculator} />
     </>
@@ -431,7 +474,7 @@ function InteractiveCalculatorHomePage({
       {blogPosts.length > 0 && (
         <PortfolioSection compact palette={palette} siteTitle={site.portfolio_title || '최근 현장 사례'} posts={blogPosts.slice(0, 3)} mediaItems={data.mediaItems} />
       )}
-      <ServicesPage compact showEstimateCta={false} pageHref={pageHref} palette={palette} />
+      <ServicesPage compact showEstimateCta={false} pageHref={pageHref} palette={palette} general={isGeneralPreviewSite(site)} />
       <HomepageFaqSection palette={palette} />
       <FinalCta data={data} palette={palette} pageHref={pageHref} showCalculator={false} />
     </>
@@ -574,7 +617,7 @@ function InteractiveDiagnosisHomePage({
       {blogPosts.length > 0 && (
         <PortfolioSection compact palette={palette} siteTitle={site.portfolio_title || '추천 현장 사례'} posts={blogPosts.slice(0, 3)} mediaItems={data.mediaItems} />
       )}
-      <ServicesPage compact showEstimateCta={false} pageHref={pageHref} palette={palette} />
+      <ServicesPage compact showEstimateCta={false} pageHref={pageHref} palette={palette} general={isGeneralPreviewSite(site)} />
       <FinalCta data={data} palette={palette} pageHref={pageHref} showCalculator={false} />
     </>
   )
@@ -590,6 +633,7 @@ function PremiumHomePage({
   palette: HomepagePalette
 }) {
   const { site, blogPosts } = data
+  const general = isGeneralPreviewSite(site)
 
   return (
     <>
@@ -602,7 +646,7 @@ function PremiumHomePage({
       <PremiumServiceSection />
       <PremiumSectionBridge label="Process" text="상담부터 검수까지 균형 있게 이어집니다" />
       <PremiumProcessSection />
-      <ReviewsPage compact palette={palette} />
+      <ReviewsPage compact palette={palette} general={general} />
       <PremiumContactSection data={data} pageHref={pageHref} />
     </>
   )
@@ -619,18 +663,19 @@ function LocalShowcaseHomePage({
 }) {
   const { site, blogPosts } = data
   const usePreviewImages = site.slug?.startsWith('preview-')
+  const general = isGeneralPreviewSite(site)
 
   return (
     <>
       <LocalHero data={data} pageHref={pageHref} palette={palette} />
       <LocalAreaTrust site={site} palette={palette} />
-      <ServicesPage compact showEstimateCta={false} pageHref={pageHref} palette={palette} />
+      <ServicesPage compact showEstimateCta={false} pageHref={pageHref} palette={palette} general={general} />
       {blogPosts.length > 0 && (
         <PortfolioSection compact palette={palette} siteTitle={site.portfolio_title || '우리 동네 현장 사례'} posts={blogPosts.slice(0, 3)} mediaItems={data.mediaItems} />
       )}
-      <BeforeAfterSection palette={palette} usePreviewImages={usePreviewImages} mediaItems={data.mediaItems} />
-      <ReviewsPage compact palette={palette} />
-      <HomepageFaqSection palette={palette} />
+      <BeforeAfterSection palette={palette} usePreviewImages={usePreviewImages} mediaItems={data.mediaItems} general={general} />
+      <ReviewsPage compact palette={palette} general={general} />
+      <HomepageFaqSection palette={palette} general={general} />
       <FinalCta data={data} palette={palette} pageHref={pageHref} showCalculator={false} />
     </>
   )
@@ -647,19 +692,20 @@ function SalesReviewsHomePage({
 }) {
   const { site, blogPosts } = data
   const usePreviewImages = site.slug?.startsWith('preview-')
+  const general = isGeneralPreviewSite(site)
 
   return (
     <>
       <SalesReviewsHero data={data} pageHref={pageHref} palette={palette} />
-      <AfterPhotoSliderSection palette={palette} mediaItems={data.mediaItems} />
-      <ReviewsPage compact palette={palette} title="후기" />
-      <SalesPricingSection palette={palette} />
-      <BeforeAfterSection palette={palette} usePreviewImages={usePreviewImages} mediaItems={data.mediaItems} />
-      <ServicesPage compact showEstimateCta={false} pageHref={pageHref} palette={palette} />
+      <AfterPhotoSliderSection palette={palette} mediaItems={data.mediaItems} general={general} />
+      <ReviewsPage compact palette={palette} title="후기" general={general} />
+      <SalesPricingSection palette={palette} general={general} />
+      <BeforeAfterSection palette={palette} usePreviewImages={usePreviewImages} mediaItems={data.mediaItems} general={general} />
+      <ServicesPage compact showEstimateCta={false} pageHref={pageHref} palette={palette} general={general} />
       {blogPosts.length > 0 && (
         <PortfolioSection compact palette={palette} siteTitle={site.portfolio_title || '최근 현장 사례'} posts={blogPosts.slice(0, 3)} mediaItems={data.mediaItems} />
       )}
-      <HomepageFaqSection palette={palette} />
+      <HomepageFaqSection palette={palette} general={general} />
       <FinalCta data={data} palette={palette} pageHref={pageHref} showCalculator={false} />
     </>
   )
@@ -676,15 +722,16 @@ function SalesPriceHomePage({
 }) {
   const { site } = data
   const usePreviewImages = site.slug?.startsWith('preview-')
+  const general = isGeneralPreviewSite(site)
 
   return (
     <>
       <SalesPriceHero data={data} palette={palette} />
-      <SalesLargePriceTable palette={palette} />
-      <BeforeAfterSection palette={palette} usePreviewImages={usePreviewImages} mediaItems={data.mediaItems} />
-      <ReviewsPage compact palette={palette} title="후기" />
-      <ServicesPage compact showEstimateCta={false} pageHref={pageHref} palette={palette} />
-      <HomepageFaqSection palette={palette} />
+      <SalesLargePriceTable palette={palette} general={general} />
+      <BeforeAfterSection palette={palette} usePreviewImages={usePreviewImages} mediaItems={data.mediaItems} general={general} />
+      <ReviewsPage compact palette={palette} title="후기" general={general} />
+      <ServicesPage compact showEstimateCta={false} pageHref={pageHref} palette={palette} general={general} />
+      <HomepageFaqSection palette={palette} general={general} />
       <FinalCta data={data} palette={palette} pageHref={pageHref} showCalculator={false} />
     </>
   )
@@ -701,17 +748,18 @@ function SalesUrgentHomePage({
 }) {
   const { site, blogPosts } = data
   const usePreviewImages = site.slug?.startsWith('preview-')
+  const general = isGeneralPreviewSite(site)
 
   return (
     <>
       <SalesUrgentHero data={data} palette={palette} />
       <ReservationStatusSection palette={palette} />
-      <ReviewsPage compact palette={palette} title="후기" />
-      <BeforeAfterSection palette={palette} usePreviewImages={usePreviewImages} mediaItems={data.mediaItems} />
+      <ReviewsPage compact palette={palette} title="후기" general={general} />
+      <BeforeAfterSection palette={palette} usePreviewImages={usePreviewImages} mediaItems={data.mediaItems} general={general} />
       {blogPosts.length > 0 && (
         <PortfolioSection compact palette={palette} siteTitle={site.portfolio_title || '최근 현장 사례'} posts={blogPosts.slice(0, 3)} mediaItems={data.mediaItems} />
       )}
-      <HomepageFaqSection palette={palette} />
+      <HomepageFaqSection palette={palette} general={general} />
       <FinalCta data={data} palette={palette} pageHref={pageHref} showCalculator={false} />
     </>
   )
@@ -727,6 +775,18 @@ function SalesReviewsHero({
   palette: HomepagePalette
 }) {
   const { site } = data
+  const general = isGeneralPreviewSite(site)
+  const metricRows = general
+    ? [
+        ['상담', '빠르게'],
+        ['기준', '범위 안내'],
+        ['사례', '사진 확인'],
+      ]
+    : [
+        ['상담', '1분'],
+        ['견적', '3분'],
+        ['기준', '평당 15,000원~'],
+      ]
 
   return (
     <section className="homepage-hero-section hp-section hp-surface border-b border-black/10">
@@ -735,7 +795,7 @@ function SalesReviewsHero({
           <p className={`homepage-label mb-4 inline-flex rounded-full ${palette.accent} px-4 py-2 text-xs font-black uppercase ${palette.accentText}`}>
             후기 전환형
           </p>
-          <h1 className="hp-display font-black">입주청소 평당 15,000원~</h1>
+          <h1 className="hp-display font-black">{general ? site.headline : '입주청소 평당 15,000원~'}</h1>
           <p className="hp-copy mt-6 max-w-2xl">{site.subheadline}</p>
           <div className="mt-8 grid gap-3 sm:grid-cols-2">
             {site.phone && <a href={`tel:${site.phone}`} className="hp-cta hp-primary min-h-16 text-lg">전화하기</a>}
@@ -743,11 +803,7 @@ function SalesReviewsHero({
           </div>
         </div>
         <div className="grid gap-3">
-          {[
-            ['상담', '1분'],
-            ['견적', '3분'],
-            ['기준', '평당 15,000원~'],
-          ].map(([label, value]) => (
+          {metricRows.map(([label, value]) => (
             <div key={label} className="grid grid-cols-[0.35fr_1fr] items-center bg-white p-5 shadow-sm">
               <p className={`text-sm font-black ${palette.accentText}`}>{label}</p>
               <p className="text-2xl font-black">{value}</p>
@@ -767,11 +823,18 @@ function SalesPriceHero({
   palette: HomepagePalette
 }) {
   const { site } = data
-  const priceRows = [
-    ['원룸', '15만원~'],
-    ['20평', '30만원~'],
-    ['30평', '42만원~'],
-  ]
+  const general = isGeneralPreviewSite(site)
+  const priceRows = general
+    ? [
+        ['줄눈', '욕실 1칸~'],
+        ['목공', '품목별 상담'],
+        ['인테리어', '범위별 안내'],
+      ]
+    : [
+        ['원룸', '15만원~'],
+        ['20평', '30만원~'],
+        ['30평', '42만원~'],
+      ]
 
   return (
     <section className="homepage-hero-section hp-section border-b border-[#c7d9ee] bg-[radial-gradient(circle_at_12%_8%,rgba(191,219,254,0.55),transparent_30%),linear-gradient(135deg,#f8fbff,#eef6ff)]">
@@ -780,7 +843,7 @@ function SalesPriceHero({
           <p className="homepage-label mb-4 inline-flex rounded-full border border-[#c7d9ee] bg-white/72 px-4 py-2 text-xs font-black uppercase text-[#1e3a5f] shadow-sm backdrop-blur">
             가격전환형
           </p>
-          <h1 className="hp-display font-black text-[#0b1f33]">가격이 먼저 보이는 청소</h1>
+          <h1 className="hp-display font-black text-[#0b1f33]">{general ? site.headline : '가격이 먼저 보이는 청소'}</h1>
           <p className="hp-copy mt-6 max-w-2xl text-[#506578]">{site.subheadline}</p>
           <div className="mt-8 grid gap-3 sm:grid-cols-2">
             {site.phone && <a href={`tel:${site.phone}`} className="hp-cta min-h-16 bg-[#1e3a5f] text-lg text-white shadow-sm">전화하기</a>}
@@ -804,19 +867,25 @@ function SalesPriceHero({
   )
 }
 
-function SalesLargePriceTable({ palette }: { palette: HomepagePalette }) {
-  const priceRows = [
-    ['원룸', '15만원~', '소형 주거공간 기준'],
-    ['20평', '30만원~', '가장 많이 문의하는 기준'],
-    ['30평', '42만원~', '방/욕실 구조에 따라 변동'],
-  ]
+function SalesLargePriceTable({ palette, general = false }: { palette: HomepagePalette; general?: boolean }) {
+  const priceRows = general
+    ? [
+        ['줄눈시공', '범위별 안내', '욕실, 주방, 베란다 등 시공 부위 기준'],
+        ['목공시공', '품목별 상담', '선반, 붙박이장, 몰딩 등 제작 범위 기준'],
+        ['인테리어', '현장별 안내', '부분 공사, 상가, 주거공간 범위 기준'],
+      ]
+    : [
+        ['원룸', '15만원~', '소형 주거공간 기준'],
+        ['20평', '30만원~', '가장 많이 문의하는 기준'],
+        ['30평', '42만원~', '방/욕실 구조에 따라 변동'],
+      ]
 
   return (
     <section className="hp-section bg-[linear-gradient(180deg,#ffffff,#f4f9ff)]">
       <div className="hp-container">
         <div className="mb-6">
           <p className={`homepage-label text-sm font-bold uppercase ${palette.accentText}`}>Price table</p>
-          <h2 className="hp-title mt-3 font-black">가격표를 숨기지 않습니다</h2>
+          <h2 className="hp-title mt-3 font-black">{general ? '시공 기준을 먼저 안내합니다' : '가격표를 숨기지 않습니다'}</h2>
         </div>
         <div className="grid gap-4">
           {priceRows.map(([label, price, text]) => (
@@ -825,7 +894,9 @@ function SalesLargePriceTable({ palette }: { palette: HomepagePalette }) {
               <p className="text-5xl font-black leading-none text-[#0b1f33] sm:text-6xl">{price}</p>
               <div>
                 <p className="text-sm leading-7 text-gray-600">{text}</p>
-                <p className="mt-2 text-xs font-bold text-[#506578]">정확한 비용은 평수, 구조, 오염도 확인 후 안내합니다.</p>
+                <p className="mt-2 text-xs font-bold text-[#506578]">
+                  {general ? '정확한 비용은 현장 상태와 시공 범위 확인 후 안내합니다.' : '정확한 비용은 평수, 구조, 오염도 확인 후 안내합니다.'}
+                </p>
               </div>
             </div>
           ))}
@@ -843,6 +914,7 @@ function SalesUrgentHero({
   palette: HomepagePalette
 }) {
   const { site } = data
+  const general = isGeneralPreviewSite(site)
   const managedImages = data.mediaItems
     .filter((item) => item.item_type === 'after_photo' || item.item_type === 'portfolio' || item.item_type === 'gallery')
     .map((item) => item.image_url)
@@ -855,9 +927,13 @@ function SalesUrgentHero({
           <p className="homepage-label mb-5 inline-flex rounded-full bg-white/10 px-4 py-2 text-xs font-black uppercase text-white/70">
             긴급상담형
           </p>
-          <h1 className="max-w-lg text-6xl font-black leading-[0.92] tracking-[-0.07em] sm:text-7xl">당일 상담 가능</h1>
+          <h1 className="max-w-lg text-6xl font-black leading-[0.92] tracking-[-0.07em] sm:text-7xl">
+            {general ? site.headline : '당일 상담 가능'}
+          </h1>
           <p className="mt-6 max-w-lg text-lg font-medium leading-9 text-white/68">
-            급한 일정은 빠른 확인이 중요합니다. 사진과 평수만 보내주시면 가능한 시간부터 안내합니다.
+            {general
+              ? '현장 사진과 시공 범위를 보내주시면 가능한 상담 일정부터 빠르게 안내합니다.'
+              : '급한 일정은 빠른 확인이 중요합니다. 사진과 평수만 보내주시면 가능한 시간부터 안내합니다.'}
           </p>
           <div className="mt-8 grid gap-3 sm:grid-cols-2">
             {site.phone && <a href={`tel:${site.phone}`} className="hp-cta min-h-16 rounded-full bg-white text-lg text-gray-950">전화하기</a>}
@@ -933,14 +1009,16 @@ function ReservationStatusSection({ palette }: { palette: HomepagePalette }) {
 function AfterPhotoSliderSection({
   palette,
   mediaItems = [],
+  general = false,
 }: {
   palette: HomepagePalette
   mediaItems?: HomepagePublicPackage['mediaItems']
+  general?: boolean
 }) {
   const managedPhotos = mediaItems.filter((item) => item.item_type === 'after_photo' || item.item_type === 'gallery')
   const afterPhotos = managedPhotos.length
-    ? managedPhotos.slice(0, 8).map((item) => ({ src: item.image_url, title: item.title || '청소 완료 사진', alt: item.alt_text || item.title || '' }))
-    : HOMEPAGE_PREVIEW_IMAGES.slice(4, 9).map((src) => ({ src, title: '청소 완료 사진', alt: '' }))
+    ? managedPhotos.slice(0, 8).map((item) => ({ src: item.image_url, title: item.title || (general ? '시공 완료 사진' : '청소 완료 사진'), alt: item.alt_text || item.title || '' }))
+    : HOMEPAGE_PREVIEW_IMAGES.slice(4, 9).map((src) => ({ src, title: general ? '시공 완료 사진' : '청소 완료 사진', alt: '' }))
 
   return (
     <section className="bg-white">
@@ -948,8 +1026,12 @@ function AfterPhotoSliderSection({
         <div className={`overflow-hidden border-y ${palette.border} py-5`}>
           <div className="mb-4 flex items-end justify-between gap-4">
             <div>
-              <p className={`homepage-label text-xs font-black uppercase ${palette.accentText}`}>After clean</p>
-              <h2 className="mt-2 text-2xl font-black">청소 후 사진으로 먼저 확인하세요</h2>
+              <p className={`homepage-label text-xs font-black uppercase ${palette.accentText}`}>
+                {general ? 'Completed work' : 'After clean'}
+              </p>
+              <h2 className="mt-2 text-2xl font-black">
+                {general ? '시공 후 사진으로 먼저 확인하세요' : '청소 후 사진으로 먼저 확인하세요'}
+              </h2>
             </div>
             <p className="hidden text-sm font-bold text-gray-500 sm:block">완료 사진 5장</p>
           </div>
@@ -970,26 +1052,34 @@ function AfterPhotoSliderSection({
   )
 }
 
-function SalesPricingSection({ palette }: { palette: HomepagePalette }) {
-  const prices = [
-    ['원룸', '평당 15,000원~'],
-    ['20평대', '평당 15,000원~'],
-    ['30평대', '평당 14,000원~'],
-  ]
+function SalesPricingSection({ palette, general = false }: { palette: HomepagePalette; general?: boolean }) {
+  const prices = general
+    ? [
+        ['줄눈', '욕실 1칸 기준'],
+        ['목공', '품목별 상담'],
+        ['인테리어', '범위별 안내'],
+      ]
+    : [
+        ['원룸', '평당 15,000원~'],
+        ['20평대', '평당 15,000원~'],
+        ['30평대', '평당 14,000원~'],
+      ]
 
   return (
     <section className="hp-section hp-surface">
       <div className="hp-container">
         <div className="mb-6">
           <p className={`homepage-label text-sm font-bold uppercase ${palette.accentText}`}>Expected cost</p>
-          <h2 className="hp-title mt-3 font-black">예상비용을 먼저 확인하세요</h2>
+          <h2 className="hp-title mt-3 font-black">{general ? '시공 기준을 먼저 확인하세요' : '예상비용을 먼저 확인하세요'}</h2>
         </div>
         <div className="grid gap-3 md:grid-cols-3">
           {prices.map(([label, price]) => (
             <article key={label} className="border border-black/10 bg-white p-6">
               <p className={`text-sm font-black ${palette.accentText}`}>{label}</p>
               <p className="mt-4 text-3xl font-black">{price}</p>
-              <p className="mt-3 text-sm leading-6 text-gray-600">현장 구조와 오염도에 따라 최종 견적은 달라질 수 있습니다.</p>
+              <p className="mt-3 text-sm leading-6 text-gray-600">
+                {general ? '현장 상태와 시공 범위에 따라 최종 비용은 달라질 수 있습니다.' : '현장 구조와 오염도에 따라 최종 견적은 달라질 수 있습니다.'}
+              </p>
             </article>
           ))}
         </div>
@@ -1321,6 +1411,7 @@ function TemplateHero({
 }) {
   const { site, calculator } = data
   const template = getHomepageTemplate(site.template_key)
+  const general = isGeneralPreviewSite(site)
   const ctaHref = heroCalculator || secondaryCalculator ? pageHref('estimate') : pageHref('contact')
   const ctaLabel = heroCalculator || secondaryCalculator ? '예상 견적 확인' : '상담 문의'
   const isInteractive = template.category === 'interactive'
@@ -1373,7 +1464,7 @@ function TemplateHero({
     <section className="homepage-hero-section hp-section hp-surface border-b border-black/5">
       <div className="hp-container grid gap-12 lg:grid-cols-[0.95fr_1.05fr] lg:items-center">
         <HeroCopy site={site} templateName={template.name} palette={palette} ctaHref={ctaHref} ctaLabel={ctaLabel} />
-        <SceneMosaic palette={palette} usePreviewImages={site.slug?.startsWith('preview-')} />
+        <SceneMosaic palette={palette} usePreviewImages={site.slug?.startsWith('preview-')} general={general} />
       </div>
     </section>
   )
@@ -1415,10 +1506,19 @@ function HeroCopy({
   )
 }
 
-function SceneMosaic({ palette, usePreviewImages = false }: { palette: HomepagePalette; usePreviewImages?: boolean }) {
+function SceneMosaic({
+  palette,
+  usePreviewImages = false,
+  general = false,
+}: {
+  palette: HomepagePalette
+  usePreviewImages?: boolean
+  general?: boolean
+}) {
+  const scenes = general ? generalScenes : cleaningScenes
   return (
     <div className="grid grid-cols-2 gap-3 sm:gap-5">
-      {cleaningScenes.map(([tag, title, text], index) => (
+      {scenes.map(([tag, title, text], index) => (
         <div
           key={title}
           data-cursor="active"
@@ -1448,11 +1548,15 @@ function SceneMosaic({ palette, usePreviewImages = false }: { palette: HomepageP
   )
 }
 
-function TrustStrip({ palette }: { palette: HomepagePalette }) {
+function TrustStrip({ palette, general = false }: { palette: HomepagePalette; general?: boolean }) {
+  const rows = general
+    ? ['시공 전후 확인', '지역 기반 상담', '시공 범위 안내', '현장 일정 조율']
+    : ['전후 사진 확인', '지역 기반 상담', '추가 비용 기준 안내', '입주/이사 일정 대응']
+
   return (
     <section className="border-y border-black/10 bg-white">
       <div className="hp-container grid gap-4 py-5 text-sm font-black text-gray-700 sm:grid-cols-4">
-        {['전후 사진 확인', '지역 기반 상담', '추가 비용 기준 안내', '입주/이사 일정 대응'].map((item) => (
+        {rows.map((item) => (
           <div key={item} className="flex items-center gap-3">
             <span className={`h-2 w-2 rounded-full ${palette.primary}`} />
             {item}
@@ -1467,21 +1571,24 @@ function BeforeAfterSection({
   palette,
   usePreviewImages = false,
   mediaItems = [],
+  general = false,
 }: {
   palette: HomepagePalette
   usePreviewImages?: boolean
   mediaItems?: HomepagePublicPackage['mediaItems']
+  general?: boolean
 }) {
   const managedScenes = mediaItems.filter((item) => item.item_type === 'before_after' || item.item_type === 'gallery')
+  const fallbackScenes = general ? generalScenes : cleaningScenes
   const rows = managedScenes.length
     ? managedScenes.slice(0, 4).map((item, index) => [
         index % 2 === 0 ? 'Before' : 'After',
         item.title || '현장 사진',
-        item.description || '현장에서 확인한 청소 사진입니다.',
+        item.description || (general ? '현장에서 확인한 시공 사진입니다.' : '현장에서 확인한 청소 사진입니다.'),
         item.image_url,
         item.alt_text || item.title || '',
       ])
-    : cleaningScenes.map(([tag, title, text], index) => [
+    : fallbackScenes.map(([tag, title, text], index) => [
         tag,
         title,
         text,
@@ -1496,10 +1603,12 @@ function BeforeAfterSection({
         <div>
           <p className={`homepage-label text-sm font-bold uppercase ${palette.accentText}`}>Before / After</p>
           <h2 className="hp-title mt-3 font-black">
-            청소는 말보다 전후 차이가 먼저 보여야 합니다
+            {general ? '시공은 결과물로 먼저 보여야 합니다' : '청소는 말보다 전후 차이가 먼저 보여야 합니다'}
           </h2>
           <p className="hp-copy mt-5">
-            창틀, 욕실, 주방, 바닥처럼 고객이 가장 많이 확인하는 구역을 전후 사진 중심으로 보여줍니다.
+            {general
+              ? '시공 전후, 마감 디테일, 현장 결과를 사진 중심으로 보여줍니다.'
+              : '창틀, 욕실, 주방, 바닥처럼 고객이 가장 많이 확인하는 구역을 전후 사진 중심으로 보여줍니다.'}
           </p>
         </div>
         <div className="grid gap-4 sm:grid-cols-2">
@@ -1592,6 +1701,7 @@ function BenefitOfferSection({
   pageHref: (slug: HomepagePageSlug) => string
 }) {
   const { site } = data
+  const general = isGeneralPreviewSite(site)
   return (
     <section className="hp-section">
       <div className="hp-container">
@@ -1640,14 +1750,21 @@ function FinalCta({
   showCalculator: boolean
 }) {
   const { site } = data
+  const general = isGeneralPreviewSite(site)
   return (
     <section className="hp-section pt-0">
       <div className="hp-container">
         <div className="grid gap-6 border-t border-black/10 pt-10 lg:grid-cols-[1fr_auto] lg:items-center">
           <div>
-            <p className={`homepage-label text-xs font-black uppercase ${palette.accentText}`}>Ready to clean</p>
-            <h2 className="mt-3 text-4xl font-black leading-tight sm:text-6xl">청소 일정, 지금 바로 확인하세요</h2>
-            <p className="hp-copy mt-4 max-w-2xl">평수와 현장 상태를 알려주시면 가능한 일정과 예상 비용을 빠르게 안내합니다.</p>
+            <p className={`homepage-label text-xs font-black uppercase ${palette.accentText}`}>
+              {general ? 'Ready to work' : 'Ready to clean'}
+            </p>
+            <h2 className="mt-3 text-4xl font-black leading-tight sm:text-6xl">
+              {general ? '시공 상담, 지금 바로 확인하세요' : '청소 일정, 지금 바로 확인하세요'}
+            </h2>
+            <p className="hp-copy mt-4 max-w-2xl">
+              {general ? '현장 위치와 필요한 시공 범위를 알려주시면 가능한 일정과 상담 내용을 빠르게 안내합니다.' : '평수와 현장 상태를 알려주시면 가능한 일정과 예상 비용을 빠르게 안내합니다.'}
+            </p>
           </div>
           <div className="grid gap-2 sm:min-w-72">
             {showCalculator && <a href={pageHref('estimate')} className="hp-cta hp-primary">예상 견적 확인</a>}
@@ -1877,19 +1994,29 @@ function ServicesPage({
   showEstimateCta,
   pageHref,
   palette,
+  general = false,
 }: {
   compact?: boolean
   showEstimateCta: boolean
   pageHref: (slug: HomepagePageSlug) => string
   palette: HomepagePalette
+  general?: boolean
 }) {
+  const cards = general
+    ? [
+        ['줄눈/타일 시공', '욕실, 주방, 베란다처럼 사용 빈도가 높은 공간의 마감 상태를 정리합니다.'],
+        ['목공/맞춤 제작', '선반, 수납장, 몰딩, 문틀처럼 공간에 맞는 제작과 설치를 상담합니다.'],
+        ['인테리어/부분 공사', '상가, 주거공간, 부분 보수처럼 현장 범위에 맞춰 시공을 안내합니다.'],
+      ]
+    : serviceCards
+
   return (
     <section className="hp-section hp-surface">
       <div className="hp-container">
       <div className="mb-6 flex items-end justify-between gap-4">
         <div>
           <p className={`homepage-label text-sm font-bold uppercase ${palette.accentText}`}>Our service</p>
-          <h1 className="hp-title mt-3 font-black">필요한 청소를 쉽게 선택하세요</h1>
+          <h1 className="hp-title mt-3 font-black">{general ? '필요한 시공을 쉽게 선택하세요' : '필요한 청소를 쉽게 선택하세요'}</h1>
         </div>
         {showEstimateCta && (
           <a href={pageHref('estimate')} className="hp-cta hp-dark hidden text-sm sm:inline-flex">
@@ -1898,7 +2025,7 @@ function ServicesPage({
         )}
       </div>
       <div className="grid gap-3 md:grid-cols-3">
-        {serviceCards.map(([title, text], index) => (
+        {cards.map(([title, text], index) => (
           <article
             key={title}
             data-cursor="active"
@@ -1920,12 +2047,16 @@ function ReviewsPage({
   compact = false,
   palette,
   title = '믿고 맡길 수 있는 청소',
+  general = false,
 }: {
   compact?: boolean
   palette: HomepagePalette
   title?: string
+  general?: boolean
 }) {
-  const visibleReviews = reviewCards.slice(0, compact ? 3 : reviewCards.length)
+  const cards = general ? generalReviewCards : reviewCards
+  const visibleReviews = cards.slice(0, compact ? 3 : cards.length)
+  const sectionTitle = title === '믿고 맡길 수 있는 청소' && general ? '믿고 맡길 수 있는 시공' : title
 
   return (
     <section className="hp-section hp-surface">
@@ -1933,7 +2064,7 @@ function ReviewsPage({
         <div className="flex items-end justify-between gap-4">
           <div>
             <p className={`homepage-label text-sm font-bold uppercase ${palette.accentText}`}>Reviews</p>
-            <h1 className="hp-title mt-3 font-black">{title}</h1>
+            <h1 className="hp-title mt-3 font-black">{sectionTitle}</h1>
           </div>
           <p className={`hidden text-sm font-black ${palette.accentText} sm:block`}>후기 {visibleReviews.length}개</p>
         </div>
@@ -1962,7 +2093,9 @@ function ReviewsPage({
   )
 }
 
-function HomepageFaqSection({ palette }: { palette: HomepagePalette }) {
+function HomepageFaqSection({ palette, general = false }: { palette: HomepagePalette; general?: boolean }) {
+  const rows = general ? generalFaqRows : faqRows
+
   return (
     <section className="hp-section hp-surface">
       <div className="hp-container">
@@ -1971,7 +2104,7 @@ function HomepageFaqSection({ palette }: { palette: HomepagePalette }) {
           <h2 className="hp-title mt-3 font-black">자주 묻는 질문</h2>
         </div>
         <div className="grid gap-3 md:grid-cols-3">
-          {faqRows.map(([question, answer]) => (
+          {rows.map(([question, answer]) => (
             <article key={question} className="border border-black/10 bg-white p-5">
               <h3 className="font-black">{question}</h3>
               <p className="mt-3 text-sm leading-6 text-gray-600">{answer}</p>
@@ -2020,13 +2153,28 @@ function AreaSection({
   )
 }
 
-function ProcessSection({ palette, compact = false }: { palette: HomepagePalette; compact?: boolean }) {
-  const processRows = [
-    ['01', '상담 및 현장 확인', '지역, 평수, 입주 일정, 오염도를 먼저 확인합니다.'],
-    ['02', '예상 견적 안내', '평수와 옵션 기준으로 예상 금액을 투명하게 안내합니다.'],
-    ['03', '청소 진행', '창틀, 욕실, 주방, 바닥 등 구역별로 작업합니다.'],
-    ['04', '전후 사진 확인', '청소 전후 사진으로 완료 상태를 확인합니다.'],
-  ]
+function ProcessSection({
+  palette,
+  compact = false,
+  general = false,
+}: {
+  palette: HomepagePalette
+  compact?: boolean
+  general?: boolean
+}) {
+  const processRows = general
+    ? [
+        ['01', '상담 및 현장 확인', '위치, 시공 범위, 일정, 현장 상태를 먼저 확인합니다.'],
+        ['02', '범위 및 기준 안내', '자재, 면적, 제작 품목 기준으로 상담 내용을 안내합니다.'],
+        ['03', '시공 진행', '현장 조건에 맞춰 마감과 디테일을 확인하며 작업합니다.'],
+        ['04', '완료 사진 확인', '시공 전후 사진으로 완료 상태를 확인합니다.'],
+      ]
+    : [
+        ['01', '상담 및 현장 확인', '지역, 평수, 입주 일정, 오염도를 먼저 확인합니다.'],
+        ['02', '예상 견적 안내', '평수와 옵션 기준으로 예상 금액을 투명하게 안내합니다.'],
+        ['03', '청소 진행', '창틀, 욕실, 주방, 바닥 등 구역별로 작업합니다.'],
+        ['04', '전후 사진 확인', '청소 전후 사진으로 완료 상태를 확인합니다.'],
+      ]
 
   return (
     <section className="hp-section">
@@ -2034,7 +2182,9 @@ function ProcessSection({ palette, compact = false }: { palette: HomepagePalette
       <div className="grid gap-8 lg:grid-cols-[0.75fr_1.25fr] lg:items-start">
         <div>
           <p className={`homepage-label text-sm font-bold uppercase ${palette.accentText}`}>Process</p>
-          <h2 className="hp-title mt-3 font-black">청소는 순서가 명확해야 결과가 깔끔합니다</h2>
+          <h2 className="hp-title mt-3 font-black">
+            {general ? '시공은 과정이 명확해야 결과가 깔끔합니다' : '청소는 순서가 명확해야 결과가 깔끔합니다'}
+          </h2>
           {!compact && (
             <p className="hp-copy mt-5">
               상담부터 완료 확인까지 고객이 헷갈리지 않도록 단계별로 안내합니다.
@@ -2056,14 +2206,16 @@ function ProcessSection({ palette, compact = false }: { palette: HomepagePalette
   )
 }
 
-function FaqPage({ palette }: { palette: HomepagePalette }) {
+function FaqPage({ palette, general = false }: { palette: HomepagePalette; general?: boolean }) {
+  const rows = general ? generalFaqRows : faqRows
+
   return (
     <section className="hp-section">
       <div className="mx-auto max-w-4xl px-4">
       <p className={`homepage-label text-sm font-bold uppercase ${palette.accentText}`}>FAQ</p>
       <h1 className="hp-title mt-3 font-black">자주 묻는 질문</h1>
       <div className="mt-6 space-y-3">
-        {faqRows.map(([question, answer]) => (
+        {rows.map(([question, answer]) => (
           <article key={question} className="hp-surface hp-border border p-5">
             <h2 className="font-black">{question}</h2>
             <p className="mt-2 text-sm leading-6 text-gray-600">{answer}</p>
