@@ -149,7 +149,18 @@ export async function listHomepageSitesForUser() {
 export async function getHomepageAdminPackage(siteId: string) {
   await assertHomepageSiteAccess(siteId)
   const client = getHomepageAdminClient()
-  const [site, domains, calculator, blogSource, blogPosts, submissions, mediaItems, pushSubscriptions, notifications] = await Promise.all([
+  const [
+    site,
+    domains,
+    calculator,
+    blogSource,
+    blogPosts,
+    submissions,
+    mediaItems,
+    onboardingSubmissions,
+    pushSubscriptions,
+    notifications,
+  ] = await Promise.all([
     client.from('homepage_sites').select('*').eq('id', siteId).maybeSingle(),
     client.from('homepage_domains').select('*').eq('site_id', siteId).order('is_primary', { ascending: false }),
     client.from('homepage_calculator_settings').select('*').eq('site_id', siteId).maybeSingle(),
@@ -176,6 +187,12 @@ export async function getHomepageAdminPackage(siteId: string) {
       .order('created_at', { ascending: false })
       .limit(80),
     client
+      .from('homepage_onboarding_submissions')
+      .select('*')
+      .eq('site_id', siteId)
+      .order('created_at', { ascending: false })
+      .limit(20),
+    client
       .from('homepage_push_subscriptions')
       .select('id, site_id, user_id, endpoint, user_agent, active, last_seen_at, created_at')
       .eq('site_id', siteId)
@@ -197,6 +214,7 @@ export async function getHomepageAdminPackage(siteId: string) {
   if (blogPosts.error) throw blogPosts.error
   if (submissions.error) throw submissions.error
   if (mediaItems.error) throw mediaItems.error
+  if (onboardingSubmissions.error) throw onboardingSubmissions.error
   if (pushSubscriptions.error) throw pushSubscriptions.error
   if (notifications.error) throw notifications.error
 
@@ -208,6 +226,7 @@ export async function getHomepageAdminPackage(siteId: string) {
     blogPosts: blogPosts.data || [],
     submissions: submissions.data || [],
     mediaItems: mediaItems.data || [],
+    onboardingSubmissions: onboardingSubmissions.data || [],
     pushSubscriptions: pushSubscriptions.data || [],
     notifications: notifications.data || [],
   }

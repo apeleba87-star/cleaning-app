@@ -17,7 +17,7 @@ const notoSansKr = Noto_Sans_KR({
 })
 
 export const metadata: Metadata = {
-  title: '무플 청소 관리 솔루션',
+  title: '무플 솔루션',
   description: '새로운 현장을 늘리는 것보다, 지금의 현장을 지켜내는 게 더 중요합니다. 무플은 현장을 관리가 아니라 유지하게 만드는 운영 구조입니다.',
   manifest: '/manifest.json',
   icons: {
@@ -37,13 +37,13 @@ export const metadata: Metadata = {
     title: '무플(MUPL)',
   },
   openGraph: {
-    title: '무플 청소 관리 솔루션',
+    title: '무플 솔루션',
     description: '새로운 현장을 늘리는 것보다, 지금의 현장을 지켜내는 게 더 중요합니다. 무플은 현장을 관리가 아니라 유지하게 만드는 운영 구조입니다.',
     type: 'website',
   },
   twitter: {
     card: 'summary',
-    title: '무플 청소 관리 솔루션',
+    title: '무플 솔루션',
     description: '새로운 현장을 늘리는 것보다, 지금의 현장을 지켜내는 게 더 중요합니다.',
   },
 }
@@ -93,11 +93,11 @@ gtag('config', '${GA_MEASUREMENT_ID}');`}
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="default" />
         <meta name="apple-mobile-web-app-title" content="무플(MUPL)" />
-        <meta property="og:title" content="무플 청소 관리 솔루션" />
+        <meta property="og:title" content="무플 솔루션" />
         <meta property="og:description" content="새로운 현장을 늘리는 것보다, 지금의 현장을 지켜내는 게 더 중요합니다. 무플은 현장을 관리가 아니라 유지하게 만드는 운영 구조입니다." />
         <meta property="og:type" content="website" />
         <meta name="twitter:card" content="summary" />
-        <meta name="twitter:title" content="무플 청소 관리 솔루션" />
+        <meta name="twitter:title" content="무플 솔루션" />
         <meta name="twitter:description" content="새로운 현장을 늘리는 것보다, 지금의 현장을 지켜내는 게 더 중요합니다." />
         <meta name="naver-site-verification" content="dd8aa4e731fa35e5850c8e12fcd0e3eb39fd36ab" />
       </head>

@@ -66,7 +66,50 @@ CREATE TABLE IF NOT EXISTS public.homepage_media_items (
 CREATE INDEX IF NOT EXISTS idx_homepage_media_items_public
   ON public.homepage_media_items(site_id, item_type, is_visible, sort_order);
 
+CREATE TABLE IF NOT EXISTS public.homepage_onboarding_submissions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  site_id UUID NOT NULL REFERENCES public.homepage_sites(id) ON DELETE CASCADE,
+  status TEXT NOT NULL DEFAULT 'submitted'
+    CHECK (status IN ('submitted', 'reviewing', 'applied', 'archived')),
+  business_name TEXT NOT NULL DEFAULT '',
+  contact_name TEXT,
+  contact_phone TEXT,
+  phone TEXT,
+  kakao_url TEXT,
+  blog_url TEXT,
+  naver_place_url TEXT,
+  instagram_url TEXT,
+  service_area TEXT,
+  address TEXT,
+  business_hours TEXT,
+  hero_headline TEXT,
+  hero_subheadline TEXT,
+  company_intro TEXT,
+  services TEXT[] NOT NULL DEFAULT '{}',
+  pricing_notes TEXT[] NOT NULL DEFAULT '{}',
+  reviews JSONB NOT NULL DEFAULT '[]'::jsonb,
+  faqs JSONB NOT NULL DEFAULT '[]'::jsonb,
+  logo_image_url TEXT,
+  representative_images TEXT[] NOT NULL DEFAULT '{}',
+  portfolio_images TEXT[] NOT NULL DEFAULT '{}',
+  before_after_images JSONB NOT NULL DEFAULT '[]'::jsonb,
+  footer_representative TEXT,
+  footer_business_number TEXT,
+  footer_email TEXT,
+  footer_address TEXT,
+  footer_note TEXT,
+  reference_urls TEXT[] NOT NULL DEFAULT '{}',
+  request_note TEXT,
+  applied_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_homepage_onboarding_submissions_site
+  ON public.homepage_onboarding_submissions(site_id, status, created_at DESC);
+
 ALTER TABLE public.homepage_media_items ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.homepage_onboarding_submissions ENABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS "homepage media public read" ON public.homepage_media_items;
 CREATE POLICY "homepage media public read" ON public.homepage_media_items
@@ -106,6 +149,38 @@ CREATE POLICY "homepage media admin write" ON public.homepage_media_items
       SELECT 1
       FROM public.homepage_admin_members m
       WHERE m.site_id = homepage_media_items.site_id
+        AND m.user_id = auth.uid()
+        AND m.role IN ('owner', 'manager')
+    )
+  );
+
+DROP POLICY IF EXISTS "homepage onboarding admin read" ON public.homepage_onboarding_submissions;
+CREATE POLICY "homepage onboarding admin read" ON public.homepage_onboarding_submissions
+  FOR SELECT USING (
+    EXISTS (
+      SELECT 1
+      FROM public.homepage_admin_members m
+      WHERE m.site_id = homepage_onboarding_submissions.site_id
+        AND m.user_id = auth.uid()
+    )
+  );
+
+DROP POLICY IF EXISTS "homepage onboarding admin write" ON public.homepage_onboarding_submissions;
+CREATE POLICY "homepage onboarding admin write" ON public.homepage_onboarding_submissions
+  FOR ALL USING (
+    EXISTS (
+      SELECT 1
+      FROM public.homepage_admin_members m
+      WHERE m.site_id = homepage_onboarding_submissions.site_id
+        AND m.user_id = auth.uid()
+        AND m.role IN ('owner', 'manager')
+    )
+  )
+  WITH CHECK (
+    EXISTS (
+      SELECT 1
+      FROM public.homepage_admin_members m
+      WHERE m.site_id = homepage_onboarding_submissions.site_id
         AND m.user_id = auth.uid()
         AND m.role IN ('owner', 'manager')
     )

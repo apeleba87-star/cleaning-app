@@ -192,6 +192,26 @@ html {
   border-radius: 18px !important;
 }
 
+.homepage-site .rounded-none {
+  border-radius: 0 !important;
+}
+
+.homepage-site.homepage-tech-site [class*="rounded-"] {
+  border-radius: 14px !important;
+}
+
+.homepage-site.homepage-tech-site .rounded-md {
+  border-radius: 6px !important;
+}
+
+.homepage-site.homepage-tech-site .rounded-lg {
+  border-radius: 8px !important;
+}
+
+.homepage-site.homepage-tech-site .rounded-none {
+  border-radius: 0 !important;
+}
+
 .homepage-site [class*="shadow"] {
   box-shadow: 0 24px 70px rgba(15, 23, 42, 0.08) !important;
 }
@@ -272,6 +292,35 @@ html {
   animation-iteration-count: infinite;
 }
 
+@keyframes homepageStudioMarquee {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+.homepage-site .homepage-studio-marquee {
+  animation: homepageStudioMarquee 24s linear infinite;
+}
+
+@keyframes homepageStudioScrollDot {
+  0%,
+  100% {
+    opacity: 0.35;
+    transform: translate(-50%, 0);
+  }
+  50% {
+    opacity: 1;
+    transform: translate(-50%, 18px);
+  }
+}
+
+.homepage-site .homepage-studio-scroll-dot {
+  animation: homepageStudioScrollDot 1.35s ease-in-out infinite;
+}
+
 .homepage-site .homepage-reveal {
   opacity: 0;
   filter: blur(8px);
@@ -330,6 +379,11 @@ html {
   }
 
   .homepage-site .homepage-auto-photo-track {
+    animation: none;
+  }
+
+  .homepage-site .homepage-studio-marquee,
+  .homepage-site .homepage-studio-scroll-dot {
     animation: none;
   }
 }

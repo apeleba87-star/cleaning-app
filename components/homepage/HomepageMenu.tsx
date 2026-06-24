@@ -37,7 +37,7 @@ export default function HomepageMenu({
         type="button"
         onClick={() => setOpen(true)}
         className={`group flex h-12 w-12 items-center justify-center rounded-full border ${
-          inverseButton ? 'border-white/35 bg-white/8' : `hp-surface ${palette.border}`
+          inverseButton ? 'border-white/55 bg-white/16 shadow-[0_10px_30px_rgba(0,0,0,0.28)]' : `hp-surface ${palette.border}`
         }`}
         aria-label="메뉴 열기"
       >
@@ -93,7 +93,7 @@ export default function HomepageMenu({
                         ? 'shadow-sm'
                         : 'bg-white text-gray-950 hover:-translate-y-0.5 hover:bg-black/[0.03]'
                     }`}
-                    style={currentPage === item.slug ? { background: 'var(--hp-primary)', color: inverseButton ? '#111827' : '#ffffff' } : undefined}
+                    style={currentPage === item.slug ? { background: 'var(--hp-primary)', color: '#ffffff' } : undefined}
                   >
                     <span className="text-lg font-black">{HOMEPAGE_PAGE_LABELS[item.slug]}</span>
                   </a>

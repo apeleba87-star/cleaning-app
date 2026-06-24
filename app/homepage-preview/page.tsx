@@ -1,43 +1,17 @@
 import Link from 'next/link'
 import { HOMEPAGE_TEMPLATES } from '@/lib/homepage/templates'
 
-const CATEGORY_SECTIONS = [
-  {
-    key: 'showcase',
-    label: '전시형',
-    eyebrow: 'Showcase',
-  },
-  {
-    key: 'sales',
-    label: '영업형',
-    eyebrow: 'Sales',
-  },
-  {
-    key: 'interactive',
-    label: '참여형',
-    eyebrow: 'Interactive',
-  },
-] as const
-
-type CategoryKey = (typeof CATEGORY_SECTIONS)[number]['key']
 type AudienceKey = 'cleaning' | 'general'
 
 export default function HomepagePreviewIndexPage({
   searchParams,
 }: {
-  searchParams?: { category?: string; audience?: string }
+  searchParams?: { audience?: string }
 }) {
   const audience: AudienceKey = searchParams?.audience === 'general' ? 'general' : 'cleaning'
-  const categorySections = audience === 'general'
-    ? CATEGORY_SECTIONS.filter((section) => section.key !== 'interactive')
-    : CATEGORY_SECTIONS
-  const activeCategory = CATEGORY_SECTIONS.some((section) => section.key === searchParams?.category)
-    ? (searchParams?.category as CategoryKey)
-    : null
-  const visibleSections = activeCategory
-    ? categorySections.filter((section) => section.key === activeCategory)
-    : categorySections
-  const baseHref = audience === 'general' ? '/homepage-preview?audience=general' : '/homepage-preview'
+  const visibleTemplates = HOMEPAGE_TEMPLATES.filter((template) => (
+    audience === 'general' ? template.category !== 'interactive' : true
+  ))
 
   return (
     <main className="min-h-screen bg-[#f4f1eb] p-4 text-gray-950 sm:p-6">
@@ -53,7 +27,7 @@ export default function HomepagePreviewIndexPage({
             <p className="mt-5 max-w-2xl text-base leading-8 text-gray-600">
               {audience === 'general'
                 ? '줄눈시공, 인테리어, 목공, 타일처럼 현장 사례가 중요한 업종에 맞춘 템플릿입니다.'
-                : '원하는 유형을 선택해 디자인을 확인하세요.'}
+                : '원하는 디자인을 확인하세요.'}
             </p>
           </div>
         </header>
@@ -63,35 +37,15 @@ export default function HomepagePreviewIndexPage({
           <CategoryButton href="/homepage-preview?audience=general" active={audience === 'general'} label="범용 현장업" />
         </div>
 
-        <div className="mt-5 flex gap-2 overflow-x-auto pb-1 text-sm">
-          <CategoryButton href={baseHref} active={!activeCategory} label="전체" />
-          {categorySections.map((section) => (
-            <CategoryButton
-              key={section.key}
-              href={`${baseHref}${baseHref.includes('?') ? '&' : '?'}category=${section.key}`}
-              active={activeCategory === section.key}
-              label={section.label}
+        <div id="templates" className="grid gap-4 py-8 md:grid-cols-2 xl:grid-cols-3">
+          {visibleTemplates.map((template, index) => (
+            <TemplateCard
+              key={template.key}
+              template={template}
+              audience={audience}
+              index={index}
             />
           ))}
-        </div>
-
-        <div id="templates" className="space-y-12 pb-10">
-          {visibleSections.map((section) => {
-            const templates = HOMEPAGE_TEMPLATES.filter((template) => template.category === section.key)
-            return (
-              <section key={section.key} id={section.label} className="mt-8 scroll-mt-8">
-                <div className="mb-4">
-                  <p className="text-xs font-black uppercase tracking-[0.25em] text-gray-500">{section.eyebrow}</p>
-                  <h2 className="mt-2 text-3xl font-black tracking-[-0.06em]">{section.label}</h2>
-                </div>
-                <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-                  {templates.map((template) => (
-                    <TemplateCard key={template.key} template={template} audience={audience} />
-                  ))}
-                </div>
-              </section>
-            )
-          })}
         </div>
       </div>
     </main>
@@ -111,13 +65,15 @@ function CategoryButton({ href, active, label }: { href: string; active: boolean
   )
 }
 
-function TemplateCard({ template, audience }: {
+function TemplateCard({ template, audience, index }: {
   template: (typeof HOMEPAGE_TEMPLATES)[number]
   audience: AudienceKey
+  index: number
 }) {
   const audienceQuery = audience === 'general' ? '?audience=general' : ''
   const embedQuery = audience === 'general' ? '?embed=1&audience=general' : '?embed=1'
   const previewHref = `/homepage-preview/${template.key}${audienceQuery}`
+  const title = `템플릿${index + 1}`
 
   return (
     <article
@@ -128,15 +84,17 @@ function TemplateCard({ template, audience }: {
         <div className="relative aspect-[4/3] overflow-hidden border border-black/10 bg-white">
           <iframe
             src={`/homepage-preview/${template.key}${embedQuery}`}
-            title={`${template.name} 디자인`}
-            className="h-[400%] w-[400%] origin-top-left scale-[0.25] border-0"
+            title={`${title} 화면 미리보기`}
+            className="pointer-events-none h-[400%] w-[400%] origin-top-left scale-[0.25] border-0"
             loading="lazy"
+            sandbox="allow-same-origin"
+            tabIndex={-1}
           />
           <div className="pointer-events-none absolute inset-0 ring-1 ring-inset ring-black/5" />
         </div>
       </Link>
       <div className="p-5">
-        <h2 className="text-xl font-black">{template.name}</h2>
+        <h2 className="text-xl font-black">{title}</h2>
         <div className="mt-5">
           <Link href={previewHref} className="rounded-xl bg-gray-950 px-3 py-3 text-center text-sm font-black text-white">
             전체 미리보기

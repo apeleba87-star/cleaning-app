@@ -16,9 +16,13 @@ export type HomepageTemplateKey =
   | 'showcase-basic'
   | 'showcase-portfolio'
   | 'showcase-local'
+  | 'showcase-tech'
+  | 'showcase-carenex'
+  | 'showcase-clean-detail'
   | 'sales-reviews'
   | 'sales-services'
   | 'sales-fast-contact'
+  | 'field-template-studio'
   | 'interactive-calculator'
   | 'interactive-steps'
   | 'interactive-campaign'
@@ -144,6 +148,63 @@ export type HomepageMediaItem = {
   alt_text: string | null
   sort_order: number
   is_visible: boolean
+  created_at?: string
+  updated_at?: string
+}
+
+export type HomepageOnboardingSubmissionStatus = 'submitted' | 'reviewing' | 'applied' | 'archived'
+
+export type HomepageOnboardingReview = {
+  author?: string
+  rating?: number
+  content: string
+}
+
+export type HomepageOnboardingFaq = {
+  question: string
+  answer: string
+}
+
+export type HomepageOnboardingBeforeAfter = {
+  title?: string
+  before?: string
+  after?: string
+}
+
+export type HomepageOnboardingSubmission = {
+  id: string
+  site_id: string
+  status: HomepageOnboardingSubmissionStatus
+  business_name: string
+  contact_name: string | null
+  contact_phone: string | null
+  phone: string | null
+  kakao_url: string | null
+  blog_url: string | null
+  naver_place_url: string | null
+  instagram_url: string | null
+  service_area: string | null
+  address: string | null
+  business_hours: string | null
+  hero_headline: string | null
+  hero_subheadline: string | null
+  company_intro: string | null
+  services: string[]
+  pricing_notes: string[]
+  reviews: HomepageOnboardingReview[]
+  faqs: HomepageOnboardingFaq[]
+  logo_image_url: string | null
+  representative_images: string[]
+  portfolio_images: string[]
+  before_after_images: HomepageOnboardingBeforeAfter[]
+  footer_representative: string | null
+  footer_business_number: string | null
+  footer_email: string | null
+  footer_address: string | null
+  footer_note: string | null
+  reference_urls: string[]
+  request_note: string | null
+  applied_at: string | null
   created_at?: string
   updated_at?: string
 }

@@ -1,4 +1,4 @@
-import { getHomepagePalettes, getHomepageTemplate } from '@/lib/homepage/templates'
+import { HOMEPAGE_TEMPLATES, getHomepagePalettes, getHomepageTemplate } from '@/lib/homepage/templates'
 import type { CSSProperties } from 'react'
 
 type Props = {
@@ -11,6 +11,11 @@ type Props = {
 export default function PalettePreviewSwitcher({ templateKey, currentPalette, pageSlug, audience = 'cleaning' }: Props) {
   const template = getHomepageTemplate(templateKey)
   const palettes = Object.values(getHomepagePalettes(templateKey))
+  const previewTemplates = audience === 'general'
+    ? HOMEPAGE_TEMPLATES.filter((item) => item.category !== 'interactive')
+    : HOMEPAGE_TEMPLATES
+  const previewIndex = Math.max(previewTemplates.findIndex((item) => item.key === template.key), 0)
+  const previewName = `템플릿${previewIndex + 1}`
   const audienceParam = audience === 'general' ? 'audience=general' : ''
   const basePath = pageSlug
     ? `/homepage-preview/${templateKey}/${pageSlug}`
@@ -41,7 +46,7 @@ export default function PalettePreviewSwitcher({ templateKey, currentPalette, pa
           홈 보기
         </a>
         <span className="shrink-0 rounded-full bg-gray-100 px-3 py-1.5 text-xs font-black text-gray-600">
-          {template.name} 확인 중
+          {previewName} 확인 중
         </span>
         <span className="ml-2 shrink-0 text-xs font-black text-gray-500">전체 분위기</span>
         {palettes.map((palette) => {

@@ -123,23 +123,38 @@ export default function PublicHomepage({ data, page = 'home' }: Props) {
   const secondaryCalculator = showCalculator && template.calculatorPosition === 'secondary'
   const isFastContact = site.template_key === 'sales-fast-contact' || site.template_key === 'showcase-local' || isDirectSales
   const isCampaign = site.template_key === 'interactive-campaign'
+  const isTemplateStudio = site.template_key === 'field-template-studio'
+  const isTechShowcase = site.template_key === 'showcase-tech'
+  const isCarenexShowcase = site.template_key === 'showcase-carenex'
+  const isCleanDetailShowcase = site.template_key === 'showcase-clean-detail'
   const previewPrefix = site.slug?.startsWith('preview-') ? `/homepage-preview/${site.template_key}` : null
   const basePath = previewPrefix || (typeof site.slug === 'string' ? `/t/${site.slug}` : '')
   const pageHref = (slug: HomepagePageSlug) => (slug === 'home' ? basePath : `${basePath}/${slug}`)
   const menuItems = template.pages.map((slug) => ({ slug, href: pageHref(slug) }))
   const fixedHeaderOffset = previewPrefix ? 'top-[40px]' : 'top-0'
-  const pageTopPadding = previewPrefix ? 'pt-[112px]' : 'pt-[72px]'
+  const overlayHeader = isTechShowcase || isCarenexShowcase
+  const pageTopPadding = overlayHeader ? (previewPrefix ? 'pt-[40px]' : 'pt-0') : previewPrefix ? 'pt-[112px]' : 'pt-[72px]'
   const isPremiumShowcase = site.template_key === 'showcase-portfolio'
-  const headerClassName = isPremiumShowcase
+  const headerClassName = isCarenexShowcase
+    ? `homepage-flat fixed inset-x-0 ${fixedHeaderOffset} z-[60] border-b border-white/15 bg-[#111827]/78 text-white backdrop-blur-xl`
+    : isTechShowcase
+    ? `homepage-flat fixed inset-x-0 ${fixedHeaderOffset} z-[60] border-b border-white/10 bg-black/88 text-white backdrop-blur-xl`
+    : isPremiumShowcase
     ? `homepage-flat fixed inset-x-0 ${fixedHeaderOffset} z-[60] border-b border-white/10 bg-black/72 text-white backdrop-blur-xl`
     : `homepage-flat fixed inset-x-0 ${fixedHeaderOffset} z-[60] border-b border-black/10 bg-white/90 backdrop-blur-xl`
-  const headerPhoneClassName = isPremiumShowcase
+  const headerPhoneClassName = isCleanDetailShowcase
+    ? 'hidden rounded-md bg-[#1a2a6c] px-4 py-2 text-sm font-black text-white sm:inline-flex'
+    : isCarenexShowcase
+    ? 'hidden rounded-md bg-[#0047ab] px-4 py-2 text-sm font-black text-white shadow-[0_4px_16px_rgba(0,71,171,0.35)] sm:inline-flex'
+    : isTechShowcase
+    ? 'hidden rounded-md bg-[#0066ff] px-4 py-2 text-sm font-black text-white shadow-[0_4px_16px_rgba(0,102,255,0.35)] sm:inline-flex'
+    : isPremiumShowcase
     ? 'hidden rounded-full bg-[#d5b56d] px-4 py-2 text-sm font-black text-[#15100a] sm:inline-flex'
     : 'hp-primary hidden rounded-full px-4 py-2 text-sm font-black sm:inline-flex'
 
   return (
     <main
-      className={`homepage-site min-h-screen ${pageTopPadding} ${palette.text}`}
+      className={`homepage-site min-h-screen ${pageTopPadding} ${palette.text} ${isTechShowcase ? 'homepage-tech-site' : ''}`}
       style={palette.cssVars as CSSProperties}
     >
       <header className={headerClassName}>
@@ -159,31 +174,63 @@ export default function PublicHomepage({ data, page = 'home' }: Props) {
               currentPage={currentPage}
               palette={palette}
               showCalculator={!!showCalculator}
-              inverseButton={isPremiumShowcase}
+              inverseButton={isPremiumShowcase || isTechShowcase || isCarenexShowcase}
             />
           </div>
         </div>
       </header>
 
       {currentPage === 'home' && (
-        <HomePage
-          data={data}
-          pageHref={pageHref}
-          palette={palette}
-          heroCalculator={!!heroCalculator}
-          secondaryCalculator={!!secondaryCalculator}
-          isCampaign={isCampaign}
-        />
+        isCleanDetailShowcase ? (
+          <CleanDetailHome data={data} pageHref={pageHref} />
+        ) : isCarenexShowcase ? (
+          <CarenexShowcaseHome data={data} pageHref={pageHref} />
+        ) : isTechShowcase ? (
+          <TechShowcaseHome data={data} pageHref={pageHref} />
+        ) : isTemplateStudio ? (
+          <FieldTemplateStudioHome data={data} pageHref={pageHref} />
+        ) : (
+          <HomePage
+            data={data}
+            pageHref={pageHref}
+            palette={palette}
+            heroCalculator={!!heroCalculator}
+            secondaryCalculator={!!secondaryCalculator}
+            isCampaign={isCampaign}
+          />
+        )
       )}
-      {currentPage === 'about' && <AboutPage data={data} palette={palette} />}
-      {currentPage === 'services' && <ServicesPage showEstimateCta={!!showCalculator} pageHref={pageHref} palette={palette} general={isGeneral} />}
+      {currentPage === 'about' && (
+        isCleanDetailShowcase ? <CleanDetailStandards /> : isCarenexShowcase ? <CarenexAbout pageHref={pageHref} /> : isTechShowcase ? <TechShowcaseAbout data={data} pageHref={pageHref} /> : isTemplateStudio ? <FieldTemplateStudioAbout pageHref={pageHref} /> : <AboutPage data={data} palette={palette} />
+      )}
+      {currentPage === 'services' && (
+        isCleanDetailShowcase
+          ? <CleanDetailScope />
+          : isCarenexShowcase
+          ? <CarenexServices />
+          : isTechShowcase
+          ? <TechShowcaseServices cleaning={isCleaningTechSite(site)} />
+          : isTemplateStudio
+          ? <FieldTemplateStudioTemplates pageHref={pageHref} />
+          : <ServicesPage showEstimateCta={!!showCalculator} pageHref={pageHref} palette={palette} general={isGeneral} />
+      )}
       {currentPage === 'portfolio' && (
-        <PortfolioSection
-          palette={palette}
-          siteTitle={site.portfolio_title || '최근 현장 사례'}
-          posts={blogPosts}
-          mediaItems={mediaItems}
-        />
+        isCleanDetailShowcase ? (
+          <CleanDetailReviews />
+        ) : isCarenexShowcase ? (
+          <CarenexPortfolio />
+        ) : isTechShowcase ? (
+          <TechShowcaseNews cleaning={isCleaningTechSite(site)} />
+        ) : isTemplateStudio ? (
+          <FieldTemplateStudioPortfolio pageHref={pageHref} />
+        ) : (
+          <PortfolioSection
+            palette={palette}
+            siteTitle={site.portfolio_title || '최근 현장 사례'}
+            posts={blogPosts}
+            mediaItems={mediaItems}
+          />
+        )
       )}
       {currentPage === 'estimate' && showCalculator && (
         <section className="mx-auto max-w-6xl px-4 py-8">
@@ -191,11 +238,11 @@ export default function PublicHomepage({ data, page = 'home' }: Props) {
         </section>
       )}
       {currentPage === 'estimate' && !showCalculator && <ContactPage data={data} palette={palette} />}
-      {currentPage === 'reviews' && <ReviewsPage palette={palette} general={isGeneral} />}
-      {currentPage === 'faq' && <FaqPage palette={palette} general={isGeneral} />}
-      {currentPage === 'contact' && <ContactPage data={data} palette={palette} />}
+      {currentPage === 'reviews' && (isTemplateStudio ? <FieldTemplateStudioReviews /> : <ReviewsPage palette={palette} general={isGeneral} />)}
+      {currentPage === 'faq' && (isCleanDetailShowcase ? <CleanDetailFaq /> : isCarenexShowcase ? <CarenexPrCenter /> : isTechShowcase ? <TechShowcaseFaq data={data} /> : isTemplateStudio ? <FieldTemplateStudioFaq /> : <FaqPage palette={palette} general={isGeneral} />)}
+      {currentPage === 'contact' && (isCleanDetailShowcase ? <CleanDetailContact data={data} /> : isCarenexShowcase ? <CarenexContact data={data} /> : isTechShowcase ? <TechShowcaseContact data={data} /> : isTemplateStudio ? <FieldTemplateStudioContact data={data} /> : <ContactPage data={data} palette={palette} />)}
 
-      <HomepageFooter site={site} palette={palette} />
+      {isCleanDetailShowcase ? <CleanDetailFooter data={data} /> : isCarenexShowcase ? <CarenexFooter data={data} /> : isTechShowcase ? <TechShowcaseFooter data={data} /> : <HomepageFooter site={site} palette={palette} />}
 
       {(isFastContact || showCalculator) && (
         <div className="fixed inset-x-0 bottom-0 z-40 border-t border-black/10 bg-white/92 p-3 shadow-lg backdrop-blur-xl">
@@ -220,6 +267,1421 @@ export default function PublicHomepage({ data, page = 'home' }: Props) {
       )}
       <HomepageRevealScript />
     </main>
+  )
+}
+
+const studioFeatureCards = [
+  ['프리미엄 홈페이지', '저렴해 보이지 않는 구조와 화면 밀도로 첫인상을 만듭니다.', HOMEPAGE_PREVIEW_IMAGES[10]],
+  ['트렌디한 이미지 효과', '현장 사진을 크게 쓰고 전환 포인트를 자연스럽게 배치합니다.', HOMEPAGE_PREVIEW_IMAGES[11]],
+  ['커스터마이징', '업종, 지역, 서비스 문구를 바꿔 실제 업체 사이트처럼 보이게 합니다.', HOMEPAGE_PREVIEW_IMAGES[12]],
+  ['디자인 템플릿', '전시형과 영업형을 업종별로 선택할 수 있게 구성합니다.', HOMEPAGE_PREVIEW_IMAGES[13]],
+  ['마케팅 도구', '전화, 카카오톡, 문의 버튼이 모바일 화면에서 바로 보이게 합니다.', HOMEPAGE_PREVIEW_IMAGES[8]],
+  ['더 많은 템플릿', '청소업뿐 아니라 줄눈, 목공, 인테리어까지 확장합니다.', HOMEPAGE_PREVIEW_IMAGES[9]],
+]
+
+const studioPlans = [
+  ['Basic', '템플릿 세팅', '기본 템플릿 적용, 연락처 연결, 하단 정보 입력'],
+  ['Standard', '문구/사진 교체', '업종 문구 정리, 대표 사진 교체, 기본 SEO 설정'],
+  ['Premium', '업종 맞춤 구성', '섹션 순서 조정, 사례 구성, 전환 CTA 최적화'],
+]
+
+const studioPortfolioCards = [
+  ['기업 홈페이지 1', '전시형 구조', HOMEPAGE_PREVIEW_IMAGES[6]],
+  ['기업 홈페이지 2', '영업형 구조', HOMEPAGE_PREVIEW_IMAGES[7]],
+  ['기업 홈페이지 3', '현장업 구조', HOMEPAGE_PREVIEW_IMAGES[8]],
+]
+
+const studioFaqRows = [
+  ['코딩을 몰라도 운영할 수 있나요?', '문구, 사진, 연락처처럼 자주 바꾸는 항목은 관리 화면에서 수정하는 방향으로 구성합니다.'],
+  ['사진이 부족해도 시작할 수 있나요?', '초기에는 템플릿 기본 이미지로 시작하고, 실제 현장 사진이 생기면 교체할 수 있습니다.'],
+  ['도메인 연결도 가능한가요?', '보유 도메인 연결과 기본 검색 노출 설정까지 함께 안내합니다.'],
+  ['제작 기간은 얼마나 걸리나요?', '자료가 준비되어 있으면 기본 세팅은 빠르게 진행하고, 맞춤 범위에 따라 일정이 달라집니다.'],
+]
+
+function FieldTemplateStudioHome({
+  data,
+  pageHref,
+}: {
+  data: HomepagePublicPackage
+  pageHref: (slug: HomepagePageSlug) => string
+}) {
+  const { site } = data
+  return (
+    <>
+      <section
+        className="homepage-hero-section relative flex min-h-[calc(100vh-72px)] items-center justify-center overflow-hidden bg-black text-center text-white"
+        style={{
+          backgroundImage: `linear-gradient(rgba(0,0,0,0.48), rgba(0,0,0,0.54)), url(${HOMEPAGE_PREVIEW_IMAGES[12]})`,
+          backgroundPosition: 'center',
+          backgroundSize: 'cover',
+        }}
+      >
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_35%,rgba(255,255,255,0.16),transparent_32%)]" />
+        <div className="relative mx-auto max-w-5xl px-5 py-24">
+          <p className="font-serif text-sm italic tracking-[0.38em] text-white/70">premium website template</p>
+          <h1 className="mt-7 text-5xl font-black leading-[0.95] tracking-[-0.07em] sm:text-7xl lg:text-8xl">
+            현장업 홈페이지,
+            <br />
+            템플릿으로 시작합니다.
+          </h1>
+          <p className="mx-auto mt-7 max-w-2xl text-base font-medium leading-8 text-white/72">
+            {site.subheadline}
+          </p>
+          <div className="mt-9 flex justify-center gap-3">
+            <a href={pageHref('services')} className="rounded-none bg-white px-7 py-4 text-sm font-black text-black">
+              바로 시작하기
+            </a>
+            <a href={pageHref('about')} className="rounded-none border border-white/45 px-7 py-4 text-sm font-black text-white">
+              더 알아보기
+            </a>
+          </div>
+        </div>
+        <div className="absolute bottom-9 left-1/2 h-12 w-7 -translate-x-1/2 rounded-full border border-white/50">
+          <span className="homepage-studio-scroll-dot absolute left-1/2 top-2 h-2 w-2 -translate-x-1/2 rounded-full bg-white" />
+        </div>
+      </section>
+
+      <FieldTemplateStudioWhoWeAre />
+      <FieldTemplateStudioCarousel />
+      <FieldTemplateStudioTemplates pageHref={pageHref} compact />
+      <FieldTemplateStudioInnovation />
+      <FieldTemplateStudioPortfolio pageHref={pageHref} compact />
+      <FieldTemplateStudioPricing pageHref={pageHref} />
+      <FieldTemplateStudioReviews />
+      <FieldTemplateStudioFaq compact />
+      <FieldTemplateStudioFinalCta pageHref={pageHref} />
+    </>
+  )
+}
+
+function FieldTemplateStudioWhoWeAre() {
+  return (
+    <section className="bg-white">
+      <div className="hp-container py-20 sm:py-28">
+        <div className="grid gap-10 lg:grid-cols-[1.1fr_0.9fr] lg:items-center">
+          <div>
+            <p className="font-serif text-sm italic tracking-[0.34em] text-[#888]">WHO WE ARE</p>
+            <h2 className="mt-5 text-4xl font-black leading-tight tracking-[-0.055em] text-black sm:text-5xl">
+              온사이트 템플릿에
+              <br />
+              오신 여러분 환영합니다.
+            </h2>
+            <p className="mt-6 max-w-2xl text-base leading-8 text-[#555]">
+              수백만 원짜리 홈페이지의 흐름을 현장업 사장님이 빠르게 시작할 수 있는 템플릿 구조로 정리합니다.
+              전시형, 영업형, 범용 현장업까지 문의 전환에 필요한 화면을 먼저 준비합니다.
+            </p>
+            <div className="mt-10 grid max-w-lg grid-cols-2 divide-x divide-black/15 border-y border-black/10 py-6">
+              {[
+                ['30+', 'Template sections'],
+                ['10x', 'Faster setup'],
+              ].map(([value, label]) => (
+                <div key={value} className="px-6 first:pl-0">
+                  <p className="text-6xl font-black tracking-[-0.06em] text-black">{value}</p>
+                  <p className="mt-2 text-xs font-bold uppercase tracking-[0.2em] text-[#888]">{label}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div className="overflow-hidden">
+            <img src={HOMEPAGE_PREVIEW_IMAGES[13]} alt="" className="aspect-[4/5] w-full object-cover" loading="lazy" />
+          </div>
+        </div>
+      </div>
+    </section>
+  )
+}
+
+function FieldTemplateStudioCarousel() {
+  return (
+    <section className="bg-[#f7f7f7]">
+      <div className="hp-container py-20 sm:py-28">
+        <div className="mb-8 flex items-end justify-between gap-4">
+          <div>
+            <p className="font-serif text-sm italic tracking-[0.34em] text-[#888]">WHAT WE MAKE</p>
+            <h2 className="mt-4 text-4xl font-black tracking-[-0.055em] text-black sm:text-5xl">템플릿은 싸 보인다는 틀을 깹니다.</h2>
+          </div>
+          <div className="hidden gap-2 sm:flex">
+            <span className="flex h-11 w-11 items-center justify-center border border-black/15 bg-white text-xl">←</span>
+            <span className="flex h-11 w-11 items-center justify-center border border-black/15 bg-black text-xl text-white">→</span>
+          </div>
+        </div>
+        <div className="-mx-4 flex snap-x gap-6 overflow-x-auto px-4 pb-4">
+          {studioFeatureCards.map(([title, text, imageUrl], index) => (
+            <article key={title} className="group min-w-[82%] snap-start overflow-hidden bg-white shadow-sm sm:min-w-[46%] lg:min-w-[31%]">
+              <div className="h-64 overflow-hidden">
+                <img src={imageUrl} alt="" className="h-full w-full object-cover transition duration-500 group-hover:scale-105" loading="lazy" />
+              </div>
+              <div className="p-6">
+                <p className="text-sm font-black text-[#888]">0{index + 1}</p>
+                <h3 className="mt-4 text-2xl font-black tracking-[-0.035em] text-black">{title}</h3>
+                <p className="mt-3 text-sm leading-7 text-[#666]">{text}</p>
+              </div>
+            </article>
+          ))}
+        </div>
+      </div>
+    </section>
+  )
+}
+
+function FieldTemplateStudioTemplates({
+  pageHref,
+  compact = false,
+}: {
+  pageHref: (slug: HomepagePageSlug) => string
+  compact?: boolean
+}) {
+  const templates = [
+    ['전시형', '회사소개, 서비스, 사례, 전후사진을 안정적으로 보여주는 기본 구조입니다.'],
+    ['영업형', '후기, 기준 비용, 빠른 상담 버튼을 앞쪽에 배치해 문의를 목표로 합니다.'],
+    ['범용 현장업', '줄눈, 목공, 인테리어, 방충망처럼 현장 사진이 중요한 업종에 맞춥니다.'],
+  ]
+
+  return (
+    <section className="bg-white">
+      <div className="hp-container py-20 text-center sm:py-28">
+        <p className="font-serif text-sm italic tracking-[0.34em] text-[#888]">OUR SERVICE</p>
+        <h1 className="mx-auto mt-4 max-w-3xl text-4xl font-black leading-tight tracking-[-0.055em] text-black sm:text-5xl">
+          프리미엄 홈페이지 템플릿을
+          <br />
+          전문으로 제작합니다.
+        </h1>
+        <div className="mt-7 flex flex-wrap justify-center gap-2">
+          {['Homepage Template', 'Trendy Design', 'Fancy Animation', 'Innovation'].map((tag, index) => (
+            <span key={tag} className={`rounded-full px-4 py-2 text-xs font-black ${index % 2 === 0 ? 'bg-black text-white' : 'border border-black text-black'}`}>
+              {tag}
+            </span>
+          ))}
+        </div>
+        <p className="mx-auto mt-7 max-w-2xl text-base leading-8 text-[#666]">
+          템플릿도 충분히 고급스러울 수 있다는 것을 증명합니다. 현장업에 필요한 페이지 흐름과 문의 버튼을 처음부터 포함합니다.
+        </p>
+      </div>
+      <div className="hp-container">
+        <div className="mb-7 flex flex-wrap items-end justify-between gap-4">
+          <div>
+            <p className="font-serif text-sm italic tracking-[0.34em] text-[#888]">TEMPLATE LINEUP</p>
+            <h2 className="mt-3 text-4xl font-black tracking-[-0.06em] text-black sm:text-5xl">현장업에 맞춘 템플릿 구성</h2>
+          </div>
+          {!compact && (
+            <a href={pageHref('contact')} className="rounded-none bg-black px-5 py-3 text-sm font-black text-white">
+              제작 상담하기
+            </a>
+          )}
+        </div>
+        <div className="grid gap-4 md:grid-cols-3">
+          {templates.map(([title, text], index) => (
+            <article key={title} className="group overflow-hidden border border-black/10 bg-white">
+              <div
+                className="h-56 bg-cover bg-center transition duration-500 group-hover:scale-105"
+                style={{ backgroundImage: `url(${HOMEPAGE_PREVIEW_IMAGES[index + 6]})` }}
+              />
+              <div className="p-6">
+                <p className="text-sm font-black text-[#888]">0{index + 1}</p>
+                <h2 className="mt-3 text-2xl font-black text-black">{title}</h2>
+                <p className="mt-3 text-sm font-semibold leading-7 text-[#666]">{text}</p>
+              </div>
+            </article>
+          ))}
+        </div>
+      </div>
+    </section>
+  )
+}
+
+function FieldTemplateStudioInnovation() {
+  return (
+    <section
+      className="overflow-hidden bg-black py-24 text-white"
+      style={{
+        backgroundImage: `linear-gradient(rgba(0,0,0,0.62), rgba(0,0,0,0.62)), url(${HOMEPAGE_PREVIEW_IMAGES[14] || HOMEPAGE_PREVIEW_IMAGES[1]})`,
+        backgroundPosition: 'center',
+        backgroundSize: 'cover',
+      }}
+    >
+      <div className="homepage-studio-marquee flex whitespace-nowrap text-[5rem] font-black lowercase leading-none tracking-[-0.08em] text-white/45 sm:text-[8rem]">
+        <span className="pr-10">innovation innovation innovation innovation</span>
+        <span className="pr-10">innovation innovation innovation innovation</span>
+      </div>
+    </section>
+  )
+}
+
+function FieldTemplateStudioPricing({ pageHref }: { pageHref: (slug: HomepagePageSlug) => string }) {
+  return (
+    <section className="bg-[#111] text-white">
+      <div className="hp-container py-14 sm:py-20">
+        <p className="font-serif text-sm italic tracking-[0.34em] text-white/45">PRODUCT</p>
+        <h2 className="mt-3 max-w-3xl text-4xl font-black leading-tight tracking-[-0.06em] sm:text-5xl">
+          필요한 범위에 맞춰 상품을 선택하세요
+        </h2>
+        <div className="mt-8 grid gap-4 md:grid-cols-3">
+          {studioPlans.map(([name, title, text], index) => (
+            <article key={name} className={`border p-6 ${index === 1 ? 'border-white bg-white text-black' : 'border-white/15 bg-white/[0.06]'}`}>
+              <p className="text-sm font-black opacity-70">{name}</p>
+              <h3 className="mt-4 text-2xl font-black">{title}</h3>
+              <p className="mt-4 min-h-16 text-sm font-semibold leading-7 opacity-75">{text}</p>
+              <a href={pageHref('contact')} className={`mt-6 inline-flex rounded-none px-5 py-3 text-sm font-black ${index === 1 ? 'bg-black text-white' : 'bg-white text-black'}`}>
+                바로 문의하기
+              </a>
+            </article>
+          ))}
+        </div>
+      </div>
+    </section>
+  )
+}
+
+function FieldTemplateStudioAbout({ pageHref }: { pageHref: (slug: HomepagePageSlug) => string }) {
+  return (
+    <>
+      <section className="hp-section bg-white">
+        <div className="hp-container grid gap-8 lg:grid-cols-[0.9fr_1.1fr] lg:items-center">
+          <div>
+            <p className="font-serif text-sm italic tracking-[0.34em] text-[#888]">ABOUT</p>
+            <h1 className="mt-3 text-5xl font-black leading-tight tracking-[-0.07em] text-black">현장업 사장님을 위한 홈페이지 제작</h1>
+            <p className="mt-5 text-base font-semibold leading-8 text-[#666]">
+              예쁜 소개 페이지보다 중요한 것은 문의가 들어오는 구조입니다. 업종, 지역, 사례, 후기, 상담 버튼이 자연스럽게 이어지도록 템플릿을 구성합니다.
+            </p>
+            <a href={pageHref('services')} className="mt-7 inline-flex rounded-none bg-black px-6 py-4 text-sm font-black text-white">
+              템플릿 구성 보기
+            </a>
+          </div>
+          <div className="grid gap-3">
+            {['업종별 첫 화면', '모바일 문의 동선', '사례 중심 구성', '운영 가능한 관리 항목'].map((item) => (
+              <div key={item} className="border border-black/10 bg-[#f7f7f7] p-6 text-xl font-black text-black">{item}</div>
+            ))}
+          </div>
+        </div>
+      </section>
+      <FieldTemplateStudioWhoWeAre />
+    </>
+  )
+}
+
+function FieldTemplateStudioPortfolio({
+  pageHref,
+  compact = false,
+}: {
+  pageHref: (slug: HomepagePageSlug) => string
+  compact?: boolean
+}) {
+  return (
+    <>
+      <section className="hp-section bg-white">
+        <div className="hp-container">
+          <div className="mb-8 flex flex-wrap items-end justify-between gap-4">
+            <div>
+              <p className="font-serif text-sm italic tracking-[0.34em] text-[#888]">PORTFOLIO</p>
+              <h1 className="mt-3 text-4xl font-black tracking-[-0.06em] text-black sm:text-5xl">더 다양한 홈페이지 템플릿을 둘러보세요!</h1>
+            </div>
+            <a href={pageHref('contact')} className="rounded-none bg-black px-5 py-3 text-sm font-black text-white">
+              View All Projects →
+            </a>
+          </div>
+          <div className="grid gap-4 md:grid-cols-3">
+            {studioPortfolioCards.map(([title, label, imageUrl]) => (
+              <article key={title} className="group relative h-80 cursor-pointer overflow-hidden bg-black">
+                <img src={imageUrl} alt="" className="h-full w-full object-cover transition duration-500 group-hover:scale-105" loading="lazy" />
+                <div className="absolute inset-0 bg-black/0 transition duration-300 group-hover:bg-black/60" />
+                <div className="absolute inset-x-0 bottom-0 translate-y-4 p-6 text-white opacity-0 transition duration-300 group-hover:translate-y-0 group-hover:opacity-100">
+                  <p className="text-xs font-black uppercase tracking-[0.25em] text-white/60">{label}</p>
+                  <h2 className="mt-3 text-2xl font-black">{title} →</h2>
+                </div>
+              </article>
+            ))}
+          </div>
+        </div>
+      </section>
+      {!compact && <FieldTemplateStudioFinalCta pageHref={pageHref} />}
+    </>
+  )
+}
+
+function FieldTemplateStudioReviews() {
+  return (
+    <section className="hp-section bg-[#f7f7f7]">
+      <div className="hp-container">
+        <p className="font-serif text-sm italic tracking-[0.34em] text-[#888]">REVIEW</p>
+        <h1 className="mt-3 text-4xl font-black tracking-[-0.06em] text-black sm:text-5xl">처음 홈페이지를 준비하는 분들이 이해하기 쉽게</h1>
+        <div className="mt-8 grid gap-4 md:grid-cols-3">
+          {['사진이 부족했는데도 기본 구성이 있어서 시작하기 쉬웠습니다.', '전화 버튼과 카카오톡 버튼이 바로 보여서 문의 안내가 편했습니다.', '업종에 맞게 문구를 바꾸니 우리 서비스처럼 보였습니다.'].map((text, index) => (
+            <article key={text} className="border border-black/10 bg-white p-6">
+              <p className="tracking-[0.18em] text-yellow-500">★★★★★</p>
+              <p className="mt-5 text-base font-bold leading-8 text-black">“{text}”</p>
+              <p className="mt-6 border-t border-black/10 pt-4 text-sm font-black text-[#888]">customer 0{index + 1}</p>
+            </article>
+          ))}
+        </div>
+      </div>
+    </section>
+  )
+}
+
+function FieldTemplateStudioFaq({ compact = false }: { compact?: boolean }) {
+  const rows = compact ? studioFaqRows.slice(0, 3) : studioFaqRows
+  return (
+    <section className="hp-section bg-white">
+      <div className="hp-container">
+        <p className="font-serif text-sm italic tracking-[0.34em] text-[#888]">FAQ</p>
+        <h1 className="mt-3 text-4xl font-black tracking-[-0.06em] text-black sm:text-5xl">자주 묻는 질문</h1>
+        <div className="mt-8 grid gap-3 md:grid-cols-2">
+          {rows.map(([question, answer]) => (
+            <article key={question} className="border border-black/10 bg-[#f7f7f7] p-6">
+              <h2 className="text-xl font-black text-black">{question}</h2>
+              <p className="mt-3 text-sm font-semibold leading-7 text-[#666]">{answer}</p>
+            </article>
+          ))}
+        </div>
+      </div>
+    </section>
+  )
+}
+
+function FieldTemplateStudioContact({ data }: { data: HomepagePublicPackage }) {
+  const { site } = data
+  return (
+    <section id="contact" className="hp-section bg-[#111] text-white">
+      <div className="hp-container grid gap-8 lg:grid-cols-[0.85fr_1.15fr]">
+        <div>
+          <p className="font-serif text-sm italic tracking-[0.34em] text-white/45">CONTACT</p>
+          <h1 className="mt-3 text-5xl font-black leading-tight tracking-[-0.07em]">어떤 업종인지 알려주시면 맞는 템플릿부터 안내합니다</h1>
+          <p className="mt-5 text-base font-semibold leading-8 text-white/65">업종, 지역, 사진 보유 여부, 원하는 상담 방식을 남겨주세요.</p>
+        </div>
+        <div className="border border-white/15 bg-white p-6 text-black">
+          <div className="grid gap-3">
+            {['업종 선택', '원하는 템플릿', '예산 범위', '연락처'].map((item) => (
+              <div key={item} className="rounded-none bg-[#f7f7f7] px-5 py-4 text-sm font-black text-[#666]">{item}</div>
+            ))}
+          </div>
+          <div className="mt-6 grid gap-2 sm:grid-cols-2">
+            {site.phone && <a href={`tel:${site.phone}`} className="rounded-none bg-black px-5 py-4 text-center text-sm font-black text-white">전화 문의</a>}
+            {site.kakao_url && <a href={site.kakao_url} className="rounded-none bg-yellow-300 px-5 py-4 text-center text-sm font-black text-black">카카오톡 문의</a>}
+          </div>
+        </div>
+      </div>
+    </section>
+  )
+}
+
+function FieldTemplateStudioFinalCta({ pageHref }: { pageHref: (slug: HomepagePageSlug) => string }) {
+  return (
+    <section className="bg-black text-white">
+      <div className="hp-container py-12 sm:py-16">
+        <div className="flex flex-wrap items-center justify-between gap-6">
+          <div>
+            <p className="font-serif text-sm italic tracking-[0.34em] text-white/45">START</p>
+            <h2 className="mt-3 text-4xl font-black tracking-[-0.06em] text-white sm:text-5xl">현장업 홈페이지, 템플릿부터 확인하세요</h2>
+          </div>
+          <a href={pageHref('contact')} className="rounded-none bg-white px-6 py-4 text-sm font-black text-black">
+            3초 상담하기
+          </a>
+        </div>
+      </div>
+    </section>
+  )
+}
+
+const techProductCards = [
+  ['클라우드매니저', 'Cloud Architecture', HOMEPAGE_PREVIEW_IMAGES[6], '#0066ff'],
+  ['인사이트 AI', 'AI Solutions', HOMEPAGE_PREVIEW_IMAGES[7], '#7c3aed'],
+  ['시큐어가드', 'Cybersecurity', HOMEPAGE_PREVIEW_IMAGES[8], '#dc2626'],
+  ['플렉스오토메이트', 'Automation', HOMEPAGE_PREVIEW_IMAGES[9], '#0066ff'],
+  ['브랜드빌더', 'Digital Growth', HOMEPAGE_PREVIEW_IMAGES[10], '#059669'],
+]
+
+const techServiceCards = [
+  {
+    label: 'Cloud Architecture',
+    color: '#0066ff',
+    title: '클라우드 아키텍처',
+    text: '비즈니스 규모에 맞춰 안정적으로 확장되는 클라우드 기반을 설계합니다.',
+    bullets: ['확장 가능한 클라우드 인프라', '멀티클라우드 전략 수립', '비용 최적화 솔루션', '24/7 모니터링 서비스'],
+  },
+  {
+    label: 'AI Solutions',
+    color: '#7c3aed',
+    title: '인공지능 솔루션',
+    text: '데이터와 업무 흐름을 연결해 실제 운영에 쓰이는 AI 기능을 구현합니다.',
+    bullets: ['머신러닝 모델 개발', '자연어 처리 서비스', '예측 분석 플랫폼', 'AI 기반 자동화'],
+  },
+  {
+    label: 'Big Data Analytics',
+    color: '#059669',
+    title: '빅데이터 분석 플랫폼',
+    text: '복잡한 데이터를 빠르게 처리하고 의사결정 가능한 지표로 전환합니다.',
+    bullets: ['실시간 데이터 처리', '데이터 시각화 대시보드', '데이터 레이크 구축', '비즈니스 인텔리전스'],
+  },
+  {
+    label: 'Cybersecurity',
+    color: '#dc2626',
+    title: '사이버 보안 솔루션',
+    text: '위협 탐지부터 대응 체계까지 기업 보안을 구조적으로 강화합니다.',
+    bullets: ['위협 탐지 및 대응', '제로트러스트 아키텍처', '보안 감사 및 컴플라이언스', '침해 사고 대응'],
+  },
+]
+
+const techNewsCards = [
+  ['테슬라, 자율주행 기술 업데이트 발표', '2024-09-17', 'AI 기반 주행 보조 시스템의 업데이트 방향과 산업 영향이 주목받고 있습니다.', HOMEPAGE_PREVIEW_IMAGES[11]],
+  ['삼성전자, 3나노미터 칩 양산 시작', '2024-09-13', '차세대 반도체 공정 경쟁이 클라우드와 AI 인프라 시장을 다시 흔들고 있습니다.', HOMEPAGE_PREVIEW_IMAGES[12]],
+  ['AI 스타트업 붐, 글로벌 투자 증가', '2024-09-13', '기업용 AI 자동화와 데이터 분석 솔루션 투자가 빠르게 확대되고 있습니다.', HOMEPAGE_PREVIEW_IMAGES[13]],
+]
+
+const cleaningTechProductCards = [
+  ['빠른상담 매니저', 'Quick Contact', HOMEPAGE_PREVIEW_IMAGES[4], '#0066ff'],
+  ['후기 신뢰보드', 'Review Conversion', HOMEPAGE_PREVIEW_IMAGES[5], '#7c3aed'],
+  ['전후사진 갤러리', 'Before After', HOMEPAGE_PREVIEW_IMAGES[6], '#059669'],
+  ['지역노출 구조', 'Local SEO', HOMEPAGE_PREVIEW_IMAGES[7], '#0066ff'],
+  ['견적문의 동선', 'Lead Flow', HOMEPAGE_PREVIEW_IMAGES[8], '#dc2626'],
+]
+
+const cleaningTechServiceCards = [
+  {
+    label: 'Quick Contact',
+    color: '#0066ff',
+    title: '빠른 문의 전환',
+    text: '모바일에서 전화와 카카오톡이 바로 보이도록 상담 동선을 앞쪽에 배치합니다.',
+    bullets: ['상단 전화 버튼', '카카오톡 바로 연결', '하단 고정 CTA', '문의 흐름 단순화'],
+  },
+  {
+    label: 'Review Trust',
+    color: '#7c3aed',
+    title: '후기 신뢰 설계',
+    text: '청소업 고객이 가장 먼저 확인하는 후기와 별점, 고객 반응을 전면에 배치합니다.',
+    bullets: ['별점 후기 카드', '고객 닉네임 표시', '후기 우선 노출', '신뢰 문구 정리'],
+  },
+  {
+    label: 'Photo Proof',
+    color: '#059669',
+    title: '전후사진 중심 구성',
+    text: '입주청소, 이사청소, 상가청소의 결과물을 사진 중심으로 보여줍니다.',
+    bullets: ['전후 사진 섹션', '청소 후 사진 슬라이드', '현장 사례 카드', '디테일 사진 강조'],
+  },
+  {
+    label: 'Local Cleaning',
+    color: '#dc2626',
+    title: '지역 청소 키워드',
+    text: '강서구, 양천구, 마포구처럼 실제 상담으로 이어지는 지역 정보를 정리합니다.',
+    bullets: ['지역 가능 안내', '서비스 지역 카드', '당일 상담 문구', '검색 노출 기본값'],
+  },
+]
+
+const cleaningTechNewsCards = [
+  ['입주청소 문의가 많은 첫 화면 구성', '2024-09-17', '가격보다 먼저 후기와 전후사진을 보여주면 상담 전환이 쉬워집니다.', HOMEPAGE_PREVIEW_IMAGES[5]],
+  ['청소업 홈페이지에서 전후사진이 중요한 이유', '2024-09-13', '고객은 설명보다 결과 사진을 먼저 확인하고 업체를 비교합니다.', HOMEPAGE_PREVIEW_IMAGES[6]],
+  ['지역명과 서비스명을 함께 노출하는 방법', '2024-09-13', '강서구 입주청소처럼 실제 검색 문구를 홈페이지 구조에 반영합니다.', HOMEPAGE_PREVIEW_IMAGES[7]],
+]
+
+function isCleaningTechSite(site: HomepagePublicPackage['site']) {
+  return site.template_key === 'showcase-tech' && site.seo_keywords?.includes('청소업')
+}
+
+function TechShowcaseHome({
+  data,
+  pageHref,
+}: {
+  data: HomepagePublicPackage
+  pageHref: (slug: HomepagePageSlug) => string
+}) {
+  const { site } = data
+  const cleaning = isCleaningTechSite(site)
+  const heroTitle = cleaning ? ['청소업 문의를 바꾸는', '통합 클린 솔루션'] : ['미래를 주도하는', '통합 테크 솔루션']
+  return (
+    <>
+      <section
+        className="homepage-hero-section relative flex min-h-[calc(100vh-72px)] items-center overflow-hidden bg-[#0a0a0a] text-white"
+        style={{
+          backgroundImage: `linear-gradient(180deg, rgba(0,0,0,0.68), rgba(0,0,0,0.44)), url(${site.hero_image_url || HOMEPAGE_PREVIEW_IMAGES[13]})`,
+          backgroundPosition: 'center',
+          backgroundSize: 'cover',
+        }}
+      >
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_78%_28%,rgba(0,102,255,0.24),transparent_30%)]" />
+        <div className="relative mx-auto w-[min(1200px,calc(100%-32px))] py-24 sm:py-32">
+          <p className="inline-flex border-l-[3px] border-[#0066ff] pl-3 text-xs font-semibold uppercase tracking-[0.16em] text-[#0066ff]">
+            {cleaning ? 'Cleaning business platform' : 'Tech business solution'}
+          </p>
+          <h1 className="mt-7 max-w-5xl text-5xl font-extrabold leading-[1.05] tracking-[-0.04em] sm:text-7xl">
+            {heroTitle[0]}
+            <br />
+            <span className="text-[#4da0ff]">{heroTitle[1]}</span>
+          </h1>
+          <p className="mt-7 max-w-2xl text-lg leading-8 text-white/75">
+            {site.subheadline}
+          </p>
+          <div className="mt-9 flex flex-wrap gap-3">
+            <a href={pageHref('services')} className="rounded-md bg-[#0066ff] px-6 py-4 text-sm font-semibold text-white shadow-[0_4px_18px_rgba(0,102,255,0.42)] transition hover:scale-[1.03] hover:bg-[#0055cc]">
+              {cleaning ? '청소업 구성 보기' : '솔루션 보기'}
+            </a>
+            <a href={pageHref('contact')} className="rounded-md border border-white/20 bg-white/5 px-6 py-4 text-sm font-semibold text-white backdrop-blur transition hover:bg-white/10">
+              3초만에 문의하기
+            </a>
+          </div>
+        </div>
+        <div className="absolute bottom-10 left-1/2 h-12 w-7 -translate-x-1/2 rounded-full border border-white/35">
+          <span className="homepage-studio-scroll-dot absolute left-1/2 top-2 h-2 w-2 -translate-x-1/2 rounded-full bg-white" />
+        </div>
+      </section>
+      <TechShowcaseProducts cleaning={cleaning} />
+      <TechShowcaseServices cleaning={cleaning} />
+      <TechShowcaseNews cleaning={cleaning} />
+      <TechShowcaseCta pageHref={pageHref} />
+    </>
+  )
+}
+
+function TechShowcaseSectionHeader({
+  label,
+  title,
+  dark = true,
+}: {
+  label: string
+  title: string
+  dark?: boolean
+}) {
+  return (
+    <div className="mb-10">
+      <p className="inline-flex border-l-[3px] border-[#0066ff] pl-3 text-xs font-semibold uppercase tracking-[0.16em] text-[#0066ff]">
+        {label}
+      </p>
+      <h2 className={`mt-4 max-w-3xl text-4xl font-bold leading-tight tracking-[-0.025em] ${dark ? 'text-white' : 'text-[#1a1a1a]'}`}>
+        {title}
+      </h2>
+    </div>
+  )
+}
+
+function TechShowcaseProducts({ cleaning = false }: { cleaning?: boolean }) {
+  const cards = cleaning ? cleaningTechProductCards : techProductCards
+  return (
+    <section className="bg-[#0a0a0a] text-white">
+      <div className="mx-auto w-[min(1200px,calc(100%-32px))] py-20 sm:py-28">
+        <TechShowcaseSectionHeader label="Innovation" title={cleaning ? '청소업 문의 전환 솔루션\n상담을 만드는 홈페이지 구조' : '테크 비즈니스 솔루션\n성공을 위한 기술 파트너'} />
+        <div className="-mx-4 flex snap-x gap-5 overflow-x-auto px-4 pb-4">
+          {cards.map(([title, label, imageUrl, color]) => (
+            <article key={title} className="group relative h-[400px] min-w-[300px] snap-start cursor-pointer overflow-hidden rounded-[14px] bg-[#111] transition duration-300 hover:scale-[1.03]">
+              <img src={imageUrl} alt="" className="h-full w-full object-cover opacity-82 transition duration-500 group-hover:scale-105" loading="lazy" />
+              <div className="absolute inset-0 bg-gradient-to-b from-black/0 via-black/15 to-black/90" />
+              <div className="absolute inset-x-0 bottom-0 p-6">
+                <p className="text-xs font-semibold uppercase tracking-[0.14em]" style={{ color }}>{label}</p>
+                <h3 className="mt-3 text-2xl font-semibold text-white">{title}</h3>
+              </div>
+            </article>
+          ))}
+        </div>
+      </div>
+    </section>
+  )
+}
+
+function TechShowcaseServices({ cleaning = false }: { cleaning?: boolean }) {
+  const cards = cleaning ? cleaningTechServiceCards : techServiceCards
+  return (
+    <section className="bg-white">
+      <div className="mx-auto w-[min(1200px,calc(100%-32px))] py-20 sm:py-28">
+        <TechShowcaseSectionHeader label="Service" title={cleaning ? '청소업 상담을 만드는 핵심 구성' : '비즈니스 성장을 위한 핵심 기술 분야'} dark={false} />
+        <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-4">
+          {cards.map((card) => (
+            <article key={card.label} className="rounded-[14px] border border-black/[0.08] bg-white p-7 shadow-[0_2px_16px_rgba(0,0,0,0.06)] transition duration-300 hover:-translate-y-1 hover:shadow-[0_8px_40px_rgba(0,0,0,0.12)]">
+              <p className="text-xs font-semibold uppercase tracking-[0.14em]" style={{ color: card.color }}>{card.label}</p>
+              <h3 className="mt-4 text-2xl font-bold text-[#1a1a1a]">{card.title}</h3>
+              <p className="mt-4 text-sm leading-7 text-[#666]">{card.text}</p>
+              <ul className="mt-6 space-y-3 text-sm text-[#444]">
+                {card.bullets.map((bullet) => (
+                  <li key={bullet} className="flex gap-2">
+                    <span style={{ color: card.color }}>•</span>
+                    <span>{bullet}</span>
+                  </li>
+                ))}
+              </ul>
+            </article>
+          ))}
+        </div>
+      </div>
+    </section>
+  )
+}
+
+function TechShowcaseNews({ cleaning = false }: { cleaning?: boolean }) {
+  const cards = cleaning ? cleaningTechNewsCards : techNewsCards
+  return (
+    <section className="bg-[#0a0a0a] text-white">
+      <div className="mx-auto w-[min(1200px,calc(100%-32px))] py-20 sm:py-28">
+        <TechShowcaseSectionHeader label={cleaning ? 'Cleaning insight' : 'News'} title={cleaning ? '청소업 홈페이지의 흐름을 읽다\n문의 전환과 신뢰 요소' : '테크 산업의 흐름을 읽다\n최신 뉴스와 트렌드'} />
+        <div className="grid gap-7 md:grid-cols-3">
+          {cards.map(([title, date, text, imageUrl]) => (
+            <article key={title} className="overflow-hidden rounded-xl bg-white text-[#1a1a1a] shadow-[0_2px_12px_rgba(0,0,0,0.08)] transition duration-300 hover:-translate-y-1 hover:shadow-[0_12px_40px_rgba(0,0,0,0.18)]">
+              <img src={imageUrl} alt="" className="h-[220px] w-full object-cover" loading="lazy" />
+              <div className="p-6">
+                <p className="text-[13px] text-[#999]">{date}</p>
+                <h3 className="mt-3 text-lg font-semibold leading-snug">{title}</h3>
+                <p className="mt-3 line-clamp-3 text-sm leading-6 text-[#666]">{text}</p>
+              </div>
+            </article>
+          ))}
+        </div>
+      </div>
+    </section>
+  )
+}
+
+function TechShowcaseCta({ pageHref }: { pageHref: (slug: HomepagePageSlug) => string }) {
+  return (
+    <section className="bg-[linear-gradient(135deg,#0055ff_0%,#0033cc_100%)] px-5 py-24 text-center text-white">
+      <h2 className="text-4xl font-bold tracking-[-0.02em]">도움이 필요하신가요?</h2>
+      <p className="mx-auto mt-5 max-w-2xl text-lg leading-8 text-white/75">
+        궁금하신 부분을 문의주시면 빠르게 도와드리겠습니다.
+      </p>
+      <a href={pageHref('contact')} className="mt-8 inline-flex rounded-lg bg-white px-9 py-4 text-base font-semibold text-[#0055ff] transition hover:bg-white/90">
+        문의하기
+      </a>
+    </section>
+  )
+}
+
+function TechShowcaseAbout({
+  data,
+  pageHref,
+}: {
+  data: HomepagePublicPackage
+  pageHref: (slug: HomepagePageSlug) => string
+}) {
+  const cleaning = isCleaningTechSite(data.site)
+  return (
+    <>
+      <section className="bg-[#0a0a0a] text-white">
+        <div className="mx-auto grid w-[min(1200px,calc(100%-32px))] gap-10 py-20 sm:py-28 lg:grid-cols-[0.9fr_1.1fr] lg:items-center">
+          <div>
+            <TechShowcaseSectionHeader label="About" title={cleaning ? '청소업 상담을 실제 문의로 연결합니다' : '복잡한 기술을 비즈니스 성과로 연결합니다'} />
+            <p className="text-base leading-8 text-white/70">
+              {cleaning
+                ? '입주청소, 이사청소, 상가청소 고객이 먼저 확인하는 가격 기준, 후기, 전후사진, 지역 정보를 한 흐름으로 정리합니다.'
+                : '클라우드 인프라, AI 자동화, 데이터 분석, 보안 체계를 하나의 흐름으로 설계해 기업의 디지털 전환을 지원합니다.'}
+            </p>
+            <a href={pageHref('contact')} className="mt-8 inline-flex rounded-md bg-[#0066ff] px-6 py-4 text-sm font-semibold text-white">
+              상담 문의
+            </a>
+          </div>
+          <img src={HOMEPAGE_PREVIEW_IMAGES[12]} alt="" className="h-[520px] w-full rounded-[14px] object-cover" loading="lazy" />
+        </div>
+      </section>
+      <TechShowcaseServices cleaning={cleaning} />
+    </>
+  )
+}
+
+function TechShowcaseFaq({ data }: { data: HomepagePublicPackage }) {
+  const cleaning = isCleaningTechSite(data.site)
+  const rows = cleaning
+    ? [
+        ['청소업 문구로 전부 바꿀 수 있나요?', '입주청소, 이사청소, 상가청소, 정기청소처럼 실제 서비스명에 맞춰 문구를 바꿉니다.'],
+        ['전화와 카카오톡 문의가 바로 연결되나요?', '상단 CTA와 하단 CTA, 문의 페이지에 전화/카카오톡 연결 버튼을 배치합니다.'],
+        ['전후사진과 후기도 넣을 수 있나요?', '청소 후 사진, 현장 사례, 별점 후기 섹션을 템플릿 기본 구조에 포함합니다.'],
+      ]
+    : [
+        ['기존 시스템과 연동이 가능한가요?', '현재 사용 중인 클라우드, ERP, 데이터베이스 구조를 확인한 뒤 단계별 연동 범위를 제안합니다.'],
+        ['보안 검토도 함께 진행하나요?', '초기 진단 단계에서 권한, 접근 제어, 로그, 백업 정책을 함께 검토합니다.'],
+        ['AI 솔루션은 어떤 데이터가 필요한가요?', '업무 목적에 따라 필요한 데이터를 정의하고, 수집 가능 여부와 모델 적용 범위를 안내합니다.'],
+      ]
+  return (
+    <section className="bg-white">
+      <div className="mx-auto w-[min(900px,calc(100%-32px))] py-20 sm:py-28">
+        <TechShowcaseSectionHeader label="FAQ" title="자주 묻는 질문" dark={false} />
+        <div className="space-y-3">
+          {rows.map(([question, answer]) => (
+            <article key={question} className="rounded-[14px] border border-black/[0.08] bg-[#f8f9fa] p-6">
+              <h2 className="text-xl font-bold text-[#1a1a1a]">{question}</h2>
+              <p className="mt-3 text-sm leading-7 text-[#666]">{answer}</p>
+            </article>
+          ))}
+        </div>
+      </div>
+    </section>
+  )
+}
+
+function TechShowcaseContact({ data }: { data: HomepagePublicPackage }) {
+  const { site } = data
+  const cleaning = isCleaningTechSite(site)
+  return (
+    <section className="bg-[#0a0a0a] text-white">
+      <div className="mx-auto grid w-[min(1200px,calc(100%-32px))] gap-10 py-20 sm:py-28 lg:grid-cols-[0.9fr_1.1fr]">
+        <div>
+          <TechShowcaseSectionHeader label="Contact" title={cleaning ? '청소 서비스와 지역을 알려주시면 상담 동선부터 안내합니다' : '기술 과제를 알려주시면 맞는 솔루션부터 안내합니다'} />
+          <p className="text-base leading-8 text-white/70">
+            {cleaning ? '입주청소, 이사청소, 상가청소 중 필요한 서비스와 주요 지역을 남겨주세요.' : '클라우드, AI, 데이터, 보안 중 필요한 영역과 현재 상황을 남겨주세요.'}
+          </p>
+        </div>
+        <div className="rounded-[14px] border border-white/10 bg-white/[0.06] p-7">
+          <div className="grid gap-3">
+            {(cleaning ? ['업체명', '청소 서비스', '서비스 가능 지역', '연락처'] : ['회사명', '필요한 솔루션', '현재 사용 중인 시스템', '연락처']).map((item) => (
+              <div key={item} className="rounded-lg border border-white/10 bg-black/30 px-5 py-4 text-sm font-semibold text-white/45">{item}</div>
+            ))}
+          </div>
+          <div className="mt-6 grid gap-2 sm:grid-cols-2">
+            {site.phone && <a href={`tel:${site.phone}`} className="rounded-md bg-[#0066ff] px-5 py-4 text-center text-sm font-semibold text-white">전화 문의</a>}
+            {site.kakao_url && <a href={site.kakao_url} className="rounded-md bg-white px-5 py-4 text-center text-sm font-semibold text-[#0066ff]">문의하기</a>}
+          </div>
+        </div>
+      </div>
+    </section>
+  )
+}
+
+function TechShowcaseFooter({ data }: { data: HomepagePublicPackage }) {
+  const { site } = data
+  const cleaning = isCleaningTechSite(site)
+  const businessItems = cleaning
+    ? ['입주청소', '이사청소', '상가청소', '정기청소']
+    : ['클라우드', 'AI 솔루션', '빅데이터', '보안']
+  return (
+    <footer className="border-t border-white/10 bg-[#0a0a0a] text-white">
+      <div className="mx-auto grid w-[min(1200px,calc(100%-32px))] gap-10 py-16 sm:grid-cols-[2fr_1fr_1fr]">
+        <div>
+          <p className="text-2xl font-black">{site.business_name || site.name}</p>
+          <div className="mt-8 grid gap-5 text-sm leading-7 text-white/65">
+            <div>
+              <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-[#0066ff]">Address</p>
+              <p>{site.footer_address || site.address}</p>
+            </div>
+            <div>
+              <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-[#0066ff]">Contact</p>
+              <p>T. {site.footer_phone || site.phone}</p>
+              <p>F. 010 1234 1234</p>
+            </div>
+          </div>
+        </div>
+        <div>
+          <p className="mb-4 text-[11px] font-semibold uppercase tracking-[0.16em] text-[#0066ff]">Business</p>
+          {businessItems.map((item) => (
+            <p key={item} className="text-sm leading-7 text-white/65">{item}</p>
+          ))}
+        </div>
+        <div>
+          <p className="mb-4 text-[11px] font-semibold uppercase tracking-[0.16em] text-[#0066ff]">Company</p>
+          <p className="text-sm leading-7 text-white/65">대표: {site.footer_representative || '홍길동'}</p>
+          <p className="text-sm leading-7 text-white/65">사업자등록번호: {site.footer_business_number || '000-00-00000'}</p>
+        </div>
+      </div>
+      <div className="mx-auto flex w-[min(1200px,calc(100%-32px))] flex-wrap justify-between gap-3 border-t border-white/[0.08] py-6 text-sm text-white/45">
+        <span>개인정보처리방침</span>
+        <span>{cleaning ? 'CleanTech Platform' : 'Technova'}. All rights reserved.</span>
+      </div>
+    </footer>
+  )
+}
+
+const carenexHeroSlides = [
+  ['자산의 가치를 높이는\n스마트 건물관리 솔루션', '시설관리, 미화, 보안, 행정지원을 아우르는 원스톱 서비스를 경험하세요.', HOMEPAGE_PREVIEW_IMAGES[13]],
+  ['체계적인 관리 시스템과\n전문 관리 인력', '전문 시스템과 숙련된 전문가가 파트너사의 건물관리를 책임집니다.', HOMEPAGE_PREVIEW_IMAGES[12]],
+  ['건물의 특성에 맞춘\n최적의 관리 플랜', '대형 오피스부터 복합 상가, 관공서까지 각 현장에 최적화된 솔루션을 제안합니다.', HOMEPAGE_PREVIEW_IMAGES[11]],
+]
+
+const carenexServices = [
+  ['시설관리 (FM)', '전기, 소방, 공조, 승강기 등 핵심 설비의 24/7 예방 점검 및 신속 대응', HOMEPAGE_PREVIEW_IMAGES[6]],
+  ['미화·환경관리', '일상의 쾌적함과 건물의 가치를 높이는 전문 클리닝 및 조경, 방역', HOMEPAGE_PREVIEW_IMAGES[5]],
+  ['보안·주차관리', '첨단 시스템과 전문 인력을 통한 24시간 빈틈없는 안전 및 주차 편의 제공', HOMEPAGE_PREVIEW_IMAGES[7]],
+  ['아웃소싱·인재파견', '미화/보안 인력 등 건물 운영에 필요한 전문 인력 파견과 관리', HOMEPAGE_PREVIEW_IMAGES[8]],
+]
+
+const carenexCompetences = [
+  ['AI', 'AI 건물 진단', 'AI 플랫폼 기반 정밀 분석과 데이터 기반 리스크 대응'],
+  ['ESG', '친환경 청소 인증', 'ESG 경영 실천을 위한 친환경 세제·장비 및 인증 시스템'],
+  ['IT', 'IT 스마트 관리', '실시간 현장 리포트와 디지털 데이터 기반의 투명한 관리'],
+  ['FM', '시설·미화 통합관리', '인력·자원 최적화로 관리 품질 향상과 운영 비용 절감'],
+]
+
+const carenexPortfolio = [
+  ['프라임 오피스 빌딩', HOMEPAGE_PREVIEW_IMAGES[9]],
+  ['복합 상업시설', HOMEPAGE_PREVIEW_IMAGES[10]],
+  ['공공기관 청사', HOMEPAGE_PREVIEW_IMAGES[11]],
+  ['지식산업센터', HOMEPAGE_PREVIEW_IMAGES[12]],
+  ['대형 주거단지', HOMEPAGE_PREVIEW_IMAGES[13]],
+  ['물류 운영센터', HOMEPAGE_PREVIEW_IMAGES[14] || HOMEPAGE_PREVIEW_IMAGES[4]],
+]
+
+function CarenexShowcaseHome({
+  data,
+  pageHref,
+}: {
+  data: HomepagePublicPackage
+  pageHref: (slug: HomepagePageSlug) => string
+}) {
+  return (
+    <>
+      <CarenexHero />
+      <CarenexServices />
+      <CarenexCompetence />
+      <CarenexPlatform pageHref={pageHref} />
+      <CarenexPerformance />
+      <CarenexPortfolio />
+      <CarenexPrCenter />
+      <CarenexContact data={data} />
+    </>
+  )
+}
+
+function CarenexSectionHeader({ label, title, text, dark = false }: { label: string; title: string; text?: string; dark?: boolean }) {
+  return (
+    <div className="mx-auto mb-12 max-w-3xl text-center">
+      <p className="text-[13px] font-bold uppercase tracking-[0.15em] text-[#0047ab]">{label}</p>
+      <h2 className={`mt-4 text-4xl font-bold tracking-[-0.02em] ${dark ? 'text-white' : 'text-[#1a1a1a]'}`}>{title}</h2>
+      {text && <p className={`mx-auto mt-5 max-w-xl text-base leading-8 ${dark ? 'text-white/75' : 'text-[#666]'}`}>{text}</p>}
+    </div>
+  )
+}
+
+function CarenexHero() {
+  const [title, text, image] = carenexHeroSlides[0]
+  return (
+    <section
+      className="homepage-hero-section relative flex min-h-[calc(100vh-70px)] items-center justify-center overflow-hidden bg-[#111827] text-center text-white"
+      style={{
+        backgroundImage: `linear-gradient(to bottom, rgba(0,0,0,0.55), rgba(0,0,0,0.35)), url(${image})`,
+        backgroundPosition: 'center',
+        backgroundSize: 'cover',
+      }}
+    >
+      <div className="mx-auto max-w-5xl px-5">
+        <h1 className="whitespace-pre-line text-4xl font-bold leading-[1.2] tracking-[-0.02em] text-white drop-shadow-[0_2px_12px_rgba(0,0,0,0.3)] sm:text-6xl">
+          {title}
+        </h1>
+        <p className="mx-auto mt-6 max-w-2xl text-lg leading-8 text-white/85">{text}</p>
+      </div>
+      <div className="absolute bottom-20 left-1/2 flex -translate-x-1/2 gap-2">
+        {[0, 1, 2].map((dot) => (
+          <span key={dot} className={`h-2.5 rounded-full ${dot === 0 ? 'w-7 bg-white' : 'w-2.5 bg-white/40'}`} />
+        ))}
+      </div>
+      <div className="homepage-studio-scroll-dot absolute bottom-9 left-1/2 -translate-x-1/2 text-xs font-bold uppercase tracking-[0.18em] text-white/70">SCROLL ↓</div>
+    </section>
+  )
+}
+
+function CarenexServices() {
+  return (
+    <section className="bg-white py-20 sm:py-28">
+      <div className="mx-auto w-[min(1200px,calc(100%-32px))]">
+        <CarenexSectionHeader
+          label="TOTAL PROPERTY SOLUTION"
+          title="빌딩케어 프로 통합 관리 서비스"
+          text="다년간의 전문 노하우를 바탕으로 자산 가치를 극대화하는 최적화된 건물 관리 서비스를 제공합니다."
+        />
+        <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-4">
+          {carenexServices.map(([title, text, image], index) => (
+            <article key={title} className="group overflow-hidden rounded-xl bg-white shadow-[0_4px_20px_rgba(0,0,0,0.08)] transition duration-300 hover:-translate-y-1.5 hover:shadow-[0_12px_40px_rgba(0,0,0,0.14)]">
+              <img src={image} alt="" className="h-60 w-full object-cover transition duration-500 group-hover:scale-105" loading="lazy" />
+              <div className="p-6">
+                <p className="text-sm font-bold text-[#0047ab]">0{index + 1}</p>
+                <h3 className="mt-3 text-xl font-bold text-[#1a1a1a]">{title}</h3>
+                <p className="mt-3 text-sm leading-7 text-[#666]">{text}</p>
+              </div>
+            </article>
+          ))}
+        </div>
+      </div>
+    </section>
+  )
+}
+
+function CarenexCompetence() {
+  return (
+    <section className="bg-[#f5f5f5] py-20 sm:py-28">
+      <div className="mx-auto w-[min(1200px,calc(100%-32px))]">
+        <CarenexSectionHeader label="CORE COMPETENCE" title="빌딩케어 프로만의 핵심 경쟁력" />
+        <div className="grid gap-7 md:grid-cols-2 xl:grid-cols-4">
+          {carenexCompetences.map(([icon, title, text]) => (
+            <article key={title} className="rounded-[14px] border border-black/[0.06] bg-white p-8 text-center shadow-[0_2px_12px_rgba(0,0,0,0.05)] transition duration-300 hover:-translate-y-1 hover:border-[#0047ab] hover:shadow-[0_8px_32px_rgba(0,71,171,0.12)]">
+              <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-[rgba(0,71,171,0.08)] text-xl font-black text-[#0047ab]">{icon}</div>
+              <h3 className="mt-6 text-xl font-bold text-[#1a1a1a]">{title}</h3>
+              <p className="mt-3 text-sm leading-7 text-[#666]">{text}</p>
+            </article>
+          ))}
+        </div>
+      </div>
+    </section>
+  )
+}
+
+function CarenexPlatform({ pageHref }: { pageHref: (slug: HomepagePageSlug) => string }) {
+  return (
+    <section
+      className="bg-[#111827] text-white"
+      style={{ backgroundImage: `linear-gradient(rgba(17,24,39,0.92), rgba(17,24,39,0.92)), url(${HOMEPAGE_PREVIEW_IMAGES[12]})`, backgroundSize: 'cover', backgroundPosition: 'center' }}
+    >
+      <div className="mx-auto grid w-[min(1200px,calc(100%-32px))] gap-12 py-24 lg:grid-cols-2 lg:items-center">
+        <div>
+          <p className="text-[13px] font-bold uppercase tracking-[0.12em] text-[#1565c0]">BUILDINGCARE SMART PLATFORM</p>
+          <h2 className="mt-4 text-4xl font-bold leading-tight">데이터로 완성하는<br />효율적인 건물 관리</h2>
+          <p className="mt-6 text-base leading-8 text-white/75">
+            자체 개발한 통합 플랫폼을 통해 실시간 모니터링을 실현합니다. 시설, 미화, 보안 데이터를 통합 분석하여 문제를 사전에 감지하고 운영 비용을 최적화합니다.
+          </p>
+          <a href={pageHref('contact')} className="mt-8 inline-flex rounded-lg border-2 border-white px-7 py-4 text-sm font-bold text-white transition hover:bg-white hover:text-[#0047ab]">
+            빌딩케어 솔루션 문의
+          </a>
+        </div>
+        <div className="rounded-2xl border border-white/10 bg-white/10 p-5 shadow-2xl backdrop-blur">
+          <div className="rounded-xl bg-white p-5 text-[#111827]">
+            <p className="text-sm font-bold text-[#0047ab]">SMART DASHBOARD</p>
+            <div className="mt-5 grid gap-3">
+              {['시설 점검 현황', '미화 품질 리포트', '보안 이벤트 분석', '운영 비용 최적화'].map((item, index) => (
+                <div key={item} className="flex items-center justify-between rounded-lg bg-[#f5f5f5] px-4 py-3">
+                  <span className="font-bold">{item}</span>
+                  <span className="text-sm font-black text-[#0047ab]">{92 + index}%</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  )
+}
+
+function CarenexPerformance() {
+  const rows = [['150+', '파트너스'], ['300+', '총 관리 빌딩'], ['500+', '전문 관리 인력'], ['95%', '계약 연장률']]
+  return (
+    <section className="bg-[#0047ab] py-16 text-white">
+      <div className="mx-auto grid w-[min(1200px,calc(100%-32px))] gap-8 sm:grid-cols-2 lg:grid-cols-4">
+        {rows.map(([value, label], index) => (
+          <div key={label} className={`text-center ${index > 0 ? 'lg:border-l lg:border-white/25' : ''}`}>
+            <p className="text-6xl font-black tracking-[-0.04em]">{value}</p>
+            <p className="mt-3 text-sm font-medium text-white/80">{label}</p>
+          </div>
+        ))}
+      </div>
+    </section>
+  )
+}
+
+function CarenexPortfolio() {
+  return (
+    <section className="bg-[#f5f5f5] py-20 sm:py-28">
+      <div className="mx-auto w-[min(1200px,calc(100%-32px))]">
+        <CarenexSectionHeader label="PORTFOLIO" title="빌딩케어 프로 관리 현장" />
+        <div className="grid gap-5 md:grid-cols-3">
+          {carenexPortfolio.map(([title, image]) => (
+            <article key={title} className="group relative aspect-[4/3] overflow-hidden rounded-[10px]">
+              <img src={image} alt="" className="h-full w-full object-cover transition duration-500 group-hover:scale-105" loading="lazy" />
+              <div className="absolute inset-0 bg-[#0047ab]/0 transition duration-300 group-hover:bg-[#0047ab]/70" />
+              <div className="absolute inset-0 flex items-center justify-center text-xl font-bold text-white opacity-0 transition duration-300 group-hover:opacity-100">{title} →</div>
+            </article>
+          ))}
+        </div>
+      </div>
+    </section>
+  )
+}
+
+function CarenexPrCenter() {
+  const rows = [
+    ['회사소개', '고객만족을 위해 노력하는 건물관리 전문기업', '자세히 보기 →'],
+    ['인증서 및 특허', '빌딩케어 프로의 신뢰와 전문성을 증명합니다.', '자세히 보기 →'],
+    ['오시는 길', '본사 및 지점 위치 안내', '자세히 보기 →'],
+  ]
+  return (
+    <section className="bg-white py-20 sm:py-28">
+      <div className="mx-auto w-[min(1200px,calc(100%-32px))]">
+        <CarenexSectionHeader label="PR CENTER" title="빌딩케어 프로 커뮤니티" />
+        <div className="grid gap-7 md:grid-cols-3">
+          {rows.map(([title, text, link]) => (
+            <article key={title} className="rounded-xl border border-[#e5e7eb] border-t-[#0047ab] border-t-[3px] bg-[#f9fafb] p-9">
+              <h3 className="text-2xl font-bold text-[#1a1a1a]">{title}</h3>
+              <p className="mt-4 text-sm leading-7 text-[#666]">{text}</p>
+              <p className="mt-7 text-sm font-bold text-[#0047ab]">{link}</p>
+            </article>
+          ))}
+        </div>
+      </div>
+    </section>
+  )
+}
+
+function CarenexAbout({ pageHref }: { pageHref: (slug: HomepagePageSlug) => string }) {
+  return (
+    <>
+      <CarenexPlatform pageHref={pageHref} />
+      <CarenexCompetence />
+    </>
+  )
+}
+
+function CarenexContact({ data }: { data: HomepagePublicPackage }) {
+  const { site } = data
+  return (
+    <section
+      className="bg-[#111827] px-5 py-24 text-center text-white"
+      style={{ backgroundImage: `linear-gradient(rgba(10,20,50,0.85), rgba(10,20,50,0.85)), url(${HOMEPAGE_PREVIEW_IMAGES[13]})`, backgroundSize: 'cover', backgroundPosition: 'center' }}
+    >
+      <p className="text-[13px] font-bold uppercase tracking-[0.15em] text-[#1565c0]">CONTACT US</p>
+      <h2 className="mt-4 text-4xl font-bold">무엇을 도와드릴까요?</h2>
+      <p className="mx-auto mt-5 max-w-2xl text-lg leading-8 text-white/75">
+        건물 관리에 대한 문의나 견적이 필요하시면 편하게 연락 주세요. 전문 상담사가 신속하고 정확하게 답변드리겠습니다.
+      </p>
+      <div className="mt-7 text-lg font-bold leading-9">
+        <p>📞 {site.phone || '0000-0000'}</p>
+        <p>✉️ {site.footer_email || 'contact@buildingcare-pro.co.kr'}</p>
+      </div>
+      <a href={`tel:${site.phone || '0000-0000'}`} className="mt-8 inline-flex rounded-lg bg-[#0047ab] px-10 py-4 text-base font-bold text-white shadow-[0_4px_20px_rgba(0,71,171,0.4)] transition hover:-translate-y-0.5 hover:bg-[#0039a6]">
+        견적 문의하기
+      </a>
+    </section>
+  )
+}
+
+function CarenexFooter({ data }: { data: HomepagePublicPackage }) {
+  const { site } = data
+  return (
+    <footer className="bg-[#0a0f1e] text-white/60">
+      <div className="mx-auto grid w-[min(1200px,calc(100%-32px))] gap-10 py-16 lg:grid-cols-[2fr_1fr_1fr_1fr]">
+        <div>
+          <p className="text-2xl font-black text-white">{site.business_name || '빌딩케어 프로'}</p>
+          <p className="mt-5 max-w-sm text-sm leading-7">건물 종합관리 전문기업 빌딩케어 프로는 고객의 자산 가치를 지키기 위해 최선을 다합니다.</p>
+          <p className="mt-6 text-sm leading-7">T. {site.footer_phone || site.phone}</p>
+          <p className="text-sm leading-7">E. {site.footer_email || 'contact@buildingcare-pro.co.kr'}</p>
+        </div>
+        {[
+          ['회사소개', '인사말', '연혁', '오시는 길'],
+          ['서비스', '시설관리', '미화관리', '보안관리', '인재파견'],
+          ['스마트플랫폼', '플랫폼 소개', '도입문의'],
+        ].map(([title, ...items]) => (
+          <div key={title}>
+            <p className="mb-4 font-bold text-white">{title}</p>
+            {items.map((item) => <p key={item} className="text-sm leading-7">{item}</p>)}
+          </div>
+        ))}
+      </div>
+      <div className="mx-auto flex w-[min(1200px,calc(100%-32px))] flex-wrap justify-between gap-3 border-t border-white/[0.08] py-6 text-sm">
+        <span>사업자등록번호: {site.footer_business_number || '000-00-00000'} | 대표: {site.footer_representative || '홍길동'}</span>
+        <span>© 2024 BuildingCare Pro. All rights reserved.</span>
+      </div>
+    </footer>
+  )
+}
+
+const cleanDetailTargets = [
+  ['새 집으로 첫 입주', '입주 전 실내 미세먼지와 자재 잔여물을 깨끗하게 정리해드려요'],
+  ['영유아 가정', '면역력이 약한 아이를 위해 먼지와 유해물질을 꼼꼼하게 제거해 드려요'],
+  ['알레르기 민감고객', '새집증후군 시공 추가 시 알레르기 유발물질을 줄일 수 있어요'],
+  ['리모델링·인테리어', '공사 후 남아있는 분진 등 오염을 제거해 쾌적한 공간을 만들어드려요'],
+]
+
+const cleanDetailStandards = [
+  ['하자점검', '타일·도배·마감재 하자 확인 후 보고'],
+  ['분진제거', '전문 장비로 톱밥·미세먼지 제거'],
+  ['200장 타올 구비', '4색 구분 타올을 공간별로 분리 사용'],
+  ['고온 스팀세척', '고온 스팀으로 싱크·배수구 살균'],
+  ['전문 청소장비', '습건식 청소기, 스팀기 등 장비 활용'],
+  ['전용 청소세제', '장소별 특화 세제로 기름때·물때 제거'],
+  ['1일 1집 청소', '하루 한 집만 전담 집중 서비스'],
+  ['후불결제 안내', '청소 완료 후 확인하고 결제'],
+]
+
+const cleanDetailReviews = [
+  ['박○준', '의정부시 평화로', '2026.06.21', '청소의 달인이 여기 계세요'],
+  ['심○섭', '하남시 미사대로', '2026.06.20', '마스터님 감사합니다'],
+  ['주○경', '연수구 송도과학로', '2026.06.17', '꼼꼼하고 확실한 청소'],
+  ['박○희', '성남시 분당구', '2026.06.13', '너무나도 만족하는 1등 청소'],
+  ['전○진', '중구 손기정로', '2026.06.12', '입주청소 감사드립니다'],
+  ['이○정', '마포구 만리재로', '2026.06.11', '정말 감사합니다'],
+]
+
+const cleanDetailScopeRows = [
+  ['방/거실', ['벽, 천장 먼지 및 이물질 제거', '몰딩 먼지 및 오염 제거', '문틀, 창문틀, 유리 오염 제거', '마루와 바닥 찌든 때 제거']],
+  ['주방/싱크대', ['싱크대 상하부장 먼지 제거', '중간 타일 오염 제거', '후드 주변 기름때 제거', '배수구와 수전 디테일 청소']],
+  ['화장실/욕실', ['배수구 오염 제거', '욕실 타일 먼지 제거', '수전과 스테인레스 이물질 제거', '천장과 벽 사이 찌든 때 제거']],
+  ['베란다', ['방충망 먼지 제거', '섀시와 창틀 오염 제거', '바닥 타일 오염 제거', '다용도실 먼지 정리']],
+]
+
+const cleanDetailFaqRows = [
+  ['평수 대비 투입 인원수는 어떻게 되나요?', '현장 구조와 평형에 따라 2명 이상 투입을 기준으로 안내합니다.'],
+  ['예약 및 청소시기는 언제가 좋은가요?', '입주 전 가구와 짐이 들어오기 전 일정을 추천드립니다.'],
+  ['식사비용은 어떻게 하나요?', '별도 식사비는 받지 않는 구성으로 안내할 수 있습니다.'],
+  ['청소범위는 어떻게 되나요?', '방/거실, 주방, 욕실, 베란다 등 주요 공간별 범위를 사전에 안내합니다.'],
+]
+
+function CleanDetailHome({ data, pageHref }: { data: HomepagePublicPackage; pageHref: (slug: HomepagePageSlug) => string }) {
+  return (
+    <>
+      <section className="bg-[#f5f5f5] pt-20 text-center">
+        <div className="mx-auto w-[min(1120px,calc(100%-32px))] py-16">
+          <p className="text-base italic text-[#666]">잘못된 선택으로 돈과 시간을 낭비하지 마세요</p>
+          <h1 className="mt-4 text-4xl font-bold leading-tight tracking-[-0.02em] text-[#1a2a6c] sm:text-5xl">
+            클린홈 프로는 제대로 청소합니다
+          </h1>
+          <p className="mx-auto mt-5 max-w-2xl text-base leading-8 text-[#666]">{data.site.subheadline}</p>
+          <a href={pageHref('contact')} className="mt-8 inline-flex rounded-lg bg-[#ff6600] px-10 py-4 text-base font-bold text-white transition hover:bg-[#e55a00]">
+            간편견적 신청하기
+          </a>
+        </div>
+      </section>
+      <CleanDetailTargets />
+      <CleanDetailTrust />
+      <CleanDetailCertificates />
+      <CleanDetailStandards />
+      <CleanDetailReviews />
+      <CleanDetailCostCta pageHref={pageHref} />
+      <CleanDetailProcess />
+      <CleanDetailScope />
+      <CleanDetailPeopleTable />
+      <CleanDetailFaq />
+      <CleanDetailRelated />
+    </>
+  )
+}
+
+function CleanDetailSectionHeader({ title, text }: { title: string; text?: string }) {
+  return (
+    <div className="mx-auto mb-10 max-w-3xl text-center">
+      <h2 className="text-3xl font-bold tracking-[-0.02em] text-[#1a1a1a] sm:text-4xl">{title}</h2>
+      {text && <p className="mx-auto mt-4 max-w-2xl text-base leading-8 text-[#666]">{text}</p>}
+    </div>
+  )
+}
+
+function CleanDetailTargets() {
+  return (
+    <section className="bg-white py-20">
+      <div className="mx-auto w-[min(1120px,calc(100%-32px))]">
+        <CleanDetailSectionHeader title="입주청소는 이런 분께 추천드려요" />
+        <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
+          {cleanDetailTargets.map(([title, text], index) => (
+            <article key={title} className="rounded-xl border border-[#e0e0e0] bg-white p-7 text-center shadow-[0_2px_12px_rgba(0,0,0,0.06)] transition hover:-translate-y-1 hover:border-[#1a2a6c]">
+              <p className="mx-auto flex h-11 w-11 items-center justify-center rounded-full bg-[#1a2a6c] text-sm font-bold text-white">0{index + 1}</p>
+              <h3 className="mt-5 text-lg font-bold text-[#222]">{title}</h3>
+              <p className="mt-3 text-sm leading-7 text-[#666]">{text}</p>
+            </article>
+          ))}
+        </div>
+      </div>
+    </section>
+  )
+}
+
+function CleanDetailTrust() {
+  const rows = [
+    ['칭찬후기 10만건+', '실제 이용 고객 후기 중심으로 신뢰를 보여줍니다.'],
+    ['현장점검 7천회+', '서비스 품질을 현장에서 확인하는 구조를 보여줍니다.'],
+    ['소비자 인증', '공식 인증과 품질 기준을 강조할 수 있습니다.'],
+    ['본사 책임 관리', '체크리스트와 교육 이수 기준으로 관리합니다.'],
+  ]
+  return (
+    <section className="bg-[#1a2a6c] py-16 text-white">
+      <div className="mx-auto grid w-[min(1120px,calc(100%-32px))] gap-5 md:grid-cols-2">
+        {rows.map(([title, text]) => (
+          <article key={title} className="rounded-xl bg-white p-6 text-[#1a1a1a]">
+            <h3 className="text-2xl font-black text-[#1a2a6c]">{title}</h3>
+            <p className="mt-3 text-sm leading-7 text-[#555]">{text}</p>
+          </article>
+        ))}
+      </div>
+    </section>
+  )
+}
+
+function CleanDetailCertificates() {
+  return (
+    <section className="bg-white py-20">
+      <div className="mx-auto w-[min(1120px,calc(100%-32px))]">
+        <CleanDetailSectionHeader title="독보적 전문성, 압도적 품질" text="지속적인 기준 관리와 품질 개선으로 청소 서비스의 신뢰를 높입니다." />
+        <div className="flex gap-4 overflow-x-auto pb-2">
+          {['품질 인증', '고객만족 인증', '친환경 장비', '전문 교육', '보험 안내', '현장 점검'].map((item) => (
+            <div key={item} className="min-w-44 rounded-lg border border-[#e0e0e0] bg-white p-6 text-center font-bold text-[#1a2a6c]">{item}</div>
+          ))}
+        </div>
+      </div>
+    </section>
+  )
+}
+
+function CleanDetailStandards() {
+  return (
+    <section className="bg-[#f5f5f5] py-20">
+      <div className="mx-auto w-[min(1120px,calc(100%-32px))]">
+        <CleanDetailSectionHeader title="입주청소 서비스만의 기준과 품질" text="처음 입주하는 공간을 제대로 준비하기 위한 핵심 기준을 안내합니다." />
+        <div className="grid gap-5 md:grid-cols-2">
+          {cleanDetailStandards.map(([title, text], index) => (
+            <article key={title} className="grid gap-5 rounded-xl bg-white p-6 shadow-[0_2px_12px_rgba(0,0,0,0.06)] sm:grid-cols-[3rem_1fr]">
+              <span className="flex h-11 w-11 items-center justify-center rounded-full bg-[#1a2a6c] text-sm font-bold text-white">{String(index + 1).padStart(2, '0')}</span>
+              <div>
+                <h3 className="text-xl font-bold text-[#222]">{title}</h3>
+                <p className="mt-2 text-sm leading-7 text-[#666]">{text}</p>
+              </div>
+            </article>
+          ))}
+        </div>
+      </div>
+    </section>
+  )
+}
+
+function CleanDetailReviews() {
+  return (
+    <section className="bg-white py-20">
+      <div className="mx-auto w-[min(1120px,calc(100%-32px))]">
+        <CleanDetailSectionHeader title="만족도 높은 서비스를 후기에서 확인하세요" text="현장점검과 실제 고객 후기를 함께 보여주는 정보형 구성입니다." />
+        <div className="-mx-4 flex gap-4 overflow-x-auto px-4 pb-4">
+          {cleanDetailReviews.map(([name, area, date, title], index) => (
+            <article key={`${name}-${title}`} className="min-w-[260px] rounded-[10px] border border-[#e5e7eb] border-t-[#1a2a6c] border-t-[3px] bg-white p-5 shadow-[0_2px_12px_rgba(0,0,0,0.08)]">
+              <span className="rounded bg-[#ff6600] px-2 py-1 text-[10px] font-bold text-white">{2800 + index}번째 현장점검</span>
+              <h3 className="mt-4 text-base font-bold text-[#222]">{title}</h3>
+              <p className="mt-3 line-clamp-4 text-sm leading-7 text-[#555]">공간별로 꼼꼼하게 확인해주셔서 입주 전 걱정을 줄일 수 있었습니다.</p>
+              <p className="mt-4 text-xs text-[#888]">{name} · {area}</p>
+              <p className="mt-1 text-xs text-[#aaa]">{date}</p>
+            </article>
+          ))}
+        </div>
+      </div>
+    </section>
+  )
+}
+
+function CleanDetailCostCta({ pageHref }: { pageHref: (slug: HomepagePageSlug) => string }) {
+  return (
+    <section className="bg-[linear-gradient(135deg,#1a2a6c,#2d4db5)] px-5 py-16 text-center text-white">
+      <h2 className="text-3xl font-bold">우리집 청소비용이 궁금하다면</h2>
+      <p className="mt-4 text-base leading-8 text-white/85">평형과 현장 상태에 따라 달라지는 비용을 상담으로 빠르게 확인하세요.</p>
+      <a href={pageHref('contact')} className="mt-7 inline-flex rounded-lg bg-[#ff6600] px-9 py-4 text-base font-bold text-white hover:bg-[#e55a00]">비용 확인하기</a>
+    </section>
+  )
+}
+
+function CleanDetailProcess() {
+  const rows = ['상담 안내', '예약 확정', '서비스 시작', '공간별 청소', '상태 확인', '후불 결제', '해피콜']
+  return (
+    <section className="bg-white py-20">
+      <div className="mx-auto w-[min(1120px,calc(100%-32px))]">
+        <CleanDetailSectionHeader title="시작부터 끝까지 꼼꼼하게" text="상담부터 사후 확인까지 단계별로 안내합니다." />
+        <div className="grid gap-4 md:grid-cols-7">
+          {rows.map((row, index) => (
+            <div key={row} className="text-center">
+              <span className={`mx-auto flex h-12 w-12 items-center justify-center rounded-full text-sm font-bold text-white ${index === 0 ? 'bg-[#ff6600]' : 'bg-[#1a2a6c]'}`}>0{index + 1}</span>
+              <p className="mt-3 text-sm font-bold text-[#333]">{row}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  )
+}
+
+function CleanDetailScope() {
+  return (
+    <section className="bg-[#f5f5f5] py-20">
+      <div className="mx-auto w-[min(1120px,calc(100%-32px))]">
+        <CleanDetailSectionHeader title="공간별 청소 범위" text="고객이 궁금해하는 공간별 청소 항목을 한눈에 보여줍니다." />
+        <div className="grid gap-5 md:grid-cols-2">
+          {cleanDetailScopeRows.map(([title, items]) => (
+            <article key={title as string} className="rounded-xl bg-white p-6">
+              <h3 className="border-b-2 border-[#1a2a6c] pb-3 text-xl font-bold text-[#1a2a6c]">{title}</h3>
+              <ul className="mt-5 space-y-3 text-sm leading-7 text-[#555]">
+                {(items as string[]).map((item) => <li key={item}>• {item}</li>)}
+              </ul>
+            </article>
+          ))}
+        </div>
+      </div>
+    </section>
+  )
+}
+
+function CleanDetailPeopleTable() {
+  return (
+    <section className="bg-white py-20">
+      <div className="mx-auto w-[min(800px,calc(100%-32px))]">
+        <CleanDetailSectionHeader title="전문 크린마스터가 방문합니다" />
+        <table className="w-full border-collapse overflow-hidden rounded-xl border border-[#e0e0e0] text-center">
+          <thead className="bg-[#1a2a6c] text-white">
+            <tr><th className="p-4">평형기준</th><th className="p-4">인원기준</th></tr>
+          </thead>
+          <tbody>
+            {[
+              ['36평 이하', '2명'],
+              ['52평 이하', '3명'],
+              ['53평 이상', '4명'],
+            ].map(([size, count], index) => (
+              <tr key={size} className={index % 2 ? 'bg-[#f9f9f9]' : 'bg-white'}>
+                <td className="border border-[#e0e0e0] p-4">{size}</td>
+                <td className="border border-[#e0e0e0] p-4">{count}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  )
+}
+
+function CleanDetailFaq() {
+  return (
+    <section className="bg-[#f5f5f5] py-20">
+      <div className="mx-auto w-[min(900px,calc(100%-32px))]">
+        <CleanDetailSectionHeader title="자주 묻는 질문을 알려드립니다" text="더 궁금하신 점은 언제든 문의해주세요. ☎ 0000-0000" />
+        <div className="space-y-3">
+          {cleanDetailFaqRows.map(([question, answer], index) => (
+            <article key={question} className="overflow-hidden rounded-[10px] border border-[#e0e0e0]">
+              <h3 className={`p-5 text-base font-semibold ${index === 0 ? 'bg-[#f0f4ff] text-[#1a2a6c]' : 'bg-white text-[#333]'}`}>Q. {question}</h3>
+              {index === 0 && <p className="bg-[#fafafa] p-5 text-sm leading-8 text-[#555]">{answer}</p>}
+            </article>
+          ))}
+        </div>
+      </div>
+    </section>
+  )
+}
+
+function CleanDetailRelated() {
+  const rows = ['포장이사', '새집증후군', '프리미엄청소', '에어컨 청소', '세탁기 청소', '마루코팅', '상판코팅', '줄눈시공']
+  return (
+    <section className="bg-white py-20">
+      <div className="mx-auto w-[min(1120px,calc(100%-32px))]">
+        <CleanDetailSectionHeader title="따로 알아보는 번거로움 없이 모두 가능합니다" />
+        <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-4">
+          {rows.map((row) => (
+            <article key={row} className="rounded-[10px] border border-[#e0e0e0] bg-white p-5 text-center font-bold text-[#333] transition hover:border-[#1a2a6c] hover:bg-[#f0f4ff]">{row}</article>
+          ))}
+        </div>
+      </div>
+    </section>
+  )
+}
+
+function CleanDetailContact({ data }: { data: HomepagePublicPackage }) {
+  const { site } = data
+  return (
+    <section className="bg-[#1a2a6c] px-5 py-20 text-center text-white">
+      <h1 className="text-4xl font-bold">입주청소 견적이 필요하신가요?</h1>
+      <p className="mx-auto mt-5 max-w-2xl text-base leading-8 text-white/80">평형, 주소, 희망일정을 알려주시면 상담 기준에 맞춰 안내드립니다.</p>
+      <p className="mt-6 text-2xl font-black">{site.phone || '0000-0000'}</p>
+      <a href={`tel:${site.phone || '0000-0000'}`} className="mt-8 inline-flex rounded-lg bg-[#ff6600] px-10 py-4 text-base font-bold text-white">간편견적 신청하기</a>
+    </section>
+  )
+}
+
+function CleanDetailFooter({ data }: { data: HomepagePublicPackage }) {
+  const { site } = data
+  return (
+    <footer className="bg-[#1a1a2e] text-[#cccccc]">
+      <div className="mx-auto grid w-[min(1120px,calc(100%-32px))] gap-10 py-14 md:grid-cols-[2fr_1fr_1fr]">
+        <div>
+          <p className="text-2xl font-black text-white">{site.business_name || '클린홈 프로'}</p>
+          <p className="mt-5 text-sm leading-7">대표: 홍길동<br />사업자번호: 000-00-00000<br />주소: {site.footer_address || site.address}</p>
+          <p className="mt-5 text-sm leading-7">전화: {site.footer_phone || site.phone} | FAX: 000-0000-0000</p>
+        </div>
+        <div>
+          <p className="mb-3 font-bold text-white">청소 서비스</p>
+          {['입주청소', '이사청소', '프리미엄청소', '가전청소'].map((item) => <p key={item} className="text-sm leading-7">{item}</p>)}
+        </div>
+        <div>
+          <p className="mb-3 font-bold text-white">고객지원</p>
+          {['FAQ', '견적문의', '후기', '계약 유의사항'].map((item) => <p key={item} className="text-sm leading-7">{item}</p>)}
+        </div>
+      </div>
+      <div className="mx-auto flex w-[min(1120px,calc(100%-32px))] flex-wrap justify-between gap-3 border-t border-white/10 py-5 text-xs">
+        <span>개인정보처리방침 | 서비스 이용약관</span>
+        <span>© CleanHome Pro. All Rights Reserved.</span>
+      </div>
+    </footer>
   )
 }
 
@@ -793,7 +2255,7 @@ function SalesReviewsHero({
       <div className="hp-container grid gap-8 lg:grid-cols-[1fr_0.78fr] lg:items-center">
         <div>
           <p className={`homepage-label mb-4 inline-flex rounded-full ${palette.accent} px-4 py-2 text-xs font-black uppercase ${palette.accentText}`}>
-            후기 전환형
+            {site.name}
           </p>
           <h1 className="hp-display font-black">{general ? site.headline : '입주청소 평당 15,000원~'}</h1>
           <p className="hp-copy mt-6 max-w-2xl">{site.subheadline}</p>
@@ -1423,7 +2885,7 @@ function TemplateHero({
         <div className="hp-container grid gap-10 lg:grid-cols-[0.9fr_1.1fr] lg:items-center">
           <div>
             <p className={`homepage-label mb-5 inline-flex rounded-full ${palette.accent} px-4 py-2 text-xs font-black uppercase ${palette.accentText}`}>
-              {template.name}
+              {site.name}
             </p>
             <h1 className="hp-display font-black">{site.headline}</h1>
             <p className="hp-copy mt-6 max-w-2xl">{site.subheadline}</p>
@@ -1445,7 +2907,7 @@ function TemplateHero({
       <section className="homepage-hero-section hp-dark">
         <div className="hp-container grid gap-10 py-10 sm:py-20 lg:grid-cols-[1fr_0.82fr] lg:items-center">
           <div>
-            <p className="homepage-label mb-5 text-xs font-black uppercase opacity-70">{template.name}</p>
+            <p className="homepage-label mb-5 text-xs font-black uppercase opacity-70">{site.name}</p>
             <h1 className="hp-display font-black">{site.headline}</h1>
             <p className="mt-6 max-w-2xl text-lg leading-9 opacity-75">{site.subheadline}</p>
             <div className="mt-8 grid gap-3 sm:grid-cols-3">
@@ -1463,7 +2925,7 @@ function TemplateHero({
   return (
     <section className="homepage-hero-section hp-section hp-surface border-b border-black/5">
       <div className="hp-container grid gap-12 lg:grid-cols-[0.95fr_1.05fr] lg:items-center">
-        <HeroCopy site={site} templateName={template.name} palette={palette} ctaHref={ctaHref} ctaLabel={ctaLabel} />
+        <HeroCopy site={site} templateName={site.name} palette={palette} ctaHref={ctaHref} ctaLabel={ctaLabel} />
         <SceneMosaic palette={palette} usePreviewImages={site.slug?.startsWith('preview-')} general={general} />
       </div>
     </section>

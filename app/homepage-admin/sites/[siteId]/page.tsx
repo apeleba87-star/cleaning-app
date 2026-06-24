@@ -18,6 +18,7 @@ export default function HomepageSiteAdminPage({ params }: Props) {
   const [blogPosts, setBlogPosts] = useState<any[]>([])
   const [submissions, setSubmissions] = useState<any[]>([])
   const [mediaItems, setMediaItems] = useState<any[]>([])
+  const [onboardingSubmissions, setOnboardingSubmissions] = useState<any[]>([])
   const [pushSubscriptions, setPushSubscriptions] = useState<any[]>([])
   const [notifications, setNotifications] = useState<any[]>([])
   const [domainText, setDomainText] = useState('')
@@ -34,6 +35,7 @@ export default function HomepageSiteAdminPage({ params }: Props) {
   const [saving, setSaving] = useState<string | null>(null)
 
   const publicUrl = useMemo(() => (site?.slug ? `/t/${site.slug}` : '#'), [site?.slug])
+  const onboardingUrl = useMemo(() => `/homepage-onboarding/${params.siteId}`, [params.siteId])
 
   const load = () => {
     homepageGetCached<any>(`/api/homepage/sites/${params.siteId}`, 30_000)
@@ -45,6 +47,7 @@ export default function HomepageSiteAdminPage({ params }: Props) {
         setBlogPosts(data.blogPosts || [])
         setSubmissions(data.submissions || [])
         setMediaItems(data.mediaItems || [])
+        setOnboardingSubmissions(data.onboardingSubmissions || [])
         setPushSubscriptions(data.pushSubscriptions || [])
         setNotifications(data.notifications || [])
         setDomainText((data.domains || []).map((d: any) => d.domain).join('\n'))
@@ -256,6 +259,50 @@ export default function HomepageSiteAdminPage({ params }: Props) {
     load()
   }
 
+  const updateOnboardingStatus = async (id: string, status: string) => {
+    setSaving(`onboarding-${id}`)
+    setError('')
+    setMessage('')
+    try {
+      await homepageFetch(`/api/homepage/sites/${params.siteId}/onboarding-submissions/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ status }),
+      })
+      homepageInvalidateCache('/api/homepage')
+      setMessage('고객 제출 자료 상태를 변경했습니다.')
+      load()
+    } catch (err: any) {
+      setError(err.message || '상태를 변경하지 못했습니다.')
+    } finally {
+      setSaving(null)
+    }
+  }
+
+  const applyOnboarding = async (id: string) => {
+    if (!window.confirm('이 제출 자료를 현재 홈페이지에 반영할까요? 기존 기본 정보 일부가 변경되고 사진/사례가 추가됩니다.')) return
+    setSaving(`apply-onboarding-${id}`)
+    setError('')
+    setMessage('')
+    try {
+      const result = await homepageFetch<{ mediaCount: number }>(`/api/homepage/sites/${params.siteId}/onboarding-submissions/${id}`, {
+        method: 'POST',
+      })
+      homepageInvalidateCache('/api/homepage')
+      setMessage(`고객 제출 자료를 반영했습니다. 사진/사례 ${result.mediaCount || 0}건을 추가했습니다.`)
+      load()
+    } catch (err: any) {
+      setError(err.message || '고객 제출 자료를 반영하지 못했습니다.')
+    } finally {
+      setSaving(null)
+    }
+  }
+
+  const copyOnboardingUrl = async () => {
+    const url = `${window.location.origin}${onboardingUrl}`
+    await navigator.clipboard?.writeText(url)
+    setMessage('고객 입력폼 링크를 복사했습니다.')
+  }
+
   if (!site || !calculator) {
     return <div className="rounded-2xl border bg-white p-5 text-sm text-gray-500">불러오는 중...</div>
   }
@@ -282,6 +329,104 @@ export default function HomepageSiteAdminPage({ params }: Props) {
 
       {message && <p className="rounded-xl border border-blue-200 bg-blue-50 p-3 text-sm text-blue-700">{message}</p>}
       {error && <p className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</p>}
+
+      <section className="rounded-2xl border bg-white p-4 shadow-sm">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <h2 className="text-lg font-black">고객 제작 자료 입력</h2>
+            <p className="mt-1 text-sm text-gray-600">
+              이 링크를 고객에게 보내면 업체 정보, 문구, 사진 링크, 후기, FAQ를 정해진 양식으로 받을 수 있습니다.
+            </p>
+            <p className="mt-2 break-all rounded-xl bg-gray-50 px-3 py-2 text-xs font-bold text-gray-700">
+              {onboardingUrl}
+            </p>
+          </div>
+          <div className="flex shrink-0 gap-2">
+            <Link href={onboardingUrl} target="_blank" className="rounded-xl border bg-white px-4 py-3 text-sm font-bold">
+              입력폼 열기
+            </Link>
+            <button onClick={copyOnboardingUrl} className="rounded-xl bg-gray-950 px-4 py-3 text-sm font-bold text-white">
+              링크 복사
+            </button>
+          </div>
+        </div>
+
+        <div className="mt-5 space-y-3">
+          {onboardingSubmissions.length ? (
+            onboardingSubmissions.map((submission) => (
+              <div key={submission.id} className="rounded-2xl border p-4">
+                <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                  <div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="text-base font-black">{submission.business_name || '업체명 없음'}</p>
+                      <span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-black text-gray-600">
+                        {onboardingStatusLabel(submission.status)}
+                      </span>
+                    </div>
+                    <p className="mt-1 text-sm text-gray-600">
+                      담당자 {submission.contact_name || '-'} · {submission.contact_phone || '-'} ·{' '}
+                      {submission.created_at?.slice(0, 16).replace('T', ' ') || ''}
+                    </p>
+                    <p className="mt-2 text-sm font-bold text-gray-900">{submission.hero_headline || '첫 화면 문구 없음'}</p>
+                    {submission.hero_subheadline && <p className="mt-1 text-sm text-gray-600">{submission.hero_subheadline}</p>}
+                  </div>
+                  <div className="grid gap-2 sm:grid-cols-2 lg:w-64">
+                    <select
+                      className="rounded-xl border px-3 py-2 text-sm font-bold"
+                      value={submission.status || 'submitted'}
+                      onChange={(e) => updateOnboardingStatus(submission.id, e.target.value)}
+                    >
+                      <option value="submitted">제출됨</option>
+                      <option value="reviewing">검토중</option>
+                      <option value="applied">반영완료</option>
+                      <option value="archived">보관</option>
+                    </select>
+                    <button
+                      onClick={() => applyOnboarding(submission.id)}
+                      disabled={saving === `apply-onboarding-${submission.id}`}
+                      className="rounded-xl bg-blue-600 px-3 py-2 text-sm font-bold text-white disabled:opacity-60"
+                    >
+                      {saving === `apply-onboarding-${submission.id}` ? '반영 중...' : '사이트에 반영'}
+                    </button>
+                  </div>
+                </div>
+
+                <div className="mt-4 grid gap-3 text-sm md:grid-cols-2">
+                  <InfoBlock title="서비스" items={submission.services || []} />
+                  <InfoBlock title="가격/상담 기준" items={submission.pricing_notes || []} />
+                  <InfoBlock title="사진" items={[
+                    `대표 ${submission.representative_images?.length || 0}장`,
+                    `사례 ${submission.portfolio_images?.length || 0}장`,
+                    `전후 ${submission.before_after_images?.length || 0}쌍`,
+                  ]} />
+                  <InfoBlock title="사업자 정보" items={[
+                    submission.footer_representative && `대표 ${submission.footer_representative}`,
+                    submission.footer_business_number && `사업자 ${submission.footer_business_number}`,
+                    submission.footer_email && `이메일 ${submission.footer_email}`,
+                  ].filter(Boolean)} />
+                </div>
+
+                {submission.request_note && (
+                  <div className="mt-3 rounded-xl bg-amber-50 p-3 text-sm text-amber-900">
+                    <p className="font-black">추가 요청사항</p>
+                    <p className="mt-1 whitespace-pre-line">{submission.request_note}</p>
+                  </div>
+                )}
+                {!!submission.reference_urls?.length && (
+                  <div className="mt-3 rounded-xl bg-gray-50 p-3 text-xs text-gray-600">
+                    <p className="font-black">참고 사이트</p>
+                    {submission.reference_urls.map((url: string) => (
+                      <p key={url} className="mt-1 break-all">{url}</p>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ))
+          ) : (
+            <p className="rounded-xl bg-gray-50 p-4 text-sm text-gray-500">아직 고객이 제출한 제작 자료가 없습니다.</p>
+          )}
+        </div>
+      </section>
 
       <section className="rounded-2xl border bg-white p-4 shadow-sm">
         <h2 className="text-lg font-black">내 홈페이지</h2>
@@ -709,6 +854,34 @@ export default function HomepageSiteAdminPage({ params }: Props) {
       </section>
     </main>
   )
+}
+
+function InfoBlock({ title, items }: { title: string; items: any[] }) {
+  const visibleItems = (items || []).filter(Boolean)
+  return (
+    <div className="rounded-xl bg-gray-50 p-3">
+      <p className="font-black">{title}</p>
+      {visibleItems.length ? (
+        <ul className="mt-2 space-y-1 text-gray-600">
+          {visibleItems.slice(0, 6).map((item, index) => (
+            <li key={`${title}-${index}`}>· {String(item)}</li>
+          ))}
+        </ul>
+      ) : (
+        <p className="mt-2 text-gray-400">입력 없음</p>
+      )}
+    </div>
+  )
+}
+
+function onboardingStatusLabel(status: string) {
+  const labels: Record<string, string> = {
+    submitted: '제출됨',
+    reviewing: '검토중',
+    applied: '반영완료',
+    archived: '보관',
+  }
+  return labels[status] || status
 }
 
 function Input({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) {
