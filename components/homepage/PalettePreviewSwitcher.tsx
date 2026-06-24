@@ -5,18 +5,20 @@ type Props = {
   templateKey: string
   currentPalette?: string
   pageSlug?: string
-  audience?: 'cleaning' | 'general'
+  audience?: 'cleaning' | 'general' | 'silver'
 }
 
 export default function PalettePreviewSwitcher({ templateKey, currentPalette, pageSlug, audience = 'cleaning' }: Props) {
   const template = getHomepageTemplate(templateKey)
   const palettes = Object.values(getHomepagePalettes(templateKey))
-  const previewTemplates = audience === 'general'
-    ? HOMEPAGE_TEMPLATES.filter((item) => item.category !== 'interactive')
-    : HOMEPAGE_TEMPLATES
+  const previewTemplates = audience === 'silver'
+    ? HOMEPAGE_TEMPLATES.filter((item) => item.category === 'silver')
+    : audience === 'general'
+    ? HOMEPAGE_TEMPLATES.filter((item) => item.category !== 'interactive' && item.category !== 'silver')
+    : HOMEPAGE_TEMPLATES.filter((item) => item.category !== 'silver')
   const previewIndex = Math.max(previewTemplates.findIndex((item) => item.key === template.key), 0)
   const previewName = `템플릿${previewIndex + 1}`
-  const audienceParam = audience === 'general' ? 'audience=general' : ''
+  const audienceParam = audience === 'cleaning' ? '' : `audience=${audience}`
   const basePath = pageSlug
     ? `/homepage-preview/${templateKey}/${pageSlug}`
     : `/homepage-preview/${templateKey}`
@@ -28,7 +30,7 @@ export default function PalettePreviewSwitcher({ templateKey, currentPalette, pa
     currentPalette ? `palette=${currentPalette}` : '',
     audienceParam,
   ])}`
-  const listHref = audience === 'general' ? '/homepage-preview?audience=general' : '/homepage-preview'
+  const listHref = audience === 'cleaning' ? '/homepage-preview' : `/homepage-preview?audience=${audience}`
 
   return (
     <div className="homepage-site sticky top-0 z-[70] border-b border-black/10 bg-white/95 px-3 py-2 backdrop-blur-xl">

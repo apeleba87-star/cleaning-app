@@ -1,4 +1,4 @@
-export type HomepageTemplateCategory = 'showcase' | 'sales' | 'interactive'
+export type HomepageTemplateCategory = 'showcase' | 'sales' | 'interactive' | 'silver'
 
 export type HomepagePageSlug =
   | 'home'
@@ -19,6 +19,7 @@ export type HomepageTemplateKey =
   | 'showcase-tech'
   | 'showcase-carenex'
   | 'showcase-clean-detail'
+  | 'silver-daycare'
   | 'sales-reviews'
   | 'sales-services'
   | 'sales-fast-contact'

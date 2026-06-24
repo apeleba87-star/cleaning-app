@@ -12,7 +12,7 @@ export default function HomepageTemplatePreviewSubPage({
   searchParams?: { palette?: string; audience?: string }
 }) {
   if (!HOMEPAGE_PREVIEW_TEMPLATE_KEYS.includes(params.templateKey as any)) notFound()
-  const audience = searchParams?.audience === 'general' ? 'general' : 'cleaning'
+  const audience = searchParams?.audience === 'general' ? 'general' : searchParams?.audience === 'silver' ? 'silver' : 'cleaning'
   const data = createHomepagePreviewPackage(params.templateKey, searchParams?.palette as any, audience)
   const page = normalizeHomepagePageSlug(params.pageSlug, data.site.template_key)
   if (page === 'home' && params.pageSlug !== 'home') notFound()

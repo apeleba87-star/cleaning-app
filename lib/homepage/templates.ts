@@ -101,6 +101,15 @@ export const HOMEPAGE_TEMPLATES: HomepageTemplateDefinition[] = [
     pages: ['home', 'services', 'portfolio', 'faq', 'contact'],
   },
   {
+    key: 'silver-daycare',
+    category: 'silver',
+    name: '주간보호 안심상담형',
+    description: '식단, 시설, 프로그램, 장기요양등급 상담과 전화 전환을 강조하는 실버케어 홈페이지입니다.',
+    defaultPalette: 'calm',
+    calculatorPosition: 'none',
+    pages: ['home', 'services', 'portfolio', 'faq', 'contact'],
+  },
+  {
     key: 'sales-reviews',
     category: 'sales',
     name: '후기 전환형',
@@ -409,7 +418,7 @@ const templatePaletteOverrides: Partial<Record<HomepageTemplateKey, Record<Homep
 }
 
 export function getHomepageTemplate(key: string | null | undefined) {
-  return HOMEPAGE_TEMPLATES.find((template) => template.key === key) || HOMEPAGE_TEMPLATES[6]
+  return HOMEPAGE_TEMPLATES.find((template) => template.key === key) || HOMEPAGE_TEMPLATES[0]
 }
 
 export function getTemplateCategory(key: string | null | undefined): HomepageTemplateCategory {

@@ -1,31 +1,35 @@
 import Link from 'next/link'
 import { HOMEPAGE_TEMPLATES } from '@/lib/homepage/templates'
 
-type AudienceKey = 'cleaning' | 'general'
+type AudienceKey = 'cleaning' | 'general' | 'silver'
 
 export default function HomepagePreviewIndexPage({
   searchParams,
 }: {
   searchParams?: { audience?: string }
 }) {
-  const audience: AudienceKey = searchParams?.audience === 'general' ? 'general' : 'cleaning'
-  const visibleTemplates = HOMEPAGE_TEMPLATES.filter((template) => (
-    audience === 'general' ? template.category !== 'interactive' : true
-  ))
+  const audience: AudienceKey = searchParams?.audience === 'general' ? 'general' : searchParams?.audience === 'silver' ? 'silver' : 'cleaning'
+  const visibleTemplates = HOMEPAGE_TEMPLATES.filter((template) => {
+    if (audience === 'silver') return template.category === 'silver'
+    if (audience === 'general') return template.category !== 'interactive' && template.category !== 'silver'
+    return template.category !== 'silver'
+  })
 
   return (
     <main className="min-h-screen bg-[#f4f1eb] p-4 text-gray-950 sm:p-6">
       <div className="mx-auto max-w-6xl">
         <header className="border border-black/10 bg-white p-6 sm:p-12">
           <p className="text-sm font-black uppercase tracking-[0.35em] text-gray-500">
-            {audience === 'general' ? 'Field service templates' : 'Homepage templates'}
+            {audience === 'silver' ? 'Silver care templates' : audience === 'general' ? 'Field service templates' : 'Homepage templates'}
           </p>
           <div className="mt-4">
             <h1 className="text-5xl font-black leading-[0.98] tracking-[-0.075em] sm:text-7xl">
-              {audience === 'general' ? '범용 현장업 템플릿' : '홈페이지 템플릿'}
+              {audience === 'silver' ? '실버 템플릿' : audience === 'general' ? '범용 현장업 템플릿' : '홈페이지 템플릿'}
             </h1>
             <p className="mt-5 max-w-2xl text-base leading-8 text-gray-600">
-              {audience === 'general'
+              {audience === 'silver'
+                ? '주간보호센터, 데이케어센터처럼 보호자 상담과 신뢰 안내가 중요한 업종을 위한 템플릿입니다.'
+                : audience === 'general'
                 ? '줄눈시공, 인테리어, 목공, 타일처럼 현장 사례가 중요한 업종에 맞춘 템플릿입니다.'
                 : '원하는 디자인을 확인하세요.'}
             </p>
@@ -35,6 +39,7 @@ export default function HomepagePreviewIndexPage({
         <div className="mt-5 flex gap-2 overflow-x-auto pb-1 text-sm">
           <CategoryButton href="/homepage-preview" active={audience === 'cleaning'} label="청소업 템플릿" />
           <CategoryButton href="/homepage-preview?audience=general" active={audience === 'general'} label="범용 현장업" />
+          <CategoryButton href="/homepage-preview?audience=silver" active={audience === 'silver'} label="실버" />
         </div>
 
         <div id="templates" className="grid gap-4 py-8 md:grid-cols-2 xl:grid-cols-3">
@@ -70,9 +75,9 @@ function TemplateCard({ template, audience, index }: {
   audience: AudienceKey
   index: number
 }) {
-  const audienceQuery = audience === 'general' ? '?audience=general' : ''
-  const embedQuery = audience === 'general' ? '?embed=1&audience=general' : '?embed=1'
-  const previewHref = `/homepage-preview/${template.key}${audienceQuery}`
+  const audienceQueryValue = audience === 'cleaning' ? '' : `?audience=${audience}`
+  const embedQuery = audience === 'cleaning' ? '?embed=1' : `?embed=1&audience=${audience}`
+  const previewHref = `/homepage-preview/${template.key}${audienceQueryValue}`
   const title = `템플릿${index + 1}`
 
   return (

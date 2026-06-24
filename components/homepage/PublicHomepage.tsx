@@ -127,6 +127,8 @@ export default function PublicHomepage({ data, page = 'home' }: Props) {
   const isTechShowcase = site.template_key === 'showcase-tech'
   const isCarenexShowcase = site.template_key === 'showcase-carenex'
   const isCleanDetailShowcase = site.template_key === 'showcase-clean-detail'
+  const isSilverDaycare = site.template_key === 'silver-daycare'
+  const hasStickyContactBar = isFastContact || isSilverDaycare
   const previewPrefix = site.slug?.startsWith('preview-') ? `/homepage-preview/${site.template_key}` : null
   const basePath = previewPrefix || (typeof site.slug === 'string' ? `/t/${site.slug}` : '')
   const pageHref = (slug: HomepagePageSlug) => (slug === 'home' ? basePath : `${basePath}/${slug}`)
@@ -142,7 +144,9 @@ export default function PublicHomepage({ data, page = 'home' }: Props) {
     : isPremiumShowcase
     ? `homepage-flat fixed inset-x-0 ${fixedHeaderOffset} z-[60] border-b border-white/10 bg-black/72 text-white backdrop-blur-xl`
     : `homepage-flat fixed inset-x-0 ${fixedHeaderOffset} z-[60] border-b border-black/10 bg-white/90 backdrop-blur-xl`
-  const headerPhoneClassName = isCleanDetailShowcase
+  const headerPhoneClassName = isSilverDaycare
+    ? 'hidden rounded-full bg-[#1f6b4f] px-4 py-2 text-sm font-black text-white shadow-[0_8px_20px_rgba(31,107,79,0.22)] sm:inline-flex'
+    : isCleanDetailShowcase
     ? 'hidden rounded-md bg-[#1a2a6c] px-4 py-2 text-sm font-black text-white sm:inline-flex'
     : isCarenexShowcase
     ? 'hidden rounded-md bg-[#0047ab] px-4 py-2 text-sm font-black text-white shadow-[0_4px_16px_rgba(0,71,171,0.35)] sm:inline-flex'
@@ -181,7 +185,9 @@ export default function PublicHomepage({ data, page = 'home' }: Props) {
       </header>
 
       {currentPage === 'home' && (
-        isCleanDetailShowcase ? (
+        isSilverDaycare ? (
+          <SilverDaycareHome data={data} pageHref={pageHref} />
+        ) : isCleanDetailShowcase ? (
           <CleanDetailHome data={data} pageHref={pageHref} />
         ) : isCarenexShowcase ? (
           <CarenexShowcaseHome data={data} pageHref={pageHref} />
@@ -201,10 +207,12 @@ export default function PublicHomepage({ data, page = 'home' }: Props) {
         )
       )}
       {currentPage === 'about' && (
-        isCleanDetailShowcase ? <CleanDetailStandards /> : isCarenexShowcase ? <CarenexAbout pageHref={pageHref} /> : isTechShowcase ? <TechShowcaseAbout data={data} pageHref={pageHref} /> : isTemplateStudio ? <FieldTemplateStudioAbout pageHref={pageHref} /> : <AboutPage data={data} palette={palette} />
+        isSilverDaycare ? <SilverDaycareGradeGuide data={data} /> : isCleanDetailShowcase ? <CleanDetailStandards /> : isCarenexShowcase ? <CarenexAbout pageHref={pageHref} /> : isTechShowcase ? <TechShowcaseAbout data={data} pageHref={pageHref} /> : isTemplateStudio ? <FieldTemplateStudioAbout pageHref={pageHref} /> : <AboutPage data={data} palette={palette} />
       )}
       {currentPage === 'services' && (
-        isCleanDetailShowcase
+        isSilverDaycare
+          ? <SilverDaycarePrograms />
+          : isCleanDetailShowcase
           ? <CleanDetailScope />
           : isCarenexShowcase
           ? <CarenexServices />
@@ -215,7 +223,9 @@ export default function PublicHomepage({ data, page = 'home' }: Props) {
           : <ServicesPage showEstimateCta={!!showCalculator} pageHref={pageHref} palette={palette} general={isGeneral} />
       )}
       {currentPage === 'portfolio' && (
-        isCleanDetailShowcase ? (
+        isSilverDaycare ? (
+          <SilverDaycareFacilities data={data} />
+        ) : isCleanDetailShowcase ? (
           <CleanDetailReviews />
         ) : isCarenexShowcase ? (
           <CarenexPortfolio />
@@ -239,12 +249,12 @@ export default function PublicHomepage({ data, page = 'home' }: Props) {
       )}
       {currentPage === 'estimate' && !showCalculator && <ContactPage data={data} palette={palette} />}
       {currentPage === 'reviews' && (isTemplateStudio ? <FieldTemplateStudioReviews /> : <ReviewsPage palette={palette} general={isGeneral} />)}
-      {currentPage === 'faq' && (isCleanDetailShowcase ? <CleanDetailFaq /> : isCarenexShowcase ? <CarenexPrCenter /> : isTechShowcase ? <TechShowcaseFaq data={data} /> : isTemplateStudio ? <FieldTemplateStudioFaq /> : <FaqPage palette={palette} general={isGeneral} />)}
-      {currentPage === 'contact' && (isCleanDetailShowcase ? <CleanDetailContact data={data} /> : isCarenexShowcase ? <CarenexContact data={data} /> : isTechShowcase ? <TechShowcaseContact data={data} /> : isTemplateStudio ? <FieldTemplateStudioContact data={data} /> : <ContactPage data={data} palette={palette} />)}
+      {currentPage === 'faq' && (isSilverDaycare ? <SilverDaycareFaq data={data} /> : isCleanDetailShowcase ? <CleanDetailFaq /> : isCarenexShowcase ? <CarenexPrCenter /> : isTechShowcase ? <TechShowcaseFaq data={data} /> : isTemplateStudio ? <FieldTemplateStudioFaq /> : <FaqPage palette={palette} general={isGeneral} />)}
+      {currentPage === 'contact' && (isSilverDaycare ? <SilverDaycareContact data={data} /> : isCleanDetailShowcase ? <CleanDetailContact data={data} /> : isCarenexShowcase ? <CarenexContact data={data} /> : isTechShowcase ? <TechShowcaseContact data={data} /> : isTemplateStudio ? <FieldTemplateStudioContact data={data} /> : <ContactPage data={data} palette={palette} />)}
 
       {isCleanDetailShowcase ? <CleanDetailFooter data={data} /> : isCarenexShowcase ? <CarenexFooter data={data} /> : isTechShowcase ? <TechShowcaseFooter data={data} /> : <HomepageFooter site={site} palette={palette} />}
 
-      {(isFastContact || showCalculator) && (
+      {(hasStickyContactBar || showCalculator) && (
         <div className="fixed inset-x-0 bottom-0 z-40 border-t border-black/10 bg-white/92 p-3 shadow-lg backdrop-blur-xl">
           <div className="mx-auto flex max-w-2xl gap-2">
             {showCalculator && (
@@ -267,6 +277,271 @@ export default function PublicHomepage({ data, page = 'home' }: Props) {
       )}
       <HomepageRevealScript />
     </main>
+  )
+}
+
+const silverCareImages = [
+  'https://images.unsplash.com/photo-1550831107-1553da8c8464?auto=format&fit=crop&w=1200&q=85',
+  'https://images.unsplash.com/photo-1519494026892-80bbd2d6fd0d?auto=format&fit=crop&w=1200&q=85',
+  'https://images.unsplash.com/photo-1584515933487-779824d29309?auto=format&fit=crop&w=1200&q=85',
+  'https://images.unsplash.com/photo-1498837167922-ddd27525d352?auto=format&fit=crop&w=1200&q=85',
+]
+
+const silverProgramCards = [
+  ['인지 활동', '회상놀이, 미술, 노래교실로 어르신의 하루 리듬을 돕습니다.'],
+  ['신체 활동', '가벼운 체조와 보행 훈련으로 무리 없는 움직임을 이어갑니다.'],
+  ['정서 돌봄', '담당 선생님이 식사, 투약, 컨디션 변화를 보호자께 안내합니다.'],
+]
+
+const silverFaqRows = [
+  ['장기요양등급이 없어도 상담 가능한가요?', '가능합니다. 현재 상황을 듣고 등급 신청 절차와 필요 서류를 함께 안내드립니다.'],
+  ['차량 송영은 어디까지 가능한가요?', '센터 기준 인근 지역을 우선 운행하며, 주소 확인 후 가능 여부를 안내드립니다.'],
+  ['식단표는 어떻게 확인하나요?', '주간 식단과 간식 구성을 홈페이지 또는 블로그 연동 방식으로 보여줄 수 있습니다.'],
+  ['처음 방문 전에 무엇을 준비해야 하나요?', '어르신 건강 상태, 복용약, 식사 주의사항을 알려주시면 상담이 더 정확합니다.'],
+]
+
+function SilverDaycareHome({
+  data,
+  pageHref,
+}: {
+  data: HomepagePublicPackage
+  pageHref: (slug: HomepagePageSlug) => string
+}) {
+  const { site } = data
+  return (
+    <>
+      <section className="relative overflow-hidden bg-[#fbf6ea]">
+        <div className="absolute inset-x-0 top-0 h-40 bg-[#e8f3dc]" />
+        <div className="hp-container relative grid gap-10 py-14 sm:py-20 lg:grid-cols-[1.02fr_0.98fr] lg:items-center">
+          <div>
+            <p className="inline-flex rounded-full bg-white px-4 py-2 text-sm font-black text-[#1f6b4f] shadow-sm">
+              주간보호센터 안심 상담형
+            </p>
+            <h1 className="mt-6 text-5xl font-black leading-[1.05] tracking-[-0.055em] text-[#22352d] sm:text-6xl">
+              부모님을 맡기는 결정,
+              <br />
+              전화 한 통으로 편하게 확인하세요.
+            </h1>
+            <p className="mt-6 max-w-2xl text-lg font-medium leading-9 text-[#5c675f]">
+              {site.subheadline}
+            </p>
+            <div className="mt-8 flex flex-col gap-3 sm:flex-row">
+              {site.phone && (
+                <a href={`tel:${site.phone}`} className="rounded-full bg-[#1f6b4f] px-7 py-4 text-center text-lg font-black text-white shadow-xl shadow-emerald-900/15">
+                  전화상담 {site.phone}
+                </a>
+              )}
+              <a href={pageHref('about')} className="rounded-full border border-[#1f6b4f]/25 bg-white px-7 py-4 text-center text-lg font-black text-[#1f6b4f]">
+                장기요양등급 안내
+              </a>
+            </div>
+            <div className="mt-8 grid gap-3 sm:grid-cols-3">
+              {['식단 공개', '차량 송영', '등급 신청 도움'].map((item) => (
+                <div key={item} className="rounded-2xl bg-white p-4 text-center font-black text-[#22352d] shadow-sm">
+                  {item}
+                </div>
+              ))}
+            </div>
+          </div>
+          <div className="relative">
+            <div className="overflow-hidden rounded-[2rem] bg-white p-3 shadow-2xl shadow-emerald-950/10">
+              <img src={silverCareImages[0]} alt="주간보호센터 상담 이미지" className="aspect-[4/5] w-full rounded-[1.4rem] object-cover" />
+            </div>
+            <div className="absolute -bottom-5 left-5 right-5 rounded-3xl bg-white p-5 shadow-xl">
+              <p className="text-sm font-black text-[#1f6b4f]">오늘 상담 가능</p>
+              <p className="mt-2 text-2xl font-black tracking-[-0.04em] text-[#22352d]">센터 방문 전 전화로 먼저 확인하세요</p>
+            </div>
+          </div>
+        </div>
+      </section>
+      <SilverDaycareQuickInfo data={data} />
+      <SilverDaycareFacilities data={data} compact />
+      <SilverDaycareMeals />
+      <SilverDaycarePrograms />
+      <SilverDaycareGradeGuide data={data} />
+      <SilverDaycareVehicle data={data} />
+      <SilverDaycareFaq data={data} compact />
+      <SilverDaycareContact data={data} />
+    </>
+  )
+}
+
+function SilverDaycareQuickInfo({ data }: { data: HomepagePublicPackage }) {
+  const { site } = data
+  const rows = [
+    ['운영시간', site.business_hours || '평일 08:00 - 18:00'],
+    ['차량운행', site.service_area || '센터 인근 송영 가능'],
+    ['상담내용', '등급 신청, 이용 절차, 비용 안내'],
+    ['보호자 확인', '식단, 프로그램, 시설 사진 안내'],
+  ]
+  return (
+    <section className="bg-white">
+      <div className="hp-container grid gap-3 py-8 sm:grid-cols-2 lg:grid-cols-4">
+        {rows.map(([title, text]) => (
+          <div key={title} className="rounded-3xl border border-[#dbe8d3] bg-[#fbf8f0] p-5">
+            <p className="text-sm font-black text-[#1f6b4f]">{title}</p>
+            <p className="mt-2 text-lg font-black tracking-[-0.02em] text-[#26352f]">{text}</p>
+          </div>
+        ))}
+      </div>
+    </section>
+  )
+}
+
+function SilverDaycareFacilities({ data, compact = false }: { data: HomepagePublicPackage; compact?: boolean }) {
+  const images = data.mediaItems.length ? data.mediaItems.slice(0, 4).map((item) => item.image_url) : silverCareImages
+  return (
+    <section className="bg-[#f7f1e4]">
+      <div className={`hp-container ${compact ? 'py-14' : 'py-20 sm:py-24'}`}>
+        <div className="mb-8 max-w-2xl">
+          <p className="text-sm font-black uppercase tracking-[0.24em] text-[#1f6b4f]">Facility</p>
+          <h2 className="mt-3 text-4xl font-black tracking-[-0.045em] text-[#26352f]">시설 상태를 사진으로 먼저 보여줍니다</h2>
+          <p className="mt-4 leading-8 text-[#68746c]">보호자는 센터 분위기, 생활실, 식사 공간, 프로그램 공간을 먼저 보고 싶어합니다.</p>
+        </div>
+        <div className="grid gap-4 md:grid-cols-4">
+          {images.map((imageUrl, index) => (
+            <div key={`${imageUrl}-${index}`} className={`${index === 0 ? 'md:col-span-2 md:row-span-2' : ''} overflow-hidden rounded-3xl bg-white p-2 shadow-sm`}>
+              <img src={imageUrl} alt="" className="h-full min-h-56 w-full rounded-[1.25rem] object-cover" loading="lazy" />
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  )
+}
+
+function SilverDaycareMeals() {
+  return (
+    <section className="bg-white">
+      <div className="hp-container grid gap-8 py-20 lg:grid-cols-[0.85fr_1.15fr] lg:items-center">
+        <div>
+          <p className="text-sm font-black uppercase tracking-[0.24em] text-[#1f6b4f]">Meal Guide</p>
+          <h2 className="mt-3 text-4xl font-black tracking-[-0.045em] text-[#26352f]">식단은 보호자가 가장 자주 확인하는 신뢰 자료입니다</h2>
+          <p className="mt-5 leading-8 text-[#68746c]">주간 식단표, 간식, 저염식/당뇨식 상담 가능 여부를 보기 쉽게 정리합니다. 블로그 식단 게시물을 홈페이지에 연결하는 구조도 확장할 수 있습니다.</p>
+        </div>
+        <div className="rounded-[2rem] bg-[#fbf6ea] p-5">
+          {[
+            ['월', '잡곡밥 · 소고기무국 · 계란찜 · 나물무침'],
+            ['화', '흑미밥 · 된장국 · 생선구이 · 제철과일'],
+            ['수', '영양죽 · 두부조림 · 김치전 · 요거트'],
+          ].map(([day, menu]) => (
+            <div key={day} className="mb-3 grid grid-cols-[4rem_1fr] rounded-2xl bg-white p-4 last:mb-0">
+              <p className="font-black text-[#1f6b4f]">{day}</p>
+              <p className="font-bold leading-7 text-[#26352f]">{menu}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  )
+}
+
+function SilverDaycarePrograms() {
+  return (
+    <section className="bg-[#eef7e9]">
+      <div className="hp-container py-20">
+        <div className="mb-8 max-w-2xl">
+          <p className="text-sm font-black uppercase tracking-[0.24em] text-[#1f6b4f]">Program</p>
+          <h2 className="mt-3 text-4xl font-black tracking-[-0.045em] text-[#26352f]">하루가 무료하지 않도록 프로그램을 보여줍니다</h2>
+        </div>
+        <div className="grid gap-4 md:grid-cols-3">
+          {silverProgramCards.map(([title, text], index) => (
+            <div key={title} className="rounded-[2rem] bg-white p-7 shadow-sm">
+              <p className="text-sm font-black text-[#1f6b4f]">0{index + 1}</p>
+              <h3 className="mt-4 text-2xl font-black tracking-[-0.035em] text-[#26352f]">{title}</h3>
+              <p className="mt-3 leading-7 text-[#68746c]">{text}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  )
+}
+
+function SilverDaycareGradeGuide({ data }: { data: HomepagePublicPackage }) {
+  return (
+    <section className="bg-white">
+      <div className="hp-container grid gap-8 py-20 lg:grid-cols-[1fr_0.9fr] lg:items-center">
+        <div>
+          <p className="text-sm font-black uppercase tracking-[0.24em] text-[#1f6b4f]">Care Grade</p>
+          <h2 className="mt-3 text-4xl font-black tracking-[-0.045em] text-[#26352f]">장기요양등급 신청, 처음부터 같이 안내합니다</h2>
+          <p className="mt-5 leading-8 text-[#68746c]">주간보호센터를 처음 찾는 보호자는 등급 신청부터 막히는 경우가 많습니다. 홈페이지에서 절차를 먼저 설명하고 바로 전화상담으로 연결합니다.</p>
+          {data.site.phone && (
+            <a href={`tel:${data.site.phone}`} className="mt-7 inline-flex rounded-full bg-[#1f6b4f] px-7 py-4 font-black text-white">
+              등급 신청 전화상담
+            </a>
+          )}
+        </div>
+        <div className="grid gap-3">
+          {['건강 상태와 이용 희망일 상담', '국민건강보험공단 신청 절차 안내', '인정조사 준비사항 확인', '등급 결과 후 이용 일정 조율'].map((item, index) => (
+            <div key={item} className="rounded-2xl border border-[#dbe8d3] bg-[#fbf8f0] p-5">
+              <p className="font-black text-[#1f6b4f]">STEP {index + 1}</p>
+              <p className="mt-2 text-lg font-black text-[#26352f]">{item}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  )
+}
+
+function SilverDaycareVehicle({ data }: { data: HomepagePublicPackage }) {
+  return (
+    <section className="bg-[#26352f] text-white">
+      <div className="hp-container grid gap-8 py-16 lg:grid-cols-[0.8fr_1.2fr] lg:items-center">
+        <div>
+          <p className="text-sm font-black uppercase tracking-[0.24em] text-[#bfe3b0]">Vehicle Service</p>
+          <h2 className="mt-3 text-4xl font-black tracking-[-0.045em]">차량 송영 가능 지역을 명확하게 안내합니다</h2>
+        </div>
+        <div className="rounded-[2rem] bg-white/10 p-6">
+          <p className="text-2xl font-black">{data.site.service_area || '센터 인근 지역 차량 송영 가능'}</p>
+          <p className="mt-4 leading-8 text-white/72">보호자가 가장 궁금해하는 등하원 시간, 동승 관리, 운행 가능 지역을 상담 전에 확인할 수 있게 구성합니다.</p>
+        </div>
+      </div>
+    </section>
+  )
+}
+
+function SilverDaycareFaq({ data, compact = false }: { data: HomepagePublicPackage; compact?: boolean }) {
+  return (
+    <section className="bg-[#fbf6ea]">
+      <div className={`hp-container ${compact ? 'py-16' : 'py-20'}`}>
+        <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <p className="text-sm font-black uppercase tracking-[0.24em] text-[#1f6b4f]">FAQ</p>
+            <h2 className="mt-3 text-4xl font-black tracking-[-0.045em] text-[#26352f]">보호자가 묻기 전에 먼저 답합니다</h2>
+          </div>
+          {data.site.phone && <a href={`tel:${data.site.phone}`} className="rounded-full bg-[#1f6b4f] px-6 py-3 text-center font-black text-white">전화상담</a>}
+        </div>
+        <div className="grid gap-3">
+          {silverFaqRows.map(([question, answer]) => (
+            <div key={question} className="rounded-3xl bg-white p-6">
+              <p className="text-lg font-black text-[#26352f]">{question}</p>
+              <p className="mt-3 leading-7 text-[#68746c]">{answer}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  )
+}
+
+function SilverDaycareContact({ data }: { data: HomepagePublicPackage }) {
+  const { site } = data
+  return (
+    <section className="bg-white">
+      <div className="hp-container py-20">
+        <div className="rounded-[2rem] bg-[#1f6b4f] p-8 text-white sm:p-12">
+          <p className="text-sm font-black uppercase tracking-[0.24em] text-white/70">Consultation</p>
+          <h2 className="mt-4 text-4xl font-black tracking-[-0.045em]">방문 전, 보호자님 상황부터 편하게 들려주세요</h2>
+          <p className="mt-4 max-w-2xl leading-8 text-white/75">어르신 상태, 등급 여부, 송영 지역, 이용 희망 요일을 알려주시면 필요한 절차를 순서대로 안내드립니다.</p>
+          <div className="mt-8 flex flex-col gap-3 sm:flex-row">
+            {site.phone && <a href={`tel:${site.phone}`} className="rounded-full bg-white px-7 py-4 text-center text-lg font-black text-[#1f6b4f]">전화상담 {site.phone}</a>}
+            {site.kakao_url && <a href={site.kakao_url} className="rounded-full bg-yellow-300 px-7 py-4 text-center text-lg font-black text-[#3b2a00]">카카오톡 상담</a>}
+          </div>
+        </div>
+      </div>
+    </section>
   )
 }
 
