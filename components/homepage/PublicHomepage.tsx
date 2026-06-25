@@ -1,7 +1,7 @@
 import EstimateCalculator from '@/components/homepage/EstimateCalculator'
 import HomepageMenu from '@/components/homepage/HomepageMenu'
 import { HOMEPAGE_PREVIEW_IMAGES } from '@/lib/homepage/mock'
-import type { CSSProperties } from 'react'
+import type { CSSProperties, ReactNode } from 'react'
 import {
   getHomepageTemplate,
   getHomepagePalette,
@@ -128,6 +128,8 @@ export default function PublicHomepage({ data, page = 'home' }: Props) {
   const isCarenexShowcase = site.template_key === 'showcase-carenex'
   const isCleanDetailShowcase = site.template_key === 'showcase-clean-detail'
   const isSilverDaycare = site.template_key === 'silver-daycare'
+  const isSilverHospital = site.template_key === 'silver-hospital'
+  const isSilverHomecare = site.template_key === 'silver-homecare'
   const hasStickyContactBar = isFastContact || isSilverDaycare
   const previewPrefix = site.slug?.startsWith('preview-') ? `/homepage-preview/${site.template_key}` : null
   const basePath = previewPrefix || (typeof site.slug === 'string' ? `/t/${site.slug}` : '')
@@ -155,6 +157,32 @@ export default function PublicHomepage({ data, page = 'home' }: Props) {
     : isPremiumShowcase
     ? 'hidden rounded-full bg-[#d5b56d] px-4 py-2 text-sm font-black text-[#15100a] sm:inline-flex'
     : 'hp-primary hidden rounded-full px-4 py-2 text-sm font-black sm:inline-flex'
+
+  if (isSilverDaycare) {
+    return <SilverNursingLanding data={data} previewOffsetClassName={previewPrefix ? 'top-[40px]' : 'top-0'} />
+  }
+
+  if (isSilverHospital) {
+    return (
+      <SilverHospitalSite
+        data={data}
+        currentPage={currentPage}
+        pageHref={pageHref}
+        previewOffsetClassName={previewPrefix ? 'top-[40px]' : 'top-0'}
+      />
+    )
+  }
+
+  if (isSilverHomecare) {
+    return (
+      <SilverHomecareSite
+        data={data}
+        currentPage={currentPage}
+        pageHref={pageHref}
+        previewOffsetClassName={previewPrefix ? 'top-[40px]' : 'top-0'}
+      />
+    )
+  }
 
   return (
     <main
@@ -299,6 +327,1195 @@ const silverFaqRows = [
   ['식단표는 어떻게 확인하나요?', '주간 식단과 간식 구성을 홈페이지 또는 블로그 연동 방식으로 보여줄 수 있습니다.'],
   ['처음 방문 전에 무엇을 준비해야 하나요?', '어르신 건강 상태, 복용약, 식사 주의사항을 알려주시면 상담이 더 정확합니다.'],
 ]
+
+const silverNursingNav = [
+  ['#intro', '요양원소개'],
+  ['#difference', '차별화'],
+  ['#guide', '이용안내'],
+  ['#contact', '전화상담'],
+]
+
+const silverHomecareNav: Array<[HomepagePageSlug, string]> = [
+  ['home', '홈'],
+  ['about', '센터소개'],
+  ['services', '방문요양'],
+  ['portfolio', '지원금'],
+  ['faq', 'FAQ'],
+  ['contact', '서비스 신청'],
+]
+
+const silverHomecareQuickCards = [
+  ['방문요양이란?', '서비스 설명과 신청 가능 여부를 안내합니다.'],
+  ['지원금 및 부담금', '월 본인부담금과 지원 구조를 확인합니다.'],
+  ['1:1 전화상담', '등급이 없어도 전화로 먼저 상담 가능합니다.'],
+  ['서비스 신청', '방문 없이 전화로 신청 절차를 시작합니다.'],
+]
+
+const silverHomecareFeatures = [
+  ['케어플랜 개발', '가정방문, 신체평가, 욕구 사정을 바탕으로 어르신에게 맞는 케어플랜을 수립합니다.'],
+  ['월별 사회복지사 방문', '전담 사회복지사가 월 1회 방문해 만족도, 건강상태, 가족 상담을 확인합니다.'],
+  ['장기요양 등급 갱신 관리', '만료 전 갱신 일정을 확인하고 필요한 서류와 절차를 보호자에게 안내합니다.'],
+  ['치매 인지 지원', '인지기능 검사, 워크북 제공, 치매 전문 인력의 지속 모니터링을 안내합니다.'],
+]
+
+const silverHospitalNav: Array<[HomepagePageSlug, string]> = [
+  ['home', '홈'],
+  ['about', '병원소개'],
+  ['services', '진료안내'],
+  ['portfolio', '진료진소개'],
+  ['faq', '무플소식'],
+  ['contact', '간병문의'],
+]
+
+const silverHospitalServices = [
+  ['치매질환 치료', '인지 저하와 노인성 질환을 함께 살피는 진료 안내'],
+  ['통증치료', '만성 통증과 회복 관리를 위한 맞춤 치료'],
+  ['노인성 질환', '고혈압, 당뇨, 심혈관 질환 등 장기 관리'],
+  ['양한방 협진', '한방과 협진으로 통합 의료서비스 제공'],
+]
+
+const silverHospitalBadges = [
+  ['인증', '보건복지부 의료기관 인증'],
+  ['협진', '양한방 통합 진료'],
+  ['간호', '24시간 간호 체계'],
+  ['복지', '사회복지 프로그램'],
+]
+
+function SilverHomecareSite({
+  data,
+  currentPage,
+  pageHref,
+  previewOffsetClassName,
+}: {
+  data: HomepagePublicPackage
+  currentPage: HomepagePageSlug
+  pageHref: (slug: HomepagePageSlug) => string
+  previewOffsetClassName: string
+}) {
+  const { site } = data
+  const phone = site.phone || '00-000-0000'
+
+  return (
+    <main className="homepage-site min-h-screen bg-[#F7FAFC] pb-24 text-[#2D3748]">
+      <SilverHomecareHeader site={site} phone={phone} currentPage={currentPage} pageHref={pageHref} previewOffsetClassName={previewOffsetClassName} />
+      {currentPage === 'home' && <SilverHomecareHome data={data} pageHref={pageHref} phone={phone} />}
+      {currentPage === 'about' && <SilverHomecareAbout data={data} phone={phone} />}
+      {currentPage === 'services' && <SilverHomecareServices phone={phone} />}
+      {currentPage === 'portfolio' && <SilverHomecareCostGuide phone={phone} />}
+      {currentPage === 'faq' && <SilverHomecareFaq phone={phone} />}
+      {currentPage === 'contact' && <SilverHomecareApply site={site} phone={phone} />}
+      <SilverHomecareFooter site={site} phone={phone} />
+      <div className="fixed inset-x-0 bottom-0 z-50 border-t border-[#D9E2EC] bg-white/95 p-3 shadow-2xl backdrop-blur-xl">
+        <div className="mx-auto flex max-w-3xl items-center gap-3">
+          <div className="min-w-0 flex-1">
+            <p className="text-xs font-black text-[#718096]">방문요양 전화상담</p>
+            <p className="truncate text-xl font-black text-[#2B6CB0]">{phone}</p>
+          </div>
+          <a href={`tel:${phone}`} className="rounded-full bg-[#F6AD55] px-6 py-3 text-sm font-black text-white">
+            바로 전화
+          </a>
+        </div>
+      </div>
+    </main>
+  )
+}
+
+function SilverHomecareHeader({
+  site,
+  phone,
+  currentPage,
+  pageHref,
+  previewOffsetClassName,
+}: {
+  site: HomepagePublicPackage['site']
+  phone: string
+  currentPage: HomepagePageSlug
+  pageHref: (slug: HomepagePageSlug) => string
+  previewOffsetClassName: string
+}) {
+  return (
+    <header className={`fixed inset-x-0 ${previewOffsetClassName} z-50 border-b border-[#D9E2EC] bg-white/95 shadow-sm backdrop-blur-xl`}>
+      <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-5 py-4">
+        <a href={pageHref('home')} className="min-w-0">
+          <p className="text-2xl font-black tracking-[-0.045em] text-[#2B6CB0]">{site.business_name || '무플재가복지센터'}</p>
+          <p className="text-xs font-bold text-[#718096]">방문요양 · 등급신청 · 본인부담금 상담</p>
+        </a>
+        <nav className="hidden items-center gap-6 text-sm font-black lg:flex">
+          {silverHomecareNav.map(([slug, label]) => (
+            <a key={slug} href={pageHref(slug)} className={currentPage === slug ? 'text-[#2B6CB0]' : 'text-[#2D3748] hover:text-[#2B6CB0]'}>
+              {label}
+            </a>
+          ))}
+        </nav>
+        <a href={`tel:${phone}`} className="hidden rounded-full bg-[#2B6CB0] px-5 py-3 text-sm font-black text-white lg:inline-flex">
+          전화 상담 {phone}
+        </a>
+        <details className="relative lg:hidden">
+          <summary className="flex h-11 w-11 cursor-pointer list-none items-center justify-center rounded-full border border-[#D9E2EC] bg-white">
+            <span className="space-y-1.5">
+              <span className="block h-0.5 w-5 bg-[#2D3748]" />
+              <span className="block h-0.5 w-5 bg-[#2D3748]" />
+              <span className="block h-0.5 w-5 bg-[#2D3748]" />
+            </span>
+          </summary>
+          <div className="fixed inset-x-4 top-20 z-[80] rounded-3xl border border-[#D9E2EC] bg-white p-5 shadow-2xl">
+            <div className="grid gap-2">
+              {silverHomecareNav.map(([slug, label]) => (
+                <a key={slug} href={pageHref(slug)} className="rounded-2xl bg-[#F7FAFC] px-5 py-4 text-lg font-black text-[#2D3748]">
+                  {label}
+                </a>
+              ))}
+              <a href={`tel:${phone}`} className="rounded-2xl bg-[#2B6CB0] px-5 py-4 text-center text-lg font-black text-white">
+                방문요양 전화상담 {phone}
+              </a>
+            </div>
+          </div>
+        </details>
+      </div>
+    </header>
+  )
+}
+
+function SilverHomecareHome({
+  data,
+  pageHref,
+  phone,
+}: {
+  data: HomepagePublicPackage
+  pageHref: (slug: HomepagePageSlug) => string
+  phone: string
+}) {
+  const { site } = data
+  return (
+    <>
+      <section className="overflow-hidden bg-white pt-28">
+        <div className="mx-auto grid max-w-7xl gap-10 px-5 py-16 lg:grid-cols-[0.95fr_1.05fr] lg:items-center">
+          <div>
+            <p className="inline-flex rounded-full bg-[#E6F4EA] px-4 py-2 text-sm font-black text-[#38A169]">국민건강보험공단 지정 방문요양 상담</p>
+            <h1 className="mt-6 text-5xl font-black leading-[1.05] tracking-[-0.06em] text-[#2D3748] sm:text-6xl">
+              건강한 노후의
+              <br />
+              행복을 함께합니다
+            </h1>
+            <p className="mt-6 max-w-2xl text-lg font-semibold leading-8 text-[#718096]">
+              {site.business_name || '무플재가복지센터'}가 방문요양, 등급신청, 본인부담금 상담을 전화로 쉽게 안내합니다.
+            </p>
+            <div className="mt-8 flex flex-col gap-3 sm:flex-row">
+              <a href={`tel:${phone}`} className="rounded-full bg-[#2B6CB0] px-8 py-4 text-center text-lg font-black text-white shadow-xl shadow-blue-900/15">
+                방문요양 전화상담
+              </a>
+              <a href={pageHref('contact')} className="rounded-full bg-[#F6AD55] px-8 py-4 text-center text-lg font-black text-white">
+                서비스 신청 안내
+              </a>
+            </div>
+            <p className="mt-4 text-sm font-bold text-[#718096]">등급이 없어도 먼저 전화주세요. 신청 가능 여부와 절차를 안내드립니다.</p>
+          </div>
+          <div className="relative">
+            <img src={site.hero_image_url || data.mediaItems[0]?.image_url || silverCareImages[2]} alt="방문요양 상담" className="aspect-[4/3] w-full rounded-[2rem] object-cover shadow-2xl" />
+            <div className="absolute -bottom-5 left-5 right-5 rounded-3xl bg-white p-5 shadow-xl">
+              <p className="text-sm font-black text-[#2B6CB0]">전화상담 우선</p>
+              <p className="mt-1 text-xl font-black tracking-[-0.035em]">방문요양 가능 여부를 바로 확인하세요</p>
+            </div>
+          </div>
+        </div>
+      </section>
+      <SilverHomecareQuickGrid pageHref={pageHref} phone={phone} />
+      <SilverHomecareAboutBlock data={data} />
+      <SilverHomecareFeatureBlocks phone={phone} />
+      <SilverHomecareContactMethods phone={phone} />
+      <SilverHomecareBottomCta phone={phone} />
+    </>
+  )
+}
+
+function SilverHomecareQuickGrid({ pageHref, phone }: { pageHref: (slug: HomepagePageSlug) => string; phone: string }) {
+  const links = [pageHref('services'), pageHref('portfolio'), `tel:${phone}`, pageHref('contact')]
+  return (
+    <section className="bg-[#F7FAFC] py-16">
+      <div className="mx-auto grid max-w-7xl gap-5 px-5 sm:grid-cols-2 lg:grid-cols-4">
+        {silverHomecareQuickCards.map(([title, text], index) => (
+          <a key={title} href={links[index]} className="rounded-3xl bg-white p-6 shadow-md transition hover:-translate-y-1 hover:shadow-xl">
+            <p className="text-sm font-black text-[#2B6CB0]">0{index + 1}</p>
+            <h3 className="mt-4 text-xl font-black tracking-[-0.03em]">{title}</h3>
+            <p className="mt-3 text-sm leading-6 text-[#718096]">{text}</p>
+          </a>
+        ))}
+      </div>
+    </section>
+  )
+}
+
+function SilverHomecareAboutBlock({ data }: { data: HomepagePublicPackage }) {
+  return (
+    <section className="bg-white py-20">
+      <div className="mx-auto grid max-w-7xl gap-8 px-5 lg:grid-cols-2 lg:items-center">
+        <img src={data.mediaItems[1]?.image_url || silverCareImages[0]} alt="센터 소개" className="aspect-[4/3] w-full rounded-[2rem] object-cover" />
+        <div>
+          <p className="text-sm font-black uppercase tracking-[0.24em] text-[#2B6CB0]">About Center</p>
+          <h2 className="mt-4 text-4xl font-black tracking-[-0.05em]">가족의 부담을 덜고 어르신의 일상을 지킵니다</h2>
+          <p className="mt-5 leading-8 text-[#718096]">2009년 개소, 국민건강보험공단 지정기관, 지자체 등록 노인복지시설이라는 신뢰 포인트를 중심으로 방문요양 상담을 유도합니다.</p>
+          <div className="mt-7 grid gap-3 sm:grid-cols-3">
+            {['2009년 개소', '공단 지정기관', '지자체 등록시설'].map((item) => (
+              <div key={item} className="rounded-2xl bg-[#F7FAFC] p-4 text-center font-black text-[#2B6CB0]">{item}</div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </section>
+  )
+}
+
+function SilverHomecareFeatureBlocks({ phone }: { phone: string }) {
+  return (
+    <section className="bg-[#F7FAFC] py-20">
+      <div className="mx-auto max-w-7xl px-5">
+        <div className="mb-10 max-w-2xl">
+          <p className="text-sm font-black uppercase tracking-[0.24em] text-[#2B6CB0]">Care System</p>
+          <h2 className="mt-4 text-4xl font-black tracking-[-0.05em]">방문요양 서비스 특징</h2>
+        </div>
+        <div className="grid gap-6">
+          {silverHomecareFeatures.map(([title, text], index) => (
+            <article key={title} className={`grid gap-5 rounded-[2rem] bg-white p-6 shadow-md lg:grid-cols-[0.8fr_1.2fr] lg:items-center ${index % 2 === 1 ? 'lg:[&>*:first-child]:order-2' : ''}`}>
+              <div className="flex aspect-[4/3] items-center justify-center rounded-[1.5rem] bg-[#E6F4EA] text-5xl font-black text-[#38A169]">0{index + 1}</div>
+              <div>
+                <h3 className="text-3xl font-black tracking-[-0.045em]">{title}</h3>
+                <p className="mt-4 leading-8 text-[#718096]">{text}</p>
+                <a href={`tel:${phone}`} className="mt-6 inline-flex rounded-full bg-[#2B6CB0] px-6 py-3 font-black text-white">전화로 확인</a>
+              </div>
+            </article>
+          ))}
+        </div>
+      </div>
+    </section>
+  )
+}
+
+function SilverHomecareContactMethods({ phone }: { phone: string }) {
+  return (
+    <section className="bg-white py-20">
+      <div className="mx-auto max-w-7xl px-5">
+        <h2 className="text-4xl font-black tracking-[-0.05em]">상담 방법</h2>
+        <div className="mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+          {[
+            ['1:1 게시판', '문의 내용을 남기면 확인 후 연락드립니다.', '#'],
+            ['카카오톡', '채널 상담으로 간단히 문의할 수 있습니다.', '#'],
+            ['네이버 톡톡', '네이버 상담 채널로 연결합니다.', '#'],
+            ['전화', '가장 빠른 상담 방법입니다.', `tel:${phone}`],
+          ].map(([title, text, href]) => (
+            <a key={title} href={href} className="rounded-3xl border border-[#D9E2EC] p-6 transition hover:-translate-y-1 hover:shadow-xl">
+              <h3 className="text-xl font-black">{title}</h3>
+              <p className="mt-3 text-sm leading-6 text-[#718096]">{text}</p>
+            </a>
+          ))}
+        </div>
+      </div>
+    </section>
+  )
+}
+
+function SilverHomecareBottomCta({ phone }: { phone: string }) {
+  return (
+    <section className="bg-[#2B6CB0] py-14 text-white">
+      <div className="mx-auto flex max-w-7xl flex-col gap-5 px-5 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <p className="text-sm font-black uppercase tracking-[0.24em] text-white/60">Call Now</p>
+          <h2 className="mt-3 text-4xl font-black tracking-[-0.05em]">방문요양 신청, 전화로 바로 시작하세요</h2>
+          <p className="mt-3 font-semibold text-white/72">등급 여부와 거주지를 알려주시면 필요한 절차를 안내드립니다.</p>
+        </div>
+        <a href={`tel:${phone}`} className="rounded-full bg-[#F6AD55] px-8 py-4 text-center text-lg font-black text-white">
+          지금 바로 전화하기
+        </a>
+      </div>
+    </section>
+  )
+}
+
+function SilverHomecareSubLayout({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <>
+      <section className="bg-[#2B6CB0] px-5 pb-14 pt-36 text-white">
+        <div className="mx-auto max-w-7xl">
+          <p className="text-sm font-black uppercase tracking-[0.24em] text-white/65">Muple Homecare</p>
+          <h1 className="mt-4 text-5xl font-black tracking-[-0.06em]">{title}</h1>
+        </div>
+      </section>
+      <section className="bg-white py-16">
+        <div className="mx-auto max-w-7xl px-5">{children}</div>
+      </section>
+    </>
+  )
+}
+
+function SilverHomecareAbout({ data, phone }: { data: HomepagePublicPackage; phone: string }) {
+  return (
+    <SilverHomecareSubLayout title="센터소개">
+      <SilverHomecareAboutBlock data={data} />
+      <SilverHomecareBottomCta phone={phone} />
+    </SilverHomecareSubLayout>
+  )
+}
+
+function SilverHomecareServices({ phone }: { phone: string }) {
+  return (
+    <SilverHomecareSubLayout title="방문요양">
+      <div className="grid gap-5 md:grid-cols-2">
+        {['방문요양이란?', '등급신청 절차', '서비스 신청절차', '요양보호사에 대하여'].map((item) => (
+          <div key={item} className="rounded-3xl bg-[#F7FAFC] p-7">
+            <h2 className="text-2xl font-black">{item}</h2>
+            <p className="mt-3 leading-8 text-[#718096]">보호자가 이해하기 쉽게 서비스 대상, 절차, 준비사항을 안내합니다.</p>
+          </div>
+        ))}
+      </div>
+      <div className="mt-8">
+        <a href={`tel:${phone}`} className="inline-flex rounded-full bg-[#2B6CB0] px-7 py-4 font-black text-white">방문요양 전화상담</a>
+      </div>
+    </SilverHomecareSubLayout>
+  )
+}
+
+function SilverHomecareCostGuide({ phone }: { phone: string }) {
+  return (
+    <SilverHomecareSubLayout title="지원금 & 부담금">
+      <div className="grid gap-5 lg:grid-cols-3">
+        {['일반 15%', '경감 7.5%', '면제 0%'].map((item) => (
+          <div key={item} className="rounded-3xl bg-[#F7FAFC] p-7 text-center">
+            <p className="text-3xl font-black text-[#2B6CB0]">{item}</p>
+            <p className="mt-3 font-bold text-[#718096]">본인부담금 기준</p>
+          </div>
+        ))}
+      </div>
+      <p className="mt-6 leading-8 text-[#718096]">등급별 월 한도액과 이용 시간에 따라 실제 부담금은 달라집니다.</p>
+      <a href={`tel:${phone}`} className="mt-7 inline-flex rounded-full bg-[#F6AD55] px-7 py-4 font-black text-white">본인부담금 전화상담</a>
+    </SilverHomecareSubLayout>
+  )
+}
+
+function SilverHomecareFaq({ phone }: { phone: string }) {
+  return (
+    <SilverHomecareSubLayout title="자주묻는질문">
+      <div className="grid gap-4">
+        {[
+          ['등급이 없어도 신청할 수 있나요?', '가능합니다. 등급신청 절차부터 전화로 안내드립니다.'],
+          ['방문요양과 요양원의 차이는?', '방문요양은 어르신 댁으로 요양보호사가 방문하는 재가 서비스입니다.'],
+          ['본인부담금은 얼마인가요?', '등급, 이용시간, 경감 여부에 따라 달라집니다.'],
+        ].map(([q, a]) => (
+          <div key={q} className="rounded-3xl bg-[#F7FAFC] p-6">
+            <p className="text-xl font-black">{q}</p>
+            <p className="mt-3 leading-7 text-[#718096]">{a}</p>
+          </div>
+        ))}
+      </div>
+      <a href={`tel:${phone}`} className="mt-7 inline-flex rounded-full bg-[#2B6CB0] px-7 py-4 font-black text-white">FAQ 전화상담</a>
+    </SilverHomecareSubLayout>
+  )
+}
+
+function SilverHomecareApply({ site, phone }: { site: HomepagePublicPackage['site']; phone: string }) {
+  return (
+    <SilverHomecareSubLayout title="서비스 신청">
+      <div className="grid gap-8 lg:grid-cols-[0.9fr_1.1fr]">
+        <div className="rounded-[2rem] bg-[#F7FAFC] p-8">
+          <h2 className="text-4xl font-black tracking-[-0.05em]">전화로 신청 절차를 시작하세요</h2>
+          <p className="mt-4 leading-8 text-[#718096]">어르신 성함, 거주지, 등급 여부, 희망 서비스를 알려주시면 신청 절차를 안내드립니다.</p>
+          <a href={`tel:${phone}`} className="mt-7 inline-flex rounded-full bg-[#2B6CB0] px-8 py-4 text-lg font-black text-white">서비스 신청 전화상담 {phone}</a>
+        </div>
+        <div className="rounded-[2rem] bg-white p-8 shadow-md">
+          <p className="text-2xl font-black text-[#2B6CB0]">{site.business_name || '무플재가복지센터'}</p>
+          <p className="mt-4 leading-8 text-[#718096]">{site.address || '강원특별자치도 원주시 무플로 00'}</p>
+          <div className="mt-6 grid gap-3">
+            {['방문요양 신청', '등급신청 상담', '본인부담금 안내'].map((item) => (
+              <div key={item} className="rounded-2xl bg-[#F7FAFC] p-5 font-black">{item}</div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </SilverHomecareSubLayout>
+  )
+}
+
+function SilverHomecareFooter({ site, phone }: { site: HomepagePublicPackage['site']; phone: string }) {
+  return (
+    <footer className="bg-[#2D3748] text-white">
+      <div className="mx-auto max-w-7xl px-5 py-10">
+        <p className="text-2xl font-black tracking-[-0.04em]">{site.business_name || '무플재가복지센터'}</p>
+        <p className="mt-4 text-sm font-semibold leading-7 text-white/62">
+          대표자: 홍길동 | 주소: {site.address || '강원특별자치도 원주시 무플로 00'} | 전화: {phone} | 팩스: 00-000-0000 | 이메일: care@example.com
+        </p>
+        <p className="mt-3 text-sm font-semibold text-white/62">사업자등록번호: 000-00-00000</p>
+        <p className="mt-6 text-xs font-bold text-white/45">Copyright © 무플재가복지센터. All rights reserved.</p>
+      </div>
+    </footer>
+  )
+}
+
+function SilverHospitalSite({
+  data,
+  currentPage,
+  pageHref,
+  previewOffsetClassName,
+}: {
+  data: HomepagePublicPackage
+  currentPage: HomepagePageSlug
+  pageHref: (slug: HomepagePageSlug) => string
+  previewOffsetClassName: string
+}) {
+  const { site } = data
+  const phone = site.phone || '055-000-0000'
+
+  return (
+    <main
+      className="homepage-site min-h-screen bg-white pb-20 text-[#222222]"
+      style={{
+        '--hp-bg': '#FFFFFF',
+        '--hp-bg-2': '#F4F8FB',
+        '--hp-surface': '#FFFFFF',
+        '--hp-soft': '#F4F8FB',
+        '--hp-text': '#222222',
+        '--hp-muted': '#6B7280',
+        '--hp-primary': '#2E7D9A',
+        '--hp-accent': '#F5A623',
+        '--hp-dark': '#1B5E75',
+        '--hp-border': '#E0E7EF',
+      } as CSSProperties}
+    >
+      <SilverHospitalHeader
+        site={site}
+        phone={phone}
+        currentPage={currentPage}
+        pageHref={pageHref}
+        previewOffsetClassName={previewOffsetClassName}
+      />
+      {currentPage === 'home' && <SilverHospitalHome data={data} pageHref={pageHref} phone={phone} />}
+      {currentPage === 'about' && <SilverHospitalAbout data={data} />}
+      {currentPage === 'services' && <SilverHospitalMedical phone={phone} />}
+      {currentPage === 'portfolio' && <SilverHospitalDoctors />}
+      {currentPage === 'faq' && <SilverHospitalNews posts={data.blogPosts} />}
+      {currentPage === 'contact' && <SilverHospitalContact site={site} phone={phone} />}
+      <SilverHospitalFooter site={site} phone={phone} pageHref={pageHref} />
+      <div className="fixed inset-x-0 bottom-0 z-50 border-t border-[#E0E7EF] bg-white/95 p-3 shadow-2xl backdrop-blur-xl">
+        <div className="mx-auto flex max-w-3xl items-center gap-3">
+          <div className="min-w-0 flex-1">
+            <p className="text-xs font-black text-[#6B7280]">입원·간병 문의</p>
+            <p className="truncate text-xl font-black text-[#1B5E75]">{phone}</p>
+          </div>
+            <a href={`tel:${phone}`} className="rounded-full bg-[#F5A623] px-6 py-3 text-sm font-black text-white">
+            바로 전화
+          </a>
+        </div>
+      </div>
+    </main>
+  )
+}
+
+function SilverHospitalHeader({
+  site,
+  phone,
+  currentPage,
+  pageHref,
+  previewOffsetClassName,
+}: {
+  site: HomepagePublicPackage['site']
+  phone: string
+  currentPage: HomepagePageSlug
+  pageHref: (slug: HomepagePageSlug) => string
+  previewOffsetClassName: string
+}) {
+  return (
+    <header className={`fixed inset-x-0 ${previewOffsetClassName} z-50 bg-white shadow-sm`}>
+      <div className="hidden border-b border-[#E0E7EF] bg-[#F4F8FB] lg:block">
+        <div className="mx-auto flex max-w-7xl justify-end gap-5 px-5 py-2 text-xs font-bold text-[#6B7280]">
+          <span>대표전화: {phone}</span>
+          <span>보건복지부 의료기관 인증 병원</span>
+        </div>
+      </div>
+      <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-5 py-4">
+        <a href={pageHref('home')} className="min-w-0">
+          <p className="text-2xl font-black tracking-[-0.045em] text-[#1B5E75]">{site.business_name || '무플 요양병원'}</p>
+          <p className="text-xs font-bold text-[#6B7280]">Muple Nursing Hospital</p>
+        </a>
+        <nav className="hidden items-center gap-6 text-sm font-black lg:flex">
+          {silverHospitalNav.map(([slug, label]) => (
+            <a key={slug} href={pageHref(slug)} className={currentPage === slug ? 'text-[#2E7D9A]' : 'text-[#222222] hover:text-[#2E7D9A]'}>
+              {label}
+            </a>
+          ))}
+        </nav>
+        <a href={`tel:${phone}`} className="hidden rounded-full bg-[#F5A623] px-5 py-3 text-sm font-black text-white lg:inline-flex">
+          입원 가능 여부 전화상담
+        </a>
+        <details className="relative lg:hidden">
+          <summary className="flex h-11 w-11 cursor-pointer list-none items-center justify-center rounded-full border border-[#E0E7EF] bg-white">
+            <span className="space-y-1.5">
+              <span className="block h-0.5 w-5 bg-[#222222]" />
+              <span className="block h-0.5 w-5 bg-[#222222]" />
+              <span className="block h-0.5 w-5 bg-[#222222]" />
+            </span>
+          </summary>
+          <div className="fixed inset-x-4 top-20 z-[80] rounded-3xl border border-[#E0E7EF] bg-white p-5 shadow-2xl">
+            <div className="grid gap-2">
+              {silverHospitalNav.map(([slug, label]) => (
+                <a key={slug} href={pageHref(slug)} className="rounded-2xl bg-[#F4F8FB] px-5 py-4 text-lg font-black text-[#222222]">
+                  {label}
+                </a>
+              ))}
+              <a href={`tel:${phone}`} className="rounded-2xl bg-[#F5A623] px-5 py-4 text-center text-lg font-black text-white">
+                전화 문의 {phone}
+              </a>
+            </div>
+          </div>
+        </details>
+      </div>
+    </header>
+  )
+}
+
+function SilverHospitalHome({
+  data,
+  pageHref,
+  phone,
+}: {
+  data: HomepagePublicPackage
+  pageHref: (slug: HomepagePageSlug) => string
+  phone: string
+}) {
+  const { site, blogPosts } = data
+  return (
+    <>
+      <section
+        className="relative flex min-h-[760px] items-center overflow-hidden bg-[#1B5E75] pt-28 text-white"
+        style={{
+          backgroundImage: `linear-gradient(rgba(13,54,70,0.54), rgba(13,54,70,0.68)), url(${site.hero_image_url || silverCareImages[1]})`,
+          backgroundPosition: 'center',
+          backgroundSize: 'cover',
+        }}
+      >
+        <div className="mx-auto w-full max-w-7xl px-5 py-24">
+          <p className="inline-flex rounded-full bg-white/15 px-4 py-2 text-sm font-black backdrop-blur-md">보건복지부 의료기관 인증 병원</p>
+          <h1 className="mt-7 max-w-4xl text-5xl font-black leading-[1.06] tracking-[-0.06em] sm:text-7xl">
+            보금자리 같은 편안함과
+            <br />
+            아늑함을 전합니다
+          </h1>
+          <p className="mt-6 max-w-2xl text-xl font-semibold leading-8 text-white/82">섬김과 사랑을 실천하는 무플 요양병원입니다.</p>
+          <div className="mt-9 flex flex-col gap-3 sm:flex-row">
+            <a href={`tel:${phone}`} className="rounded-full bg-[#F5A623] px-8 py-4 text-center font-black text-white shadow-xl shadow-black/20">입원 가능 여부 전화상담</a>
+            <a href={pageHref('about')} className="rounded-full bg-white px-8 py-4 text-center font-black text-[#1B5E75]">병원 정보 보기</a>
+          </div>
+          <p className="mt-4 text-sm font-bold text-white/72">입원이 확정되지 않아도 괜찮습니다. 환자 상태와 지역만 알려주시면 상담 가능합니다.</p>
+        </div>
+      </section>
+      <section className="bg-[#F4F8FB]">
+        <div className="mx-auto grid max-w-7xl gap-3 overflow-x-auto px-5 py-8 sm:grid-cols-4">
+          {silverHospitalBadges.map(([title, text]) => (
+            <div key={title} className="min-w-52 rounded-3xl bg-white p-6 text-center shadow-sm">
+              <p className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-[#e5f4f7] text-xs font-black text-[#2E7D9A]">{title}</p>
+              <p className="mt-4 font-black text-[#222222]">{text}</p>
+            </div>
+          ))}
+        </div>
+      </section>
+      <SilverHospitalServicesGrid phone={phone} />
+      <section className="bg-white py-20">
+        <div className="mx-auto grid max-w-7xl gap-8 px-5 lg:grid-cols-2 lg:items-center">
+          <img src={data.mediaItems[0]?.image_url || silverCareImages[1]} alt="병원 외관" className="aspect-[4/3] w-full rounded-[2rem] object-cover" />
+          <div>
+            <p className="text-sm font-black uppercase tracking-[0.24em] text-[#2E7D9A]">About Hospital</p>
+            <h2 className="mt-4 text-4xl font-black tracking-[-0.05em]">무플 요양병원은 섬김과 사랑을 실천합니다</h2>
+            <p className="mt-5 leading-8 text-[#6B7280]">양한방 협진을 통한 통합 의료서비스와 사회복지 프로그램으로 환자와 가족의 마음까지 살피는 병원 홈페이지형 구성입니다.</p>
+            <div className="mt-7 flex flex-col gap-3 sm:flex-row">
+              <a href={`tel:${phone}`} className="inline-flex rounded-full bg-[#F5A623] px-6 py-3 text-center font-black text-white">환자 상태 전화상담</a>
+              <a href={pageHref('about')} className="inline-flex rounded-full bg-[#2E7D9A] px-6 py-3 text-center font-black text-white">병원 소개 보기</a>
+            </div>
+          </div>
+        </div>
+      </section>
+      <section className="bg-[#1B5E75] py-12 text-white">
+        <div className="mx-auto grid max-w-7xl gap-4 px-5 sm:grid-cols-4">
+          {['20년+ 운영 경험', '150명+ 입원 케어', '5개 진료 분야', '24시간 간호'].map((item) => (
+            <div key={item} className="rounded-3xl bg-white/10 p-6 text-center">
+              <p className="text-3xl font-black">{item.split(' ')[0]}</p>
+              <p className="mt-2 text-sm font-bold text-white/70">{item.replace(item.split(' ')[0], '').trim()}</p>
+            </div>
+          ))}
+        </div>
+      </section>
+      <SilverHospitalNews posts={blogPosts} compact />
+      <SilverHospitalContact site={site} phone={phone} compact />
+    </>
+  )
+}
+
+function SilverHospitalServicesGrid({ phone }: { phone?: string }) {
+  return (
+    <section className="bg-white py-20">
+      <div className="mx-auto max-w-7xl px-5">
+        <div className="mb-9 flex items-end justify-between gap-4">
+          <div>
+            <p className="text-sm font-black uppercase tracking-[0.24em] text-[#2E7D9A]">Medical Services</p>
+            <h2 className="mt-4 text-4xl font-black tracking-[-0.05em]">주요 진료 서비스</h2>
+          </div>
+        </div>
+        <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+          {silverHospitalServices.map(([title, text]) => (
+            <div key={title} className="rounded-[2rem] border border-[#E0E7EF] p-6 transition hover:-translate-y-1 hover:shadow-xl">
+              <p className="text-3xl font-black text-[#2E7D9A]">+</p>
+              <h3 className="mt-4 text-xl font-black">{title}</h3>
+              <p className="mt-3 text-sm leading-6 text-[#6B7280]">{text}</p>
+              {phone ? (
+                <a href={`tel:${phone}`} className="mt-5 inline-flex rounded-full bg-[#F5A623] px-4 py-2 text-sm font-black text-white">전화로 상담</a>
+              ) : (
+                <p className="mt-5 text-sm font-black text-[#F5A623]">자세히 보기</p>
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  )
+}
+
+function SilverHospitalSubLayout({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <>
+      <section className="bg-[#1B5E75] px-5 pb-16 pt-36 text-white">
+        <div className="mx-auto max-w-7xl">
+          <p className="text-sm font-black uppercase tracking-[0.24em] text-white/60">Muple Hospital</p>
+          <h1 className="mt-4 text-5xl font-black tracking-[-0.06em]">{title}</h1>
+        </div>
+      </section>
+      <section className="bg-white py-16">
+        <div className="mx-auto grid max-w-7xl gap-8 px-5 lg:grid-cols-[220px_1fr]">
+          <aside className="hidden lg:block">
+            <div className="sticky top-32 rounded-3xl border border-[#E0E7EF] p-4">
+              {silverHospitalNav.slice(1).map(([, label]) => (
+                <p key={label} className="border-b border-[#E0E7EF] px-3 py-4 text-sm font-black last:border-b-0">{label}</p>
+              ))}
+            </div>
+          </aside>
+          <div>{children}</div>
+        </div>
+      </section>
+    </>
+  )
+}
+
+function SilverHospitalAbout({ data }: { data: HomepagePublicPackage }) {
+  return (
+    <SilverHospitalSubLayout title="병원소개">
+      <div className="grid gap-8 lg:grid-cols-[0.85fr_1.15fr] lg:items-center">
+        <img src={data.mediaItems[1]?.image_url || silverCareImages[0]} alt="병원 시설" className="aspect-[4/5] w-full rounded-[2rem] object-cover" />
+        <div>
+          <h2 className="text-4xl font-black tracking-[-0.05em]">환자와 가족에게 더 편안한 병원</h2>
+          <p className="mt-5 leading-8 text-[#6B7280]">무플 요양병원은 보금자리 같은 편안함과 아늑함을 바탕으로 양한방 협진, 재활, 간호, 사회복지 프로그램을 제공합니다.</p>
+          <div className="mt-8 grid gap-3">
+            {['병원장 인사말', '병원 연혁', '시설 안내', '오시는 길'].map((item) => (
+              <div key={item} className="rounded-2xl bg-[#F4F8FB] p-5 font-black">{item}</div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </SilverHospitalSubLayout>
+  )
+}
+
+function SilverHospitalMedical({ phone }: { phone: string }) {
+  return (
+    <SilverHospitalSubLayout title="진료안내">
+      <SilverHospitalServicesGrid phone={phone} />
+      <div className="mt-8 rounded-[2rem] bg-[#F4F8FB] p-8">
+        <h2 className="text-3xl font-black tracking-[-0.045em]">사회복지 프로그램과 격리병실 안내</h2>
+        <p className="mt-4 leading-8 text-[#6B7280]">원예치료, 음악치료, 자원봉사 활동, 격리병실, 양한방 협진 안내를 카드형 콘텐츠로 확장할 수 있습니다.</p>
+        <a href={`tel:${phone}`} className="mt-6 inline-flex rounded-full bg-[#F5A623] px-6 py-3 font-black text-white">입원 가능 여부 전화상담</a>
+      </div>
+    </SilverHospitalSubLayout>
+  )
+}
+
+function SilverHospitalDoctors() {
+  return (
+    <SilverHospitalSubLayout title="진료진 소개">
+      <div className="grid gap-5">
+        {['내과', '신경과', '재활의학과', '한방과'].map((department, index) => (
+          <article key={department} className="grid gap-5 rounded-[2rem] border border-[#E0E7EF] p-6 sm:grid-cols-[140px_1fr]">
+            <div className="flex aspect-square items-center justify-center rounded-3xl bg-[#F4F8FB] text-4xl font-black text-[#2E7D9A]">Dr</div>
+            <div>
+              <p className="text-sm font-black text-[#2E7D9A]">{department}</p>
+              <h2 className="mt-2 text-2xl font-black">홍길동 {index + 1} 과장</h2>
+              <p className="mt-3 leading-7 text-[#6B7280]">전문분야: 치매, 파킨슨, 노인성 질환, 통증 관리. 실제 구축 시 의료진 사진과 학력/경력을 입력합니다.</p>
+            </div>
+          </article>
+        ))}
+      </div>
+    </SilverHospitalSubLayout>
+  )
+}
+
+function SilverHospitalNews({ posts, compact = false }: { posts: HomepagePublicPackage['blogPosts']; compact?: boolean }) {
+  const content = (
+    <div>
+      <div className="mb-8 flex items-end justify-between gap-4">
+        <div>
+          <p className="text-sm font-black uppercase tracking-[0.24em] text-[#2E7D9A]">News</p>
+          <h2 className="mt-4 text-4xl font-black tracking-[-0.05em]">무플 소식</h2>
+        </div>
+        <span className="hidden rounded-full bg-[#F4F8FB] px-4 py-2 text-sm font-black sm:inline-flex">공지사항 / 병원소식 / 후원활동</span>
+      </div>
+      <div className="grid gap-5 md:grid-cols-3">
+        {posts.slice(0, 3).map((post) => (
+          <article key={post.id} className="overflow-hidden rounded-[2rem] border border-[#E0E7EF] bg-white">
+            {post.thumbnail_url && <img src={post.thumbnail_url} alt="" className="aspect-[4/3] w-full object-cover" loading="lazy" />}
+            <div className="p-5">
+              <h3 className="text-lg font-black">{post.title}</h3>
+              <p className="mt-3 text-sm leading-6 text-[#6B7280]">{post.summary}</p>
+              <p className="mt-4 text-xs font-bold text-[#6B7280]">2025.04.01</p>
+            </div>
+          </article>
+        ))}
+      </div>
+    </div>
+  )
+
+  if (compact) {
+    return <section className="bg-[#F4F8FB] py-20"><div className="mx-auto max-w-7xl px-5">{content}</div></section>
+  }
+
+  return <SilverHospitalSubLayout title="무플 소식">{content}</SilverHospitalSubLayout>
+}
+
+function SilverHospitalContact({
+  site,
+  phone,
+  compact = false,
+}: {
+  site: HomepagePublicPackage['site']
+  phone: string
+  compact?: boolean
+}) {
+  const content = (
+    <div className="grid gap-8 lg:grid-cols-[0.9fr_1.1fr]">
+      <div className="rounded-[2rem] bg-white p-8 shadow-sm">
+        <p className="text-sm font-black uppercase tracking-[0.24em] text-[#2E7D9A]">Contact</p>
+        <h2 className="mt-4 text-4xl font-black tracking-[-0.05em]">전화로 먼저 확인하세요</h2>
+        <p className="mt-4 leading-8 text-[#6B7280]">입원이 확정되지 않아도 상담 가능합니다. 환자 상태, 현재 계신 지역, 간병 필요 여부를 전화로 알려주세요.</p>
+        <div className="mt-7 grid gap-3">
+          <a href={`tel:${phone}`} className="rounded-2xl bg-[#F5A623] px-6 py-5 text-center text-xl font-black text-white">
+            입원·간병 전화상담 {phone}
+          </a>
+          <div className="rounded-2xl border border-[#E0E7EF] bg-[#F4F8FB] p-5">
+            <p className="text-sm font-black text-[#2E7D9A]">전화 전 준비하면 좋은 내용</p>
+            <p className="mt-2 font-bold leading-7 text-[#222222]">환자 나이, 진단명, 거동 가능 여부, 간병 필요 여부</p>
+          </div>
+        </div>
+      </div>
+      <div className="rounded-[2rem] bg-[#F4F8FB] p-8">
+        <p className="text-2xl font-black text-[#1B5E75]">{phone}</p>
+        <p className="mt-4 leading-8 text-[#6B7280]">{site.address || '경남 창원시 마산합포구 무플로 00'}</p>
+        <div className="mt-6 grid gap-3">
+          {[
+            ['상담시간', site.business_hours || '입원·간병 상담 09:00 - 18:00'],
+            ['상담지역', site.service_area || '마산 / 창원 / 진해 / 함안 입원 상담'],
+            ['문의방법', '전화 연결을 가장 빠른 상담 방식으로 운영합니다.'],
+          ].map(([title, text]) => (
+            <div key={title} className="rounded-2xl bg-white p-5">
+              <p className="text-sm font-black text-[#2E7D9A]">{title}</p>
+              <p className="mt-2 font-bold leading-7 text-[#222222]">{text}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+
+  if (compact) {
+    return <section className="bg-white py-20"><div className="mx-auto max-w-7xl px-5">{content}</div></section>
+  }
+
+  return <SilverHospitalSubLayout title="간병 문의">{content}</SilverHospitalSubLayout>
+}
+
+function SilverHospitalFooter({
+  site,
+  phone,
+  pageHref,
+}: {
+  site: HomepagePublicPackage['site']
+  phone: string
+  pageHref: (slug: HomepagePageSlug) => string
+}) {
+  return (
+    <footer className="bg-[#1B5E75] text-white">
+      <div className="mx-auto max-w-7xl px-5 py-10">
+        <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
+          <p className="text-2xl font-black tracking-[-0.04em]">{site.business_name || '무플 요양병원'}</p>
+          <div className="flex flex-wrap gap-4 text-sm font-bold text-white/75">
+            {silverHospitalNav.slice(1).map(([slug, label]) => (
+              <a key={slug} href={pageHref(slug)}>{label}</a>
+            ))}
+          </div>
+        </div>
+        <p className="mt-6 text-sm font-semibold leading-7 text-white/62">
+          대표자: 홍길동 | 사업자번호: 000-00-00000 | 주소: {site.address || '경남 창원시 마산합포구 무플로 00'} | 대표전화: {phone}
+        </p>
+        <div className="mt-4 flex gap-4 text-sm font-bold text-white/70">
+          <a href="#">개인정보처리방침</a>
+          <a href="#">이용약관</a>
+        </div>
+        <p className="mt-6 text-xs font-bold text-white/45">COPYRIGHT © 무플 요양병원 ALL RIGHTS RESERVED</p>
+      </div>
+    </footer>
+  )
+}
+
+const silverNursingReasons = [
+  ['MED', '무플 메디컬그룹 연계', '건물 내 의원과 연계해 보호자가 안심할 수 있는 의료 네트워크를 안내합니다.'],
+  ['LOC', '도심 접근성', '명학역 도보권과 지하주차장으로 방문 상담과 면회 접근성을 높입니다.'],
+  ['ROOM', '1~2인실 특화', '프라이버시를 고려한 생활 공간으로 어르신의 편안한 일상을 돕습니다.'],
+  ['CARE', '24시간 전문 인력', '야간 케어까지 고려한 근무 체계로 보호자의 걱정을 줄입니다.'],
+  ['PLAN', '맞춤형 케어플랜', '입소 상담 후 건강 상태와 생활 습관에 맞춘 케어 기준을 안내합니다.'],
+  ['CHK', '매일 건강 체크', '혈압, 맥박, 산소포화도 등 기본 건강 상태를 꾸준히 확인합니다.'],
+]
+
+const silverNursingPrivileges = [
+  ['01', '도심 속 최적 입지', '명학역 도보권, 지하주차장 완비로 방문이 편합니다.', silverCareImages[1]],
+  ['02', '프리미엄 케어', '1:2 직원-입소자 비율을 강조해 돌봄 밀도를 보여줍니다.', silverCareImages[2]],
+  ['03', '독립적인 공간', '1~2인실 중심의 프라이버시 있는 생활 환경을 안내합니다.', silverCareImages[0]],
+]
+
+function SilverNursingLanding({
+  data,
+  previewOffsetClassName,
+}: {
+  data: HomepagePublicPackage
+  previewOffsetClassName: string
+}) {
+  const { site } = data
+  const phone = site.phone || '031-466-9979'
+
+  return (
+    <main
+      className="homepage-site min-h-screen scroll-smooth bg-white pb-24 text-[#1A1A2E]"
+      style={{
+        '--hp-bg': '#FFFFFF',
+        '--hp-bg-2': '#F5F8FA',
+        '--hp-surface': '#FFFFFF',
+        '--hp-soft': '#F5F8FA',
+        '--hp-text': '#1A1A2E',
+        '--hp-muted': '#6B7280',
+        '--hp-primary': '#2E6DA4',
+        '--hp-accent': '#5BA3C9',
+        '--hp-dark': '#1E4D7B',
+        '--hp-border': '#E5E7EB',
+      } as CSSProperties}
+    >
+      <header className={`fixed inset-x-0 ${previewOffsetClassName} z-50 border-b border-white/20 bg-white/92 shadow-sm backdrop-blur-xl`}>
+        <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-5 py-3">
+          <a href="#top" className="min-w-0">
+            <p className="text-lg font-black tracking-[-0.03em] text-[#1E4D7B]">무플 요양원</p>
+            <p className="text-xs font-bold text-[#6B7280]">Premium Nursing Home</p>
+          </a>
+          <nav className="hidden items-center gap-7 text-sm font-black text-[#1A1A2E] lg:flex">
+            {silverNursingNav.map(([href, label]) => (
+              <a key={href} href={href} className="transition hover:text-[#2E6DA4]">
+                {label}
+              </a>
+            ))}
+          </nav>
+          <div className="hidden items-center gap-2 lg:flex">
+            <a href={`tel:${phone}`} className="rounded-full bg-[#2E6DA4] px-5 py-3 text-sm font-black text-white shadow-lg shadow-blue-900/15">
+              입소 가능 여부 전화상담
+            </a>
+          </div>
+          <details className="group relative lg:hidden">
+            <summary className="flex h-11 w-11 cursor-pointer list-none items-center justify-center rounded-full border border-[#E5E7EB] bg-white">
+              <span className="space-y-1.5">
+                <span className="block h-0.5 w-5 bg-[#1A1A2E]" />
+                <span className="block h-0.5 w-5 bg-[#1A1A2E]" />
+                <span className="block h-0.5 w-5 bg-[#1A1A2E]" />
+              </span>
+            </summary>
+            <div className="fixed inset-x-4 top-20 z-[80] rounded-3xl border border-[#E5E7EB] bg-white p-5 shadow-2xl">
+              <div className="grid gap-2">
+                {silverNursingNav.map(([href, label]) => (
+                  <a key={href} href={href} className="rounded-2xl bg-[#F5F8FA] px-5 py-4 text-lg font-black text-[#1A1A2E]">
+                    {label}
+                  </a>
+                ))}
+                <a href={`tel:${phone}`} className="rounded-2xl bg-[#2E6DA4] px-5 py-4 text-center text-lg font-black text-white">
+                  입소 가능 여부 전화상담 {phone}
+                </a>
+              </div>
+            </div>
+          </details>
+        </div>
+      </header>
+
+      <section
+        id="top"
+        className="relative flex min-h-screen items-center overflow-hidden bg-[#1E4D7B] pt-24 text-white"
+        style={{
+          backgroundImage: `linear-gradient(rgba(18,42,68,0.55), rgba(18,42,68,0.72)), url(${silverCareImages[1]})`,
+          backgroundPosition: 'center',
+          backgroundSize: 'cover',
+        }}
+      >
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_18%_20%,rgba(91,163,201,0.45),transparent_32%)]" />
+        <div className="relative mx-auto w-full max-w-7xl px-5 py-24">
+          <div className="max-w-4xl">
+            <p className="inline-flex rounded-full border border-white/25 bg-white/15 px-4 py-2 text-sm font-black backdrop-blur-md">
+              메디컬 특화 도심형 프리미엄 요양원
+            </p>
+            <h1 className="mt-7 text-5xl font-black leading-[1.03] tracking-[-0.06em] sm:text-7xl">
+              부모님의 내일을
+              <br />
+              정성으로 지킵니다
+            </h1>
+            <p className="mt-6 text-2xl font-bold text-white/86">{site.business_name || '무플 요양원'}</p>
+            <div className="mt-9 flex flex-col gap-3 sm:flex-row">
+              <a href={`tel:${phone}`} className="rounded-full bg-[#2E6DA4] px-8 py-4 text-center text-lg font-black text-white shadow-xl shadow-blue-950/25">
+                입소 가능 여부 전화상담
+              </a>
+              <a href="#facility" className="rounded-full border border-white/55 bg-white/10 px-8 py-4 text-center text-lg font-black text-white backdrop-blur-md">
+                시설 둘러보기
+              </a>
+            </div>
+            <p className="mt-4 text-sm font-bold text-white/72">장기요양등급이 없어도 먼저 전화주세요. 보호자 상황에 맞춰 이용 가능 여부를 안내드립니다.</p>
+          </div>
+        </div>
+      </section>
+
+      <section className="bg-[#2E6DA4] text-white">
+        <div className="mx-auto flex max-w-7xl flex-col gap-3 px-5 py-7 sm:flex-row sm:items-center">
+          <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-white/15 text-sm font-black">MED</div>
+          <div>
+            <p className="text-2xl font-black tracking-[-0.035em]">건물 내 무플의원 운영</p>
+            <p className="mt-1 font-semibold text-white/75">내과 · 가정의학과 · 피부과 연계 진료</p>
+          </div>
+        </div>
+      </section>
+
+      <SilverNursingReasons phone={phone} />
+      <SilverNursingPrivileges phone={phone} />
+      <SilverNursingGuide phone={phone} />
+      <SilverNursingContact site={site} phone={phone} />
+      <SilverNursingFooter site={site} />
+
+      <div className="fixed inset-x-0 bottom-0 z-50 border-t border-[#E5E7EB] bg-white/95 p-3 shadow-2xl backdrop-blur-xl">
+        <div className="mx-auto flex max-w-3xl items-center gap-3">
+          <div className="min-w-0 flex-1">
+            <p className="text-xs font-black text-[#6B7280]">상담문의</p>
+            <p className="truncate text-xl font-black text-[#1E4D7B]">{phone}</p>
+          </div>
+          <a href={`tel:${phone}`} className="rounded-full bg-[#2E6DA4] px-6 py-3 text-sm font-black text-white">
+            바로 전화
+          </a>
+        </div>
+      </div>
+    </main>
+  )
+}
+
+function SilverNursingReasons({ phone }: { phone: string }) {
+  return (
+    <section id="difference" className="bg-white py-20 sm:py-24">
+      <div className="mx-auto max-w-7xl px-5">
+        <div className="mx-auto max-w-2xl text-center">
+          <p className="text-sm font-black uppercase tracking-[0.24em] text-[#2E6DA4]">Difference</p>
+          <h2 className="mt-4 text-4xl font-black tracking-[-0.05em] text-[#1A1A2E]">빌리지가 다른 이유</h2>
+          <p className="mt-4 leading-8 text-[#6B7280]">요양원을 찾는 보호자가 가장 먼저 확인하는 의료, 접근성, 생활 공간, 케어 기준을 카드로 정리합니다.</p>
+        </div>
+        <div className="mt-12 grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+          {silverNursingReasons.map(([icon, title, text]) => (
+            <div key={title} className="rounded-[2rem] border border-[#E5E7EB] bg-white p-6 shadow-sm transition duration-300 hover:-translate-y-1 hover:shadow-xl">
+              <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-[#F5F8FA] text-xs font-black text-[#2E6DA4]">{icon}</div>
+              <h3 className="mt-5 text-2xl font-black tracking-[-0.035em] text-[#1A1A2E]">{title}</h3>
+              <p className="mt-3 leading-7 text-[#6B7280]">{text}</p>
+            </div>
+          ))}
+        </div>
+        <div className="mt-10 rounded-[2rem] bg-[#F5F8FA] p-6 sm:flex sm:items-center sm:justify-between sm:gap-6">
+          <div>
+            <p className="text-xl font-black text-[#1A1A2E]">부모님 상태를 먼저 설명해 주세요</p>
+            <p className="mt-2 font-bold leading-7 text-[#6B7280]">입소 가능 여부, 등급 신청, 방문 상담 가능 시간을 전화로 빠르게 안내드립니다.</p>
+          </div>
+          <a href={`tel:${phone}`} className="mt-5 inline-flex rounded-full bg-[#2E6DA4] px-7 py-4 font-black text-white sm:mt-0">
+            부모님 상태 전화상담
+          </a>
+        </div>
+      </div>
+    </section>
+  )
+}
+
+function SilverNursingPrivileges({ phone }: { phone: string }) {
+  return (
+    <section id="intro" className="bg-[#F5F8FA] py-20 sm:py-24">
+      <div className="mx-auto max-w-7xl px-5">
+        <div className="mb-12 max-w-2xl">
+          <p className="text-sm font-black uppercase tracking-[0.24em] text-[#2E6DA4]">Premium</p>
+          <h2 className="mt-4 text-4xl font-black tracking-[-0.05em] text-[#1A1A2E]">프리미엄 특권</h2>
+        </div>
+        <div className="grid gap-8">
+          {silverNursingPrivileges.map(([number, title, text, imageUrl], index) => (
+            <article key={title} className={`grid gap-6 lg:grid-cols-2 lg:items-center ${index % 2 === 1 ? 'lg:[&>*:first-child]:order-2' : ''}`}>
+              <div className="overflow-hidden rounded-[2rem] bg-white p-3 shadow-sm">
+                <img src={imageUrl} alt={`${title} 이미지`} className="aspect-[4/3] w-full rounded-[1.4rem] object-cover" loading="lazy" />
+              </div>
+              <div className="rounded-[2rem] bg-white p-8 shadow-sm">
+                <p className="text-7xl font-black tracking-[-0.08em] text-[#5BA3C9]/25">{number}</p>
+                <h3 className="mt-3 text-3xl font-black tracking-[-0.045em] text-[#1A1A2E]">{title}</h3>
+                <p className="mt-4 text-lg leading-8 text-[#6B7280]">{text}</p>
+              </div>
+            </article>
+          ))}
+        </div>
+        <div className="mt-10 text-center">
+          <a href={`tel:${phone}`} className="inline-flex rounded-full bg-[#2E6DA4] px-8 py-4 text-lg font-black text-white">
+            시설 방문 가능 여부 전화상담
+          </a>
+          <p className="mt-3 text-sm font-bold text-[#6B7280]">상담만 받아도 괜찮습니다. 방문 전 전화로 먼저 확인하세요.</p>
+        </div>
+      </div>
+    </section>
+  )
+}
+
+function SilverNursingGuide({ phone }: { phone: string }) {
+  return (
+    <section id="guide" className="bg-white py-20 sm:py-24">
+      <div className="mx-auto max-w-7xl px-5">
+        <div className="mb-8 max-w-2xl">
+          <p className="text-sm font-black uppercase tracking-[0.24em] text-[#2E6DA4]">Guide</p>
+          <h2 className="mt-4 text-4xl font-black tracking-[-0.05em] text-[#1A1A2E]">이용안내</h2>
+        </div>
+        <div className="mb-6 flex gap-2 overflow-x-auto pb-2 text-sm font-black">
+          {['시설개요', '이용절차', '이용비용', '층별안내'].map((tab, index) => (
+            <span key={tab} className={`shrink-0 rounded-full px-5 py-3 ${index === 0 ? 'bg-[#2E6DA4] text-white' : 'bg-[#F5F8FA] text-[#1A1A2E]'}`}>
+              {tab}
+            </span>
+          ))}
+        </div>
+        <div className="grid gap-5 lg:grid-cols-2">
+          <div className="rounded-[2rem] bg-[#F5F8FA] p-6">
+            <h3 className="text-2xl font-black tracking-[-0.035em]">시설개요</h3>
+            <div className="mt-5 grid gap-3 sm:grid-cols-3">
+              {['총 정원 77명', '1인실 7개', '2인실 70개'].map((item) => (
+                <div key={item} className="rounded-2xl bg-white p-4 text-center font-black text-[#1E4D7B]">{item}</div>
+              ))}
+            </div>
+            <p className="mt-4 text-sm font-bold text-[#6B7280]">개원: 2025년 4월</p>
+          </div>
+          <div className="rounded-[2rem] bg-[#F5F8FA] p-6">
+            <h3 className="text-2xl font-black tracking-[-0.035em]">이용절차</h3>
+            <div className="mt-6 grid gap-3 sm:grid-cols-3">
+              {['상담', '신청', '계약'].map((step, index) => (
+                <div key={step} className="rounded-2xl bg-white p-5 text-center">
+                  <p className="text-sm font-black text-[#2E6DA4]">0{index + 1}</p>
+                  <p className="mt-2 text-xl font-black">{step}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div className="rounded-[2rem] bg-[#F5F8FA] p-6">
+            <h3 className="text-2xl font-black tracking-[-0.035em]">이용비용</h3>
+            <div className="mt-5 grid gap-3 sm:grid-cols-2">
+              <div className="rounded-2xl bg-white p-5">
+                <p className="text-lg font-black">1인실</p>
+                <p className="mt-2 text-2xl font-black text-[#2E6DA4]">250~257만원</p>
+                <p className="mt-1 text-sm font-bold text-[#6B7280]">보험급여 외</p>
+              </div>
+              <div className="rounded-2xl bg-white p-5">
+                <p className="text-lg font-black">2인실</p>
+                <p className="mt-2 text-2xl font-black text-[#2E6DA4]">190~197만원</p>
+                <p className="mt-1 text-sm font-bold text-[#6B7280]">보험급여 외</p>
+              </div>
+            </div>
+            <p className="mt-4 text-sm font-bold text-[#6B7280]">장기요양보험 급여 제외 금액입니다.</p>
+          </div>
+          <div id="facility" className="rounded-[2rem] bg-[#F5F8FA] p-6">
+            <h3 className="text-2xl font-black tracking-[-0.035em]">층별안내</h3>
+            <div className="mt-5 grid gap-3 text-sm">
+              {[
+                ['6F', '휴게실, 병실, 특별실, 샤워실, 너싱스테이션'],
+                ['3F~5F', '휴게실, 병실, 샤워실, 너싱스테이션'],
+                ['2F', '의원, 라운지, 사무실, 상담실, 식당, 웰니스, PT실'],
+              ].map(([floor, text]) => (
+                <div key={floor} className="grid gap-3 rounded-2xl bg-white p-4 sm:grid-cols-[5rem_1fr]">
+                  <p className="font-black text-[#2E6DA4]">{floor}</p>
+                  <p className="font-bold text-[#1A1A2E]">{text}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+        <div className="mt-8 rounded-[2rem] bg-[#2E6DA4] p-7 text-white sm:flex sm:items-center sm:justify-between sm:gap-6">
+          <div>
+            <p className="text-2xl font-black tracking-[-0.04em]">우리 부모님 예상 비용과 입소 가능 여부를 확인하세요</p>
+            <p className="mt-2 font-semibold text-white/75">등급 여부, 희망 호실, 이용 시작 시점을 알려주시면 전화로 안내드립니다.</p>
+          </div>
+          <a href={`tel:${phone}`} className="mt-5 inline-flex rounded-full bg-white px-7 py-4 font-black text-[#2E6DA4] sm:mt-0">
+            비용 전화상담
+          </a>
+        </div>
+      </div>
+    </section>
+  )
+}
+
+function SilverNursingContact({ site, phone }: { site: HomepagePublicPackage['site']; phone: string }) {
+  return (
+    <section id="contact" className="bg-[#F5F8FA] py-20 sm:py-24">
+      <div className="mx-auto grid max-w-7xl gap-8 px-5 lg:grid-cols-[0.8fr_1.2fr]">
+        <div className="rounded-[2rem] bg-white p-8 shadow-sm">
+          <p className="text-sm font-black uppercase tracking-[0.24em] text-[#2E6DA4]">Contact</p>
+          <h2 className="mt-4 text-4xl font-black tracking-[-0.05em] text-[#1A1A2E]">전화로 먼저 상담하세요</h2>
+          <p className="mt-4 leading-8 text-[#6B7280]">입소가 확정되지 않아도 괜찮습니다. 부모님 상태, 등급 여부, 희망 이용 시점을 전화로 알려주세요.</p>
+          <div className="mt-8 grid gap-4">
+            <a href={`tel:${phone}`} className="rounded-2xl bg-[#2E6DA4] p-5 text-center text-2xl font-black text-white">입소 가능 여부 전화상담 {phone}</a>
+            <div className="rounded-2xl bg-[#F5F8FA] p-5">
+              <p className="text-sm font-black text-[#2E6DA4]">전화 전 준비하면 좋은 내용</p>
+              <p className="mt-2 font-bold leading-7 text-[#1A1A2E]">장기요양등급 여부, 현재 거주지, 차량 송영 필요 여부, 희망 이용 요일</p>
+            </div>
+            <p className="rounded-2xl bg-[#F5F8FA] p-5 font-bold leading-7 text-[#1A1A2E]">
+              경기 안양시 만안구 안양로 115, 2~6층
+              <br />
+              명학역 1번 출구 도보 5분
+            </p>
+          </div>
+        </div>
+        <div className="min-h-[420px] overflow-hidden rounded-[2rem] bg-white p-3 shadow-sm">
+          <div className="flex h-full min-h-[396px] items-center justify-center rounded-[1.4rem] bg-[#dbeaf5] p-8 text-center">
+            <div>
+              <p className="text-sm font-black uppercase tracking-[0.24em] text-[#2E6DA4]">Kakao Map</p>
+              <p className="mt-4 text-3xl font-black tracking-[-0.045em] text-[#1A1A2E]">무플 요양원</p>
+              <p className="mt-3 leading-7 text-[#6B7280]">Kakao Map API 키 연결 시 이 영역에 실제 지도를 표시합니다.</p>
+              <a href="https://map.kakao.com/" className="mt-6 inline-flex rounded-full bg-[#2E6DA4] px-6 py-3 font-black text-white">
+                지도에서 보기
+              </a>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  )
+}
+
+function SilverNursingFooter({ site }: { site: HomepagePublicPackage['site'] }) {
+  return (
+    <footer className="bg-[#1A1A2E] text-white">
+      <div className="mx-auto max-w-7xl px-5 py-10">
+        <p className="text-2xl font-black tracking-[-0.04em]">{site.business_name || '무플 요양원'}</p>
+        <p className="mt-4 text-sm font-semibold leading-7 text-white/60">
+          사업자등록번호 123-45-67890 | 대표자 홍길동 | 경기 안양시 만안구 안양로 115, 2~6층
+        </p>
+        <div className="mt-4 flex gap-4 text-sm font-bold text-white/70">
+          <a href="#">개인정보처리방침</a>
+          <a href="#">이용약관</a>
+        </div>
+        <p className="mt-6 text-xs font-bold text-white/45">COPYRIGHT © 무플 요양원</p>
+      </div>
+    </footer>
+  )
+}
 
 function SilverDaycareHome({
   data,

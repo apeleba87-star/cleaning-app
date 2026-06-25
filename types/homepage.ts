@@ -20,6 +20,8 @@ export type HomepageTemplateKey =
   | 'showcase-carenex'
   | 'showcase-clean-detail'
   | 'silver-daycare'
+  | 'silver-hospital'
+  | 'silver-homecare'
   | 'sales-reviews'
   | 'sales-services'
   | 'sales-fast-contact'
