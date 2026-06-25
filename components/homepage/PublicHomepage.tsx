@@ -107,6 +107,351 @@ const compareRows = [
   ['작업 확인', '전후 사진으로 청소 상태를 확인합니다.', '가능', '제한적'],
 ]
 
+const cleanupServices = [
+  ['쓰레기집 청소', '방치공간 청소, 악취 제거, 재활용 분리, 살균 소독을 한 번에 안내합니다.'],
+  ['유품정리', '유족 입장에서 분류, 보관, 폐기, 정리 과정을 조용하게 진행합니다.'],
+  ['고독사 청소', '오염 제거, 격리, 탈취, 유품 분리를 비밀보장 중심으로 안내합니다.'],
+  ['폐기물 처리', '대형/생활 폐기물을 합법적 수거와 전 과정 관리로 정리합니다.'],
+  ['쓰레기 처리', '생활쓰레기와 대량 폐기물을 빠르게 수거하고 마무리합니다.'],
+  ['일반 청소', '가정과 사무실의 먼지, 얼룩, 생활 오염을 체계적으로 청소합니다.'],
+]
+
+const cleanupCostRows = [
+  ['쓰레기 폐기물 처리 - 1톤차 1대', '40만원~'],
+  ['유품정리 & 고독사 청소', '55만원~'],
+  ['청소 난이도 중 - 1평 당', '4~8만원'],
+  ['청소 난이도 상 - 1평 당', '8~15만원'],
+  ['청소 난이도 최상 - 1평 당', '15~30만원'],
+  ['사진/전화 견적', '무료'],
+  ['고온 살균 소독 및 탈취', '무료'],
+  ['확실한 A/S 진행', '무료'],
+]
+
+const cleanupProcess = [
+  ['01', '상담 문의', '1:1 비밀 상담 진행'],
+  ['02', '현장 파악', '사진 또는 방문으로 투명한 진단'],
+  ['03', '투입 준비', '전문 장비와 담당 팀 구성'],
+  ['04', '청소 완료', '폐기, 정리, 살균까지 마무리'],
+  ['05', '사후관리', '검수 후 A/S 안내'],
+]
+
+function CleanupLegacyLanding({
+  data,
+  previewOffsetClassName,
+}: {
+  data: HomepagePublicPackage
+  previewOffsetClassName: string
+}) {
+  const { site, mediaItems, blogPosts } = data
+  const phone = site.phone || '00-000-0000'
+
+  return (
+    <main className="homepage-site min-h-screen bg-white pb-24 text-[#1A1A1A]">
+      <header className={`fixed inset-x-0 ${previewOffsetClassName} z-50 border-b border-black/10 bg-white/95 shadow-sm backdrop-blur-xl`}>
+        <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-5 py-4">
+          <a href="#top" className="min-w-0">
+            <p className="text-2xl font-black tracking-[-0.055em] text-[#6B21A8]">{site.business_name || '무플 유품정리'}</p>
+            <p className="text-xs font-bold text-[#555]">특수청소 · 유품정리 · 폐기물처리</p>
+          </a>
+          <nav className="hidden items-center gap-6 text-sm font-black lg:flex">
+            {['청소', '유품 정리', '고독사 청소', '폐기물 처리', '작업 후기', '문의하기'].map((item) => (
+              <a key={item} href={`#${item === '문의하기' ? 'contact' : item === '작업 후기' ? 'reviews' : 'services'}`} className="hover:text-[#6B21A8]">
+                {item}
+              </a>
+            ))}
+          </nav>
+          <div className="hidden gap-2 lg:flex">
+            <a href={`tel:${phone}`} className="rounded-full bg-[#6B21A8] px-5 py-3 text-sm font-black text-white">지금 바로 전화상담</a>
+            <a href={site.kakao_url || '#'} className="rounded-full bg-[#FEE500] px-5 py-3 text-sm font-black text-[#1A1A1A]">카카오톡 상담</a>
+          </div>
+          <details className="relative lg:hidden">
+            <summary className="flex h-11 w-11 cursor-pointer list-none items-center justify-center rounded-full border border-black/10 bg-white">
+              <span className="space-y-1.5">
+                <span className="block h-0.5 w-5 bg-black" />
+                <span className="block h-0.5 w-5 bg-black" />
+                <span className="block h-0.5 w-5 bg-black" />
+              </span>
+            </summary>
+            <div className="fixed inset-x-4 top-20 z-[80] rounded-3xl bg-white p-5 shadow-2xl">
+              <div className="grid gap-2">
+                {['청소', '유품 정리', '고독사 청소', '폐기물 처리', '작업 후기', '문의하기'].map((item) => (
+                  <a key={item} href={`#${item === '문의하기' ? 'contact' : item === '작업 후기' ? 'reviews' : 'services'}`} className="rounded-2xl bg-[#F8F7FF] px-5 py-4 text-lg font-black">
+                    {item}
+                  </a>
+                ))}
+                <a href={`tel:${phone}`} className="rounded-2xl bg-[#6B21A8] px-5 py-4 text-center text-lg font-black text-white">전화상담 {phone}</a>
+              </div>
+            </div>
+          </details>
+        </div>
+      </header>
+
+      <section id="top" className="relative overflow-hidden bg-[#10051d] pt-28 text-white">
+        <div className="absolute inset-0 opacity-45" style={{ backgroundImage: `url(${site.hero_image_url || mediaItems[0]?.image_url || HOMEPAGE_PREVIEW_IMAGES[0]})`, backgroundPosition: 'center', backgroundSize: 'cover' }} />
+        <div className="relative mx-auto grid min-h-[720px] max-w-7xl gap-10 px-5 py-20 lg:grid-cols-[1fr_0.78fr] lg:items-center">
+          <div>
+            <div className="grid max-w-2xl gap-3 sm:grid-cols-2">
+              {['전 지역 방문 가능', '365일 24시간 운영', '100% 비밀보장', '투명한 견적안내'].map((item) => (
+                <span key={item} className="rounded-full border border-white/25 bg-white/10 px-4 py-2 text-sm font-black backdrop-blur-md">✓ {item}</span>
+              ))}
+            </div>
+            <h1 className="mt-8 text-5xl font-black leading-[1.04] tracking-[-0.06em] sm:text-7xl">
+              힘든 정리,
+              <br />
+              조용하고 신속하게
+            </h1>
+            <p className="mt-6 max-w-2xl text-lg font-semibold leading-8 text-white/72">특수청소, 유품정리, 고독사 청소, 폐기물 처리까지 전화 한 통으로 상황에 맞게 안내합니다.</p>
+            <div className="mt-8 flex flex-col gap-3 sm:flex-row">
+              <a href={`tel:${phone}`} className="rounded-full bg-[#6B21A8] px-8 py-4 text-center text-lg font-black text-white">지금 바로 전화상담</a>
+              <a href={site.kakao_url || '#'} className="rounded-full bg-[#FEE500] px-8 py-4 text-center text-lg font-black text-black">카카오톡 상담</a>
+            </div>
+          </div>
+          <div id="contact" className="rounded-[2rem] bg-white p-6 text-[#1A1A1A] shadow-2xl">
+            <p className="text-sm font-black uppercase tracking-[0.24em] text-[#6B21A8]">Quick Contact</p>
+            <h2 className="mt-3 text-3xl font-black tracking-[-0.045em]">간편상담 신청</h2>
+            <div className="mt-6 grid gap-3">
+              {['성함', '휴대폰번호'].map((label) => (
+                <div key={label} className="rounded-2xl border border-black/10 bg-[#F8F7FF] px-5 py-4 text-sm font-bold text-[#555]">{label}</div>
+              ))}
+              <div className="rounded-2xl bg-[#F8F7FF] p-4 text-sm font-bold text-[#555]">개인정보 수집·이용 동의</div>
+              <a href={`tel:${phone}`} className="rounded-full bg-[#6B21A8] px-6 py-4 text-center font-black text-white">간편상담 전화로 신청</a>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <CleanupServiceGrid />
+      <CleanupReviews posts={blogPosts} />
+      <CleanupCostSection />
+      <CleanupRepresentativeServices mediaItems={mediaItems} />
+      <CleanupProcessSection />
+      <CleanupWhyUs />
+      <CleanupInsurance phone={phone} />
+      <CleanupCoverage />
+      <CleanupFinalForm phone={phone} />
+      <CleanupFooter site={site} phone={phone} />
+
+      <div className="fixed inset-x-0 bottom-0 z-50 border-t border-black/10 bg-white/95 p-3 shadow-2xl backdrop-blur-xl">
+        <div className="mx-auto flex max-w-3xl items-center gap-2">
+          <a href={`tel:${phone}`} className="flex-1 rounded-full bg-[#6B21A8] py-3 text-center text-sm font-black text-white">{phone} 전화상담</a>
+          <a href={site.kakao_url || '#'} className="flex-1 rounded-full bg-[#FEE500] py-3 text-center text-sm font-black text-black">카카오톡</a>
+        </div>
+      </div>
+    </main>
+  )
+}
+
+function CleanupServiceGrid() {
+  return (
+    <section id="services" className="bg-white py-20">
+      <div className="mx-auto max-w-7xl px-5">
+        <p className="text-center text-sm font-black uppercase tracking-[0.24em] text-[#6B21A8]">service</p>
+        <h2 className="mt-3 text-center text-4xl font-black tracking-[-0.05em]">연중무휴 24시간 상담가능</h2>
+        <div className="mt-10 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+          {cleanupServices.map(([title, text]) => (
+            <a key={title} href="#contact" className="rounded-3xl border border-black/10 bg-white p-6 shadow-[0_4px_20px_rgba(0,0,0,0.08)] transition hover:-translate-y-1 hover:border-[#6B21A8]">
+              <p className="text-3xl font-black text-[#6B21A8]">+</p>
+              <h3 className="mt-4 text-xl font-black">{title}</h3>
+              <p className="mt-3 text-sm leading-6 text-[#555]">{text}</p>
+            </a>
+          ))}
+        </div>
+      </div>
+    </section>
+  )
+}
+
+function CleanupReviews({ posts }: { posts: HomepagePublicPackage['blogPosts'] }) {
+  return (
+    <section id="reviews" className="bg-[#F8F7FF] py-20">
+      <div className="mx-auto max-w-7xl px-5">
+        <p className="text-sm font-black uppercase tracking-[0.24em] text-[#6B21A8]">review</p>
+        <h2 className="mt-3 max-w-3xl text-4xl font-black tracking-[-0.05em]">무플 유품정리를 믿고 맡겨주신 고객님들의 후기</h2>
+        <div className="mt-10 grid gap-5 md:grid-cols-3">
+          {posts.slice(0, 3).map((post) => (
+            <article key={post.id} className="overflow-hidden rounded-3xl bg-white shadow-[0_4px_20px_rgba(0,0,0,0.08)]">
+              {post.thumbnail_url && <img src={post.thumbnail_url} alt="" className="aspect-[4/3] w-full object-cover" />}
+              <div className="p-6">
+                <p className="text-[#F5A623]">★★★★★ 5.0</p>
+                <h3 className="mt-3 text-xl font-black">{post.title}</h3>
+                <p className="mt-3 text-sm leading-6 text-[#555]">{post.summary}</p>
+                <p className="mt-5 text-sm font-black text-[#6B21A8]">고객님 후기</p>
+              </div>
+            </article>
+          ))}
+        </div>
+      </div>
+    </section>
+  )
+}
+
+function CleanupCostSection() {
+  return (
+    <section className="bg-white py-20">
+      <div className="mx-auto max-w-7xl px-5">
+        <p className="text-sm font-black uppercase tracking-[0.24em] text-[#6B21A8]">cost information</p>
+        <h2 className="mt-3 text-4xl font-black tracking-[-0.05em]">무플 유품정리 비용안내</h2>
+        <p className="mt-4 text-[#555]">재활용 가능 품목과 폐기물 양, 오염도에 따라 견적이 달라질 수 있습니다.</p>
+        <div className="mt-8 overflow-hidden rounded-3xl border border-black/10">
+          {cleanupCostRows.map(([label, price]) => (
+            <div key={label} className="grid gap-3 border-b border-black/10 p-5 last:border-b-0 sm:grid-cols-[1fr_180px]">
+              <p className="font-bold">{label}</p>
+              <p className={`font-black ${price === '무료' ? 'text-[#6B21A8]' : 'text-[#EF4444]'}`}>{price === '무료' ? 'FREE' : price}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  )
+}
+
+function CleanupRepresentativeServices({ mediaItems }: { mediaItems: HomepagePublicPackage['mediaItems'] }) {
+  return (
+    <section className="bg-[#F8F7FF] py-20">
+      <div className="mx-auto max-w-7xl px-5">
+        <p className="text-sm font-black uppercase tracking-[0.24em] text-[#6B21A8]">service</p>
+        <h2 className="mt-3 text-4xl font-black tracking-[-0.05em]">무플 유품정리만의 대표서비스</h2>
+        <p className="mt-4 font-bold text-[#555]">서비스 만족도를 높이는 전문 청소업체형 구성입니다.</p>
+        <div className="mt-10 grid gap-5 md:grid-cols-2 lg:grid-cols-3">
+          {cleanupServices.map(([title, text], index) => (
+            <a key={title} href="#contact" className="overflow-hidden rounded-3xl bg-white shadow-[0_4px_20px_rgba(0,0,0,0.08)] transition hover:-translate-y-1">
+              <img src={mediaItems[index]?.image_url || HOMEPAGE_PREVIEW_IMAGES[index]} alt="" className="aspect-[4/3] w-full object-cover" />
+              <div className="p-6">
+                <h3 className="text-xl font-black">{title}</h3>
+                <p className="mt-3 text-sm leading-6 text-[#555]">{text}</p>
+              </div>
+            </a>
+          ))}
+        </div>
+      </div>
+    </section>
+  )
+}
+
+function CleanupProcessSection() {
+  return (
+    <section className="bg-white py-20">
+      <div className="mx-auto max-w-7xl px-5">
+        <p className="text-center text-sm font-black uppercase tracking-[0.24em] text-[#6B21A8]">process</p>
+        <h2 className="mt-3 text-center text-4xl font-black tracking-[-0.05em]">무플 유품정리만의 작업절차</h2>
+        <div className="mt-12 grid gap-4 lg:grid-cols-5">
+          {cleanupProcess.map(([num, title, text]) => (
+            <div key={num} className="rounded-3xl border border-black/10 bg-white p-6 text-center shadow-[0_4px_20px_rgba(0,0,0,0.08)]">
+              <span className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-[#6B21A8] text-lg font-black text-white">{num}</span>
+              <h3 className="mt-5 text-xl font-black">{title}</h3>
+              <p className="mt-3 text-sm leading-6 text-[#555]">{text}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  )
+}
+
+function CleanupWhyUs() {
+  const rows = [
+    ['불명확한 유령업체', '전문 교육 이수 담당팀'],
+    ['불투명 견적, 낮은 품질', '투명 견적 + 현장별 기준 안내'],
+    ['이웃 노출, 비밀 미보장', '신속 진행, 100% 비밀 보장'],
+    ['개인정보 유출 우려', '유품과 서류 분리 보관 안내'],
+    ['A/S 없음, 연락 두절', '검수 후 사후관리 안내'],
+  ]
+
+  return (
+    <section className="bg-[#10051d] py-20 text-white">
+      <div className="mx-auto max-w-7xl px-5">
+        <p className="text-sm font-black uppercase tracking-[0.24em] text-[#d8b4fe]">why us</p>
+        <h2 className="mt-3 text-4xl font-black tracking-[-0.05em]">비교 후 결국 무플 유품정리 선택</h2>
+        <div className="mt-10 overflow-hidden rounded-3xl bg-white text-[#1A1A1A]">
+          <div className="grid grid-cols-2 bg-[#F8F7FF] text-center font-black">
+            <div className="p-5 text-[#777]">타 업체</div>
+            <div className="p-5 text-[#6B21A8]">무플 유품정리</div>
+          </div>
+          {rows.map(([bad, good]) => (
+            <div key={bad} className="grid grid-cols-2 border-t border-black/10">
+              <div className="p-5 text-sm font-bold text-[#777]">× {bad}</div>
+              <div className="p-5 text-sm font-black text-[#6B21A8]">✓ {good}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  )
+}
+
+function CleanupInsurance({ phone }: { phone: string }) {
+  return (
+    <section className="bg-white py-20">
+      <div className="mx-auto grid max-w-7xl gap-8 px-5 lg:grid-cols-[0.9fr_1.1fr] lg:items-center">
+        <div className="rounded-[2rem] bg-[#F8F7FF] p-8">
+          <p className="text-sm font-black uppercase tracking-[0.24em] text-[#6B21A8]">liability insurance</p>
+          <h2 className="mt-3 text-4xl font-black tracking-[-0.05em]">배상책임보험 안내 영역</h2>
+          <p className="mt-5 leading-8 text-[#555]">작업 중 발생할 수 있는 재산 피해, 누수, 파손 등 고객 불안을 줄이기 위해 보험 가입 여부와 보상 범위를 명확히 설명하는 섹션입니다.</p>
+          <a href={`tel:${phone}`} className="mt-8 inline-flex rounded-full bg-[#6B21A8] px-7 py-4 font-black text-white">보험/작업 범위 전화문의</a>
+        </div>
+        <div className="rounded-[2rem] border border-[#6B21A8]/20 bg-white p-8 shadow-[0_4px_20px_rgba(0,0,0,0.08)]">
+          <h3 className="text-2xl font-black">고객 신뢰를 높이는 강조 박스</h3>
+          <ul className="mt-6 grid gap-4 text-sm font-bold leading-6 text-[#555]">
+            <li>✓ 작업 전 견적 범위와 추가 비용 가능성을 먼저 안내</li>
+            <li>✓ 유품, 서류, 귀중품 분류 기준 사전 확인</li>
+            <li>✓ 현장 노출을 줄이는 방문 시간과 차량 동선 협의</li>
+            <li>✓ 작업 후 사진 확인과 사후관리 안내</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+  )
+}
+
+function CleanupCoverage() {
+  return (
+    <section className="bg-[#F8F7FF] py-20">
+      <div className="mx-auto max-w-7xl px-5 text-center">
+        <h2 className="text-4xl font-black tracking-[-0.05em]">전국 어디서나 출동 상담</h2>
+        <p className="mx-auto mt-5 max-w-3xl leading-8 text-[#555]">서울, 경기, 충청, 강원, 경상, 전라 등 전국 특수청소 상담을 받을 수 있도록 지역 커버리지와 직영 투입 메시지를 강조합니다.</p>
+        <div className="mt-10 rounded-[2rem] bg-white p-10 shadow-[0_4px_20px_rgba(0,0,0,0.08)]">
+          <p className="text-7xl font-black text-[#6B21A8]">KOREA</p>
+          <p className="mt-4 font-black">전국 출동 · 균일한 상담 품질 · 비밀보장</p>
+        </div>
+      </div>
+    </section>
+  )
+}
+
+function CleanupFinalForm({ phone }: { phone: string }) {
+  return (
+    <section className="bg-white py-20">
+      <div className="mx-auto max-w-4xl rounded-[2rem] bg-[#6B21A8] p-8 text-white shadow-2xl">
+        <h2 className="text-4xl font-black tracking-[-0.05em]">빠르고 간편하게 견적상담 접수하세요</h2>
+        <p className="mt-4 text-white/75">성함과 연락처만 남기면 담당자가 빠르게 연락하는 구조입니다.</p>
+        <div className="mt-8 grid gap-3 md:grid-cols-2">
+          {['성함', '휴대폰번호', '이메일 선택', '개인정보 수집·이용 동의'].map((label) => (
+            <div key={label} className="rounded-2xl bg-white/12 px-5 py-4 text-sm font-bold text-white/80">{label}</div>
+          ))}
+        </div>
+        <a href={`tel:${phone}`} className="mt-6 inline-flex rounded-full bg-white px-8 py-4 font-black text-[#6B21A8]">간편상담 신청하기</a>
+      </div>
+    </section>
+  )
+}
+
+function CleanupFooter({ site, phone }: { site: HomepagePublicPackage['site']; phone: string }) {
+  return (
+    <footer className="bg-[#111] px-5 py-12 text-white">
+      <div className="mx-auto max-w-7xl">
+        <p className="text-2xl font-black text-[#d8b4fe]">{site.business_name || '무플 유품정리'}</p>
+        <div className="mt-5 grid gap-2 text-sm text-white/60">
+          <p>상호: {site.footer_company_name || '무플 유품정리'} | 대표: {site.footer_representative || '홍길동'}</p>
+          <p>사업자등록번호: {site.footer_business_number || '000-00-00000'} | 주소: {site.footer_address || '서울특별시 강북구 무플로 00'}</p>
+          <p>대표번호: {phone} | 운영시간: {site.footer_business_hours || '365일 24시간 전화상담'}</p>
+          <p>개인정보처리방침 | 이용약관 | 이메일무단수집거부</p>
+        </div>
+        <p className="mt-8 text-xs text-white/40">COPYRIGHT © 2026 무플 유품정리. ALL RIGHTS RESERVED.</p>
+      </div>
+    </footer>
+  )
+}
+
 function isGeneralPreviewSite(site: HomepagePublicPackage['site']) {
   return site.business_name === '온사이트 스튜디오' || site.seo_keywords?.includes('현장업')
 }
@@ -127,6 +472,7 @@ export default function PublicHomepage({ data, page = 'home' }: Props) {
   const isTechShowcase = site.template_key === 'showcase-tech'
   const isCarenexShowcase = site.template_key === 'showcase-carenex'
   const isCleanDetailShowcase = site.template_key === 'showcase-clean-detail'
+  const isCleanupLegacy = site.template_key === 'cleaning-legacy-cleanup'
   const isSilverDaycare = site.template_key === 'silver-daycare'
   const isSilverHospital = site.template_key === 'silver-hospital'
   const isSilverHomecare = site.template_key === 'silver-homecare'
@@ -157,6 +503,10 @@ export default function PublicHomepage({ data, page = 'home' }: Props) {
     : isPremiumShowcase
     ? 'hidden rounded-full bg-[#d5b56d] px-4 py-2 text-sm font-black text-[#15100a] sm:inline-flex'
     : 'hp-primary hidden rounded-full px-4 py-2 text-sm font-black sm:inline-flex'
+
+  if (isCleanupLegacy) {
+    return <CleanupLegacyLanding data={data} previewOffsetClassName={previewPrefix ? 'top-[40px]' : 'top-0'} />
+  }
 
   if (isSilverDaycare) {
     return <SilverNursingLanding data={data} previewOffsetClassName={previewPrefix ? 'top-[40px]' : 'top-0'} />

@@ -11,7 +11,7 @@ export default function HomepagePreviewIndexPage({
   const audience: AudienceKey = searchParams?.audience === 'general' ? 'general' : searchParams?.audience === 'silver' ? 'silver' : 'cleaning'
   const visibleTemplates = HOMEPAGE_TEMPLATES.filter((template) => {
     if (audience === 'silver') return template.category === 'silver'
-    if (audience === 'general') return template.category !== 'interactive' && template.category !== 'silver'
+    if (audience === 'general') return template.category !== 'interactive' && template.category !== 'silver' && template.key !== 'cleaning-legacy-cleanup'
     return template.category !== 'silver'
   })
 

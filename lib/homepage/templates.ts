@@ -101,6 +101,15 @@ export const HOMEPAGE_TEMPLATES: HomepageTemplateDefinition[] = [
     pages: ['home', 'services', 'portfolio', 'faq', 'contact'],
   },
   {
+    key: 'cleaning-legacy-cleanup',
+    category: 'sales',
+    name: '특수청소 유품정리 전환형',
+    description: '특수청소, 유품정리, 고독사 청소, 폐기물 처리 상담 전환을 위한 청소업 랜딩페이지입니다.',
+    defaultPalette: 'bold',
+    calculatorPosition: 'none',
+    pages: ['home'],
+  },
+  {
     key: 'silver-daycare',
     category: 'silver',
     name: '요양원 메디컬 안심상담형',

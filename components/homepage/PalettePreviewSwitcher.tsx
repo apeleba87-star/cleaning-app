@@ -14,7 +14,7 @@ export default function PalettePreviewSwitcher({ templateKey, currentPalette, pa
   const previewTemplates = audience === 'silver'
     ? HOMEPAGE_TEMPLATES.filter((item) => item.category === 'silver')
     : audience === 'general'
-    ? HOMEPAGE_TEMPLATES.filter((item) => item.category !== 'interactive' && item.category !== 'silver')
+    ? HOMEPAGE_TEMPLATES.filter((item) => item.category !== 'interactive' && item.category !== 'silver' && item.key !== 'cleaning-legacy-cleanup')
     : HOMEPAGE_TEMPLATES.filter((item) => item.category !== 'silver')
   const previewIndex = Math.max(previewTemplates.findIndex((item) => item.key === template.key), 0)
   const previewName = `템플릿${previewIndex + 1}`

@@ -19,6 +19,7 @@ export type HomepageTemplateKey =
   | 'showcase-tech'
   | 'showcase-carenex'
   | 'showcase-clean-detail'
+  | 'cleaning-legacy-cleanup'
   | 'silver-daycare'
   | 'silver-hospital'
   | 'silver-homecare'
