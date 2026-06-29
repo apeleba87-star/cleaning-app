@@ -19,7 +19,7 @@ function isValidMobilePhone(value: string) {
 async function assertSilverRequestAdmin() {
   const user = await getHomepageUser()
   if (!user) throw new HomepageUnauthorizedError()
-  if (!['admin', 'platform_admin'].includes(String(user.role))) {
+  if (!['admin', 'platform_admin', 'business_owner'].includes(String(user.role))) {
     throw new HomepageForbiddenError()
   }
 }
