@@ -17,8 +17,10 @@ function isValidMobilePhone(value: string) {
 }
 
 export default function BlogCheckRequestForm() {
+  const [centerName, setCenterName] = useState('')
   const [role, setRole] = useState('원장님')
   const [phone, setPhone] = useState('')
+  const [privacyAgreed, setPrivacyAgreed] = useState(false)
   const [status, setStatus] = useState<'idle' | 'submitting' | 'success' | 'error'>('idle')
   const [message, setMessage] = useState('')
 
@@ -28,22 +30,30 @@ export default function BlogCheckRequestForm() {
     setMessage('')
 
     try {
+      if (!centerName.trim()) {
+        throw new Error('센터명을 입력해주세요.')
+      }
       if (!isValidMobilePhone(phone)) {
         throw new Error('010으로 시작하는 휴대폰 번호 11자리를 모두 입력해주세요.')
+      }
+      if (!privacyAgreed) {
+        throw new Error('개인정보 수집·이용에 동의해주세요.')
       }
 
       const response = await fetch('/api/silver-consulting/requests', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ role, phone }),
+        body: JSON.stringify({ center_name: centerName, role, phone, privacy_agreed: privacyAgreed }),
       })
       const data = await response.json().catch(() => ({}))
       if (!response.ok) throw new Error(data?.error || '신청 저장에 실패했습니다.')
 
       setStatus('success')
       setMessage('신청이 저장되었습니다. 24시간 내 점검 결과를 안내드리겠습니다.')
+      setCenterName('')
       setPhone('')
       setRole('원장님')
+      setPrivacyAgreed(false)
     } catch (error) {
       setStatus('error')
       setMessage(error instanceof Error ? error.message : '신청 저장에 실패했습니다.')
@@ -52,6 +62,16 @@ export default function BlogCheckRequestForm() {
 
   return (
     <form onSubmit={submitRequest} className="my-7 grid gap-3 text-left">
+      <label className="grid gap-2 text-sm font-black text-slate-600">
+        센터명
+        <input
+          value={centerName}
+          onChange={(event) => setCenterName(event.target.value)}
+          placeholder="예: 맨즈주간보호센터"
+          className="rounded-2xl border border-slate-200 bg-[#F5F8FA] px-5 py-4 text-base font-black text-[#1A1A2E] outline-none focus:border-[#2E6DA4]"
+        />
+      </label>
+
       <label className="grid gap-2 text-sm font-black text-slate-600">
         직급
         <select
@@ -77,6 +97,23 @@ export default function BlogCheckRequestForm() {
           placeholder="010-0000-0000"
           className="rounded-2xl border border-slate-200 bg-[#F5F8FA] px-5 py-4 text-base font-black text-[#1A1A2E] outline-none focus:border-[#2E6DA4]"
         />
+      </label>
+
+      <label className="rounded-2xl border border-slate-200 bg-white p-4">
+        <span className="flex items-start gap-3">
+          <input
+            type="checkbox"
+            checked={privacyAgreed}
+            onChange={(event) => setPrivacyAgreed(event.target.checked)}
+            className="mt-1 h-5 w-5 rounded border-slate-300 accent-[#2E6DA4]"
+          />
+          <span>
+            <span className="block text-sm font-black text-[#1A1A2E]">개인정보 수집·이용에 동의합니다.</span>
+            <span className="mt-2 block text-xs font-bold leading-5 text-slate-500">
+              수집 항목: 직급, 연락처 / 목적: 무료 점검 결과 안내 및 상담 연락 / 보유 기간: 신청일로부터 1년 또는 삭제 요청 시까지
+            </span>
+          </span>
+        </span>
       </label>
 
       <button

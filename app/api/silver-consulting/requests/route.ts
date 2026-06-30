@@ -31,7 +31,7 @@ export async function GET() {
     const client = getHomepageAdminClient()
     const { data, error } = await client
       .from('silver_blog_check_requests')
-      .select('id, role, phone, source_page, status, memo, created_at, updated_at')
+      .select('id, center_name, role, phone, source_page, status, memo, privacy_agreed, privacy_agreed_at, created_at, updated_at')
       .order('created_at', { ascending: false })
       .limit(200)
 
@@ -46,18 +46,25 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const body = await request.json()
+    const centerName = sanitizeText(body.center_name, 120)
     const role = sanitizeText(body.role, 20)
     const phone = sanitizeText(body.phone, 40)
+    const privacyAgreed = body.privacy_agreed === true
 
+    if (!centerName) throw new HomepageApiError('센터명을 입력해주세요.')
     if (!allowedRoles.has(role)) throw new HomepageApiError('직급을 선택해주세요.')
     if (!isValidMobilePhone(phone)) throw new HomepageApiError('010으로 시작하는 휴대폰 번호 11자리를 모두 입력해주세요.')
+    if (!privacyAgreed) throw new HomepageApiError('개인정보 수집·이용에 동의해주세요.')
 
     const client = getHomepageAdminClient()
     const { data, error } = await client
       .from('silver_blog_check_requests')
       .insert({
+        center_name: centerName,
         role,
         phone,
+        privacy_agreed: true,
+        privacy_agreed_at: new Date().toISOString(),
         source_page: 'silver-consulting',
         status: 'submitted',
       })
@@ -93,7 +100,7 @@ export async function PATCH(request: Request) {
         updated_at: new Date().toISOString(),
       })
       .eq('id', id)
-      .select('id, role, phone, source_page, status, memo, created_at, updated_at')
+      .select('id, center_name, role, phone, source_page, status, memo, privacy_agreed, privacy_agreed_at, created_at, updated_at')
       .single()
 
     if (error) throw error

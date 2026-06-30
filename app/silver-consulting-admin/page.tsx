@@ -6,11 +6,14 @@ import { homepageFetch } from '@/lib/homepage/client'
 
 type BlogCheckRequest = {
   id: string
+  center_name: string | null
   role: string
   phone: string
   source_page: string
   status: 'submitted' | 'contacted' | 'completed' | 'archived'
   memo: string | null
+  privacy_agreed: boolean
+  privacy_agreed_at: string | null
   created_at: string
   updated_at: string
 }
@@ -134,7 +137,11 @@ export default function SilverConsultingAdminPage() {
                       </span>
                       <span className="text-xs font-bold text-slate-400">{formatDate(request.created_at)}</span>
                     </div>
-                    <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                    <div className="mt-4 rounded-2xl bg-[#F5F8FA] p-4">
+                      <p className="text-xs font-black text-slate-400">센터명</p>
+                      <p className="mt-1 text-2xl font-black">{request.center_name || '-'}</p>
+                    </div>
+                    <div className="mt-3 grid gap-3 sm:grid-cols-2">
                       <div className="rounded-2xl bg-[#F5F8FA] p-4">
                         <p className="text-xs font-black text-slate-400">직급</p>
                         <p className="mt-1 text-xl font-black">{request.role}</p>
@@ -145,6 +152,12 @@ export default function SilverConsultingAdminPage() {
                           {request.phone}
                         </a>
                       </div>
+                    </div>
+                    <div className="mt-3 rounded-2xl bg-[#F5F8FA] p-4">
+                      <p className="text-xs font-black text-slate-400">개인정보 동의</p>
+                      <p className="mt-1 text-sm font-black text-[#1A1A2E]">
+                        {request.privacy_agreed ? `동의 완료${request.privacy_agreed_at ? ` · ${formatDate(request.privacy_agreed_at)}` : ''}` : '동의 정보 없음'}
+                      </p>
                     </div>
                     <textarea
                       defaultValue={request.memo || ''}
