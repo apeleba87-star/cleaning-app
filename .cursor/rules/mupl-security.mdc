@@ -1,0 +1,47 @@
+---
+description: 무플 보안 기본 원칙 - RLS, Company 격리, Private Storage, Share Token, 개인정보, 업로드 검증
+alwaysApply: true
+---
+
+# 무플 보안 원칙
+
+고객의 집/사업장 내부 사진과 개인정보는 민감 데이터다. Security는 MVP부터 적용한다.
+
+## Company 데이터 격리
+- 모든 주요 업무 테이블은 `company_id`를 가진다 (projects, media_assets, customer_reports 등).
+- 모든 테이블에 RLS를 켜고, 소속 Company 데이터만 접근 가능하게 한다.
+- 클라이언트가 보낸 `company_id`를 신뢰하지 않는다. 소속은 `auth.uid()`로 DB에서 판단한다.
+- UI에서 숨기는 것은 보안이 아니다. DB 레벨에서 차단한다.
+
+```sql
+-- ❌ 클라이언트 입력 company_id로 필터 (조작 가능)
+-- ✅ RLS: 요청자의 소속을 DB에서 조회
+CREATE POLICY projects_member_select ON projects FOR SELECT
+  USING (company_id IN (SELECT company_id FROM company_members WHERE user_id = auth.uid()));
+```
+
+## Key와 Secret
+- Service Role Key는 서버 전용. 클라이언트 번들/Flutter 앱에 절대 넣지 않는다.
+- Service Role로 RLS를 우회하는 코드는 꼭 필요한 서버 작업에만 쓰고 이유를 명확히 한다.
+- Secret/API Key 하드코딩 금지. 환경변수 사용.
+
+## Storage
+- 현장 사진 Bucket은 Private. Public URL로 저장하지 않는다.
+- 제한 접근은 Signed URL(적절한 만료, 재발급 최소화, 대량 생성 부하 검토).
+- 공개 포트폴리오 사진과 Private 현장 사진은 Bucket/정책을 분리한다.
+
+## Share Token (고객 Report)
+- `/report/1`, `/report/{project_id}` 같은 추측 가능한 URL 금지.
+- 충분한 entropy의 랜덤 Token. `active`/`revoked`/`expires_at`으로 즉시 비활성화 가능하게.
+
+## 개인정보
+- Public 영역에 고객 이름, 전화번호, 상세주소, 동/호수, GPS, EXIF 위치 등 식별정보를 자동 노출하지 않는다.
+- 업로드 전(클라이언트에서) EXIF 위치정보 제거.
+- 로그에 개인정보, Signed URL, Token, Secret을 남기지 않는다.
+
+## 입력/파일 검증
+- 사용자 입력은 서버/DB에서 검증 (zod 등).
+- 파일: MIME, 확장자, 크기, 개수 검증. MVP 허용 형식은 JPEG, WebP만.
+
+## 캐싱
+- Private 데이터가 다른 사용자에게 Cache로 노출되지 않게 한다. Security > Performance.

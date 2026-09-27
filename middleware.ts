@@ -35,6 +35,7 @@ function isMUPLHost(host: string) {
 
 function isHomepageFastPath(pathname: string) {
   return (
+    pathname.startsWith('/r/') ||
     pathname.startsWith('/_homepage') ||
     pathname.startsWith('/t/') ||
     pathname.startsWith('/api/homepage/public') ||

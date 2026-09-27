@@ -1,0 +1,42 @@
+---
+description: 무플 최우선 설계 원칙 (Security, Performance, Scalability, Cost) 과 작업 전 검토 질문
+alwaysApply: true
+---
+
+# 무플 최우선 설계 원칙
+
+적용 범위: 새 무플 현장 서비스(현장 → 공간 → Before/After → 고객 Report) 코드.
+V1 기존 코드(`/business`, `/franchise`, `/store-manager`, `(staff)` 등)는 요청이 없으면 리팩터링하지 않는다.
+
+## 우선순위
+1. Security 2. Performance 3. Scalability 4. Cost Optimization
+"동작한다"는 이유만으로 구현하지 않는다. 충돌 시 Security > Performance.
+
+## 설계 결정 시 설명할 것 (가능한 범위에서)
+보안 영향 / 성능 영향 / 서버 부하 / Storage / Egress / DB 부하 / 비용 증가 요소 / 사용자 10배 증가 시 병목
+
+## 코드 작성 전 체크
+1. 실제 MVP에 필요한가?
+2. 기존 Domain 구조와 충돌하지 않는가?
+3. 보안 취약점을 만들지 않는가?
+4. 불필요한 DB Query(N+1 등)를 만들지 않는가?
+5. 사진 Egress를 늘리지 않는가?
+6. Vercel/Supabase 비용을 불필요하게 늘리지 않는가?
+7. 사용자 10배 증가 시 병목은 어디인가?
+8. 다른 Storage Provider로 이동 가능한가?
+9. 개인정보가 외부로 노출될 가능성이 있는가?
+10. 더 단순한 방법이 있는가?
+
+## 단순함
+- 스택: Flutter + Supabase + Vercel(Next.js). 이 구조를 최대한 단순하게 유지한다.
+- 금지: 불필요한 Microservice, Kubernetes, Message Broker, Redis, 과도한 Event Architecture, premature optimization.
+- 단, 나중에 바꾸기 어려운 것은 처음부터 올바르게: 데이터 소유권(company_id), 권한(RLS), Media 추상화, Module 경계, Index, Storage path.
+
+## 미래 확장
+"미래의 기능을 미리 만들지 않는다. 그러나 미래 기능 때문에 오늘의 핵심 구조를 폐기하는 상황은 피한다."
+- 핵심 Domain(Project, Area, PhotoPair, MediaAsset, Report)은 Supabase 전용 개념으로 설계하지 않는다.
+- 포트폴리오, 문의, 견적, 결제, 리뷰, AI 콘텐츠는 MVP 코드에 넣지 않는다.
+
+## 설계 승인 전
+새 서비스의 A~L 설계 문서(`docs/architecture/`)가 승인되기 전에는 기능 코드를 작성하지 않는다.
+정확한 요금을 모르면 가격을 지어내지 말고 비용 발생 구조만 설명한다.

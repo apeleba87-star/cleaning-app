@@ -1,0 +1,38 @@
+---
+description: 무플 DB Query, Pagination, 고객 Report 성능, Serverless 사용, Observability, 사용량/비용 측정 원칙. DB 스키마, API, Query, Report 페이지, 로그, 비용 관련 작업 시 사용.
+alwaysApply: false
+---
+
+# 무플 데이터 / 성능 / 비용 원칙
+
+## Query
+- N+1 금지. 목록을 위해 항목마다 Query를 반복하지 않는다 (join, `in`, 집계 View/RPC 사용).
+- 접근 패턴을 먼저 정의하고 Index를 설계한다. 후보: company_id, project_id, area_id, photo_pair_id, created_at, status, service_type.
+- 복합 Index는 실제 Query 기준. Index를 무조건 많이 만들지 않는다.
+
+## Pagination
+- 현장, 사진, 포트폴리오(향후 문의, 리뷰)는 한 번에 전부 가져오지 않는다.
+- Cursor 기반 우선 (예: `created_at, id` 기준 최근 20개 → 다음 20개).
+
+## 고객 Report 성능
+- 고객은 앱 없이 카카오톡 링크 → 모바일 브라우저로 연다. 첫 화면이 빨라야 한다.
+- 먼저: 업체명, 현장 기본정보, Thumbnail, 첫 화면. 고화질은 Lazy Load.
+
+## Serverless Function
+- 필요한 경우만: 서버에서만 해야 하는 보안 작업, Secret 필요, 신뢰 가능한 검증, 복잡한 비동기 처리.
+- 이미지 Resize/Compress처럼 클라이언트에서 안전하게 가능한 작업은 클라이언트에서.
+
+## 비용 항목 (항상 고려)
+Storage, Egress, Database, Image Transformation, Serverless Function, Vercel Bandwidth, API Request, Supabase Compute
+
+## Observability
+- 추적: 로그인 실패, 사진 압축 실패, Upload 실패, DB Insert 실패, Report Load 실패, 권한 오류.
+- 로그에 개인정보, Signed URL, Token, Secret 금지. id와 오류 코드 중심으로 기록.
+
+## 사용량 측정 (비용 예측용)
+- 업체 수, MAU, 업체당 월 현장 수, 현장당 사진 수, 평균 사진 용량.
+- 신규/누적 Storage, Report 조회 수, 이미지 다운로드량.
+- `media_assets.size_bytes` 등 집계 가능한 컬럼을 남겨 SQL로 계산할 수 있게 한다.
+
+## Vendor Lock-in
+- Supabase/Vercel을 적극 사용하되, Domain Model과 인프라 코드를 분리한다.

@@ -1,0 +1,5 @@
+package com.mupl.mupl_field
+
+import io.flutter.embedding.android.FlutterActivity
+
+class MainActivity : FlutterActivity()

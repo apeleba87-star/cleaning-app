@@ -1,0 +1,40 @@
+---
+description: 무플 사진/Storage 작업 시 적용 - 클라이언트 압축, Thumbnail, 업로드 Queue, 중복 방지, 삭제/정합성, Storage 추상화. 사진 촬영, 업로드, 이미지 표시, Storage, 고객 Report 이미지를 다룰 때 사용.
+alwaysApply: false
+---
+
+# 무플 사진 Pipeline 원칙
+
+## 크기 목표 (클라이언트에서 처리)
+- 원본(4000px+, 3~10MB+)은 서버에 저장하지 않는다. 원본 업로드 후 서버 압축 금지.
+- Full: 약 1600px, 150~300KB / Thumbnail: 200~400px, 약 20KB / Preview: 필요 시 중간 크기.
+- Resize, Compress, EXIF 제거는 Flutter 기기에서 수행한다.
+
+## 업로드 흐름
+촬영 → Local 저장 → 압축 → Queue 등록 → (사용자는 바로 다음 촬영)
+Background: Upload → 성공 → DB 반영 / 실패 → Queue 유지 → Retry
+
+- 업로드마다 클라이언트에서 고유 ID(UUID)를 만든다. 이 ID를 MediaAsset id와 storage path에 사용해 Retry해도 중복 생성되지 않게 한다 (idempotent).
+- 상태 추적: `pending` → `uploading` → `uploaded` / `failed`.
+- 사진은 클라이언트가 Supabase Storage로 직접 업로드한다 (RLS/Storage 정책으로 보호).
+
+```text
+❌ Flutter → Vercel Function → Supabase Storage   (Function 비용, 대역폭 이중 과금)
+✅ Flutter → Supabase Storage (정책으로 경로 제한) → DB 상태 반영
+```
+
+## 표시
+- 목록은 Thumbnail만. 30장 × 200KB(6MB) 대신 30장 × 20KB(600KB) 수준.
+- Lazy Loading, Pagination/Batch, Memory/Disk Cache, Decode 크기 제한. 500장을 한 번에 메모리에 올리지 않는다.
+- 이미지 Traffic은 Storage → 사용자로 직접. Vercel Function 경유 금지. Vercel Image Optimization 일괄 적용 금지.
+- Signed URL은 화면에 보이는 것만, 필요할 때 생성한다. 목록 전체를 한 번에 서명하지 않는다.
+
+## Storage 추상화
+- DB에는 전체 URL이 아니라 `provider`, `bucket`, `storage_path`를 저장한다.
+- 예: `provider=supabase`, `bucket=project-media`, `storage_path=companies/{company_id}/projects/{project_id}/{asset_id}.jpg`
+- URL 생성은 한 모듈에서만 한다 (추후 R2/S3 이전 대비).
+
+## 삭제와 정합성
+- Soft Delete(DB 표시)와 실제 Storage Delete를 구분한다. Project 삭제 시 Orphan File이 남지 않게 한다.
+- Storage 성공 + DB 실패, DB 성공 + Storage 실패를 상태로 추적하고 Cleanup 전략을 둔다.
+- 향후 Trash / Retention / Permanent Delete를 붙일 수 있게 설계한다.
