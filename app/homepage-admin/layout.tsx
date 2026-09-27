@@ -47,9 +47,6 @@ export default function HomepageAdminLayout({ children }: { children: React.Reac
             </Link>
           ))}
         </nav>
-        <Link href="/v2/manage" className="mt-6 block text-sm text-blue-600">
-          무플 관리로 이동
-        </Link>
       </aside>
       <div className="flex-1 p-4 md:p-6">{children}</div>
     </div>

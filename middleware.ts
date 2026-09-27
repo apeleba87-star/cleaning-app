@@ -114,18 +114,14 @@ export async function middleware(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser()
 
-  const isV2App =
-    pathname.startsWith('/v2') ||
-    pathname.startsWith('/v2-store-manager') ||
-    pathname.startsWith('/api/v2')
   const isHomepageApp =
     pathname.startsWith('/homepage-admin') ||
     pathname.startsWith('/api/homepage')
 
-  // V2/홈페이지 관리자: Auth만 공유. V1 users/trial/session PATCH 미적용 (속도·비용)
-  if (isV2App || isHomepageApp) {
+  // 홈페이지 관리자: Auth만 공유. V1 users/trial/session PATCH 미적용 (속도·비용)
+  if (isHomepageApp) {
     if (!user) {
-      const isApi = pathname.startsWith('/api/v2') || pathname.startsWith('/api/homepage')
+      const isApi = pathname.startsWith('/api/homepage')
       if (isApi) {
         return NextResponse.json({ error: '로그인이 필요합니다.' }, { status: 401 })
       }

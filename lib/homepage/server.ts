@@ -53,12 +53,13 @@ export async function getHomepageUser() {
   if (!userId) return null
 
   const client = getHomepageAdminClient()
-  const [{ data: v1User }, { data: v2User }] = await Promise.all([
-    client.from('users').select('id, role, name, company_id').eq('id', userId).maybeSingle(),
-    client.from('v2_users').select('id, role, name, company_id').eq('id', userId).maybeSingle(),
-  ])
+  const { data: v1User } = await client
+    .from('users')
+    .select('id, role, name, company_id')
+    .eq('id', userId)
+    .maybeSingle()
 
-  const profile = v1User || v2User || { id: userId, role: 'homepage_owner', name: null, company_id: null }
+  const profile = v1User || { id: userId, role: 'homepage_owner', name: null, company_id: null }
   return { ...profile, id: userId }
 }
 
